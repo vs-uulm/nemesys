@@ -3,7 +3,17 @@ from queue import Queue
 from tempfile import NamedTemporaryFile
 
 class TsharkConnector(object):
-    """Class to manage a tshark process and encapsulate the communication with the process' input and output."""
+    """
+    Class to manage a tshark process and encapsulate the communication with the process' input and output.
+
+    ## Parsing PCAPs with tshark
+    For validating inferences with FMS, we parse PCAPs with tshark yielding JSON with raw data via `-T json -x`.
+    We use the same process of tshark without restarting to improve performance.
+    tshark however detects repeated parsing of the same packet as a retransmission or other "fatal" errors in TCP and
+    the payload of the encapsulated protocol does not get dissected any more.
+    To prevent this, we use the following tshark parameter to turn off sequence number related analysis for TCP:
+    `-o tcp.analyze_sequence_numbers: FALSE`
+    """
 
     # __tsharkline = ["tshark", "-l", "-r", "-", "-T", "json", "-x"]
     # __tsharkline = ["tshark", "-Q", "-a", "duration:20", "-l", "-n", "-i", "-", "-T", "json", "-x"]
