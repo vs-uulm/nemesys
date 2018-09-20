@@ -1,0 +1,1027 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AnalysisUIOptions">
+    <option name="SCOPE_TYPE" value="3" />
+  </component>
+  <component name="BookmarkManager">
+    <bookmark url="file://$PROJECT_DIR$/src/inference/analyzers.py" line="676" mnemonic="2" />
+    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="88" mnemonic="7" />
+    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="331" mnemonic="8" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
+      <change beforePath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Import/PCAPImporter/PCAPImporter.py" beforeDir="false" afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Import/PCAPImporter/PCAPImporter.py" afterDir="false" />
+      <change beforePath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/AbstractField.py" beforeDir="false" afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/AbstractField.py" afterDir="false" />
+      <change beforePath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/Domain/Parser/FieldParser.py" beforeDir="false" afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/Domain/Parser/FieldParser.py" afterDir="false" />
+      <change beforePath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/Symbol.py" beforeDir="false" afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/Symbol.py" afterDir="false" />
+    </list>
+    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <option name="TRACKING_ENABLED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CreatePatchCommitExecutor">
+    <option name="PATCH_PATH" value="" />
+  </component>
+  <component name="FavoritesManager">
+    <favorites_list name="specimen-generation" />
+  </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file leaf-file-name="messageParser.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="333">
+              <caret line="890" column="19" selection-start-line="890" selection-start-column="19" selection-end-line="890" selection-end-column="19" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="formatRefinement.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="-27">
+              <caret line="265" column="49" selection-start-line="265" selection-start-column="49" selection-end-line="265" selection-end-column="49" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="README.md" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/README.md">
+          <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+            <state split_layout="SPLIT">
+              <first_editor relative-caret-position="195">
+                <caret line="13" column="10" selection-start-line="13" selection-start-column="10" selection-end-line="13" selection-end-column="10" />
+              </first_editor>
+              <second_editor />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="analyzers.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="375">
+              <caret line="410" selection-start-line="410" selection-end-line="410" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="netzob_fms.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/netzob_fms.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="213">
+              <caret line="226" column="28" selection-start-line="226" selection-start-column="28" selection-end-line="226" selection-end-column="28" />
+              <folding>
+                <element signature="e#413#428#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="segmentHandler.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="213">
+              <caret line="53" column="47" selection-start-line="53" selection-start-column="47" selection-end-line="53" selection-end-column="47" />
+              <folding>
+                <element signature="e#0#23#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="tsharkConnector.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state>
+              <caret column="35" selection-start-column="35" selection-end-column="35" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="netzobFormatMatchScore.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/validation/netzobFormatMatchScore.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="123">
+              <caret line="261" selection-start-line="261" selection-end-line="261" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="singlePlotter.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="213">
+              <caret line="129" column="31" selection-start-line="129" selection-start-column="31" selection-end-line="129" selection-end-column="31" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="FindInProjectRecents">
+    <findStrings>
+      <find>cm</find>
+      <find>cm.</find>
+      <find>ParsedMessage</find>
+      <find>tshark</find>
+      <find>tsharkline</find>
+      <find>TsharkConnector</find>
+      <find>process</find>
+      <find>linktype</find>
+      <find>MessageAnalyzer</find>
+      <find>inference.analyzers</find>
+      <find>correlation</find>
+      <find>impo</find>
+      <find>MessageSegment</find>
+      <find>from.*MessageSegment</find>
+      <find>\{.*dissec</find>
+      <find>self._s</find>
+      <find>specimens</find>
+      <find>runtimes</find>
+      <find>tformats</find>
+      <find>unique</find>
+      <find>fieldendsper</find>
+      <find>fieldendsfrom</find>
+      <find>RawMessage</find>
+      <find>fieldends</find>
+      <find>validation.Messa</find>
+      <find>Message</find>
+      <find>dissectorMatcher</find>
+      <find>fmslist</find>
+      <find>MessageComparator</find>
+      <find>DissectorMatcher</find>
+    </findStrings>
+    <replaceStrings>
+      <replace />
+      <replace>ParsingConstants.IGNORE_FIELDS</replace>
+      <replace>ParsingConstants.TYPELOOKUP</replace>
+      <replace>TsharkConnector</replace>
+    </replaceStrings>
+    <dirStrings>
+      <dir>$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/pyshark</dir>
+      <dir>$PROJECT_DIR$</dir>
+      <dir>$PROJECT_DIR$/src</dir>
+      <dir>$PROJECT_DIR$/src/dissectorValidation</dir>
+      <dir>$PROJECT_DIR$/src/</dir>
+      <dir>$PROJECT_DIR$/../n-grams</dir>
+      <dir>$PROJECT_DIR$/src/inference</dir>
+    </dirStrings>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/src/validation/messageParser.py" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/src/messageEntropies.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/messageRefinement.py" />
+        <option value="$PROJECT_DIR$/src/parsePCAP.py" />
+        <option value="$PROJECT_DIR$/src/reupHelper/SpecimenLoader.py" />
+        <option value="$PROJECT_DIR$/src/nemesys_absolute_field_histogram.py" />
+        <option value="$PROJECT_DIR$/src/dissectorValidation/MessageComparator.py" />
+        <option value="$PROJECT_DIR$/src/dissectorValidation/reportWriter.py" />
+        <option value="$PROJECT_DIR$/src/inferAndCompareTshark.py" />
+        <option value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/__init__.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/MessageSegment.py" />
+        <option value="$PROJECT_DIR$/src/analysis_message_segments.py" />
+        <option value="$PROJECT_DIR$/src/analysisVisualization/SingleMessagePlotter.py" />
+        <option value="$PROJECT_DIR$/src/nemesys_field_deviation_plot.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/TemplateGenerator.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/MessageAnalyzer.py" />
+        <option value="$PROJECT_DIR$/src/analysisVisualization/DistancesPlotter.py" />
+        <option value="$PROJECT_DIR$/src/characterize_segments.py" />
+        <option value="$PROJECT_DIR$/src/dissectorValidation/LabelMessages.py" />
+        <option value="$PROJECT_DIR$/src/labelFromTshark.py" />
+        <option value="$PROJECT_DIR$/src/resume_analysis.py" />
+        <option value="$PROJECT_DIR$/src/entropyHistogram.py" />
+        <option value="$PROJECT_DIR$/src/dissectorValidation/ParsedMessage.py" />
+        <option value="$PROJECT_DIR$/README.md" />
+        <option value="$PROJECT_DIR$/src/prep_deduplicate-trace.py" />
+        <option value="$PROJECT_DIR$/src/analysisVisualization/MessagePlotter.py" />
+        <option value="$PROJECT_DIR$/src/dissectorValidation/dissectorMatcher.py" />
+        <option value="$PROJECT_DIR$/src/analysisVisualization/MultiMessagePlotter.py" />
+        <option value="$PROJECT_DIR$/src/reupMessages/segmentHandler.py" />
+        <option value="$PROJECT_DIR$/src/reupHelper/baseAlgorithms.py" />
+        <option value="$PROJECT_DIR$/src/validation/ParsedMessage.py" />
+        <option value="$PROJECT_DIR$/src/nemesys.py" />
+        <option value="$PROJECT_DIR$/src/validation/LabelMessages.py" />
+        <option value="$PROJECT_DIR$/src/validation/MessageComparator.py" />
+        <option value="$PROJECT_DIR$/src/validation/reportWriter.py" />
+        <option value="$PROJECT_DIR$/src/utils/loader.py" />
+        <option value="$PROJECT_DIR$/src/inference/segments.py" />
+        <option value="$PROJECT_DIR$/src/check_parse-pcap.py" />
+        <option value="$PROJECT_DIR$/src/nemesys_field-deviation-plot.py" />
+        <option value="$PROJECT_DIR$/src/nemesys_fms.py" />
+        <option value="$PROJECT_DIR$/src/utils/baseAlgorithms.py" />
+        <option value="$PROJECT_DIR$/src/validation/netzobFormatMatchScore.py" />
+        <option value="$PROJECT_DIR$/src/validation/dissectorMatcher.py" />
+        <option value="$PROJECT_DIR$/src/visualization/multiPlotter.py" />
+        <option value="$PROJECT_DIR$/src/netzob_fms.py" />
+        <option value="$PROJECT_DIR$/src/validation/tsharkConnector.py" />
+        <option value="$PROJECT_DIR$/src/inference/analyzers.py" />
+        <option value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
+        <option value="$PROJECT_DIR$/src/visualization/singlePlotter.py" />
+        <option value="$PROJECT_DIR$/src/validation/messageParser.py" />
+        <option value="$PROJECT_DIR$/src/inference/formatRefinement.py" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectFrameBounds" extendedState="7">
+    <option name="y" value="30" />
+    <option name="width" value="1270" />
+    <option name="height" value="1410" />
+  </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectView">
+    <navigator proportions="" version="1">
+      <foldersAlwaysOnTop value="true" />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="NEMESYS" type="b2602c69:ProjectViewProjectNode" />
+              <item name="nemesys" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="NEMESYS" type="b2602c69:ProjectViewProjectNode" />
+              <item name="nemesys" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="NEMESYS" type="b2602c69:ProjectViewProjectNode" />
+              <item name="nemesys" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="validation" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="SearchEverywhereHistoryKey" value="getoffset&#9;null&#9;null&#10;Bcolors&#9;null&#9;null&#10;bcolor&#9;null&#9;null&#10;getClustersFrom&#9;null&#9;null&#10;getClustersFromLa&#9;null&#9;null&#10;absolute differences&#9;null&#9;null&#10;plot&#9;FILE&#9;file:///home/stephan/git.lab-vs/REUP/specimen-generation/src/plotMessages.py&#10;bitarray&#9;null&#9;null" />
+    <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="Python" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/src/inference/segments.py" />
+    <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
+    <property name="settings.editor.selected.configurable" value="Errors" />
+  </component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/src/visualization" />
+      <recent name="$PROJECT_DIR$/src/" />
+      <recent name="$PROJECT_DIR$/reupHelper" />
+      <recent name="$PROJECT_DIR$/dissectorValidation" />
+    </key>
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/src/reupMessages" />
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="RunDashboard">
+    <option name="ruleStates">
+      <list>
+        <RuleState>
+          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+        </RuleState>
+        <RuleState>
+          <option name="name" value="StatusDashboardGroupingRule" />
+        </RuleState>
+      </list>
+    </option>
+  </component>
+  <component name="RunManager" selected="Python.parsePCAP">
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="characterize_segments" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/characterize_segments.py" />
+      <option name="PARAMETERS" value="-d input/binaryprotocols_merged_500.pcap variance" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="deduplicate-trace" type="PythonConfigurationType" factoryName="Python">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$USER_HOME$/REUP-common/trace-collection/sources/SMIA_2011-10-10_08_632834000_file1-splits/nbns" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/prep_deduplicate-trace.py" />
+      <option name="PARAMETERS" value="$USER_HOME$/REUP-common/trace-collection/sources/SMIA_2011-10-10_08_632834000_file1-splits/nbns/nbns_SMIA20111010-one.pcap -p 10000" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="nemesys_field_deviation_plot" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemesys_field-deviation-plot.py" />
+      <option name="PARAMETERS" value="input/random-100-continuous.pcap -l3" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="nemesys_fms" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemesys_fms.py" />
+      <option name="PARAMETERS" value="input/hide/smb_SMIA20111010-one_deduped-100.pcap" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="parsePCAP" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/check_parse-pcap.py" />
+      <option name="PARAMETERS" value="input/dns_ictf2010_deduped-100.pcap -l 2 -r" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="plot" type="PythonConfigurationType" factoryName="Python">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_message_plot.py" />
+      <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap bcDelta" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="segment" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_message_segments.py" />
+      <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration default="true" type="Tox" factoryName="Tox">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Attests">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="specimen-generation" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="CLASS_NAME" value="" />
+      <option name="METHOD_NAME" value="" />
+      <option name="FOLDER_NAME" value="" />
+      <option name="TEST_TYPE" value="TEST_SCRIPT" />
+      <option name="PATTERN" value="" />
+      <option name="USE_PATTERN" value="false" />
+      <method />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Doctests">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="CLASS_NAME" value="" />
+      <option name="METHOD_NAME" value="" />
+      <option name="FOLDER_NAME" value="" />
+      <option name="TEST_TYPE" value="TEST_SCRIPT" />
+      <option name="PATTERN" value="" />
+      <option name="USE_PATTERN" value="false" />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Nosetests">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_regexPattern" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;.&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Unittests">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;.&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="py.test">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;.&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.plot" />
+      <item itemvalue="Python.deduplicate-trace" />
+      <item itemvalue="Python.segment" />
+      <item itemvalue="Python.nemesys_fms" />
+      <item itemvalue="Python.nemesys_field_deviation_plot" />
+      <item itemvalue="Python.parsePCAP" />
+      <item itemvalue="Python.characterize_segments" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.parsePCAP" />
+        <item itemvalue="Python.characterize_segments" />
+        <item itemvalue="Python.nemesys_fms" />
+        <item itemvalue="Python.segment" />
+        <item itemvalue="Python.nemesys_field_deviation_plot" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="StructureViewFactory">
+    <option name="AUTOSCROLL_FROM_SOURCE" value="true" />
+    <option name="ACTIVE_ACTIONS" value=",SHOW_FIELDS,SHOW_INHERITED,ALPHA_COMPARATOR" />
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="" />
+      <created>1490278930309</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1490278930309</updated>
+    </task>
+    <task id="LOCAL-00001" summary="generate field lists of the same message either inferred and dissected">
+      <created>1495560301252</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1495560301252</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
+    <servers />
+  </component>
+  <component name="TodoView" selected-index="1">
+    <todo-panel id="selected-file">
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+    <todo-panel id="all">
+      <are-packages-shown value="true" />
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="0" y="30" width="2560" height="1410" extended-state="7" />
+    <editor active="true" />
+    <layout>
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.5578447" visible="true" weight="0.1961326" />
+      <window_info anchor="bottom" id="TODO" order="5" weight="0.29080823" />
+      <window_info anchor="bottom" id="Event Log" order="6" sideWeight="0.32754537" side_tool="true" weight="0.28129953" />
+      <window_info anchor="bottom" id="Inspection Results" order="7" weight="0.44611728" />
+      <window_info id="Find" order="2" sideWeight="0.6497623" weight="0.29834256" />
+      <window_info anchor="bottom" id="Version Control" order="7" weight="0.32884312" />
+      <window_info anchor="bottom" id="Python Console" order="8" weight="0.3293919" />
+      <window_info anchor="bottom" id="Run" order="1" weight="0.32911393" />
+      <window_info x="502" y="116" width="361" height="583" id="Structure" order="1" sideWeight="0.4421553" side_tool="true" visible="true" weight="0.1961326" />
+      <window_info anchor="bottom" id="Terminal" order="9" weight="0.32884312" />
+      <window_info id="Favorites" order="3" sideWeight="0.5459588" side_tool="true" weight="0.15588003" />
+      <window_info anchor="bottom" id="Debug" order="2" sideWeight="0.6724546" weight="0.45721078" />
+      <window_info anchor="bottom" id="Salesforce" order="12" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.24961948" />
+      <window_info anchor="right" id="Commander" order="0" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="bottom" id="Debug Logs" order="10" />
+      <window_info anchor="right" x="0" y="0" width="291" height="538" id="Documentation" order="4" side_tool="true" weight="0.27853882" />
+      <window_info anchor="bottom" id="Execute Anonymous" order="11" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Inspection" order="4" weight="0.4" />
+      <window_info anchor="bottom" id="Cvs" order="3" weight="0.25" />
+      <window_info anchor="right" id="Data View" order="3" weight="0.32952815" />
+    </layout>
+  </component>
+  <component name="VcsContentAnnotationSettings">
+    <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="generate field lists of the same message either inferred and dissected" />
+    <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$USER_HOME$/Dokumente/git.lab-vs/REUP/nemesys/src/validation/tsharkConnector.py</url>
+          <line>67</line>
+          <option name="timeStamp" value="441" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/validation/dissectorMatcher.py</url>
+          <line>33</line>
+          <option name="timeStamp" value="443" />
+        </line-breakpoint>
+      </breakpoints>
+      <breakpoints-dialog>
+        <breakpoints-dialog />
+      </breakpoints-dialog>
+      <option name="time" value="444" />
+    </breakpoint-manager>
+  </component>
+  <component name="debuggerHistoryManager">
+    <expressions id="evaluateCodeFragment">
+      <expression>
+        <expression-string>m._AbstractMessage__data.hex()</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>Resplit2MostFrequentPair.__pairFrequencies</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>self.__pairFrequencies</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>__pairFrequencies</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>quality2message[.286]</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>len(ac._message.data)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>len(self.message.data)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>numpy.array(self._values)[~numpy.isnan(numpy.array(self._values))]</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>a = numpy.array(self._values)[~numpy.isnan(numpy.array(self._values))]</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
+      </expression>
+    </expressions>
+    <expressions id="breakpointCondition">
+      <expression>
+        <expression-string>fieldkey == 'gss-api'</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>embedded == 'smb_pipe'</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>embedded == 'smb.padding'</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>len(formatedData[strPointer:strPointer+2]) != 2</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>splitshift != 0</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>risingdeltas[-1][0] &gt;= len(self.bcdeltas)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>numpy.isnan(segPairSimi).any()</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>numpy.isnan(similarities).any()</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>numpy.nanmax(corrarray) &gt; 1.0</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+    </expressions>
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/sklearn/cluster/dbscan_.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="647">
+          <caret line="284" column="40" selection-start-line="284" selection-start-column="40" selection-end-line="284" selection-end-column="40" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/scipy/spatial/distance.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="1382" column="4" selection-start-line="1382" selection-start-column="4" selection-end-line="1382" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/matplotlib/axes/_base.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="15">
+          <caret line="1710" column="8" selection-start-line="1710" selection-start-column="8" selection-end-line="1710" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/numpy/lib/arraysetops.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="96">
+          <caret line="86" selection-start-line="86" selection-end-line="86" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/codecs.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="87">
+          <caret line="319" selection-start-line="319" selection-end-line="319" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/analysisVisualization/DistancesPlotter.py" />
+    <entry file="file://$PROJECT_DIR$/src/generate_random_pcap.py" />
+    <entry file="file://$PROJECT_DIR$/src/characterize_segments.py" />
+    <entry file="file://$PROJECT_DIR$/src/labelFromTshark.py" />
+    <entry file="file://$PROJECT_DIR$/src/reupMessages/AnalysisSeries.py" />
+    <entry file="file://$PROJECT_DIR$/src/plotMessages.py" />
+    <entry file="file://$PROJECT_DIR$/src/entropyHistogram.py" />
+    <entry file="file://$PROJECT_DIR$/src/histotest.py" />
+    <entry file="file://$PROJECT_DIR$/src/messageEntropies.py" />
+    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py" />
+    <entry file="file://$PROJECT_DIR$/src/nemesys_absolute-field-histogram.py" />
+    <entry file="file://$PROJECT_DIR$/src/resume_analysis.py" />
+    <entry file="file://$PROJECT_DIR$/src/analysis_message_segments.py" />
+    <entry file="file://$PROJECT_DIR$/src/prep_deduplicate-trace.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1305">
+          <caret line="87" column="24" selection-start-line="87" selection-start-column="24" selection-end-line="87" selection-end-column="24" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/analysisVisualization/simplePrint.py" />
+    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="585">
+          <caret line="39" column="33" selection-start-line="39" selection-start-column="33" selection-end-line="39" selection-end-column="33" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/reupMessages/labeling.py" />
+    <entry file="file://$PROJECT_DIR$/src/reupMessages/TemplateGenerator.py" />
+    <entry file="file://$PROJECT_DIR$/src/visualization/bcolors.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="75">
+          <caret line="5" column="16" selection-start-line="5" selection-start-column="11" selection-end-line="5" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/lib/python3.5/subprocess.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="809" column="8" selection-start-line="809" selection-start-column="8" selection-end-line="809" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/Dokumente/git.lab-vs/REUP/nemesys/src/validation/ParsedMessage.py" />
+    <entry file="file://$USER_HOME$/Dokumente/git.lab-vs/REUP/nemesys/src/validation/tsharkConnector.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="209">
+          <caret line="102" selection-start-line="102" selection-end-line="102" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/__init__.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="15">
+          <caret line="1" column="41" lean-forward="true" selection-start-line="1" selection-start-column="41" selection-end-line="1" selection-end-column="41" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/lib/python3.5/typing.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="186">
+          <caret line="1851" column="6" selection-start-line="1851" selection-start-column="6" selection-end-line="1851" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/Messages/RawMessage.py">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/nemesys.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="15">
+          <caret line="1" column="51" selection-start-line="1" selection-start-column="51" selection-end-line="1" selection-end-column="51" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/reportWriter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="198">
+          <caret line="39" column="72" selection-start-line="39" selection-start-column="55" selection-end-line="39" selection-end-column="72" />
+          <folding>
+            <element signature="e#74#83#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/utils/loader.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="390">
+          <caret line="26" lean-forward="true" selection-start-line="26" selection-end-line="26" />
+          <folding>
+            <element signature="e#0#23#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/LabelMessages.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="30">
+          <caret line="6" column="11" selection-start-line="6" selection-start-column="11" selection-end-line="6" selection-end-column="11" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/MessageComparator.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2925">
+          <caret line="207" column="38" lean-forward="true" selection-start-line="207" selection-start-column="38" selection-end-line="207" selection-end-column="38" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/segments.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="401">
+          <caret line="137" column="25" selection-start-line="137" selection-start-column="25" selection-end-line="137" selection-end-column="25" />
+          <folding>
+            <element signature="e#0#11#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/check_parse-pcap.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="315">
+          <caret line="28" column="52" selection-start-line="28" selection-start-column="52" selection-end-line="28" selection-end-column="52" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/nemesys_field-deviation-plot.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="213">
+          <caret line="47" selection-start-line="47" selection-end-line="47" />
+          <folding>
+            <element signature="e#155#176#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/nemesys_fms.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="33">
+          <caret line="73" selection-start-line="73" selection-end-line="73" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/netzobFormatMatchScore.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="123">
+          <caret line="261" selection-start-line="261" selection-end-line="261" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/netzob_fms.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="213">
+          <caret line="226" column="28" selection-start-line="226" selection-start-column="28" selection-end-line="226" selection-end-column="28" />
+          <folding>
+            <element signature="e#413#428#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="35" selection-start-column="35" selection-end-column="35" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/utils/baseAlgorithms.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="105">
+          <caret line="7" column="13" selection-start-line="7" selection-start-column="13" selection-end-line="7" selection-end-column="13" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="356">
+          <caret line="214" column="66" selection-start-line="214" selection-start-column="66" selection-end-line="214" selection-end-column="66" />
+          <folding>
+            <element signature="e#0#58#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/dissectorMatcher.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="159">
+          <caret line="217" selection-start-line="217" selection-end-line="217" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="375">
+          <caret line="410" selection-start-line="410" selection-end-line="410" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="213">
+          <caret line="129" column="31" selection-start-line="129" selection-start-column="31" selection-end-line="129" selection-end-column="31" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="213">
+          <caret line="53" column="47" selection-start-line="53" selection-start-column="47" selection-end-line="53" selection-end-column="47" />
+          <folding>
+            <element signature="e#0#23#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="333">
+          <caret line="890" column="19" selection-start-line="890" selection-start-column="19" selection-end-line="890" selection-end-column="19" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-27">
+          <caret line="265" column="49" selection-start-line="265" selection-start-column="49" selection-end-line="265" selection-end-column="49" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+        <state split_layout="SPLIT">
+          <first_editor relative-caret-position="195">
+            <caret line="13" column="10" selection-start-line="13" selection-start-column="10" selection-end-line="13" selection-end-column="10" />
+          </first_editor>
+          <second_editor />
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>
