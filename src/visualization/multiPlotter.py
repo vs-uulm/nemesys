@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List, Any
+from typing import Dict, Tuple, List, Any, Union
 
 import numpy
 import matplotlib.pyplot as plt
@@ -190,6 +190,53 @@ class MultiMessagePlotter(MessagePlotter):
         """
         for ax, analysisResult, compareValue in zip(self._axes.flat, analysisResults, compareValues):
             MessagePlotter.fillDiffToCompare(ax, analysisResult, compareValue)
+
+
+    from inference.segments import CorrelatedSegment
+
+    def plotCorrelations(self,
+            correlations: List[CorrelatedSegment]):
+        """
+        Plot the given correlations and their messages.
+
+        :param correlations: List of segment correlations.
+        """
+        import humanhash
+        from inference.segments import CorrelatedSegment
+
+        self.plotInEachAx([series.values for series in correlations],
+                          MessagePlotter.STYLE_CORRELATION + dict(label='Correlation'))
+
+        # (segment, haystraw), conv = next(iter(convolutions.items()))
+        #   type: Tuple[MessageSegment, Union[MessageSegment, AbstractMessage
+        # plt.gca().twinx()
+        for ax, series in zip(self._axes.flat, correlations):  # type: plt.Axes, CorrelatedSegment
+            humanid = humanhash.humanize(series.id)
+            shift = series.bestMatch()  # TODO multiple ones
+
+            MessagePlotter.color_y_axis(ax, 'green')
+            ax.set_title("{} {:.3E}".format(humanid, series.values[shift]), fontdict={'fontsize': 'x-small'})
+
+            bvax = ax.twinx()
+            # original position: range(segment.offset, segment.offset + len(segment.values))
+            segX = range(shift, shift+len(series.feature.values))
+            bvax.fill_between(segX, series.haystack.values[shift : shift+len(series.feature.values)],
+                              series.feature.values, facecolor='red', alpha=.3)
+            bvax.plot(segX, series.feature.values,
+                      linewidth=.6, alpha=1, c='red',
+                      label='Segment')
+
+            MessagePlotter.color_y_axis(bvax, 'blue')
+            if isinstance(series.haystack, MessageSegment):
+                bvax.plot(series.haystack.values, linewidth=.6, alpha=.6, c='blue', label='Bitvariances')
+            else:
+                raise NotImplementedError('Should not be necessary.')
+            #     analyzer = MessageAnalyzer.findExistingAnalysis(type(series.haystack.analyzer), MessageAnalyzer.U_BYTE,
+            #                                                     series.haystack, series.haystack.analyzer.analysisParams)
+            #     bvax.plot(analyzer.values,
+            #               linewidth=.6, alpha=.6, c='blue', label='Bitvariances')
+
+        plt.figlegend()
 
 
     def plotMultiSegmentLines(self, segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
