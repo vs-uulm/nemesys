@@ -391,8 +391,8 @@ class ParsedMessage(object):
     """Cache the last used tsharkConnector for reuse."""
 
 
-    def __init__(self, message: Union[RawMessage, None], layernumber=2, relativeToIP=True, failOnUndissectable=True,
-                 linktype=ParsingConstants.LINKTYPES['ETHERNET']):
+    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True, failOnUndissectable:bool=True,
+                 linktype:int=ParsingConstants.LINKTYPES['ETHERNET']):
         """
         Construct a new ParsedMessage for ``message``.
 
