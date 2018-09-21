@@ -14,12 +14,6 @@ class SpecimenLoader(object):
     Wrapper for loading messages from a PCAP as specimens.
     Prepares and represents messages to support further analysis.
     """
-    pcapFileName = None
-    messagePool = OrderedDict()  # type: OrderedDict[AbstractMessage, RawMessage]
-    """
-    maps message representations for Netzob and tshark
-    dict of { application layer of messages L5Messages : RawMessage }
-    """
 
     def __init__(self, pcap: str, layer:int=-1, relativeToIP:bool=False):
         """
@@ -30,6 +24,9 @@ class SpecimenLoader(object):
         if not isfile(pcap):
             raise FileNotFoundError('File not found:', pcap)
         self.pcapFileName = pcap
+        self.messagePool = OrderedDict()  # type: OrderedDict[AbstractMessage, RawMessage]
+        """maps message representations for Netzob and tshark
+        dict of { application layer of messages L5Messages : RawMessage }"""
 
         if layer <= 0:
             # read messages at layer 5 for the Netzob inference
