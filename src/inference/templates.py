@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Iterable, Sequence, ValuesView
+from typing import List, Dict, Union, Iterable, Sequence
 import numpy, scipy.spatial, itertools
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -153,7 +153,7 @@ class Template(AbstractSegment):
     def __repr__(self):
         oid = hash(self)
         # return '{:02x}'.format(oid % 0xffff)
-        import utils.bcolors as bcolors
+        import visualization.bcolors as bcolors
         # Template
         return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
 
