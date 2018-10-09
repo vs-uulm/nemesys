@@ -14,6 +14,7 @@ from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import TemplateGenerator
+from validation.dissectorMatcher import MessageComparator
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
@@ -128,6 +129,7 @@ def segments2clusteredTypes(segments: List[TypedSegment], analysisTitle) \
     :param analysisTitle:
     :return:
     """
+    print("Calculate distances...")
     tg = TemplateGenerator(segments)
     print("Clustering segments...")
     noise, *clusters = tg.clusterSimilarSegments(False)
@@ -155,13 +157,32 @@ def segments2clusteredTypes(segments: List[TypedSegment], analysisTitle) \
 
 
 
+
+
+# available analysis methods
+analyses = {
+    'bcpnm': BitCongruenceNgramMean,
+    # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
+    'bc': BitCongruence,
+    'bcd': BitCongruenceDelta,
+    'bcdg': BitCongruenceDeltaGauss,
+    'mbhbv': HorizonBitcongruence,
+
+    'variance': ValueVariance,
+    'progdiff': ValueProgressionDelta,
+    'progcumudq': CumulatedProgressionDelta,
+}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Characterize subsequences of messages by multiple metrics and visualize them.')
     parser.add_argument('pcapfilename', help='pcapfilename') # , nargs='+')
     parser.add_argument('-i', '--interactive', help='show interactive plot instead of writing output to file.',
                         action="store_true")
-    parser.add_argument('analysis', type=str, help='The kind of analysis to apply on the messages.')
+    parser.add_argument('analysis', type=str,
+                        help='The kind of analysis to apply on the messages. Available methods are: '
+                        + ', '.join(analyses.keys()))
     parser.add_argument('--parameters', '-p', help='Parameters for the analysis.')
     parser.add_argument('--distances', '-d', help='Plot distances instead of features.',
                         action="store_true")
@@ -173,34 +194,20 @@ if __name__ == '__main__':
         print('File not found: ' + args.pcapfilename)
         exit(1)
 
-    # available analysis methods
-    analyses = {
-        'bcpnm': BitCongruenceNgramMean,
-        # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
-        'bc': BitCongruence,
-        'bcd': BitCongruenceDelta,
-        'bcdg': BitCongruenceDeltaGauss,
-        'mbhbv': HorizonBitcongruence,
-
-        'variance': ValueVariance,
-        'progdiff': ValueProgressionDelta,
-        'progcumudq': CumulatedProgressionDelta,
-    }
-
     analyzerType = analyses[args.analysis]
     analysisArgs = args.parameters
 
     # dissect and label messages
     print("Loading messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=2, relativeToIP=True)
-    labeledMessages = specimens.labeledMessages.dissectAndLabel(specimens.messagePool.values())
+    comparator = MessageComparator(specimens, layer=2, relativeToIP=True)
     # segment messages according to true fields from the labels
-    print("Segmenting messages...")
+    print("Segmenting messages...", end=' ')
     segmentedMessages = [segmentsFromLabels(
         MessageAnalyzer.findExistingAnalysis(analyzerType, MessageAnalyzer.U_BYTE,
-                                             l4msg, analysisArgs), labeledMessages[rmsg])
+                                             l4msg, analysisArgs), comparator.dissections[rmsg])
         for l4msg, rmsg in specimens.messagePool.items()]
-
+    print("done.")
 
     # groupbylength
     segsByLen = dict()

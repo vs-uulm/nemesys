@@ -356,7 +356,7 @@ class TemplateGenerator(object):
 
 
     @staticmethod
-    def getClusterLabels(similarities: numpy.ndarray) -> Union[List[int]. Iterable]:
+    def getClusterLabels(similarities: numpy.ndarray) -> Union[List[int], Iterable]:
         """
         Cluster the entries in the similarities parameter and return the resulting labels.
 
