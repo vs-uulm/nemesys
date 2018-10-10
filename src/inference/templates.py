@@ -177,6 +177,7 @@ class TemplateGenerator(object):
         self._distances = self._getDistanceMatrix(
             TemplateGenerator._calcDistancesPerLen(
                 self._groupByLength()))  # type: numpy.array()
+        self.clusterer = None  # type: TemplateGenerator.DBSCAN
 
     @property
     def distanceMatrix(self) -> numpy.ndarray:
@@ -355,31 +356,84 @@ class TemplateGenerator(object):
         return simtrx
 
 
-    @staticmethod
-    def getClusterLabels(similarities: numpy.ndarray) -> Union[List[int], Iterable]:
+    class DBSCAN(object):
         """
-        Cluster the entries in the similarities parameter and return the resulting labels.
-
-        :param similarities:
-        :return:
+        Wrapper for DBSCAN from the sklearn.cluster module including autoconfiguration of the parameters.
         """
-        if numpy.count_nonzero(similarities) == 0:  # only identical segments
-            return numpy.zeros_like(similarities[0], int).tolist()
 
-        import sklearn.cluster
-        mask = numpy.tril(numpy.ones(similarities.shape)) != 0
-        epsilon = numpy.mean(similarities[mask]) + numpy.std(similarities[mask]) * 2 # 2.5? 3?
-        epsilon = .6
-        dbscan = sklearn.cluster.DBSCAN(eps=epsilon)
-        print("DBSCAN epsilon:", epsilon)
-        dbscan.fit(similarities)
-        return dbscan.labels_
+        def __init__(self, distances: numpy.ndarray, autoconfigure=True):
+            self._distances = distances
+            if autoconfigure:
+                self.minpts, self.epsilon = self._autoconfigure()
+            else:
+                self.minpts, self.epsilon = None, None
+                # epsilon = numpy.mean(similarities[mask]) + numpy.std(similarities[mask]) * 2 # 2.5? 3?
+
+
+        def lowertriangle(self):
+            """
+            distances is a symmetric matrix, so we often only need one triangle:
+            :return: mask of the lower triangle of the matrix
+            """
+            mask = numpy.tril(numpy.ones(self._distances.shape)) != 0
+            return mask
+
+
+        def _autoconfigure(self):
+            """
+            Auto configure the clustering parameters epsilon and minPts regarding the input data
+            according to the paper https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+
+            :return: minpts, epsilon
+            """
+            import math
+            from scipy.ndimage.filters import gaussian_filter1d
+
+            # MinPts ≈ ln(n)
+            minpts = round(math.log(self._distances.shape[0]))
+            # get minpts-nearest-neighbors:
+            neighdistmeans = list()
+            for neighid in range(self._distances.shape[0]):
+                ndmean = numpy.mean(
+                    sorted(self._distances[:, neighid])[1:minpts + 1])  # shift by one: ignore self identity
+                neighdistmeans.append((neighid, ndmean))
+            neighdistmeans = sorted(neighdistmeans, key=lambda x: -x[1])
+            neighdists = [e[1] for e in neighdistmeans]
+            # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
+            smoothdists = gaussian_filter1d(neighdists, numpy.log(len(neighdists)))
+            # approximate 2nd derivative and get its max
+            kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
+
+            # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+
+            epsilon = neighdists[kneeX]
+            return minpts, epsilon
+
+
+        def getClusterLabels(self) -> Union[List[int], Iterable]:
+            """
+            Cluster the entries in the similarities parameter by DBSCAN
+            and return the resulting labels.
+
+            :return:
+            """
+            import sklearn.cluster
+
+            if numpy.count_nonzero(self._distances) == 0:  # only identical segments
+                return numpy.zeros_like(self._distances[0], int).tolist()
+
+
+            dbscan = sklearn.cluster.DBSCAN(eps=self.epsilon, min_samples=self.minpts)
+            print("DBSCAN epsilon:", self.epsilon, "minpts:", self.minpts)
+            dbscan.fit(self._distances)
+            return dbscan.labels_
 
 
     def getClusters(self, lengthGroup: Sequence[MessageSegment]) -> Dict[int, List[MessageSegment]]:
         similarities = self._similaritiesInLengthGroup(lengthGroup)
         try:
-            labels = TemplateGenerator.getClusterLabels(similarities)
+            self.clusterer = TemplateGenerator.DBSCAN(similarities)
+            labels = self.clusterer.getClusterLabels()
         except ValueError as e:
             print(lengthGroup)
             # import tabulate
