@@ -220,7 +220,7 @@ if __name__ == '__main__':
     from tabulate import tabulate
 
     analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
-    for length, segments in segsByLen.items():
+    for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
 
         #############################
         if args.count:
@@ -254,23 +254,26 @@ if __name__ == '__main__':
             if length != 4:  # TODO only 4 byte fields for now!
                 continue
 
+            # TODO filter segments that contain no relevant feature data, i. e.,
+            # (0, .., 0)
+            # (nan, .., nan)
+            filteredSegments = [t for t in segments if t.bytes.count(b'\x00') != len(t.bytes)]
+            filteredSegments = [s for s in filteredSegments if
+                                numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0 ]
+
+            # More Hypotheses:
+            #  small values at fieldend: int
+            #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
+            #  len > 16: chars (pad if all 0)
+            # For a new hypothesis: what are the longest seen ints?
+            #
+
+
             if args.distances:
-                # TODO filter segments that contain no relevant feature data:
-                # (0, .., 0)
-                # (nan, .., nan)
-
-                # More Hypotheses:
-                #  small values at fieldend: int
-                #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
-                #  len > 16: chars (pad if all 0)
-                # For a new hypothesis: what are the longest seen ints?
-                #
-
-
                 print("Calculate distances...")
                 # ftype = 'id'
                 # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
-                tg = TemplateGenerator(segments)
+                tg = TemplateGenerator(filteredSegments)
                 print("Plot distances...")
                 sdp = DistancesPlotter(specimens, 'distances-{}-{}'.format(length ,analysisTitle), args.interactive)
                 sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
@@ -280,7 +283,7 @@ if __name__ == '__main__':
 
             else:
                 # segmentGroups = segments2typedClusters(segments,analysisTitle)
-                segmentGroups = segments2clusteredTypes(segments, analysisTitle)
+                segmentGroups = segments2clusteredTypes(filteredSegments, analysisTitle)
 
                 print("Prepare output...")
                 for pagetitle, segmentClusters in segmentGroups:
