@@ -132,7 +132,7 @@ class MessageAnalyzer(ABC):
 
 
     @staticmethod
-    def nibblesFromBytes(bytesequence: bytes):
+    def nibblesFromBytes(bytesequence: bytes) -> List[int]:
         """
         Returns a byte sequence representing the nibbles of the input byte sequence.
         Only the 4 least significent bits of the output are set, the first 4 bits are zero.
@@ -142,11 +142,8 @@ class MessageAnalyzer(ABC):
         :param bytesequence:
         :return:
         """
-        nibblesequence = []
-        for char in bytesequence:
-            nibblesequence.append(char >> 4)
-            nibblesequence.append(char & 0x0f)
-        return nibblesequence
+        from itertools import chain
+        return list(chain.from_iterable([(by >> 4, by & 0x0f) for by in bytesequence]))
 
 
     @staticmethod

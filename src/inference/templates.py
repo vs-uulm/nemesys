@@ -403,6 +403,7 @@ class TemplateGenerator(object):
             smoothdists = gaussian_filter1d(neighdists, numpy.log(len(neighdists)))
             # approximate 2nd derivative and get its max
             kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
+            kneeX = int(round(kneeX * 0.5))
 
             # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
 

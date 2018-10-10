@@ -149,8 +149,11 @@ def segments2clusteredTypes(segments: List[TypedSegment], analysisTitle) \
             segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
         segmentClusters.append(segmentGroups)
 
-    segmentClusters = [ ( '{} ({} bytes), '.format(analysisTitle,
-                                                   clusters[0][0].length if clusters else noise[0].length),
+    # print(len(clusters), len(noise))
+
+    segmentClusters = [ ( '{} ({} bytes), DBSCAN epsilon {:0.3f}'.format(analysisTitle,
+                                                   clusters[0][0].length if clusters else noise[0].length,
+                                                     tg.clusterer.epsilon if tg.clusterer else 'n/a'),
                           segmentClusters) ]
     return segmentClusters
 
@@ -170,7 +173,8 @@ analyses = {
 
     'variance': ValueVariance,
     'progdiff': ValueProgressionDelta,
-    'progcumudq': CumulatedProgressionDelta,
+    'progcumudelta': CumulatedProgressionDelta,
+    'value': Value,
 }
 
 
@@ -249,17 +253,16 @@ if __name__ == '__main__':
             # IPython.embed()
         #############################
         else:
-            # if length < 3 or len(segments) < 10:
-            #     continue
-            if length != 4:  # TODO only 4 byte fields for now!
-                continue
-
-            # TODO filter segments that contain no relevant feature data, i. e.,
-            # (0, .., 0)
-            # (nan, .., nan)
+            # filter segments that contain no relevant feature data, i. e.,
+            # (0, .., 0) | (nan, .., nan) | or a mixture of both
             filteredSegments = [t for t in segments if t.bytes.count(b'\x00') != len(t.bytes)]
             filteredSegments = [s for s in filteredSegments if
                                 numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0 ]
+
+            if length < 3 or len(filteredSegments) < 10:
+                continue
+            # if length != 4:  # TODO only 4 byte fields for now!
+            #     continue
 
             # More Hypotheses:
             #  small values at fieldend: int

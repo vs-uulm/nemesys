@@ -1232,6 +1232,21 @@ class ValueFrequency(MessageAnalyzer):
 
 
 
+class Value(MessageAnalyzer):
+    """
+    Simply returns the byte values of the message.
+    """
+    def analyze(self):
+        """
+        Does nothing.
+        """
+        pass
 
+    @property
+    def values(self):
+        if self.unit == MessageAnalyzer.U_BYTE:
+            return list(self.message.data)
+        else:
+            return MessageAnalyzer.nibblesFromBytes(self.message.data)
 
 
