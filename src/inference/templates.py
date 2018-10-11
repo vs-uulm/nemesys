@@ -206,7 +206,7 @@ class TemplateGenerator(object):
         """
         segsByLen = dict()
         for seg in self._segments:
-            seglen = len(seg.values)
+            seglen = len(seg.bytes)
             if seglen not in segsByLen:
                 segsByLen[seglen] = list()
             segsByLen[seglen].append(seg)
@@ -233,13 +233,17 @@ class TemplateGenerator(object):
     def _calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
         """
         Calculates pairwise distances for all input segments.
+        The values of all segments have to be of the same length!
 
         :param segments: list of segments to calculate their similarity/distance for.
         :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
             defaults to 'cosine'.
         :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
         """
-        # print("Calculating Distances...")
+        # fallback for vectors of length 1
+        if len(segments[0].values) == 1:
+            method = 'cityblock'
+
         if method == 'cosine':
             # comparing to zero vectors is undefined in cosine.
             # Its semantically equivalent to a (small) horizontal vector
@@ -248,6 +252,7 @@ class TemplateGenerator(object):
         else:
             segmentValuesMatrix = numpy.array([seg.values for seg in segments])
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
+        # import IPython; IPython.embed()
         segPairs = list()
         for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
             if numpy.isnan(simi):
@@ -372,11 +377,11 @@ class TemplateGenerator(object):
 
         def lowertriangle(self):
             """
-            distances is a symmetric matrix, so we often only need one triangle:
-            :return: mask of the lower triangle of the matrix
+            Distances is a symmetric matrix, so we often only need one triangle:
+            :return: the lower triangle of the matrix
             """
-            mask = numpy.tril(numpy.ones(self._distances.shape)) != 0
-            return mask
+            # mask = numpy.tril(numpy.ones(self._distances.shape)) != 0
+            return numpy.tril(self._distances)
 
 
         def _autoconfigure(self):
@@ -403,15 +408,22 @@ class TemplateGenerator(object):
             smoothdists = gaussian_filter1d(neighdists, numpy.log(len(neighdists)))
             # approximate 2nd derivative and get its max
             kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
-            kneeX = int(round(kneeX * 0.5))
-
-            # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+            kneeX = int(round(kneeX * 0.05))
 
             epsilon = neighdists[kneeX]
+
+            if not epsilon > 0.0:
+                lt = self.lowertriangle()
+                epsilon = lt.mean() + lt.var()
+                # from tabulate import tabulate
+                # print(tabulate(lt))
+                # import IPython; IPython.embed()
+            # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+
             return minpts, epsilon
 
 
-        def getClusterLabels(self) -> Union[List[int], Iterable]:
+        def getClusterLabels(self) -> numpy.ndarray:
             """
             Cluster the entries in the similarities parameter by DBSCAN
             and return the resulting labels.
@@ -421,8 +433,7 @@ class TemplateGenerator(object):
             import sklearn.cluster
 
             if numpy.count_nonzero(self._distances) == 0:  # only identical segments
-                return numpy.zeros_like(self._distances[0], int).tolist()
-
+                return numpy.zeros_like(self._distances[0], int)
 
             dbscan = sklearn.cluster.DBSCAN(eps=self.epsilon, min_samples=self.minpts)
             print("DBSCAN epsilon:", self.epsilon, "minpts:", self.minpts)
@@ -440,6 +451,7 @@ class TemplateGenerator(object):
             # import tabulate
             # print(tabulate.tabulate(similarities))
             raise e
+        assert isinstance(labels, numpy.ndarray)
         ulab = set(labels)
 
         segmentClusters = dict()

@@ -57,6 +57,7 @@ class DistancesPlotter(MessagePlotter):
         fig = self._fig
         axMDS, axSeg = self._axes
 
+
         s = 150
         ulab = sorted(set(labels))
         cIdx = [each for each in numpy.linspace(0, self._cm.N-2, len(ulab))]
@@ -106,6 +107,46 @@ class DistancesPlotter(MessagePlotter):
         # plt.show()
         # fig.clf()
 
+    def _plot2dDistances(self, segments: List[MessageSegment], labels: List,
+                               templates: List = None):
+        fig = self._fig
+        axMDS, axSeg = self._axes
+
+        ulab = sorted(set(labels))
+        cIdx = [each for each in numpy.linspace(0, self._cm.N - 2, len(ulab))]
+
+        if templates is None:
+            templates = ulab
+
+        coords = numpy.array([seg.values for seg in segments])  # type: numpy.ndarray
+
+        s = 150
+        for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
+            lColor = self._cm(int(round(cIdx[c])))
+            class_member_mask = (labels == l)
+            try:
+                x = list(compress(coords[:, 0].tolist(), class_member_mask))
+                if coords.shape[1] > 1:
+                    y = list(compress(coords[:, 1].tolist(), class_member_mask))
+                    axMDS.scatter(x, y, c=lColor, alpha=.6,
+                                  s=s - (c * s / len(ulab)), lw=0, label=str(l))
+                else:
+                    axMDS.scatter(x, [0] * len(x), c=lColor, alpha=.6,
+                                  s=s - (c * s / len(ulab)), lw=0, label=str(l))
+            except IndexError as e:
+                print(segments)
+                raise e
+
+            for seg in compress(segments, class_member_mask):
+                axSeg.plot(seg.values, c=lColor, alpha=0.05)
+            if isinstance(t, Template):
+                axSeg.plot(t.values, c=lColor, linewidth=4)
+
+        axMDS.legend(scatterpoints=1, loc='best', shadow=False)
+
+        fig.canvas.toolbar.update()
+
+
 
     def plotDistances(self, tg: TemplateGenerator, labels: numpy.ndarray):
         """
@@ -136,15 +177,17 @@ class DistancesPlotter(MessagePlotter):
             # Prevent ordering errors (remove if we choose to support multiple plots (lenGrps) at once)
             assert lenGrp == tg.segments
 
-            similarities = tg.distanceMatrix
-
             ulab = set(labels)
             clusters = list()
             for l in ulab:
                 class_member_mask = (labels == l)
                 clusters.append([ seg for seg in compress(lenGrp, class_member_mask) ])
 
-            self._plotManifoldDistances(lenGrp, similarities, labels)
+            if len(tg.segments[0].values) > 2:
+                similarities = tg.distanceMatrix
+                self._plotManifoldDistances(lenGrp, similarities, labels)
+            else:
+                self._plot2dDistances(lenGrp, labels)
 
 
 

@@ -119,21 +119,21 @@ def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
     return segmentGroups
 
 
-def segments2clusteredTypes(segments: List[TypedSegment], analysisTitle) \
+def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
         -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
     Keep and label segments classified as noise.
 
-    :param segments:
+    :param tg:
     :param analysisTitle:
     :return:
     """
-    print("Calculate distances...")
-    tg = TemplateGenerator(segments)
+    # print("Calculate distances...")
+    # tg = TemplateGenerator(segments)  # segments: List[TypedSegment]
     print("Clustering segments...")
     noise, *clusters = tg.clusterSimilarSegments(False)
-    print("{} clusters generated from {} segments".format(len(clusters), len(segments)))
+    print("{} clusters generated from {} segments".format(len(clusters), len(tg.segments)))
 
     segmentClusters = list()
     if len(noise) > 0:
@@ -175,6 +175,8 @@ analyses = {
     'progdiff': ValueProgressionDelta,
     'progcumudelta': CumulatedProgressionDelta,
     'value': Value,
+    'ntropy': EntropyWithinNgrams,
+    'stropy': Entropy,
 }
 
 
@@ -215,8 +217,8 @@ if __name__ == '__main__':
 
     # groupbylength
     segsByLen = dict()
-    for seg in chain.from_iterable(segmentedMessages):
-        seglen = len(seg.values)
+    for seg in chain.from_iterable(segmentedMessages):  # type: MessageSegment
+        seglen = len(seg.bytes)
         if seglen not in segsByLen:
             segsByLen[seglen] = list()
         segsByLen[seglen].append(seg)
@@ -271,26 +273,25 @@ if __name__ == '__main__':
             # For a new hypothesis: what are the longest seen ints?
             #
 
+            print("Calculate distances...")
+            # ftype = 'id'
+            # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
+            tg = TemplateGenerator(filteredSegments)
 
-            if args.distances:
-                print("Calculate distances...")
-                # ftype = 'id'
-                # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
-                tg = TemplateGenerator(filteredSegments)
-                print("Plot distances...")
-                sdp = DistancesPlotter(specimens, 'distances-{}-{}'.format(length ,analysisTitle), args.interactive)
-                sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-                sdp.writeOrShowFigure()
 
-                # IPython.embed()
+            # if args.distances:
+            print("Plot distances...")
+            sdp = DistancesPlotter(specimens, 'distances-{}-{}'.format(length ,analysisTitle), args.interactive)
+            sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+            sdp.writeOrShowFigure()
 
-            else:
-                # segmentGroups = segments2typedClusters(segments,analysisTitle)
-                segmentGroups = segments2clusteredTypes(filteredSegments, analysisTitle)
 
-                print("Prepare output...")
-                for pagetitle, segmentClusters in segmentGroups:
-                    plotMultiSegmentLines(segmentClusters, pagetitle, True)
+            # segmentGroups = segments2typedClusters(segments,analysisTitle)
+            segmentGroups = segments2clusteredTypes(tg, analysisTitle)
+
+            print("Prepare output...")
+            for pagetitle, segmentClusters in segmentGroups:
+                plotMultiSegmentLines(segmentClusters, pagetitle, True)
 
     exit()
 

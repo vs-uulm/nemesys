@@ -27,7 +27,7 @@ class MessageAnalyzer(ABC):
 
     # TODO per analysis method that does not generate one value per one byte: margins (head, tail) and skip
 
-    def __init__(self, message: AbstractMessage, unit=U_BYTE):
+    def __init__(self, message: AbstractMessage, unit=U_NIBBLE):
         """
         Create object and set the message and the unit-size.
 
@@ -380,6 +380,21 @@ class MessageAnalyzer(ABC):
         return valuestats
 
 
+class SegmentAnalyzer(MessageAnalyzer):
+    """
+    Abstract class to denote analyzers that work on a given subset, i.e. Segment, of a message.
+    """
+    def values(self):
+        raise TypeError("SegmentAnalyzer subclasses are dependent on the segment the analyzer should refer to. "
+                        "Use the function value(start, end) instead.")
+
+    def analyze(self):
+        pass
+
+
+    @abstractmethod
+    def value(self, start, end):
+        raise NotImplementedError("Abstract method: Implement!")
 
 
 ### MessageSegment classes #########################################
@@ -514,7 +529,8 @@ class MessageSegment(AbstractSegment):
 
         # calculate values by the given analysis method, if not provided
         if not analyzer.values:
-            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit, analyzer.message, analyzer.analysisParams)
+            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
+                                                                 analyzer.message, analyzer.analysisParams)
         else:
             self.analyzer = analyzer  # type: MessageAnalyzer
             """kind of the generation method for the contained analysis values"""
@@ -539,6 +555,8 @@ class MessageSegment(AbstractSegment):
     def values(self):
         if super().values:
             return super().values
+        if isinstance(self.analyzer, SegmentAnalyzer):
+            return self.analyzer.value(self.offset, self.offset+self.length)
         return self.analyzer.values[self.offset:self.offset+self.length]
 
 
