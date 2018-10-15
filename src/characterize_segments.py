@@ -293,6 +293,8 @@ if __name__ == '__main__':
             for pagetitle, segmentClusters in segmentGroups:
                 plotMultiSegmentLines(segmentClusters, pagetitle, True)
 
+            IPython.embed()
+
     exit()
 
 
