@@ -688,7 +688,7 @@ class ParsedMessage(object):
             field was not parsed correctly. This needs manual postprosessing of the dissector output.
             Therefore see :func:`_prehooks` and :func:`_posthooks`.
         """
-        rest = self.protocolbytes
+        rest = str(self.protocolbytes)
         toInsert = list()
         # iterate all fields and search their value at the next position in the raw message
         for index, raw in enumerate(self.getFieldValues()):
@@ -717,9 +717,13 @@ class ParsedMessage(object):
         # insert delimiters into the field list
         for foffset, (index, delim) in enumerate(toInsert):
             self._fieldsflat.insert(index + foffset, delim)
-        # if their is any trailing data
-        if len(rest) > 0:  # might also be padding (needs evaluation)
-            if len(rest) <= 4:
+        # if there is any trailing data
+        if len(rest) > 0:  # might also be padding (TODO needs evaluation)
+            if rest.startswith('20'):  # always consider a space at the start of the rest as delimiter
+                self._fieldsflat.append(('delimiter', '20'))
+                rest = rest[2:]
+
+            if len(rest) <= 4:  # 2 bytes in hex notation
                 self._fieldsflat.append(('delimiter', rest))
             elif self._fieldsflat[-1][0] in ['smb2.ioctl.shadow_copy.count', 'smb.trans_name']:
                 # trailer that is unknown to the dissector
@@ -999,24 +1003,22 @@ class ParsedMessage(object):
         'irc.response.trailer': _hookIRCemptyTrailer.__func__,
         'irc.request.prefix_raw': _hookAppendColon.__func__, 'irc.request.trailer_raw': _hookAppendColonSpace.__func__,
         'irc.request.trailer': _hookIRCemptyTrailer.__func__,
+
         'gss-api_raw' : _hookGssapi.__func__, 'ntlmssp.version.ntlm_current_revision_raw' : _hookAppendThreeZeros.__func__,
     }
-    # 'irc.response.command_raw': _hookAppendSpace.__func__, 'irc.response.command_parameter_raw' : _hookAppendSpace.__func__,
-    # 'irc.request.command_raw': _hookAppendSpace.__func__, 'irc.request.command_parameter_raw' : _hookAppendSpace.__func__}
     ## Basic handling of missing single delimiter characters is generalized by comparing the original message to the
     ## concatenated dissector result. See :func:`_reassemblePostProcessing()
     ##  within :func:`_reassemblePostProcessing()`
     # noinspection PyUnresolvedReferences
-    _posthooks = { 'lanman.function_code' : _hookAppendNetServerEnum2.__func__,
-                   'smb.dfs.referral.version' : _hookRaiseNotImpl.__func__,
-                   'dcerpc.cn_num_ctx_items' : _hookAppendThreeZeros.__func__,
-                   'Unknown Transaction2 Parameters' : _hookAppendUnknownTransParams.__func__,
-                   'Unknown Transaction2 Data' : _hookAppendUnknownTransData.__func__,
-                   'smb.reserved': _hookAppendUnknownTransReqBytes.__func__,
-                   'nbns.session_data_packet_size' : _hookAppendFourZeros.__func__,
-                  }
-    # 'irc.request_tree': _hookAppendCRLF.__func__, 'irc.response_tree': _hookAppendCRLF.__func__
-    # 'irc.response.command_raw': _hookAppendSpace.__func__, 'irc.request.command_raw': _hookAppendSpace.__func__
+    _posthooks = {
+        'lanman.function_code' : _hookAppendNetServerEnum2.__func__,
+        'smb.dfs.referral.version' : _hookRaiseNotImpl.__func__,
+        'dcerpc.cn_num_ctx_items' : _hookAppendThreeZeros.__func__,
+        'Unknown Transaction2 Parameters' : _hookAppendUnknownTransParams.__func__,
+        'Unknown Transaction2 Data' : _hookAppendUnknownTransData.__func__,
+        'smb.reserved': _hookAppendUnknownTransReqBytes.__func__,
+        'nbns.session_data_packet_size' : _hookAppendFourZeros.__func__,
+    }
 
 
     def printUnknownTypes(self):
