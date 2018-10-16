@@ -9,8 +9,6 @@ import time
 from os.path import abspath, isdir
 from typing import Dict, Tuple, List
 
-from mpl_toolkits.mplot3d import Axes3D
-
 from netzob import all as netzob
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -223,34 +221,6 @@ def printResultMatrix(matchprecision):
     ml.headers = qualmatrix[0]
     ml.extend(qualmatrix[1:])
     print(ml)
-
-
-def plot_scatter3d(plot, x_val, y_val, c_val):
-    """
-    3d plot x_val, y_val, and use c_val as color and z coordinate.
-
-    **depreciated** since 3D-plots are difficult to use/read.
-    Probably improve usefulness of representation for reuse.
-
-    :param plot: the pyplot object
-    :param x_val: x-values of data points
-    :param y_val: y-values of data points
-    :param c_val: color-values of data points
-    """
-
-    # maxsym = max(len(sym) for sym in x_val)
-    # for entry in similarityprecisions:
-    #     entry.extend([(0,0)] * (maxsym - len(entry)))
-    # precisionmatrix = np.asarray(similarityprecisions)
-    # print x_val
-    fig = plot.figure()
-    ax = Axes3D(fig)
-    # ax = fig.add_subplot(111, projection='3d')
-
-    ax.scatter(x_val, y_val, c_val, c=c_val)  # 'ro')
-    # plt.axis([0, 6, 0, 20])
-
-    plot.show()
 
 
 def getSimilarityquality(
