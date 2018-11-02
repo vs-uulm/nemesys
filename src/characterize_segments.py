@@ -8,6 +8,7 @@ import argparse
 import IPython, numpy, math
 from os.path import isfile, splitext, basename
 from itertools import chain
+from tabulate import tabulate
 
 import inference.segmentHandler as sh
 from utils.loader import SpecimenLoader
@@ -120,14 +121,30 @@ def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
 
 
 def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
-        -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
+        -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
     Keep and label segments classified as noise.
 
     :param tg:
     :param analysisTitle:
-    :return:
+    :return: List/Tuple structure of annotated analyses, clusters, and segments.
+        List [ of
+            Tuples (
+                 "analysis label",
+                 List [ of cluster
+                    Tuples (
+                        "cluster label",
+                        List [ of segment
+                            Tuples (
+                                "segment label (e. g. field type)",
+                                MessageSegment object
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
     """
     # print("Calculate distances...")
     # tg = TemplateGenerator(segments)  # segments: List[TypedSegment]
@@ -156,6 +173,25 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
                                                      tg.clusterer.epsilon if tg.clusterer else 'n/a'),
                           segmentClusters) ]
     return segmentClusters
+
+
+def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
+                    seg: MessageSegment) -> Union[str, bool]:
+    """
+    Determine group label of on segment from deep hierarchy of segment clusters/groups.
+
+    see segments2clusteredTypes()
+
+    :param segGrpHier:
+    :param seg:
+    :return:
+    """
+    for name, grp in segGrpHier[0][1]:
+        if seg in (s for t, s in grp):
+            return name.split(", ", 2)[-1]
+    return False
+
+
 
 
 
@@ -241,7 +277,7 @@ if __name__ == '__main__':
 
             vlmt = [(vlct, len(elmt)) for vlct,elmt in cntr.items()]
 
-            print('Segement length:', length)
+            print('Segment length:', length)
             moCoTen = sorted(vlmt, key=lambda v: v[1])[:-11:-1]
             print(tabulate([(
                 mct, featvect,
@@ -255,16 +291,25 @@ if __name__ == '__main__':
             # IPython.embed()
         #############################
         else:
-            # filter segments that contain no relevant feature data, i. e.,
+            # filter out segments that contain no relevant feature data, i. e.,
             # (0, .., 0) | (nan, .., nan) | or a mixture of both
             filteredSegments = [t for t in segments if t.bytes.count(b'\x00') != len(t.bytes)]
             filteredSegments = [s for s in filteredSegments if
                                 numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0 ]
+            # filter out identical segments
+            uniqueFeatures = set()
+            fS = filteredSegments
+            filteredSegments = list()
+            for s in fS:
+                svt = tuple(s.values)
+                if svt not in uniqueFeatures:
+                    uniqueFeatures.add(svt)
+                    filteredSegments.append(s)
 
-            if length < 3 or len(filteredSegments) < 10:
+            if length < 3 or len(filteredSegments) < 16:
                 continue
-            # if length != 4:  # TODO only 4 byte fields for now!
-            #     continue
+            if length > 9:
+                continue
 
             # More Hypotheses:
             #  small values at fieldend: int
@@ -278,22 +323,28 @@ if __name__ == '__main__':
             # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
             tg = TemplateGenerator(filteredSegments)
 
-
-            # if args.distances:
-            print("Plot distances...")
-            sdp = DistancesPlotter(specimens, 'distances-{}-{}'.format(length ,analysisTitle), args.interactive)
-            sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-            sdp.writeOrShowFigure()
-
-
+            print("Clustering...")
             # segmentGroups = segments2typedClusters(segments,analysisTitle)
             segmentGroups = segments2clusteredTypes(tg, analysisTitle)
+            # re-extract cluster labels for segments
+            labels = numpy.array([
+                labelForSegment(segmentGroups, seg) for seg in tg.segments
+            ])
+
+            # # if args.distances:
+            print("Plot distances...")
+            sdp = DistancesPlotter(specimens, 'distances-{}-{}-DBSCANe{}'.format(
+                length, analysisTitle, tg.clusterer.epsilon if tg.clusterer else 'n/a'), args.interactive)
+            # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+            sdp.plotDistances(tg, labels)
+            sdp.writeOrShowFigure()
+
 
             print("Prepare output...")
             for pagetitle, segmentClusters in segmentGroups:
                 plotMultiSegmentLines(segmentClusters, pagetitle, True)
 
-            IPython.embed()
+            # IPython.embed()
 
     exit()
 

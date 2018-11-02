@@ -3,7 +3,7 @@
 
 import numpy
 import matplotlib.pyplot as plt
-from matplotlib import cm
+from matplotlib import cm, colors
 
 from typing import List, Any
 from itertools import compress
@@ -33,13 +33,13 @@ class DistancesPlotter(MessagePlotter):
         self._fig.set_size_inches(16, 9)
         # self._cm = cm.Set1  # has 9 colors
         # self._cm = cm.tab20 # 20 colors
-        self._cm = cm.jet
+        self._cm = cm.jet  # type: colors.LinearSegmentedColormap
 
 
 
 
-    def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray, labels: List, templates: List=None):
-        from matplotlib.collections import LineCollection
+    def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
+                               labels: List, templates: List=None):
         from sklearn import manifold
         from sklearn.decomposition import PCA
 
@@ -55,36 +55,88 @@ class DistancesPlotter(MessagePlotter):
         pos = clf.fit_transform(pos)
 
         fig = self._fig
-        axMDS, axSeg = self._axes
+        axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
 
-
-        s = 150
+        s = 150  # size factor
         ulab = sorted(set(labels))
-        cIdx = [each for each in numpy.linspace(0, self._cm.N-2, len(ulab))]
+        # omit noise in cluster labels if types are plotted anyway.
+        if isinstance(segments[0], TypedSegment):
+            for l in ulab:
+                if isinstance(l, str) and "Noise" in l:
+                    ulab.remove(l)
+
+        cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
         if templates is None:
             templates = ulab
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
-            lColor = self._cm(int(round(cIdx[c])))
+            lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
+            # print(str(c), cIdx[c], lColor)
             try:
                 x = list(compress(pos[:, 0].tolist(), class_member_mask))
                 y = list(compress(pos[:, 1].tolist(), class_member_mask))
                 axMDS.scatter(x, y, c=lColor, alpha=.6,
-                              s=s-(c*s/len(ulab)), lw=0, label=str(l))
+                              s = 150,
+                              # s=s-(c*s/len(ulab)),
+                              lw=0, label=str(l))
             except IndexError as e:
                 print(pos)
                 print(similarities)
                 print(segments)
                 raise e
 
-            for seg in compress(segments, class_member_mask):
-                axSeg.plot(seg.values, c=lColor, alpha=0.05)
             if isinstance(t, Template):
                 axSeg.plot(t.values, c=lColor, linewidth=4)
 
+
+        # include field type labels for TypedSegments input
+        if isinstance(segments[0], TypedSegment):
+            ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+            s = 30  # PP
+            utyp = sorted(set(ftypes))
+            fcm = cm.cubehelix  # PP
+            cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
+            for n, ft in enumerate(utyp):  # PP
+                fColor = fcm(cIdx[n])
+                type_member_mask = (ftypes == ft)
+                x = list(compress(pos[:, 0].tolist(), type_member_mask))
+                y = list(compress(pos[:, 1].tolist(), type_member_mask))
+                axMDS.scatter(x, y, c=fColor, alpha=1,
+                          s=s,
+                          lw=0, label=str(ft))
+
+                # TODO colors of clusters or types
+                for seg in compress(segments, type_member_mask):
+                    axSeg.plot(seg.values, c=fColor, alpha=0.05)
+
+
         axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
+
+        # # Count positions
+        # from collections import Counter
+        # import math
+        # if isinstance(segments[0], TypedSegment):
+        #     coordCounter = Counter(
+        #         [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
+        #             segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+        #     )
+        # else:
+        #     coordCounter = Counter(
+        #         [(posX, posY, lab) for lab, posX, posY in zip(
+        #             labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+        #     )
+        # for (posX, posY, lab), cnt in coordCounter.items():
+        #     if cnt > 1:
+        #         theta = hash(str(lab)) % 360
+        #         r = 1
+        #         posXr = posX + r * math.cos(theta)
+        #         posYr = posY + r * math.sin(theta)
+        #         axMDS.text(posXr, posYr, "{}: {}".format(lab, cnt), withdash=True)
+
+
         # TODO plotting of edges takes a long time compared to the scatterplot (and especially rendering the PDF is a PITA)
+        # from matplotlib.collections import LineCollection
         # # Plot the edges
         # lines = [[pos[i, :], pos[j, :]]
         #             for i in range(len(pos)) for j in range(len(pos))]
@@ -102,10 +154,8 @@ class DistancesPlotter(MessagePlotter):
         #     for seg in itertools.compress(segments, class_member_mask):
         #         axSeg.plot(seg.values, c=matplotlib.cm.Set1(l+1))
 
-        # plt.tight_layout()
         fig.canvas.toolbar.update()
-        # plt.show()
-        # fig.clf()
+
 
     def _plot2dDistances(self, segments: List[MessageSegment], labels: List,
                                templates: List = None):
@@ -120,7 +170,7 @@ class DistancesPlotter(MessagePlotter):
 
         coords = numpy.array([seg.values for seg in segments])  # type: numpy.ndarray
 
-        s = 150
+        s = 150  # size factor
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
             lColor = self._cm(int(round(cIdx[c])))
             class_member_mask = (labels == l)
@@ -129,10 +179,12 @@ class DistancesPlotter(MessagePlotter):
                 if coords.shape[1] > 1:
                     y = list(compress(coords[:, 1].tolist(), class_member_mask))
                     axMDS.scatter(x, y, c=lColor, alpha=.6,
-                                  s=s - (c * s / len(ulab)), lw=0, label=str(l))
+                                  # s=s - (c * s / len(ulab)),
+                                  lw=0, label=str(l))
                 else:
                     axMDS.scatter(x, [0] * len(x), c=lColor, alpha=.6,
-                                  s=s - (c * s / len(ulab)), lw=0, label=str(l))
+                                  # s=s - (c * s / len(ulab)),
+                                  lw=0, label=str(l))
             except IndexError as e:
                 print(segments)
                 raise e

@@ -196,6 +196,36 @@ class TemplateGenerator(object):
         return self._segments
 
 
+    def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
+        """
+        Retrieve the distance of two segments.
+
+        :param A:
+        :param B:
+        :return:
+        """
+        a = self._segments.index(A)
+        b = self._segments.index(B)
+        return self._distances[a,b]
+
+
+    def pairwiseDistance(self, As: List[MessageSegment], Bs: List[MessageSegment]) -> numpy.ndarray:
+        """
+        Retrieve the matrix of pairwise distances for two lists of segments.
+
+        :param As: List of segments
+        :param Bs: List of segments
+        :return: Matrix of distances: As are rows, Bs are columns.
+        """
+        distances = list()
+        for A in As:
+            Alist = list()
+            distances.append(Alist)
+            for B in Bs:
+                Alist.append(self.pairDistance(A, B))
+        return numpy.array(distances)
+
+
     def _groupByLength(self) -> Dict[int, List[MessageSegment]]:
         """
         Groups segments by value length.
@@ -387,38 +417,77 @@ class TemplateGenerator(object):
         def _autoconfigure(self):
             """
             Auto configure the clustering parameters epsilon and minPts regarding the input data
-            according to the paper https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+            according to the paper
+            (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+
+            Kneedle: https://ieeexplore.ieee.org/document/5961514
 
             :return: minpts, epsilon
             """
             import math
             from scipy.ndimage.filters import gaussian_filter1d
+            from kneed import KneeLocator
 
             # MinPts ≈ ln(n)
             minpts = round(math.log(self._distances.shape[0]))
-            # get minpts-nearest-neighbors:
-            neighdistmeans = list()
+
+            # # get mean of minpts-nearest-neighbors:
+            # neighdistmeans = list()
+            # for neighid in range(self._distances.shape[0]):
+            #     ndmean = numpy.mean(
+            #         sorted(self._distances[:, neighid])[1:minpts + 1])  # shift by one: ignore self identity
+            #     neighdistmeans.append((neighid, ndmean))
+            # neighdistmeans = sorted(neighdistmeans, key=lambda x: -x[1])
+            # neighdists = [e[1] for e in neighdistmeans]
+
+            # get minpts-nearest-neighbor distance:
+            neighdistminpts = list()
             for neighid in range(self._distances.shape[0]):
-                ndmean = numpy.mean(
-                    sorted(self._distances[:, neighid])[1:minpts + 1])  # shift by one: ignore self identity
-                neighdistmeans.append((neighid, ndmean))
-            neighdistmeans = sorted(neighdistmeans, key=lambda x: -x[1])
-            neighdists = [e[1] for e in neighdistmeans]
+                ndminpts = sorted(self._distances[:, neighid])[int(math.floor(minpts*4)) + 1]  # shift by one: ignore self identity
+                neighdistminpts.append((neighid, ndminpts))
+            neighdistminpts = sorted(neighdistminpts, key=lambda x: -x[1])
+            neighdists = [e[1] for e in neighdistminpts]
+
             # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
-            smoothdists = gaussian_filter1d(neighdists, numpy.log(len(neighdists)))
-            # approximate 2nd derivative and get its max
-            kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
-            kneeX = int(round(kneeX * 0.05))
+            # smoothdists = gaussian_filter1d(neighdists, numpy.log(len([n for n in neighdists if n > 0.001 * max(neighdists)])))
+
+            # # approximate 2nd derivative and get its max
+            # kneeX = numpy.array(
+            #         [smoothdists[i+1] + smoothdists[i-1] - 2 * smoothdists[i] for i in range(1, len(smoothdists)-1)]
+            #     ).argmax()
+            # # kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
+            # # kneeX = int(round(kneeX))
+
+            # # knee by kneedle alogithm
+            # kneel = KneeLocator(range(len(smoothdists)), smoothdists, curve='convex', direction='decreasing')
+            # kneel.plot_knee_normalized()
+            # kneeX = kneel.knee
+
+            # try steepest-drop position
+            kneeX = numpy.ediff1d(neighdists).argmin()
+
+            # TODO plot k-neighbor distance histogram and "knee" tangent
+            # import matplotlib.pyplot as plt
+            # plt.plot(neighdists, alpha=.6)
+            # # plt.plot(smoothdists, alpha=.8)
+            # plt.axvline(kneeX, linestyle='dashed', color='red', alpha=.4)
+            # # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
+            # # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
+            # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
+            #
+            # # plt.plot(neighdists, alpha=.4)
+            # plt.show()
 
             epsilon = neighdists[kneeX]
 
             if not epsilon > 0.0:
                 lt = self.lowertriangle()
                 epsilon = lt.mean() + lt.var()
-                # from tabulate import tabulate
-                # print(tabulate(lt))
-                # import IPython; IPython.embed()
+
             # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+            # from tabulate import tabulate
+            # print(tabulate([neighdists[:10]]))
+            # import IPython; IPython.embed()
 
             return minpts, epsilon
 
@@ -444,7 +513,11 @@ class TemplateGenerator(object):
     def getClusters(self, lengthGroup: Sequence[MessageSegment]) -> Dict[int, List[MessageSegment]]:
         similarities = self._similaritiesInLengthGroup(lengthGroup)
         try:
-            self.clusterer = TemplateGenerator.DBSCAN(similarities)
+            self.clusterer = TemplateGenerator.DBSCAN(similarities, False)
+            # fixed epsilon
+            import math
+            self.clusterer.minpts = round(math.log(similarities.shape[0]))
+            self.clusterer.epsilon = 1.0
             labels = self.clusterer.getClusterLabels()
         except ValueError as e:
             print(lengthGroup)
