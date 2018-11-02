@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/NEMESYS.iml" filepath="$PROJECT_DIR$/.idea/NEMESYS.iml" />
+      <module fileurl="file://$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" filepath="$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" />
+    </modules>
+  </component>
+</project>
