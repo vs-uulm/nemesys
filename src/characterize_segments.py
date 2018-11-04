@@ -308,8 +308,8 @@ if __name__ == '__main__':
 
             if length < 3 or len(filteredSegments) < 16:
                 continue
-            if length > 9:
-                continue
+            # if length > 9:
+            #     continue
 
             # More Hypotheses:
             #  small values at fieldend: int
@@ -324,7 +324,7 @@ if __name__ == '__main__':
             tg = TemplateGenerator(filteredSegments)
 
             print("Clustering...")
-            # segmentGroups = segments2typedClusters(segments,analysisTitle)
+            # typeGroups = segments2typedClusters(segments,analysisTitle)
             segmentGroups = segments2clusteredTypes(tg, analysisTitle)
             # re-extract cluster labels for segments
             labels = numpy.array([
@@ -343,6 +343,10 @@ if __name__ == '__main__':
             print("Prepare output...")
             for pagetitle, segmentClusters in segmentGroups:
                 plotMultiSegmentLines(segmentClusters, pagetitle, True)
+
+            typeDict = segments2types(filteredSegments)
+            typeGrp = [(t, [('', s) for s in typeDict[t]]) for t in typeDict.keys()]
+            plotMultiSegmentLines(typeGrp, "{} ({} bytes)".format(analysisTitle, length), True)
 
             # IPython.embed()
 

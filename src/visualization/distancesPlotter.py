@@ -39,10 +39,39 @@ class DistancesPlotter(MessagePlotter):
 
 
     def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
-                               labels: List, templates: List=None):
+                               labels: List, templates: List=None, plotEdges = False, countMarkers = False):
+        """
+        Plot distances of segments according to (presumably multidimensional) features.
+        This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
+        arranging the segments relative to each other according to their distances using Multidimensional Scaling (MDS).
+        See module `manifold` from package `sklearn`.
+
+        Besides the distances, this function plots the feature values of each given segment above each other;
+        they are colored according to the given labels.
+
+        :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
+            within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
+            segments
+        :param similarities: The precomputed similarity matrix:
+            symmetric matrix, rows/columns in the order of `segments`
+        :param labels: Labels of strings (or ints or any other printable type) identifying the cluster for each segment
+        :param templates: Templates of clusters to be printed alongside with the feature values.
+            CURRENTLY UNUSED
+        :param plotEdges: Plot of edges between each pair of segment markers.
+            Caution: Adds n^2 lines which takes very long compared to the scatterplot and
+            quickly becomes a huge load especially when rendering the plot as PDF.
+        :param countMarkers: add text labels with information at positions with multiple markers
+        """
         from sklearn import manifold
         from sklearn.decomposition import PCA
 
+        # plot configuration
+        labsize = 150  # label markers: size factor
+        typsize = 30   # type markers: size factor
+        # self._cm          # label color map
+        fcm = cm.cubehelix  # type color map
+
+        # prepare MDS
         seed = numpy.random.RandomState(seed=3)
         mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
                            dissimilarity="precomputed", n_jobs=1)
@@ -54,10 +83,12 @@ class DistancesPlotter(MessagePlotter):
 
         pos = clf.fit_transform(pos)
 
+
         fig = self._fig
         axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
 
-        s = 150  # size factor
+
+        # identify unique labels
         ulab = sorted(set(labels))
         # omit noise in cluster labels if types are plotted anyway.
         if isinstance(segments[0], TypedSegment):
@@ -65,19 +96,25 @@ class DistancesPlotter(MessagePlotter):
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)
 
+
+        # prepare color space
         cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
         if templates is None:
             templates = ulab
+        # iterate unique labels and scatter plot each of these clusters
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
+            # TODO strange "bug" colors scatter plot of clusters (with few/>4? members) erratically;
+            #   labels for those additional colors are missing then;
+            #   however, the number of iterations is correct (identical to the number of unique labels)
             # print(str(c), cIdx[c], lColor)
             try:
                 x = list(compress(pos[:, 0].tolist(), class_member_mask))
                 y = list(compress(pos[:, 1].tolist(), class_member_mask))
                 axMDS.scatter(x, y, c=lColor, alpha=.6,
-                              s = 150,
-                              # s=s-(c*s/len(ulab)),
+                              s = labsize,
+                              # s=s-(c*s/len(ulab)),  #
                               lw=0, label=str(l))
             except IndexError as e:
                 print(pos)
@@ -92,67 +129,67 @@ class DistancesPlotter(MessagePlotter):
         # include field type labels for TypedSegments input
         if isinstance(segments[0], TypedSegment):
             ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
-            s = 30  # PP
+            # identify unique types
             utyp = sorted(set(ftypes))
-            fcm = cm.cubehelix  # PP
+            # prepare color space
             cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
+            # iterate unique types and scatter plot each of these groups
             for n, ft in enumerate(utyp):  # PP
                 fColor = fcm(cIdx[n])
                 type_member_mask = (ftypes == ft)
                 x = list(compress(pos[:, 0].tolist(), type_member_mask))
                 y = list(compress(pos[:, 1].tolist(), type_member_mask))
                 axMDS.scatter(x, y, c=fColor, alpha=1,
-                          s=s,
+                          s=typsize,
                           lw=0, label=str(ft))
 
-                # TODO colors of clusters or types
+                # TODO is it desired to have colors of clusters or types here?
                 for seg in compress(segments, type_member_mask):
                     axSeg.plot(seg.values, c=fColor, alpha=0.05)
 
 
+        # place the label/type legend at the best position
         axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
 
-        # # Count positions
-        # from collections import Counter
-        # import math
-        # if isinstance(segments[0], TypedSegment):
-        #     coordCounter = Counter(
-        #         [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
-        #             segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
-        #     )
-        # else:
-        #     coordCounter = Counter(
-        #         [(posX, posY, lab) for lab, posX, posY in zip(
-        #             labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
-        #     )
-        # for (posX, posY, lab), cnt in coordCounter.items():
-        #     if cnt > 1:
-        #         theta = hash(str(lab)) % 360
-        #         r = 1
-        #         posXr = posX + r * math.cos(theta)
-        #         posYr = posY + r * math.sin(theta)
-        #         axMDS.text(posXr, posYr, "{}: {}".format(lab, cnt), withdash=True)
+        if plotEdges:
+            # plotting of edges takes a long time compared to the scatterplot (and especially when rendering the PDF)
+            from matplotlib.collections import LineCollection
+            # Plot the edges
+            lines = [[pos[i, :], pos[j, :]]
+                        for i in range(len(pos)) for j in range(len(pos))]
+            values = numpy.abs(similarities)
+            lc = LineCollection(lines,
+                                zorder=0, cmap=plt.cm.Blues,
+                                norm=plt.Normalize(0, values.max()))
+            # lc.set_alpha(.1)
+            lc.set_array(similarities.flatten())
+            lc.set_linewidths(0.5 * numpy.ones(len(segments)))
+            axMDS.add_collection(lc)
 
 
-        # TODO plotting of edges takes a long time compared to the scatterplot (and especially rendering the PDF is a PITA)
-        # from matplotlib.collections import LineCollection
-        # # Plot the edges
-        # lines = [[pos[i, :], pos[j, :]]
-        #             for i in range(len(pos)) for j in range(len(pos))]
-        # values = numpy.abs(similarities)
-        # lc = LineCollection(lines,
-        #                     zorder=0, cmap=plt.cm.Blues,
-        #                     norm=plt.Normalize(0, values.max()))
-        # # lc.set_alpha(.1)
-        # lc.set_array(similarities.flatten())
-        # lc.set_linewidths(0.5 * numpy.ones(len(segments)))
-        # axMDS.add_collection(lc)
+        if countMarkers:
+            # Count markers at identical positions and plot text with information about the markers at this position
+            from collections import Counter
+            import math
+            if isinstance(segments[0], TypedSegment):
+                coordCounter = Counter(
+                    [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
+                        segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+                )
+            else:
+                coordCounter = Counter(
+                    [(posX, posY, lab) for lab, posX, posY in zip(
+                        labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+                )
+            for (posX, posY, lab), cnt in coordCounter.items():
+                if cnt > 1:
+                    theta = hash(str(lab)) % 360
+                    r = 1
+                    posXr = posX + r * math.cos(theta)
+                    posYr = posY + r * math.sin(theta)
+                    axMDS.text(posXr, posYr, "{}: {}".format(lab, cnt), withdash=True)
 
-        # for l in ulab:
-        #     class_member_mask = (labels == l)
-        #     for seg in itertools.compress(segments, class_member_mask):
-        #         axSeg.plot(seg.values, c=matplotlib.cm.Set1(l+1))
 
         fig.canvas.toolbar.update()
 

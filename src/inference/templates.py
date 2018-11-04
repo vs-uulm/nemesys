@@ -417,79 +417,120 @@ class TemplateGenerator(object):
         def _autoconfigure(self):
             """
             Auto configure the clustering parameters epsilon and minPts regarding the input data
-            according to the paper
-            (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
-
-            Kneedle: https://ieeexplore.ieee.org/document/5961514
 
             :return: minpts, epsilon
             """
-            import math
-            from scipy.ndimage.filters import gaussian_filter1d
-            from kneed import KneeLocator
+            from math import log
 
             # MinPts ≈ ln(n)
-            minpts = round(math.log(self._distances.shape[0]))
-
-            # # get mean of minpts-nearest-neighbors:
-            # neighdistmeans = list()
-            # for neighid in range(self._distances.shape[0]):
-            #     ndmean = numpy.mean(
-            #         sorted(self._distances[:, neighid])[1:minpts + 1])  # shift by one: ignore self identity
-            #     neighdistmeans.append((neighid, ndmean))
-            # neighdistmeans = sorted(neighdistmeans, key=lambda x: -x[1])
-            # neighdists = [e[1] for e in neighdistmeans]
+            minpts = round(log(self._distances.shape[0]))
 
             # get minpts-nearest-neighbor distance:
-            neighdistminpts = list()
-            for neighid in range(self._distances.shape[0]):
-                ndminpts = sorted(self._distances[:, neighid])[int(math.floor(minpts*4)) + 1]  # shift by one: ignore self identity
-                neighdistminpts.append((neighid, ndminpts))
-            neighdistminpts = sorted(neighdistminpts, key=lambda x: -x[1])
-            neighdists = [e[1] for e in neighdistminpts]
+            neighdists = self._knearestdistance(minpts, 4)
+            # # lower factors resulted in only few small clusters, since the density distribution is to uneven
+            # # (for DBSCAN?)
 
-            # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
-            # smoothdists = gaussian_filter1d(neighdists, numpy.log(len([n for n in neighdists if n > 0.001 * max(neighdists)])))
+            # # get mean of minpts-nearest-neighbors:
+            # neighdists = self._knearestmean(minpts)
+            # # it gives no significantly better results than the direct k-nearest distance,
+            # # but requires more computation.
 
-            # # approximate 2nd derivative and get its max
-            # kneeX = numpy.array(
-            #         [smoothdists[i+1] + smoothdists[i-1] - 2 * smoothdists[i] for i in range(1, len(smoothdists)-1)]
-            #     ).argmax()
-            # # kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()
-            # # kneeX = int(round(kneeX))
 
-            # # knee by kneedle alogithm
-            # kneel = KneeLocator(range(len(smoothdists)), smoothdists, curve='convex', direction='decreasing')
-            # kneel.plot_knee_normalized()
+            # # knee calculation by rule of thumb
+            # kneeX = self._kneebyruleofthumb(neighdists)
+            # # result is far (too far) left of the actual knee
+
+            # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
+            # from kneed import KneeLocator
+            # kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='decreasing')
             # kneeX = kneel.knee
+            # # knee is too far right/value too small to be useful: the clusters are small/zero size and few,
+            # # perhaps density distribution too uneven in this use case?
+            # kneel.plot_knee_normalized()
 
-            # try steepest-drop position
+
+            # steepest-drop position:
             kneeX = numpy.ediff1d(neighdists).argmin()
+            # # better results than "any of the" knee values
 
-            # TODO plot k-neighbor distance histogram and "knee" tangent
+            epsilon = neighdists[kneeX]
+            if not epsilon > 0.0:  # fallback if epsilon becomes zero
+                lt = self.lowertriangle()
+                epsilon = lt.mean() + lt.var()
+
+
+            # DEBUG and TESTING
+            #
+            # # plots of k-nearest-neighbor distance histogram and "knee" tangent
             # import matplotlib.pyplot as plt
             # plt.plot(neighdists, alpha=.6)
-            # # plt.plot(smoothdists, alpha=.8)
+            # plt.plot(smoothdists, alpha=.8)
             # plt.axvline(kneeX, linestyle='dashed', color='red', alpha=.4)
             # # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
             # # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
-            # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
-            #
-            # # plt.plot(neighdists, alpha=.4)
+            # # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
             # plt.show()
-
-            epsilon = neighdists[kneeX]
-
-            if not epsilon > 0.0:
-                lt = self.lowertriangle()
-                epsilon = lt.mean() + lt.var()
 
             # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
             # from tabulate import tabulate
             # print(tabulate([neighdists[:10]]))
             # import IPython; IPython.embed()
+            #
+            # DEBUG and TESTING
 
             return minpts, epsilon
+
+
+        def _knearestmean(self, k: int):
+            """
+            :param k: range of neighbors to be selected
+            :return: The mean of the k-nearest neighbors for all the distances of this clusterer instance.
+            """
+            neighdistmeans = list()
+            for neighid in range(self._distances.shape[0]):
+                ndmean = numpy.mean(
+                    sorted(self._distances[:, neighid])[1:k + 1])  # shift by one: ignore self identity
+                neighdistmeans.append((neighid, ndmean))
+            neighdistmeans = sorted(neighdistmeans, key=lambda x: -x[1])
+            return [e[1] for e in neighdistmeans]
+
+
+        def _knearestdistance(self, k: int, kfactor: float = 1):
+            """
+            :param k: neighbor to be selected
+            :param kfactor: factor to multiply to k. Shifts the distance readout to the (k times kfactor)th neighbor.
+            :return: The distances of the k-nearest neighbors for all distances of this clusterer instance.
+            """
+            from math import floor
+            neighdistminpts = list()
+            for neighid in range(self._distances.shape[0]):
+                ndminpts = sorted(self._distances[:, neighid])[int(floor(
+                    k * kfactor
+                )) + 1]  # shift by one: ignore self identity
+                neighdistminpts.append((neighid, ndminpts))
+            neighdistminpts = sorted(neighdistminpts, key=lambda x: -x[1])
+            return [e[1] for e in neighdistminpts]
+
+
+        @staticmethod
+        def _kneebyruleofthumb(neighdists):
+            """
+            according to the paper
+            (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+
+            :param neighdists: k-nearest-neighbor distances
+            :return: x coordinate of knee point on the distance distribution of the parameter neighdists
+            """
+            # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
+            from scipy.ndimage.filters import gaussian_filter1d
+            smoothdists = gaussian_filter1d(neighdists, numpy.log(len([n for n in neighdists if n > 0.001 * max(neighdists)])))
+
+            # approximate 2nd derivative and get its max
+            # kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()  # alternative for 2nd derivative
+            kneeX = numpy.array(
+                    [smoothdists[i+1] + smoothdists[i-1] - 2 * smoothdists[i] for i in range(1, len(smoothdists)-1)]
+                ).argmax()
+            return int(round(kneeX))
 
 
         def getClusterLabels(self) -> numpy.ndarray:
@@ -497,7 +538,7 @@ class TemplateGenerator(object):
             Cluster the entries in the similarities parameter by DBSCAN
             and return the resulting labels.
 
-            :return:
+            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
             """
             import sklearn.cluster
 
