@@ -133,11 +133,15 @@ class BitCongruenceGauss(BitCongruence):
         """
         Segment message by determining local maxima of sigma-1.5-gauss-filtered bit-congruence.
 
-        >>> hbg = BitCongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = BitCongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
@@ -661,11 +665,15 @@ class SlidingNbcDeltaGauss(SlidingNbcDelta):
         """
         Segment message by determining local extrema of sigma-s-gauss-filtered sliding n-byte-mean bit-congruence.
 
-        >>> hbg = HorizonBitcongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = HorizonBitcongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
@@ -830,11 +838,15 @@ class HorizonBitcongruenceGauss(HorizonBitcongruence):
         """
         Segment message by determining local maxima of sigma-1.5-gauss-filtered 2-byte-horizon bit-congruence.
 
-        >>> hbg = HorizonBitcongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = HorizonBitcongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
