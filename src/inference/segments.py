@@ -97,7 +97,7 @@ class MessageAnalyzer(ABC):
 
     @staticmethod
     def findExistingAnalysis(analyzerclass: type, unit: int,
-                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None):
+                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None) -> 'MessageAnalyzer':
         """
         Efficiently obtain an analyzer by looking for an already existing identical object instance.
 

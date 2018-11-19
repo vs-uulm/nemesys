@@ -260,7 +260,7 @@ class DistancesPlotter(MessagePlotter):
             if len(lenGrp) < 2:
                 continue
             # # Keep for extension to generate cluster labels
-            # similarities = tg._similaritiesInLengthGroup(lenGrp)
+            # similarities = tg._similaritiesSubset(lenGrp)
             # labels = tg.getClusterLabels(similarities)
 
             # Prevent ordering errors (remove if we choose to support multiple plots (lenGrps) at once)
@@ -293,7 +293,7 @@ class DistancesPlotter(MessagePlotter):
         statistics = list()
         cltrs = tg._groupByLength()
         for cluster in cltrs.values():
-            similarities = tg._similaritiesInLengthGroup(cluster)
+            similarities = tg._similaritiesSubset(cluster)
             mask = numpy.tril(numpy.ones(similarities.shape)) != 0
             statistics.append(
                 similarities[mask]

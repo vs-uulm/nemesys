@@ -22,8 +22,8 @@ class MessagePlotter(object):
         """
         Define basic properties to plot messages.
 
-        :param specimens: The original message specimens this plot contains.
-        :param analysisTitle: The title of this analysis.
+        :param specimens: The pool of messages, the data to be plotted originated from.
+        :param analysisTitle: A freely chosen title to be printed on the plot and used for the filename.
         :param isInteractive: Whether the plot should be interactive or written to file.
         """
         plt.rc('xtick', labelsize=4)  # fontsize of the tick labels
