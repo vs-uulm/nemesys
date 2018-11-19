@@ -1,0 +1,7 @@
+cython
+scapy
+IPython
+matplotlib
+pandas
+scipy
+tabulate
