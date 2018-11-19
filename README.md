@@ -43,7 +43,7 @@ Have a look into `nemesys.py` resp. `nemesys_fms.py` to get an impression of the
 * Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)
   -- ~~currently NOT the official~~ [~~"next" branch~~](https://github.com/netzob/netzob/tree/next/netzob)! --
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
-    * clone Netzob next branch to a : `git clone --single-branch -b next https://github.com/netzob/netzob.git` 
+    * clone Netzob next branch to a : `git clone --single-branch -b fix-layer-build git@github.com:skleber/netzob.git` 
     * install it: `python setup.py install`
 * [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) = 2.2.6 
   (possibly other versions, depending on the compatibility of the JSON-output format of dissected messages,
