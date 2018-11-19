@@ -5,10 +5,7 @@ To find valid features for identifying field boundaries and to distinguish betwe
 """
 import argparse
 
-import IPython, numpy, math
-from os.path import isfile, splitext, basename
-from itertools import chain
-from tabulate import tabulate
+from os.path import isfile
 
 import inference.segmentHandler as sh
 from utils.loader import SpecimenLoader
@@ -19,25 +16,7 @@ from validation.dissectorMatcher import MessageComparator
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
-
-
-
-def segmentsFromLabels(analyzer, labels) -> List[TypedSegment]:
-    """
-    Segment messages according to true fields from the labels
-    and mark each segment with its true type.
-
-    :param analyzer: An Analyzer for/with a message
-    :param labels: The labels of the true format
-    :return: Segments of the analyzer's message according to the true format
-    """
-    segments = list()
-    offset = 0
-    for ftype, flen in labels:
-        segments.append(TypedSegment(analyzer, offset, flen, ftype))
-        offset += flen
-
-    return segments
+from characterize_fieldtypes import analyses, segments2clusteredTypes, plotMultiSegmentLines, labelForSegment, filterSegments
 
 
 def removeIdenticalLabels(plt):
@@ -65,157 +44,6 @@ def plotLinesSegmentValues(segments: List[Tuple[str, MessageSegment]]):
     plt.clf()
 
 
-def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]], pagetitle=None,
-                              colorPerLabel=False):
-    ncols = 5 if len(segmentGroups) > 4 else math.ceil(len(segmentGroups) / 2)
-    nrows = (len(segmentGroups) // ncols)
-    if not len(segmentGroups) % ncols == 0:
-        nrows += 1
-    if nrows < 3:
-        nrows = 3
-
-    mmp = MultiMessagePlotter(specimens, pagetitle, nrows, ncols, args.interactive)
-    mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
-    mmp.writeOrShowFigure()
-    mmp = None
-
-
-def segments2types(segments: List[TypedSegment]):
-    typegroups = dict()
-    for seg in segments:
-        if seg.fieldtype in typegroups:
-            typegroups[seg.fieldtype].append(seg)
-        else:
-            typegroups[seg.fieldtype] = [seg]
-    return typegroups
-
-
-def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
-        -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
-    typegroups = segments2types(segments)
-    # plotLinesSegmentValues([(typelabel, typ) for typelabel, tgroup in typegroups.items() for typ in tgroup])
-
-    segmentGroups = list()  # type: List[Tuple[str, List[Tuple[str, TypedSegment]]]
-    # one plot per type with clusters
-    for ftype, segs in typegroups.items():  # [label, segment]
-        tg = TemplateGenerator(segs)
-        noise, *clusters = tg.clusterSimilarSegments(False)
-        print("{} clusters generated from {} segments".format(len(clusters), len(segs)))
-
-        segmentClusters = ("{}: {}, {} bytes".format(
-            analysisTitle, ftype,
-            clusters[0][0].length if clusters else noise[0].length), list())
-
-        if len(noise) > 0:
-            segmentClusters[1].append(('Noise: {} Seg.s'.format(len(noise)),
-                                       [('', cseg) for cseg in noise]))
-
-        if len(clusters) > 0:
-            # plotLinesSegmentValues([(str(clusternum) + ftype + str(len(clustersegs)), seg)
-            #                     for clusternum, clustersegs in enumerate(clusters) for seg in clustersegs])
-            for clusternum, clustersegs in enumerate(clusters):
-                segmentClusters[1].append(('Cluster #{}: {} Seg.s'.format(clusternum, len(clustersegs)),
-                                           [('', cseg) for cseg in clustersegs]))
-            segmentGroups.append(segmentClusters)
-    return segmentGroups
-
-
-def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
-        -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
-    """
-    Cluster segments according to the distance of their feature vectors.
-    Keep and label segments classified as noise.
-
-    :param tg:
-    :param analysisTitle:
-    :return: List/Tuple structure of annotated analyses, clusters, and segments.
-        List [ of
-            Tuples (
-                 "analysis label",
-                 List [ of cluster
-                    Tuples (
-                        "cluster label",
-                        List [ of segment
-                            Tuples (
-                                "segment label (e. g. field type)",
-                                MessageSegment object
-                            )
-                        ]
-                    )
-                ]
-            )
-        ]
-    """
-    # print("Calculate distances...")
-    # tg = TemplateGenerator(segments)  # segments: List[TypedSegment]
-    print("Clustering segments...")
-    noise, *clusters = tg.clusterSimilarSegments(False)
-    print("{} clusters generated from {} segments".format(len(clusters), len(tg.segments)))
-
-    segmentClusters = list()
-    if len(noise) > 0:
-        segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-            analysisTitle, noise[0].length, len(noise)),
-                                   [('', cseg) for cseg in noise] ))
-    for cnum, segs in enumerate(clusters):
-        typegroups = segments2types(segs)
-
-        segmentGroups = ('{} ({} bytes), Cluster #{}: {} Seg.s'.format(
-            analysisTitle, segs[0].length, cnum, len(segs)), list())
-        for ftype, tsegs in typegroups.items():  # [label, segment]
-            segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
-        segmentClusters.append(segmentGroups)
-
-    # print(len(clusters), len(noise))
-
-    segmentClusters = [ ( '{} ({} bytes), DBSCAN epsilon {:0.3f}'.format(analysisTitle,
-                                                   clusters[0][0].length if clusters else noise[0].length,
-                                                     tg.clusterer.epsilon if tg.clusterer else 'n/a'),
-                          segmentClusters) ]
-    return segmentClusters
-
-
-def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
-                    seg: MessageSegment) -> Union[str, bool]:
-    """
-    Determine group label of on segment from deep hierarchy of segment clusters/groups.
-
-    see segments2clusteredTypes()
-
-    :param segGrpHier:
-    :param seg:
-    :return:
-    """
-    for name, grp in segGrpHier[0][1]:
-        if seg in (s for t, s in grp):
-            return name.split(", ", 2)[-1]
-    return False
-
-
-
-
-
-
-
-
-# available analysis methods
-analyses = {
-    'bcpnm': BitCongruenceNgramMean,
-    # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
-    'bc': BitCongruence,
-    'bcd': BitCongruenceDelta,
-    'bcdg': BitCongruenceDeltaGauss,
-    'mbhbv': HorizonBitcongruence,
-
-    'variance': ValueVariance,
-    'progdiff': ValueProgressionDelta,
-    'progcumudelta': CumulatedProgressionDelta,
-    'value': Value,
-    'ntropy': EntropyWithinNgrams,
-    'stropy': Entropy,
-}
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Characterize subsequences of messages by multiple metrics and visualize them.')
@@ -231,11 +59,11 @@ if __name__ == '__main__':
     parser.add_argument('--count', '-c', help='Count common values of features.',
                         action="store_true")
     args = parser.parse_args()
+
     #for pcap in args.pcapfilename:
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
-
     analyzerType = analyses[args.analysis]
     analysisArgs = args.parameters
 
@@ -243,21 +71,14 @@ if __name__ == '__main__':
     print("Loading messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=2, relativeToIP=True)
     comparator = MessageComparator(specimens, layer=2, relativeToIP=True)
+
     # segment messages according to true fields from the labels
     print("Segmenting messages...", end=' ')
-    segmentedMessages = [segmentsFromLabels(
-        MessageAnalyzer.findExistingAnalysis(analyzerType, MessageAnalyzer.U_BYTE,
-                                             l4msg, analysisArgs), comparator.dissections[rmsg])
-        for l4msg, rmsg in specimens.messagePool.items()]
+    segmentedMessages = sh.annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    segsByLen = sh.groupByLength(segmentedMessages)
     print("done.")
 
-    # groupbylength
-    segsByLen = dict()
-    for seg in chain.from_iterable(segmentedMessages):  # type: MessageSegment
-        seglen = len(seg.bytes)
-        if seglen not in segsByLen:
-            segsByLen[seglen] = list()
-        segsByLen[seglen].append(seg)
+
 
     from tabulate import tabulate
 
@@ -267,8 +88,8 @@ if __name__ == '__main__':
         #############################
         if args.count:
             # count common values:
-            cntr = dict()
-            for seg in segments:
+            cntr = dict()  # type: Dict[Tuple[float], List[TypedSegment]]
+            for seg in segments:  # type: TypedSegment
                 vkey = tuple(seg.values)
                 if vkey in cntr:
                     cntr[vkey].append(seg)
@@ -291,27 +112,23 @@ if __name__ == '__main__':
             # IPython.embed()
         #############################
         else:
-            # filter out segments that contain no relevant feature data, i. e.,
-            # (0, .., 0) | (nan, .., nan) | or a mixture of both
-            filteredSegments = [t for t in segments if t.bytes.count(b'\x00') != len(t.bytes)]
-            filteredSegments = [s for s in filteredSegments if
-                                numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0 ]
-            # filter out identical segments
-            uniqueFeatures = set()
-            fS = filteredSegments
-            filteredSegments = list()
-            for s in fS:
-                svt = tuple(s.values)
-                if svt not in uniqueFeatures:
-                    uniqueFeatures.add(svt)
-                    filteredSegments.append(s)
+            # filter out segments that contain no relevant feature byte/data
+            filteredSegments = filterSegments(segments)
 
-            if length < 3 or len(filteredSegments) < 16:
+            if length < 3:
+                continue
+            if len(filteredSegments) < 16:
+                print("Too few relevant segments after Filtering for length {}. {} segments remaining:".format(
+                    length, len(filteredSegments)
+                ))
+                for each in filteredSegments:
+                    print("   ", each)
+                print()
                 continue
             # if length > 9:
             #     continue
 
-            # More Hypotheses:
+            # TODO More Hypotheses:
             #  small values at fieldend: int
             #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
             #  len > 16: chars (pad if all 0)
@@ -344,9 +161,9 @@ if __name__ == '__main__':
             for pagetitle, segmentClusters in segmentGroups:
                 plotMultiSegmentLines(segmentClusters, pagetitle, True)
 
-            typeDict = segments2types(filteredSegments)
+            typeDict = sh.segments2types(filteredSegments)
             typeGrp = [(t, [('', s) for s in typeDict[t]]) for t in typeDict.keys()]
-            plotMultiSegmentLines(typeGrp, "{} ({} bytes)".format(analysisTitle, length), True)
+            plotMultiSegmentLines(typeGrp, "{} ({} bytes) fieldtypes".format(analysisTitle, length), True)
 
             # IPython.embed()
 
