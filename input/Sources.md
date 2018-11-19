@@ -77,7 +77,7 @@
     * filtered by `!_ws.malformed`
 
 
-### Random
+## Random
 Validation to find structure: Generated PCAPs with no structure (random byte sequences):
 
 generate_random_pcap.py  
@@ -86,4 +86,20 @@ with parameters:
 * -l 100
 * -c 100 and 10000
 * with and without -f
+
+
+## binaryprotocols_merged
+* from dhcp, dns, nbns, ntp, smb
+* add missing Ethernet encapsulation by scapy:
+  ```python 
+  dnspcap = rdpcap("dns_ictf2010_deduped-982.pcap")
+  outpakets = [Ether()/a for a in dnspcap]
+  wrpcap("dns_ictf2010_deduped-982-ether.pcap", outpakets)
+  ```
+* with `mergecap -F pcap -w binaryprotocols_merged_XXX.pcap INFILES`
+
+
+
+
+
 
