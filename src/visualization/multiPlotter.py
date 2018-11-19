@@ -15,13 +15,36 @@ class MultiMessagePlotter(MessagePlotter):
     from utils.loader import SpecimenLoader
 
     def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
-                 nrows: int, ncols: int,
+                 nrows: int, ncols: int=None,
                  isInteractive: bool=False):
+        """
+        :param nrows: The number of rows the sheet should have. If ncols is not set, this is interpreted
+            as the expected count of plots and the number of rows and cols are determined automatically.
+        :param ncols: The number of columns the sheet should have, or None if nrows contains
+            the expected count of plots.
+        """
         super().__init__(specimens, analysisTitle, isInteractive)
+        if ncols is None:
+            nrows, ncols = MultiMessagePlotter._autoconfRowsCols(nrows)
         self._fig, self._axes = plt.subplots(nrows=nrows, ncols=ncols)  # type: plt.Figure, numpy.ndarray
         if not isinstance(self._axes, numpy.ndarray):
             self._axes = numpy.array(self._axes)
         self._fig.set_size_inches(16, 9)
+
+
+    @staticmethod
+    def _autoconfRowsCols(plotCount):
+        """
+        Automatically determines sensible values for rows and cols based on
+        """
+        from math import ceil
+        ncols = 5 if plotCount > 4 else ceil(plotCount / 2)
+        nrows = (plotCount // ncols)
+        if not plotCount % ncols == 0:
+            nrows += 1
+        if nrows < 3:
+            nrows = 3
+        return nrows, ncols
 
 
     def setFigureSize(self, w, h):
