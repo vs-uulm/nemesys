@@ -483,7 +483,8 @@ class ParsedMessage(object):
 
         >>> from netzob.all import *
         >>> from validation.messageParser import ParsedMessage
-        >>> pkt = PCAPImporter.readFile("input/irc_ictf2010-42_deduped-100.pcap", importLayer=1).values()
+        >>> # pkt = PCAPImporter.readFile("../input/irc_ictf2010-42_deduped-100.pcap", importLayer=1).values()
+        >>> pkt = PCAPImporter.readFile("../input/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
         >>> pms = ParsedMessage.parseMultiple(pkt)
 
         :param messages: List of raw messages to parse
@@ -1029,10 +1030,9 @@ class ParsedMessage(object):
         Example:
         >>> from netzob.all import *
         >>> from validation.messageParser import ParsedMessage
-        >>> dhcp = PCAPImporter.readFile("input/dhcp_SMIA-20111010_deduped-100.pcap", importLayer=1).values()
-        >>> for pkt in dhcp:
-        >>>     pm = ParsedMessage(pkt)
-        >>>     pm.printUnknownTypes()
+        >>> dhcp = PCAPImporter.readFile("../input/dhcp_SMIA2011101X_deduped-100.pcap", importLayer=1).values()
+        >>> pms = ParsedMessage.parseMultiple(dhcp)
+        >>> for parsed in pms.values(): parsed.printUnknownTypes()
         """
 
         headerprinted = False

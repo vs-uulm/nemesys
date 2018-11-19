@@ -49,9 +49,13 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     """
     Segment message by determining inflection points of gauss-filtered bit congruence deltas.
 
-    >>> segmentsPerMsg = [[MessageSegment()]]
+    >>> from utils.loader import SpecimenLoader
+    >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
+    >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
+    Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
     >>> for spm in segmentsPerMsg:
-    >>>     print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+    ...     if b''.join([seg.bytes for seg in spm]).hex() != spm[0].message.data.hex():
+    ...         print("Mismatch!")
 
     :return: Segmentation of the specimens in the pool.
     """

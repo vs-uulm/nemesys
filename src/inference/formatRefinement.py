@@ -92,10 +92,21 @@ class MergeConsecutiveChars(Merger):
     Merge consecutive segments completely consisting of printable-char values into a text field.
     Printable chars are defined as: \t, \n, \r, >= 0x20 and <= 0x7e
 
-    >>> segs = [MessageSegment()]
-    >>> mcc = MergeConsecutiveChars(segs)
-    >>> sgms = b''.join([m.bytes for m in mcc.merge()])
-    >>> sgss = b''.join([m.bytes for m in segs])
+    >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
+    >>> from utils.loader import SpecimenLoader
+    >>> import inference.formatRefinement as refine
+    >>> from tabulate import tabulate
+    >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
+    >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
+    Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
+    >>> for messageSegments in segmentsPerMsg:
+    ...     mcc = MergeConsecutiveChars(messageSegments)
+    ...     mccmg = mcc.merge()
+    ...     if mccmg != messageSegments:
+    ...         sgms = b''.join([m.bytes for m in mccmg])
+    ...         sgss = b''.join([m.bytes for m in messageSegments])
+    ...         if sgms != sgss:
+    ...             print("Mismatch!")
     """
 
     @staticmethod
@@ -263,12 +274,28 @@ class Resplit2LeastFrequentPair(object):
         Needs only to be called once before all segments of one inference pass can be refined.
         A different inference required to run this method again before refinement by this class.
 
-        >>> segmentsPerMsg = [[MessageSegment()]]
-        >>> messageSegments = [MessageSegment()]
+        >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from utils.loader import SpecimenLoader
         >>> import inference.formatRefinement as refine
+        >>> from tabulate import tabulate
+        >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
+        >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
+        Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
+        >>> messageSegments = segmentsPerMsg[0]
         >>> # Initialize Resplit2LeastFrequentPair class
         >>> refine.Resplit2LeastFrequentPair.countPairFrequencies(segmentsPerMsg)
-        >>> refine.Resplit2LeastFrequentPair(messageSegments).split()
+        >>> replitSegments = refine.Resplit2LeastFrequentPair(messageSegments).split()
+        >>> segbytes = [[],[]]
+        >>> for a, b in zip(messageSegments, replitSegments):
+        ...     if a != b:
+        ...         segbytes[0].append(a.bytes.hex())
+        ...         segbytes[1].append(b.bytes.hex())
+        >>> print(tabulate(segbytes))
+        --------------------  --------  --------  ------  ----------  --------  --------  --------  --------  ------
+        780001000040007c837f  0000017f  000001    6f9fca  9de16a3b    5af87abf  108735    4b574410  9b9f      e59f5d
+        780001000040007c83    7f000001  7f000001  6f9f    ca9de16a3b  5af87a    bf108735  4b5744    109b9fe5  9f5d
+        --------------------  --------  --------  ------  ----------  --------  --------  --------  --------  ------
+
         """
         from collections import Counter
         Resplit2LeastFrequentPair.__pairFrequencies = Counter()
