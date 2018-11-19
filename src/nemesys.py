@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
                              '(typically the payload of a transport protocol).')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
     args = parser.parse_args()
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
@@ -36,7 +37,7 @@ if __name__ == '__main__':
 
     print("Load messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=args.layer,
-                               relativeToIP=True if args.layer >=0 else False)
+                               relativeToIP=args.relativeToIP)
 
     print("Segment messages...")
     inferenceTitle = 'bcDeltaGauss{:.1f}'.format(sigma)  # +hiPlateaus
