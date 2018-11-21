@@ -32,6 +32,11 @@ class MultiMessagePlotter(MessagePlotter):
         self._fig.set_size_inches(16, 9)
 
 
+    @property
+    def axes(self) -> List[plt.Axes]:
+        return self._axes.flat
+
+
     @staticmethod
     def _autoconfRowsCols(plotCount):
         """
@@ -67,6 +72,17 @@ class MultiMessagePlotter(MessagePlotter):
             else:
                 ax.plot(values, **linestyle)
             ax.autoscale(tight=True)
+
+
+    def textInEachAx(self, textList: List[str]):
+        for ax, text in zip(self._axes.flat, textList):
+            if text is None:
+                continue
+            left, right = ax.get_xlim()
+            marginH = (right-left) * 0.05
+            top, bottom = ax.get_ylim()
+            marginV = (bottom - top) * 0.05
+            ax.text(left + marginH, top + marginV, text)
 
 
     def scatterInEachAx(self, valuesList: List[Tuple[List, List]], marker='_'):
