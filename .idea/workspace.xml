@@ -10,8 +10,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/characterize_fieldtypes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/characterize_fieldtypes.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/visualization/multiPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/multiPlotter.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -31,8 +34,8 @@
       <file leaf-file-name="characterize_fieldtypes.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/characterize_fieldtypes.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="784">
-              <caret line="252" column="115" lean-forward="true" selection-start-line="252" selection-start-column="64" selection-end-line="252" selection-end-column="115" />
+            <state relative-caret-position="469">
+              <caret line="228" column="18" selection-start-line="228" selection-start-column="5" selection-end-line="228" selection-end-column="18" />
               <folding>
                 <element signature="e#569#593#0" expanded="true" />
               </folding>
@@ -43,33 +46,12 @@
       <file leaf-file-name="templates.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="746">
-              <caret line="497" column="40" selection-start-line="497" selection-start-column="29" selection-end-line="497" selection-end-column="40" />
+            <state relative-caret-position="679">
+              <caret line="300" column="103" selection-start-line="300" selection-start-column="103" selection-end-line="300" selection-end-column="103" />
               <folding>
                 <element signature="e#0#63#0" expanded="true" />
-                <element signature="e#355#3461#0" />
                 <element signature="e#3546#5638#0" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="formatRefinement.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="15">
-              <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="44" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="distancesPlotter.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1215">
-              <caret line="91" column="34" selection-start-line="91" selection-start-column="34" selection-end-line="91" selection-end-column="34" />
-              <folding>
-                <element signature="e#3#15#0" expanded="true" />
+                <element signature="e#15413#18325#0" />
               </folding>
             </state>
           </provider>
@@ -86,9 +68,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>specimens</find>
-      <find>runtimes</find>
-      <find>tformats</find>
       <find>unique</find>
       <find>fieldendsper</find>
       <find>fieldendsfrom</find>
@@ -116,6 +95,9 @@
       <find>abstract</find>
       <find>365</find>
       <find>Ipyth</find>
+      <find>\|</find>
+      <find>text</find>
+      <find>distance</find>
     </findStrings>
     <replaceStrings>
       <replace />
@@ -123,6 +105,7 @@
       <replace>ParsingConstants.TYPELOOKUP</replace>
       <replace>TsharkConnector</replace>
       <replace>self.method</replace>
+      <replace>,</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/pyshark</dir>
@@ -189,11 +172,11 @@
         <option value="$PROJECT_DIR$/src/inference/segments.py" />
         <option value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
         <option value="$PROJECT_DIR$/src/visualization/plotter.py" />
-        <option value="$PROJECT_DIR$/src/visualization/multiPlotter.py" />
         <option value="$PROJECT_DIR$/src/characterize_segments.py" />
+        <option value="$PROJECT_DIR$/src/utils/loader.py" />
+        <option value="$PROJECT_DIR$/src/visualization/multiPlotter.py" />
         <option value="$PROJECT_DIR$/src/inference/templates.py" />
         <option value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
-        <option value="$PROJECT_DIR$/src/utils/loader.py" />
       </list>
     </option>
   </component>
@@ -225,13 +208,13 @@
               <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
               <item name="nemesys" type="462c0819:PsiDirectoryNode" />
               <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="inference" type="462c0819:PsiDirectoryNode" />
+              <item name="validation" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
               <item name="nemesys" type="462c0819:PsiDirectoryNode" />
               <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="utils" type="462c0819:PsiDirectoryNode" />
+              <item name="visualization" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
@@ -272,7 +255,43 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.characterize_segments">
+  <component name="RunManager" selected="Python.characterize_fieldtypes">
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="characterize_fieldtypes" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
+      <option name="PARAMETERS" value="input/binaryprotocols_merged_500.pcap value" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
     <configuration name="characterize_segments" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -305,24 +324,6 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/prep_deduplicate-trace.py" />
       <option name="PARAMETERS" value="$USER_HOME$/REUP-common/trace-collection/sources/SMIA_2011-10-10_08_632834000_file1-splits/nbns/nbns_SMIA20111010-one.pcap -p 10000" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-    </configuration>
-    <configuration name="nemesys_field_deviation_plot" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="NEMESYS" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemesys_field-deviation-plot.py" />
-      <option name="PARAMETERS" value="input/random-100-continuous.pcap -l3" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -395,24 +396,6 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_message_segments.py" />
       <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-    </configuration>
-    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
-      <module name="NEMESYS" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -509,17 +492,17 @@
       <item itemvalue="Python.deduplicate-trace" />
       <item itemvalue="Python.segment" />
       <item itemvalue="Python.nemesys_fms" />
-      <item itemvalue="Python.nemesys_field_deviation_plot" />
       <item itemvalue="Python.parsePCAP" />
       <item itemvalue="Python.characterize_segments" />
+      <item itemvalue="Python.characterize_fieldtypes" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.characterize_fieldtypes" />
         <item itemvalue="Python.characterize_segments" />
         <item itemvalue="Python.parsePCAP" />
         <item itemvalue="Python.nemesys_fms" />
         <item itemvalue="Python.segment" />
-        <item itemvalue="Python.nemesys_field_deviation_plot" />
       </list>
     </recent_temporary>
   </component>
@@ -561,20 +544,19 @@
     <frame x="0" y="30" width="1720" height="1410" extended-state="4" />
     <editor active="true" />
     <layout>
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.5435816" visible="true" weight="0.2792208" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.54120445" visible="true" weight="0.2792208" />
       <window_info anchor="bottom" id="TODO" order="5" weight="0.29080823" />
-      <window_info anchor="bottom" id="Messages" />
       <window_info anchor="bottom" id="Event Log" order="6" sideWeight="0.32754537" side_tool="true" weight="0.28129953" />
-      <window_info id="Find" order="2" sideWeight="0.6354992" weight="0.2898465" />
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.32884312" />
       <window_info anchor="bottom" id="Python Console" order="8" weight="0.3293919" />
       <window_info anchor="bottom" id="Run" order="1" weight="0.32911393" />
-      <window_info x="502" y="116" width="361" height="583" id="Structure" order="1" sideWeight="0.4564184" side_tool="true" visible="true" weight="0.2792208" />
+      <window_info x="502" y="116" width="361" height="583" id="Structure" order="1" sideWeight="0.45879558" side_tool="true" visible="true" weight="0.2792208" />
       <window_info anchor="bottom" id="Terminal" order="9" weight="0.32884312" />
       <window_info id="Favorites" order="3" sideWeight="0.44611728" side_tool="true" weight="0.2485242" />
-      <window_info anchor="bottom" id="Debug" order="2" sideWeight="0.6724546" weight="0.45721078" />
+      <window_info anchor="bottom" id="Debug" order="2" sideWeight="0.6724546" weight="0.5095087" />
       <window_info anchor="bottom" id="Salesforce" order="12" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.24940048" />
+      <window_info anchor="bottom" id="Messages" order="6" />
       <window_info anchor="right" id="Commander" order="0" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="bottom" id="Inspection Results" order="7" weight="0.44611728" />
@@ -584,6 +566,7 @@
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Inspection" order="4" weight="0.4" />
       <window_info anchor="bottom" id="Cvs" order="3" weight="0.25" />
+      <window_info id="Find" order="2" sideWeight="0.6354992" weight="0.2898465" />
       <window_info anchor="right" id="Data View" order="3" weight="0.32952815" />
     </layout>
   </component>
@@ -606,7 +589,7 @@
       <breakpoints-dialog>
         <breakpoints-dialog />
       </breakpoints-dialog>
-      <option name="time" value="447" />
+      <option name="time" value="453" />
     </breakpoint-manager>
   </component>
   <component name="debuggerHistoryManager">
@@ -707,7 +690,6 @@ a,b</expression-string>
     </expressions>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/src/reupMessages/AnalysisSeries.py" />
     <entry file="file://$PROJECT_DIR$/src/plotMessages.py" />
     <entry file="file://$PROJECT_DIR$/src/entropyHistogram.py" />
     <entry file="file://$PROJECT_DIR$/src/histotest.py" />
@@ -765,13 +747,6 @@ a,b</expression-string>
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="15">
           <caret line="1" column="51" selection-start-line="1" selection-start-column="51" selection-end-line="1" selection-end-column="51" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/reportWriter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="198">
-          <caret line="39" column="72" selection-start-line="39" selection-start-column="55" selection-end-line="39" selection-end-column="72" />
         </state>
       </provider>
     </entry>
@@ -836,20 +811,7 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="213">
-          <caret line="129" column="31" selection-start-line="129" selection-start-column="31" selection-end-line="129" selection-end-column="31" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/labeling.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="60">
-          <caret line="4" column="26" selection-start-line="4" selection-start-column="26" selection-end-line="4" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/labeling.py" />
     <entry file="file://$PROJECT_DIR$/src/inference/series.py" />
     <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/matplotlib/axes/_axes.py">
       <provider selected="true" editor-type-id="text-editor">
@@ -858,11 +820,7 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-14141" />
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py" />
     <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="405">
@@ -874,9 +832,6 @@ a,b</expression-string>
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="456">
           <caret line="101" column="91" lean-forward="true" selection-start-line="101" selection-start-column="91" selection-end-line="101" selection-end-column="91" />
-          <folding>
-            <element signature="e#0#11#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -887,23 +842,7 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="465">
-          <caret line="38" column="11" lean-forward="true" selection-start-line="38" selection-start-column="11" selection-end-line="38" selection-end-column="11" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/characterize_segments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="906">
-          <caret line="151" column="38" lean-forward="true" selection-start-line="151" selection-start-column="38" selection-end-line="151" selection-end-column="38" />
-          <folding>
-            <element signature="e#183#198#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/src/characterize_segments.py" />
     <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/kneed/knee_locator.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="645">
@@ -928,53 +867,10 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="570">
-          <caret line="42" column="32" selection-start-line="42" selection-start-column="25" selection-end-line="42" selection-end-column="32" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1215">
-          <caret line="91" column="34" selection-start-line="91" selection-start-column="34" selection-end-line="91" selection-end-column="34" />
-          <folding>
-            <element signature="e#3#15#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/AbstractField.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-60">
           <caret line="23" column="35" lean-forward="true" selection-start-line="23" selection-start-column="35" selection-end-line="23" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="44" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/hdbscan/hdbscan_.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="590">
-          <caret line="791" column="38" lean-forward="true" selection-start-line="791" selection-start-column="38" selection-end-line="791" selection-end-column="38" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="746">
-          <caret line="497" column="40" selection-start-line="497" selection-start-column="29" selection-end-line="497" selection-end-column="40" />
-          <folding>
-            <element signature="e#0#63#0" expanded="true" />
-            <element signature="e#355#3461#0" />
-            <element signature="e#3546#5638#0" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -985,10 +881,81 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/hdbscan/hdbscan_.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-835">
+          <caret line="690" column="64" selection-start-line="690" selection-start-column="64" selection-end-line="690" selection-end-column="64" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="45">
+          <caret line="7" column="6" selection-start-line="7" selection-start-column="6" selection-end-line="7" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="401">
+          <caret line="171" column="64" selection-start-line="171" selection-start-column="60" selection-end-line="171" selection-end-column="64" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="391">
+          <caret line="138" column="83" selection-start-line="138" selection-start-column="79" selection-end-line="138" selection-end-column="83" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/simplePrint.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="570">
+          <caret line="38" column="24" lean-forward="true" selection-start-line="38" selection-start-column="24" selection-end-line="38" selection-end-column="24" />
+          <folding>
+            <element signature="e#0#46#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/reportWriter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="618">
+          <caret line="58" selection-start-line="54" selection-end-line="58" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="649">
+          <caret line="84" column="42" selection-start-line="84" selection-start-column="42" selection-end-line="84" selection-end-column="42" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="15">
+          <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="44" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="679">
+          <caret line="300" column="103" selection-start-line="300" selection-start-column="103" selection-end-line="300" selection-end-column="103" />
+          <folding>
+            <element signature="e#0#63#0" expanded="true" />
+            <element signature="e#3546#5638#0" />
+            <element signature="e#15413#18325#0" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/characterize_fieldtypes.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="784">
-          <caret line="252" column="115" lean-forward="true" selection-start-line="252" selection-start-column="64" selection-end-line="252" selection-end-column="115" />
+        <state relative-caret-position="469">
+          <caret line="228" column="18" selection-start-line="228" selection-start-column="5" selection-end-line="228" selection-end-column="18" />
           <folding>
             <element signature="e#569#593#0" expanded="true" />
           </folding>
