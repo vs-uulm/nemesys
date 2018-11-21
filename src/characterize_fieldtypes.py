@@ -82,7 +82,7 @@ def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
     return segmentGroups
 
 
-def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
+def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
@@ -90,6 +90,7 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
 
     :param tg:
     :param analysisTitle:
+    :param kwargs: arguments for the clusterer
     :return: List/Tuple structure of annotated analyses, clusters, and segments.
         List [ of
             Tuples (
@@ -109,7 +110,10 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle) \
         ]
     """
     print("Clustering segments...")
-    noise, *clusters = tg.clusterSimilarSegments(False)  # , min_cluster_size=11
+    if not kwargs:
+        noise, *clusters = tg.clusterSimilarSegments(False)
+    else:
+        noise, *clusters = tg.clusterSimilarSegments(False, **kwargs)
     print("{} clusters generated from {} segments".format(len(clusters), len(tg.segments)))
 
     segmentClusters = list()
@@ -154,7 +158,7 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
-                          pagetitle=None, colorPerLabel=False):
+                          pagetitle=None, colorPerLabel=False, typeDict = None):
     """
     This is a not awfully important helper function saving the writing of a few lines code.
 
@@ -163,8 +167,49 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     :param colorPerLabel:
     :return:
     """
-    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=args.interactive)
+    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups) + 1, isInteractive=args.interactive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
+    if typeDict:  # calculate conciseness, correctness = precision, and recall
+        clusters = [segList for label, segList in segmentGroups]
+        prList = []
+        if 'Noise' in segmentGroups[0][0]:
+            clusters = clusters[1:]  # remove the noise
+            prList.append(None)
+
+        numClusters = len(clusters)
+        numFtypes = len(typeDict)
+        conciseness = numClusters / numFtypes
+
+        mmp.axes[-1].text(0, 0, "conciseness = {:.2f}".format(conciseness))
+
+        from collections import Counter
+        for clusterSegs in clusters:
+            typeFrequency = Counter([ft for ft, seg in clusterSegs])
+            mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
+            numMFToverall = len(typeDict[mostFreqentType.split(':', 2)[0]])
+            numSegsinCuster = len(clusterSegs)
+
+            precision = numMFTinCluster / numSegsinCuster
+            recall = numMFTinCluster / numMFToverall
+
+            prList.append((mostFreqentType, precision, recall, numSegsinCuster))
+
+        mmp.textInEachAx(["precision = {:.2f}\n"  # correctness
+                          "recall = {:.2f}".format(pr[1], pr[2]) if pr else None for pr in prList])
+
+        import os, csv
+        clStatsFile = os.path.join('reports/', 'clusterStatisticsHDBSCAN.csv')
+        csvWriteHead = False if os.path.exists(clStatsFile) else True
+
+        with open(clStatsFile, 'a') as csvfile:
+            clStatscsv = csv.writer(csvfile)
+            if csvWriteHead:
+                # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
+                clStatscsv.writerow(['run_title', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
+            clStatscsv.writerows([
+                (pagetitle, conciseness, *pr) for pr in prList if pr is not None
+            ])
+
     mmp.writeOrShowFigure()
     mmp = None
 
@@ -208,6 +253,9 @@ if __name__ == '__main__':
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
+    if args.analysis not in analyses:
+        print('Analysis {} unknown. Available methods are:\n' + ', '.join(analyses.keys()) + '.')
+        exit(2)
     analyzerType = analyses[args.analysis]
     analysisArgs = args.parameters
     analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
@@ -227,7 +275,7 @@ if __name__ == '__main__':
     for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
         filteredSegments = filterSegments(segments)
 
-        if length > 8:  # != 4
+        if length != 4: # > 8:  # != 4:
             continue
         if length < 3:
             continue
@@ -247,32 +295,38 @@ if __name__ == '__main__':
         # For a new hypothesis: what are the longest seen ints?
         #
 
-        print("Calculate distances...")
-        # ftype = 'id'
-        # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
-        tg = TemplateGenerator(filteredSegments, 'canberra')  # 'cosine' | 'euclidean' | 'canberra' | 'correlation'
+        typeDict = segments2types(filteredSegments)
 
-        print("Clustering...")
-        # typeGroups = segments2typedClusters(segments,analysisTitle)
-        segmentGroups = segments2clusteredTypes(tg, analysisTitle)
-        # re-extract cluster labels for segments
-        labels = numpy.array([
-            labelForSegment(segmentGroups, seg) for seg in tg.segments
-        ])
+        # TODO iterate distance_methods
+        for distance_method in [ 'cosine' , 'euclidean' , 'canberra' , 'correlation' ]:  # ['canberra']: #
+            print("Calculate distances...")
+            # ftype = 'id'
+            # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
+            # distance_method = 'canberra' # 'cosine' | 'euclidean' | 'canberra' | 'correlation'
+            tg = TemplateGenerator(filteredSegments, distance_method)
+    
+            # TODO iterate clusterer parameters
+            for mcs in range(3, 15): # [ 0 ]: # range(3, 15):
+                print("Clustering...")
+                # typeGroups = segments2typedClusters(segments,analysisTitle)
+                segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=mcs)
+                # re-extract cluster labels for segments
+                labels = numpy.array([
+                    labelForSegment(segmentGroups, seg) for seg in tg.segments
+                ])
+    
+                # # if args.distances:
+                print("Plot distances...")
+                sdp = DistancesPlotter(specimens, 'distances-{}-{}-{}-{}'.format(
+                    length, analysisTitle, distance_method, tg.clusterer if tg.clusterer else 'n/a'), args.interactive)
+                # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+                sdp.plotDistances(tg, labels)
+                sdp.writeOrShowFigure()
+        
+                print("Prepare output...")
+                for pagetitle, segmentClusters in segmentGroups:
+                    plotMultiSegmentLines(segmentClusters, "{} - {}".format(pagetitle, distance_method), True, typeDict)
 
-        # # if args.distances:
-        print("Plot distances...")
-        sdp = DistancesPlotter(specimens, 'distances-{}-{}-{}'.format(
-            length, analysisTitle, tg.clusterer if tg.clusterer else 'n/a'), args.interactive)
-        # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-        sdp.plotDistances(tg, labels)
-        sdp.writeOrShowFigure()
-
-        print("Prepare output...")
-        for pagetitle, segmentClusters in segmentGroups:
-            plotMultiSegmentLines(segmentClusters, pagetitle, True)
-
-        # typeDict = segments2types(filteredSegments)
         # typeGrp = [(t, [('', s) for s in typeDict[t]]) for t in typeDict.keys()]
         # plotMultiSegmentLines(typeGrp, "{} ({} bytes) fieldtypes".format(analysisTitle, length), True)
 

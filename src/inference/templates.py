@@ -295,10 +295,16 @@ class TemplateGenerator(object):
                         # print('Set max distance for NaN segments with values: {} and {}'.format(
                         #     segA.values, segB.values))
                     else:
-                        raise ValueError('A unresolved zero-values vector could not be handled by method ' + method +
-                                         'the segment values are: {}\nand {}'.format(segA.values, segB.values))
+                        raise ValueError('An unresolved zero-values vector could not be handled by method ' + method +
+                                         ' the segment values are: {}\nand {}'.format(segA.values, segB.values))
+                elif method == 'correlation':
+                    # TODO validate this assumption about the interpretation of uncorrelatable segments.
+                    if segA.values == segB.values:
+                        segSimi = 0.0
+                    else:
+                        segSimi = 9.9
                 else:
-                    raise NotImplementedError('Handling of NaN distances need to be defined for method ' + method)
+                    raise NotImplementedError('Handling of NaN distances needs to be defined for method ' + method)
             else:
                 segSimi = simi
             segPairs.append(InterSegment(segA, segB, segSimi))
