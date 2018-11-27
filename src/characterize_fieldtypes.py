@@ -224,7 +224,7 @@ analyses = {
     'bcdg': BitCongruenceDeltaGauss,
     'mbhbv': HorizonBitcongruence,
 
-    'variance': ValueVariance,
+    'variance': ValueVariance,  # Note: VARIANCE is the inverse of PROGDIFF
     'progdiff': ValueProgressionDelta,
     'progcumudelta': CumulatedProgressionDelta,
     'value': Value,
@@ -275,7 +275,7 @@ if __name__ == '__main__':
     for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
         filteredSegments = filterSegments(segments)
 
-        if length != 4: # > 8:  # != 4:
+        if length == 4: # > 8:  # != 4:
             continue
         if length < 3:
             continue
@@ -297,7 +297,7 @@ if __name__ == '__main__':
 
         typeDict = segments2types(filteredSegments)
 
-        # TODO iterate distance_methods
+        # iterate distance_methods
         for distance_method in [ 'cosine' , 'euclidean' , 'canberra' , 'correlation' ]:  # ['canberra']: #
             print("Calculate distances...")
             # ftype = 'id'
@@ -305,7 +305,7 @@ if __name__ == '__main__':
             # distance_method = 'canberra' # 'cosine' | 'euclidean' | 'canberra' | 'correlation'
             tg = TemplateGenerator(filteredSegments, distance_method)
     
-            # TODO iterate clusterer parameters
+            # iterate clusterer parameters
             for mcs in range(3, 15): # [ 0 ]: # range(3, 15):
                 print("Clustering...")
                 # typeGroups = segments2typedClusters(segments,analysisTitle)

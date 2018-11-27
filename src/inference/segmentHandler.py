@@ -1,11 +1,12 @@
-from typing import List, Dict, Tuple
+"""
+Batch handling of multiple segments.
+"""
+
+from typing import List, Dict, Tuple, Union
 
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
 
-"""
-Batch handling of multiple segments.
-"""
 
 
 def segmentMeans(segmentsPerMsg: List[List]):
@@ -62,7 +63,7 @@ def segmentsFromLabels(analyzer, labels) -> List[TypedSegment]:
     return segments
 
 
-def annotateFieldTypes(analyzerType: type, analysisArgs: Tuple, comparator,
+def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
                        unit=MessageAnalyzer.U_BYTE) -> List[List[TypedSegment]]:
     """
     :return: list of lists of segments that are annotated with their field type.
