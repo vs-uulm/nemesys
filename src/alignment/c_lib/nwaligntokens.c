@@ -1,7 +1,17 @@
 #include <Python.h>
 
 
-// Function to align one pair of messages on their tokens.
+/*
+Function to align one pair of messages on their tokens.
+
+TODO: Required args:
+* distanceMatrix for all pairs of tokens
+* message0, message1: List[tokens]
+    * t_id (row/col in distance matrix)
+    * ?
+
+returns (score, aligned pair)
+*/
 static PyObject* alignMessagePair(PyObject* self, PyObject* args)
 {
     printf("Hello World\n");
