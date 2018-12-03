@@ -626,7 +626,6 @@ class ParsedMessage(object):
                                     self._dissectfull += dissectsub
                                 # else:
                                 #     print("Bogus protocol layer ignored: {}".format(embedded))
-                        # TODO include some kind of handling of protocols encapsulated in the target, like nbss or tcp
 
                         # happens for some malformed packets with too few content e.g. irc with only "\r\n" payload
                         if not isinstance(self._dissectfull, list):

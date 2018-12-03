@@ -87,9 +87,6 @@ if __name__ == '__main__':
         print("Calculate distances...")
         tg = TemplateGenerator(filteredSegments, distance_method)
 
-        print("Aligning...")
-
-
         segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=5)
         # re-extract cluster labels for segments
         labels = numpy.array([
@@ -97,6 +94,12 @@ if __name__ == '__main__':
         ])
 
         # print("Prepare output...")
+
+
+
+    print("Aligning...")
+
+
 
     if args.interactive:
         IPython.embed()

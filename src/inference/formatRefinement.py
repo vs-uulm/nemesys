@@ -68,7 +68,7 @@ class Merger(ABC):
                     mergedSegments[-1] = MessageSegment(mergedSegments[-1].analyzer, mergedSegments[-1].offset,
                                                         mergedSegments[-1].length + segr.length)
                     if self.__debug:
-                        print("Merged segments: \n{} and \n{} into \n{}".format(segl, segr, mergedSegments[-1]))  # TODO debug
+                        print("Merged segments: \n{} and \n{} into \n{}".format(segl, segr, mergedSegments[-1]))
                 else:
                     mergedSegments.append(segr)
         return mergedSegments
@@ -160,11 +160,11 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
                                 del mangledSegments[-1]
                             restlen = segl.length - splitpos
                             if self.__debug:
-                                print("Recombined segments: \n{} and {} into ".format(segl, segc))  # TODO debug
+                                print("Recombined segments: \n{} and {} into ".format(segl, segc))
                             segc = MessageSegment(segc.analyzer, segc.offset - restlen,
                                                              segc.length + restlen)
                             if self.__debug:
-                                print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))  # TODO debug
+                                print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
 
                 if segmentStack:
                     segr = segmentStack[-1]
@@ -178,11 +178,11 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
                             else: # segment to the right completely used up in center
                                 del segmentStack[-1]
                             if self.__debug:
-                                print("Recombined segments: \n{} and {} into ".format(segc, segr))  # TODO debug
+                                print("Recombined segments: \n{} and {} into ".format(segc, segr))
                             segc = MessageSegment(segc.analyzer, segc.offset,
                                                               segc.length + splitpos)
                             if self.__debug:
-                                print("{} and {}".format(segc, segmentStack[-1] if segmentStack else 'Empty'))  # TODO debug
+                                print("{} and {}".format(segc, segmentStack[-1] if segmentStack else 'Empty'))
 
                 mangledSegments.append(segc)
         return mangledSegments
@@ -358,11 +358,11 @@ class Resplit2LeastFrequentPair(object):
                         else: # segment to the left completely used up in center
                             del mangledSegments[-1]
                         if self.__debug:
-                            print("Recombined segments: \n{} and {} into ".format(segl, segc))  # TODO debug
+                            print("Recombined segments: \n{} and {} into ".format(segl, segc))
                         segc = MessageSegment(segc.analyzer, segc.offset + splitshift,
                                                          segc.length - splitshift)
                         if self.__debug:
-                            print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))  # TODO debug
+                            print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
                 mangledSegments.append(segc)
         return mangledSegments
 

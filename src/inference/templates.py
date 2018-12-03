@@ -1,6 +1,6 @@
-from typing import List, Dict, Union, Iterable, Sequence, Tuple
+from typing import List, Dict, Union, Iterable, Sequence
 import numpy, scipy.spatial, itertools
-from abc import ABC, abstractmethod, ABCMeta
+from abc import ABC, abstractmethod
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
@@ -8,7 +8,6 @@ from inference.analyzers import MessageAnalyzer
 from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment
 
 
-# TODO
 
 
 class InterSegment(object):
@@ -110,6 +109,213 @@ class InterSegment(object):
             return None
 
 
+
+
+# TODO
+
+class DistanceCalculator(object):
+
+    def __init__(self, segments: List[MessageSegment], method='canberra'):
+        """
+        Determine the distance between the given segments.
+
+        :param segments:
+        """
+        self._method = method
+        self._segments = list()  # type: List[MessageSegment]
+        # ensure that all segments have analysis values
+        for seg in segments:
+            self._segments.append(segments[0].fillCandidate(seg))
+        # distance matrix for all rows and columns in order of self._segments
+        self._distances = self._getDistanceMatrix(
+            DistanceCalculator._calcDistancesPerLen(
+                self._groupByLength(), method=method))  # type: numpy.array()
+
+    @property
+    def distanceMatrix(self) -> numpy.ndarray:
+        """
+        The order of the matrix elements in each row and column is the same as in self.segments.
+
+        :return: The pairwise similarities of all segments in this object represented as an symmetric array.
+        """
+        return self._distances
+
+    @property
+    def segments(self) -> List[MessageSegment]:
+        """
+        :return: All segments in this object.
+        """
+        return self._segments
+
+    def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
+        """
+        Retrieve the distance of two segments.
+
+        :param A:
+        :param B:
+        :return:
+        """
+        a = self._segments.index(A)
+        b = self._segments.index(B)
+        return self._distances[a,b]
+
+    def pairwiseDistance(self, As: List[MessageSegment], Bs: List[MessageSegment]) -> numpy.ndarray:
+        """
+        Retrieve the matrix of pairwise distances for two lists of segments.
+
+        :param As: List of segments
+        :param Bs: List of segments
+        :return: Matrix of distances: As are rows, Bs are columns.
+        """
+        distances = list()
+        for A in As:
+            Alist = list()
+            distances.append(Alist)
+            for B in Bs:
+                Alist.append(self.pairDistance(A, B))
+        return numpy.array(distances)
+
+    def _groupByLength(self) -> Dict[int, List[MessageSegment]]:
+        """
+        Groups segments by value length.
+
+        Used in constructor.
+
+        :return: a dict mapping the length to the list of MessageSegments of that length.
+        """
+        segsByLen = dict()
+        for seg in self._segments:
+            seglen = len(seg.bytes)
+            if seglen not in segsByLen:
+                segsByLen[seglen] = list()
+            segsByLen[seglen].append(seg)
+        return segsByLen
+
+    @staticmethod
+    def _calcDistancesPerLen(segLenGroups: Dict[int, List[MessageSegment]], method='cosine') -> List[InterSegment]:
+        """
+        Calculates distances within groups of equally lengthy segments.
+
+        Used in constructor.
+
+        :param segLenGroups: a dict mapping the length to the list of MessageSegments of that length.
+        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
+            defaults to 'cosine'.
+        :return: flat list of pairwise distances for all length groups.
+        """
+        distance = list()
+        for l, segGroup in segLenGroups.items():  # type: int, List[MessageSegment]
+            distance.extend(DistanceCalculator._calcDistances(segGroup, method=method))
+        return distance
+
+    @staticmethod
+    def __prepareValuesMatrix(segments: List[MessageSegment], method):
+        # fallback for vectors of length 1
+        if len(segments[0].values) == 1:
+            method = 'cityblock'
+
+        if method == 'cosine':
+            # comparing to zero vectors is undefined in cosine.
+            # Its semantically equivalent to a (small) horizontal vector
+            segmentValuesMatrix = numpy.array(
+                [seg.values if (numpy.array(seg.values) != 0).any() else [1e-16]*len(seg.values) for seg in segments])
+        else:
+            segmentValuesMatrix = numpy.array([seg.values for seg in segments])
+
+        return method, segmentValuesMatrix
+
+
+    @staticmethod
+    def _calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
+        """
+        Calculates pairwise distances for all input segments.
+        The values of all segments have to be of the same length!
+
+        :param segments: list of segments to calculate their similarity/distance for.
+        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
+            defaults to 'cosine'.
+        :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
+        """
+        method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
+
+        segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
+
+        segPairs = list()
+        for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
+            if numpy.isnan(simi):
+                if method == 'cosine':
+                    if segA.values == segB.values \
+                            or numpy.isnan(segA.values).all() and numpy.isnan(segB.values).all():
+                        segSimi = 0
+                    elif numpy.isnan(segA.values).any() or numpy.isnan(segB.values).any():
+                        segSimi = 1
+                        # TODO better handling of segments with NaN parts.
+                        # print('Set max distance for NaN segments with values: {} and {}'.format(
+                        #     segA.values, segB.values))
+                    else:
+                        raise ValueError('An unresolved zero-values vector could not be handled by method ' + method +
+                                         ' the segment values are: {}\nand {}'.format(segA.values, segB.values))
+                elif method == 'correlation':
+                    # TODO validate this assumption about the interpretation of uncorrelatable segments.
+                    if segA.values == segB.values:
+                        segSimi = 0.0
+                    else:
+                        segSimi = 9.9
+                else:
+                    raise NotImplementedError('Handling of NaN distances needs to be defined for method ' + method)
+            else:
+                segSimi = simi
+            segPairs.append(InterSegment(segA, segB, segSimi))
+        # print("    finished.")
+        return segPairs
+
+    def _getDistanceMatrix(self, distances: List[InterSegment]) -> numpy.ndarray:
+        """
+        Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
+        The order of the matrix elements in each row and column is the same as in self._segments.
+
+        Used in constructor.
+
+        :param distances: The pairwise similarities to arrange.
+        :return: The distance matrix for the given similarities.
+            1 for each undefined element, 0 in the diagonal, even if not given in the input.
+        """
+        numsegs = len(self._segments)
+        simtrx = numpy.ones((numsegs, numsegs))
+        numpy.fill_diagonal(simtrx, 0)
+        # fill matrix with pairwise distances
+        for intseg in distances:
+            row = self._segments.index(intseg.segA)
+            col = self._segments.index(intseg.segB)
+            simtrx[row, col] = intseg.distance
+            simtrx[col, row] = intseg.distance
+        return simtrx
+
+    def _embedSegment(self, shortSegment: MessageSegment, longSegment: MessageSegment):
+        """
+        Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
+
+        :return: The minimal partial distance between the segments, wrapped in an InterSegment.
+        """
+        assert longSegment.length > shortSegment.length
+
+        maxOffset = longSegment.length - shortSegment.length
+
+        subsets = list()
+        for offset in range(0,maxOffset):
+            offSegment = MessageSegment(longSegment.analyzer, longSegment.offset + offset, shortSegment.length)
+            subsets.append(offSegment)
+        self._method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(subsets, self._method)
+
+        subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, shortSegment.values, self._method)
+        subsetsSimi.argmin() # TODO: for debugging
+        distance = subsetsSimi.min() * shortSegment.length/longSegment.length
+
+        return InterSegment(shortSegment, longSegment, distance)
+
+
+
+
 class Template(AbstractSegment):
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray],
                  baseSegments: List[MessageSegment]):
@@ -156,7 +362,7 @@ class Template(AbstractSegment):
         return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
 
 
-class TemplateGenerator(object):
+class TemplateGenerator(DistanceCalculator):
     """
     Generate templates for a list of segments according to their distance.
     """
@@ -166,151 +372,8 @@ class TemplateGenerator(object):
 
         :param segments:
         """
-        self._segments = list()  # type: List[MessageSegment]
-        # ensure that all segments have analysis values
-        for seg in segments:
-            self._segments.append(segments[0].fillCandidate(seg))
-        # distance matrix for all rows and columns in order of self._segments
-        self._distances = self._getDistanceMatrix(
-            TemplateGenerator._calcDistancesPerLen(
-                self._groupByLength(), method=method))  # type: numpy.array()
+        super().__init__(segments, method)
         self.clusterer = None  # type: TemplateGenerator.Clusterer
-
-    @property
-    def distanceMatrix(self) -> numpy.ndarray:
-        """
-        The order of the matrix elements in each row and column is the same as in self.segments.
-
-        :return: The pairwise similarities of all segments in this object represented as an symmetric array.
-        """
-        return self._distances
-
-    @property
-    def segments(self) -> List[MessageSegment]:
-        """
-        :return: All segments in this object.
-        """
-        return self._segments
-
-
-    def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
-        """
-        Retrieve the distance of two segments.
-
-        :param A:
-        :param B:
-        :return:
-        """
-        a = self._segments.index(A)
-        b = self._segments.index(B)
-        return self._distances[a,b]
-
-
-    def pairwiseDistance(self, As: List[MessageSegment], Bs: List[MessageSegment]) -> numpy.ndarray:
-        """
-        Retrieve the matrix of pairwise distances for two lists of segments.
-
-        :param As: List of segments
-        :param Bs: List of segments
-        :return: Matrix of distances: As are rows, Bs are columns.
-        """
-        distances = list()
-        for A in As:
-            Alist = list()
-            distances.append(Alist)
-            for B in Bs:
-                Alist.append(self.pairDistance(A, B))
-        return numpy.array(distances)
-
-
-    def _groupByLength(self) -> Dict[int, List[MessageSegment]]:
-        """
-        Groups segments by value length.
-
-        Used in constructor.
-
-        :return: a dict mapping the length to the list of MessageSegments of that length.
-        """
-        segsByLen = dict()
-        for seg in self._segments:
-            seglen = len(seg.bytes)
-            if seglen not in segsByLen:
-                segsByLen[seglen] = list()
-            segsByLen[seglen].append(seg)
-        return segsByLen
-
-
-    @staticmethod
-    def _calcDistancesPerLen(segLenGroups: Dict[int, List[MessageSegment]], method='cosine') -> List[InterSegment]:
-        """
-        Calculates distances within groups of equally lengthy segments.
-
-        Used in constructor.
-
-        :param segLenGroups: a dict mapping the length to the list of MessageSegments of that length.
-        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
-            defaults to 'cosine'.
-        :return: flat list of pairwise distances for all length groups.
-        """
-        distance = list()
-        for l, segGroup in segLenGroups.items():  # type: int, List[MessageSegment]
-            distance.extend(TemplateGenerator._calcDistances(segGroup, method=method))
-        return distance
-
-
-    @staticmethod
-    def _calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
-        """
-        Calculates pairwise distances for all input segments.
-        The values of all segments have to be of the same length!
-
-        :param segments: list of segments to calculate their similarity/distance for.
-        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
-            defaults to 'cosine'.
-        :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
-        """
-        # fallback for vectors of length 1
-        if len(segments[0].values) == 1:
-            method = 'cityblock'
-
-        if method == 'cosine':
-            # comparing to zero vectors is undefined in cosine.
-            # Its semantically equivalent to a (small) horizontal vector
-            segmentValuesMatrix = numpy.array(
-                [seg.values if (numpy.array(seg.values) != 0).any() else [1e-16]*len(seg.values) for seg in segments])
-        else:
-            segmentValuesMatrix = numpy.array([seg.values for seg in segments])
-        segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
-        # import IPython; IPython.embed()
-        segPairs = list()
-        for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
-            if numpy.isnan(simi):
-                if method == 'cosine':
-                    if segA.values == segB.values \
-                            or numpy.isnan(segA.values).all() and numpy.isnan(segB.values).all():
-                        segSimi = 0
-                    elif numpy.isnan(segA.values).any() or numpy.isnan(segB.values).any():
-                        segSimi = 1
-                        # TODO better handling of segments with NaN parts.
-                        # print('Set max distance for NaN segments with values: {} and {}'.format(
-                        #     segA.values, segB.values))
-                    else:
-                        raise ValueError('An unresolved zero-values vector could not be handled by method ' + method +
-                                         ' the segment values are: {}\nand {}'.format(segA.values, segB.values))
-                elif method == 'correlation':
-                    # TODO validate this assumption about the interpretation of uncorrelatable segments.
-                    if segA.values == segB.values:
-                        segSimi = 0.0
-                    else:
-                        segSimi = 9.9
-                else:
-                    raise NotImplementedError('Handling of NaN distances needs to be defined for method ' + method)
-            else:
-                segSimi = simi
-            segPairs.append(InterSegment(segA, segB, segSimi))
-        # print("    finished.")
-        return segPairs
-
 
     @staticmethod
     def __altSimilarities(segmentGroup: List[MessageSegment]):
@@ -331,30 +394,6 @@ class TemplateGenerator(object):
             segPairs.append(InterSegment(segA, segB,
                                          scipy.spatial.distance.cosine(segA.values, segB.values)))
         return segPairs
-
-
-    def _getDistanceMatrix(self, distances: List[InterSegment]) -> numpy.ndarray:
-        """
-        Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
-        The order of the matrix elements in each row and column is the same as in self._segments.
-
-        Used in constructor.
-
-        :param distances: The pairwise similarities to arrange.
-        :return: The distance matrix for the given similarities.
-            1 for each undefined element, 0 in the diagonal, even if not given in the input.
-        """
-        numsegs = len(self._segments)
-        simtrx = numpy.ones((numsegs, numsegs))
-        numpy.fill_diagonal(simtrx, 0)
-        # fill matrix with pairwise distances
-        for intseg in distances:
-            row = self._segments.index(intseg.segA)
-            col = self._segments.index(intseg.segB)
-            simtrx[row, col] = intseg.distance
-            simtrx[col, row] = intseg.distance
-        return simtrx
-
 
     def clusterSimilarSegments(self, filterNoise=True, **kwargs) -> List[List[MessageSegment]]:
         """
@@ -615,7 +654,6 @@ class TemplateGenerator(object):
             # plt.clf()
 
             # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
-            from tabulate import tabulate
             # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
             # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
             # import IPython; IPython.embed()
@@ -698,7 +736,8 @@ class TemplateGenerator(object):
         Do the initialization of the clusterer and performe the clustering.
 
         :param segments: List of equally lengthy segments.
-        :param epsilon: The DBSCAN epsilon value, if it should be fixed. if not given (None), it is autoconfigured.
+        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
+            If not given (None), it is autoconfigured.
         :return: A dict of labels to lists of segments with that label.
         """
         clustererClass = TemplateGenerator.HDBSCAN
