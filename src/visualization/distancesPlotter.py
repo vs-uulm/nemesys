@@ -11,7 +11,7 @@ from itertools import compress
 from visualization.plotter import MessagePlotter
 from utils.loader import SpecimenLoader
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import TemplateGenerator, Template
+from inference.templates import TemplateGenerator, Template, DistanceCalculator
 
 
 
@@ -237,7 +237,7 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotDistances(self, tg: TemplateGenerator, labels: numpy.ndarray):
+    def plotDistances(self, tg: DistanceCalculator, labels: numpy.ndarray):
         """
         Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
 

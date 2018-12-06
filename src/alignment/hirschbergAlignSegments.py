@@ -5,16 +5,19 @@ import numpy
 
 class Alignment(ABC):
 
-    SCORE_GAP = 0  # TODO: use as factor, to multiply with e.g. the maximum of the given similairty matrix.
-    SCORE_MATCH = 5  # overruled by similarity matrix
+    SCORE_GAP = 0
+    SCORE_MATCH = 5  # use as factor, to multiply with the similarity matrix.
     SCORE_MISMATCH = -5
 
     def __init__(self, similarityMatrix):
         """
         TODO: similarityMatrix needs to contain values for pairs of non-equal length segments, too!
+
+        :param similarityMatrix: normalized similarity matrix (0..1)
+            with 1 meaning identity and 0 maximum dissimilarity.
         """
 
-        self._similarities = similarityMatrix
+        self._similarities = similarityMatrix * Alignment.SCORE_MATCH
         """
         matrix of similarities: higher values denote closer match
 
@@ -67,8 +70,8 @@ class HirschbergOnSegmentSimilarity(Alignment):
             return haligned
         else:
             xmid = len(message0) // 2
-            scoreL = self._nwScore(message0[:xmid], message1)
-            scoreR = self._nwScore(message0[:xmid-1:-1], message1[::-1])
+            scoreL = self.nwScore(message0[:xmid], message1)
+            scoreR = self.nwScore(message0[:xmid - 1:-1], message1[::-1])
             scoreSum = scoreL[::-1] + scoreR  # vector sum of both alignments
             ymid = scoreSum.shape[0] - numpy.argmax(scoreSum) - 1  # last maximum to resemble NW more literally
             # # original:
@@ -91,7 +94,7 @@ class HirschbergOnSegmentSimilarity(Alignment):
         return messageA, messageB
 
 
-    def _nwScore(self, tokensX: List[int], tokensY: List[int]):
+    def nwScore(self, tokensX: List[int], tokensY: List[int]):
         """
         calculate a nwscore for two lists of tokens.
 
@@ -108,7 +111,7 @@ class HirschbergOnSegmentSimilarity(Alignment):
         >>> m0 = [2,4,3,0]
         >>> m1 = [1,4,0]
         >>> hirsch = HirschbergOnSegmentSimilarity(simtx)
-        >>> score = hirsch._nwScore(m0,m1)
+        >>> score = hirsch.nwScore(m0,m1)
         >>> print(tabulate([score]))
         -  -  --  -
         2  4   3  0

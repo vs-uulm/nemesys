@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Dict
+from typing import List, Union, Tuple, Dict, Sequence
 import numpy
 import matplotlib.pyplot as plt
 
@@ -31,7 +31,17 @@ class SingleMessagePlotter(MessagePlotter):
         :param fieldEnds: real field ends of the message to be marked in the plot.
         :param labels: labels per subplot
         """
-        pass
+        if isinstance(analysisResults[0], Sequence):
+            for singleanalysis in analysisResults:
+                plt.plot(singleanalysis)
+        else:
+            plt.plot(analysisResults)
+
+        if compareValue:
+            plt.plot(compareValue, MessagePlotter.STYLE_COMPARELINE)
+
+        if fieldEnds or labels:
+            raise NotImplementedError("Plotting fieldEnds and labels is not implemented.")
 
 
     def plotColormesh(self, analysisResults: Union[List[List[float]], numpy.ndarray], fieldEnds: List[List[int]]=None):

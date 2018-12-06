@@ -2,10 +2,12 @@
 Batch handling of multiple segments.
 """
 
-from typing import List, Dict, Tuple, Union
+import numpy
+from typing import List, Dict, Tuple, Union, Sequence, TypeVar
 
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
+
 
 
 
@@ -73,6 +75,50 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
                                              l4msg, analysisArgs), comparator.dissections[rmsg])
         for l4msg, rmsg in comparator.messages.items()]
     return segmentedMessages
+
+
+def segmentsFixed(analyzerType: type, analysisArgs: Union[Tuple, None], comparator, length: int,
+                       unit=MessageAnalyzer.U_BYTE) -> List[Tuple[MessageSegment]]:
+    """
+    Segment messages into fixed size chunks.
+
+    :param length: The length for all the segments. Overhanging final segments shorter than length will be padded with
+        nans.
+    :return: Segments of the analyzer's message according to the true format
+    """
+    segments = list()
+    for l4msg, rmsg in comparator.messages.items():
+        if len(l4msg.data) % length == 0:  # exclude the overlap
+            lastOffset = len(l4msg.data)
+        else:
+            lastOffset = (len(l4msg.data) // length) * length
+        sequence = [
+            MessageSegment(
+            MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
+                                                 l4msg, analysisArgs),
+            offset, length)
+            for offset in range(0, lastOffset, length)
+        ]
+        if len(l4msg.data) > lastOffset:  # append the overlap
+            # TODO here are nasty hacks!
+            # Better define a new subclass of MessageSegment that internally padds values
+            # (and bytes? what are the guarantees?) to a given length that exceeds the message length
+            residuepadd = lastOffset + length - len(l4msg.data)
+            originalAnalyzer = MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
+                                                 l4msg, analysisArgs)
+            import copy
+            newMessage = copy.copy(originalAnalyzer.message)
+            newMessage.data = newMessage.data + b'\x00' * residuepadd
+            newAnalyzer = type(originalAnalyzer)(newMessage, originalAnalyzer.unit)  # type: MessageAnalyzer
+            newAnalyzer.setAnalysisParams(*originalAnalyzer.analysisParams)
+            padd = [numpy.nan] * residuepadd
+            newAnalyzer._values = originalAnalyzer.values + padd
+            newSegment = MessageSegment(newAnalyzer, lastOffset+1, length)
+            for seg in sequence:  # replace all previous analyzers to make the sequence homogeneous for this message
+                seg.analyzer = newAnalyzer
+            sequence.append(newSegment)
+        segments.append(tuple(sequence))
+    return segments
 
 
 def groupByLength(segmentedMessages) -> Dict[int, List[MessageSegment]]:
@@ -155,4 +201,34 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]]):
             ).split()
         for m in segmentsPerMsg]
     return refinedPerMsg
+
+
+T = TypeVar('T')
+def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T], identity=0, incomparable=1) -> numpy.ndarray:
+    """
+    Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
+    The order of the matrix elements in each row and column is the same as in self._segments.
+
+    Used in constructor.
+
+    :param distances: The pairwise similarities to arrange.
+        0. T: segA
+        1. T: segB
+        2. float: distance
+    :return: The distance matrix for the given similarities.
+        1 for each undefined element, 0 in the diagonal, even if not given in the input.
+    """
+    numsegs = len(segmentOrder)
+    simtrx = numpy.ones((numsegs, numsegs))
+    if incomparable != 1:
+        simtrx.fill(incomparable)
+    numpy.fill_diagonal(simtrx, identity)
+    # fill matrix with pairwise distances
+    for intseg in distances:
+        row = segmentOrder.index(intseg[0])
+        col = segmentOrder.index(intseg[1])
+        simtrx[row, col] = intseg[2]
+        simtrx[col, row] = intseg[2]
+    return simtrx
+
 

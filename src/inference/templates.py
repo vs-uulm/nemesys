@@ -115,7 +115,7 @@ class InterSegment(object):
 
 class DistanceCalculator(object):
 
-    def __init__(self, segments: List[MessageSegment], method='canberra'):
+    def __init__(self, segments: Iterable[MessageSegment], method='canberra'):
         """
         Determine the distance between the given segments.
 
@@ -124,8 +124,9 @@ class DistanceCalculator(object):
         self._method = method
         self._segments = list()  # type: List[MessageSegment]
         # ensure that all segments have analysis values
+        firstSegment = next(iter(segments))
         for seg in segments:
-            self._segments.append(segments[0].fillCandidate(seg))
+            self._segments.append(firstSegment.fillCandidate(seg))
         # distance matrix for all rows and columns in order of self._segments
         self._distances = self._getDistanceMatrix(
             DistanceCalculator._calcDistancesPerLen(
@@ -136,9 +137,48 @@ class DistanceCalculator(object):
         """
         The order of the matrix elements in each row and column is the same as in self.segments.
 
-        :return: The pairwise similarities of all segments in this object represented as an symmetric array.
+        :return: The pairwise distances of all segments in this object represented as an symmetric array.
         """
         return self._distances
+
+    def similarityMatrix(self) -> numpy.ndarray:
+        """
+        Converts the distances into similarities using the knowledge about distance method and analysis type.
+
+        The order of the matrix elements in each row and column is the same as in self.segments.
+
+        :return: The pairwise similarities of all segments in this object represented as an symmetric array.
+        """
+        distanceMax = {
+            'cosine': 1,
+            'correlation': 2,
+            'canberra': None,
+            'euclidean': None
+        }
+        if self._method == 'canberra':
+            minDim = numpy.empty(self._distances.shape)
+            for i in range(self._distances.shape[0]):
+                for j in range(self._distances.shape[1]):
+                    minDim[i,j] = self._maxDimension(i,j)
+            distanceMax['canberra'] = minDim
+        elif self._method == 'euclidean':
+            from math import sqrt
+            domainSize = self._segments[0].analyzer.domain[1] - self._segments[0].analyzer.domain[0]
+            minDim = numpy.empty(self._distances.shape)
+            for i in range(self._distances.shape[0]):
+                for j in range(self._distances.shape[1]):
+                    minDim[i,j] = self._maxDimension(i,j) * domainSize
+            distanceMax['euclidean'] = minDim
+
+        # distanceMatrix =
+        similarityMatrix = 1 - (self._distances / distanceMax[self._method])
+        return similarityMatrix
+
+    def _maxDimension(self, segmentX: int, segmentY: int):
+        """
+        :return: Minimum of the value dimensions of the measured pair of segments
+        """
+        return min(len(self._segments[segmentX].values), len(self._segments[segmentY].values))
 
     @property
     def segments(self) -> List[MessageSegment]:
@@ -238,6 +278,7 @@ class DistanceCalculator(object):
         """
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
 
+        # This is the poodle's core
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
 
         segPairs = list()
@@ -280,18 +321,21 @@ class DistanceCalculator(object):
         :return: The distance matrix for the given similarities.
             1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
-        numsegs = len(self._segments)
-        simtrx = numpy.ones((numsegs, numsegs))
-        numpy.fill_diagonal(simtrx, 0)
-        # fill matrix with pairwise distances
-        for intseg in distances:
-            row = self._segments.index(intseg.segA)
-            col = self._segments.index(intseg.segB)
-            simtrx[row, col] = intseg.distance
-            simtrx[col, row] = intseg.distance
+        # numsegs = len(self._segments)
+        # simtrx = numpy.ones((numsegs, numsegs))
+        # numpy.fill_diagonal(simtrx, 0)
+        # # fill matrix with pairwise distances
+        # for intseg in distances:
+        #     row = self._segments.index(intseg.segA)
+        #     col = self._segments.index(intseg.segB)
+        #     simtrx[row, col] = intseg.distance
+        #     simtrx[col, row] = intseg.distance
+        from inference.segmentHandler import matrixFromTpairs
+        simtrx = matrixFromTpairs([(ise.segA,ise.segB, ise.distance) for ise in distances], self._segments)
         return simtrx
 
-    def _embedSegment(self, shortSegment: MessageSegment, longSegment: MessageSegment):
+    @staticmethod
+    def _embedSegment(shortSegment: MessageSegment, longSegment: MessageSegment, method='canberra'):
         """
         Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
 
@@ -305,13 +349,13 @@ class DistanceCalculator(object):
         for offset in range(0,maxOffset):
             offSegment = MessageSegment(longSegment.analyzer, longSegment.offset + offset, shortSegment.length)
             subsets.append(offSegment)
-        self._method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(subsets, self._method)
+        method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(subsets, method)
 
-        subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, shortSegment.values, self._method)
-        subsetsSimi.argmin() # TODO: for debugging
+        subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, numpy.array([shortSegment.values]), method)
+        shift = subsetsSimi.argmin() # TODO: for debugging
         distance = subsetsSimi.min() * shortSegment.length/longSegment.length
 
-        return InterSegment(shortSegment, longSegment, distance)
+        return method, shift, InterSegment(shortSegment, longSegment, distance)
 
 
 

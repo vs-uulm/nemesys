@@ -12,22 +12,16 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 class MessageAnalyzer(ABC):
     """
-    Subclasses fully describe a specific analysis upon a message and hold the results.
+    Subclasses of this abstract class fully describe a specific analysis upon a message and hold the results.
     """
     _analyzerCache = dict()
 
     U_BYTE = 0
     U_NIBBLE = 1
 
-    _unit = U_BYTE
-    _message = None
-    _analysisArgs = None
-    _values = None
-    _startskip = 0
-
     # TODO per analysis method that does not generate one value per one byte: margins (head, tail) and skip
 
-    def __init__(self, message: AbstractMessage, unit=U_NIBBLE):
+    def __init__(self, message: AbstractMessage, unit=U_BYTE):
         """
         Create object and set the message and the unit-size.
 
@@ -36,10 +30,21 @@ class MessageAnalyzer(ABC):
         """
         self._message = message
         self._unit = unit
+        self._analysisArgs = None
+        self._values = None
+        self._startskip = 0
 
     @property
     def unit(self):
         return self._unit
+
+    @property
+    @abstractmethod
+    def domain(self):
+        """
+        :return: The value domain (min and max) of the analyzer
+        """
+        raise NotImplementedError("The value domain is not yet defined for this analyzer.")
 
     @property
     def values(self):
@@ -384,13 +389,21 @@ class SegmentAnalyzer(MessageAnalyzer):
     """
     Abstract class to denote analyzers that work on a given subset, i.e. Segment, of a message.
     """
+    @property
+    def domain(self):
+        """
+        The correct domain cannot be determined for analyses of subsets segments.
+        It is depenent e. g. on the length of the segment, which is only known
+        during a call to value(self, start, end).
+        """
+        raise AttributeError("SegmentAnalyzers do not support the querying of the domain.")
+
     def values(self):
         raise TypeError("SegmentAnalyzer subclasses are dependent on the segment the analyzer should refer to. "
                         "Use the function value(start, end) instead.")
 
     def analyze(self):
         pass
-
 
     @abstractmethod
     def value(self, start, end):
@@ -610,8 +623,8 @@ class MessageSegment(AbstractSegment):
                     or candidate.analyzer.analysisParams != self.analyzer.analysisParams:
                 raise ValueError('The analysis methods of this MessageSegment ({}({})) and '
                                  'the haystack to correlate it to ({}({})) are not compatible.'.format(
-                    self.analyzer.__name__, ', '.join([str(a) for a in self.analyzer.analysisParams]),
-                    candidate.analyzer.__name__, ', '.join([str(a) for a in candidate.analyzer.analysisParams])
+                    type(self.analyzer).__name__, ', '.join([str(a) for a in self.analyzer.analysisParams]),
+                    type(candidate.analyzer).__name__, ', '.join([str(a) for a in candidate.analyzer.analysisParams])
                 ))
             if not candidate.values:
                 candidate.analyzer.analyze()
