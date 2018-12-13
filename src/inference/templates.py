@@ -115,6 +115,8 @@ class InterSegment(object):
 
 class DistanceCalculator(object):
 
+    debug = True
+
     def __init__(self, segments: Iterable[MessageSegment], method='canberra'):
         """
         Determine the distance between the given segments.
@@ -276,11 +278,17 @@ class DistanceCalculator(object):
             defaults to 'cosine'.
         :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
         """
+        if DistanceCalculator.debug:
+            print('Prepare values.')
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
 
+        if DistanceCalculator.debug:
+            print('call pdist from scipy.')
         # This is the poodle's core
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
 
+        if DistanceCalculator.debug:
+            print('Expand compressed pairs.')
         segPairs = list()
         for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
             if numpy.isnan(simi):
@@ -307,7 +315,6 @@ class DistanceCalculator(object):
             else:
                 segSimi = simi
             segPairs.append(InterSegment(segA, segB, segSimi))
-        # print("    finished.")
         return segPairs
 
     def _getDistanceMatrix(self, distances: List[InterSegment]) -> numpy.ndarray:
@@ -356,6 +363,27 @@ class DistanceCalculator(object):
         distance = subsetsSimi.min() * shortSegment.length/longSegment.length
 
         return method, shift, InterSegment(shortSegment, longSegment, distance)
+
+    def _embdedAndCalcDistances(self, segments: List[MessageSegment], method='canberra'):
+        """
+        Embed all shorter Segments into all larger ones and use the resulting pairwise distances to generate a
+        complete distance list of all combinations of the into segment list regardless of their length.
+
+        :param segments:
+        :param method:
+        :return:
+        """
+        raise NotImplementedError()
+        # TODO: implement
+        # a) for segments of identical length: call _calcDistancesPerLen()
+        # b) on segments with mismatching length: _embedSegment as follows:
+        #   for all length groups, sorted by length decreasing
+        #       for all length groups with length < current length
+        #           for all segments in "sorter length" group
+        #               for all segments in current length group
+        #                   _embedSegment(shorter in longer)
+        #                   add embedding similarity to list of InterSegments
+        #
 
 
 
