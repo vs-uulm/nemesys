@@ -12,9 +12,10 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMess
 from validation.tsharkConnector import TsharkConnector
 
 
-# noinspection PyDictCreation
 class ParsingConstants(object):
-    """Class to hold constants necessary for the interpretation of the tshark dissectors."""
+    """
+    Class to hold constants necessary for the interpretation of the tshark dissectors.
+    """
 
     # see https://www.tcpdump.org/linktypes.html
     LINKTYPES = {
@@ -25,6 +26,16 @@ class ParsingConstants(object):
         'RAW_IP': 101
         # IEEE802_11 = 105
     }
+
+
+# noinspection PyDictCreation
+class ParsingConstants226(ParsingConstants):
+    """
+    Class to hold constants necessary for the interpretation of the tshark dissectors.
+    Version for tshark 2.2.6 and compatible.
+    """
+
+    COMPATIBLE_TO = b'2.2.6'
 
     EXCLUDE_SUB_FIELDS = [  # a convenience list for debugging: names of fields that need not give a warning if ignored.
         'dns.flags_tree', 'ntp.flags_tree',
@@ -41,7 +52,6 @@ class ParsingConstants(object):
 
         'smb2.ioctl.function_tree', 'smb.nt.ioctl.completion_filter_tree', 'smb2.ioctl.function_tree',
         'smb.nt.ioctl.completion_filter_tree', 'smb.lock.type_tree'
-
     ]
 
     # names of field nodes in the json which should be ignored.
@@ -346,6 +356,26 @@ class ParsingConstants(object):
     TYPELOOKUP['smb2.ioctl.shadow_copy.count'] = 'int'  # has value: 02000000
 
 
+# noinspection PyDictCreation
+class ParsingConstants263(ParsingConstants226):
+    """
+    Compatibility for tshark 2.6.3
+
+    "_raw" field node values list
+    # h - hex bytes
+    # p - position
+    # l - length
+    # b - bitmask
+    # t - type
+    see line 262ff: https://github.com/wireshark/wireshark/blob/3a514caaf1e3b36eb284c3a566d489aba6df5392/tools/json2pcap/json2pcap.py
+    """
+    COMPATIBLE_TO = b'2.6.3'
+
+    pass
+
+
+
+
 class DissectionInvalidError(Exception):
     """
     Base Exception for all errors in dissections from tshark
@@ -411,6 +441,7 @@ class ParsedMessage(object):
         self.protocolbytes = None
         self._fieldsflat = None
         self.__failOnUndissectable = failOnUndissectable
+        self.__constants = None
         if message:
             if not isinstance(message, RawMessage):
                 raise TypeError( "The message need to be of type netzob.Model.Vocabulary.Messages.RawMessage. "
@@ -506,6 +537,7 @@ class ParsedMessage(object):
         elif ParsedMessage.__tshark.linktype != linktype:
             ParsedMessage.__tshark.terminate()
             ParsedMessage.__tshark = TsharkConnector(linktype)
+
 
         prsdmsgs = {}
         n = 1000  # parse in chunks of 1000s
@@ -648,9 +680,12 @@ class ParsedMessage(object):
                                     "Incomplete dissection. Probably wrong base encapsulation detected?")
 
                         self.protocolbytes = ParsedMessage._getElementByName(layersvalue,
-                            self.protocolname + ParsedMessage.RK)
+                            self.protocolname + ParsedMessage.RK)  # tshark 2.2.6
+                        if isinstance(self.protocolbytes, list):   # tshark 2.6.3
+                            self.protocolbytes = self.protocolbytes[0]
                         # field keys, filter for those ending with '_raw' into fieldnames
                         self._fieldsflat = ParsedMessage._walkSubTree(self._dissectfull)
+                        # IPython.embed()
                         try:
                             ParsedMessage._reassemblePostProcessing(self)
                         except DissectionIncomplete as e:
@@ -749,19 +784,27 @@ class ParsedMessage(object):
             If False (default), ignore all branch nodes which are not listed in :func:`_includeSubFields`..
         :return:
         """
+        CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
+
         subfields = []
         for fieldkey, subnode in root:
             if fieldkey in ParsedMessage._prehooks:  # apply pre-hook if any for this field name
                 ranPreHook = ParsedMessage._prehooks[fieldkey](subnode, subfields)
                 if ranPreHook is not None:
                     subfields.append(ranPreHook)
-            if isinstance(subnode,  str):  # leaf
-                if fieldkey.endswith(ParsedMessage.RK) and fieldkey not in ParsingConstants.IGNORE_FIELDS:
-                    subfields.append((fieldkey[:-len(ParsedMessage.RK)], subnode))
-            else:  # branch node
-                if allSubFields or fieldkey in ParsingConstants.INCLUDE_SUBFIELDS:
-                    subfields.extend(ParsedMessage._walkSubTree(subnode, fieldkey in ParsingConstants.RECORD_STRUCTURE))
-                elif fieldkey not in ParsingConstants.EXCLUDE_SUB_FIELDS:  # to get a notice on errors
+            # leaf
+            if fieldkey.endswith(ParsedMessage.RK) and (isinstance(subnode, str)  # tshark 2.2.6
+                or (isinstance(subnode, list) and len(subnode) == 5  # tshark 2.6.3
+                    and isinstance(subnode[0], str)
+                    and isinstance(subnode[1], int) and isinstance(subnode[2], int)
+                    and isinstance(subnode[3], int) and isinstance(subnode[4], int))):
+                if fieldkey not in CONSTANTS_CLASS.IGNORE_FIELDS:
+                    subfields.append((fieldkey[:-len(ParsedMessage.RK)],
+                                      subnode if isinstance(subnode, str) else subnode[0]))
+            elif not isinstance(subnode, str):  # branch node, ignore textual descriptions
+                if allSubFields or fieldkey in CONSTANTS_CLASS.INCLUDE_SUBFIELDS:
+                    subfields.extend(ParsedMessage._walkSubTree(subnode, fieldkey in CONSTANTS_CLASS.RECORD_STRUCTURE))
+                elif fieldkey not in CONSTANTS_CLASS.EXCLUDE_SUB_FIELDS:  # to get a notice on errors
                     print("Ignored sub field:", fieldkey)
                     if fieldkey == '_ws.expert':
                         expertMessage = ParsedMessage._getElementByName(subnode, '_ws.expert.message')
@@ -1034,12 +1077,12 @@ class ParsedMessage(object):
         >>> pms = ParsedMessage.parseMultiple(dhcp)
         >>> for parsed in pms.values(): parsed.printUnknownTypes()
         """
-
+        CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
         headerprinted = False
         for fieldname, fieldvalue in self._fieldsflat:
-            if not fieldname in ParsingConstants.TYPELOOKUP:
+            if not fieldname in CONSTANTS_CLASS.TYPELOOKUP:
                 if not headerprinted:  # print if any output before first line
-                    print("Known types: " + repr(set(ParsingConstants.TYPELOOKUP.values())))
+                    print("Known types: " + repr(set(CONSTANTS_CLASS.TYPELOOKUP.values())))
                     headerprinted = True
                 print("TYPELOOKUP['{:s}'] = '???'  # has value: {:s}".format(fieldname, fieldvalue))
 
@@ -1071,15 +1114,16 @@ class ParsedMessage(object):
         """
         :return: The list of field types and their field lengths of this ParsedMessage.
         """
+        CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
         retVal = []
         for fk, fv in self._fieldsflat:
-            if fk not in ParsingConstants.TYPELOOKUP:
+            if fk not in CONSTANTS_CLASS.TYPELOOKUP:
                 if fk == 'data.data':
                     print(self._dissectfull)
                 raise NotImplementedError(
                     "Field name {} has unknown type. hex value: {}".format(fk, fv) +
                     "\nfor Wireshark filter: {}".format(':'.join([b1+b2 for b1, b2 in zip(fv[::2], fv[1::2])])))
-            retVal.append((ParsingConstants.TYPELOOKUP[fk], len(fv)//2))
+            retVal.append((CONSTANTS_CLASS.TYPELOOKUP[fk], len(fv)//2))
         return tuple(retVal)
 
     def getValuesOfTypes(self):
@@ -1087,12 +1131,13 @@ class ParsedMessage(object):
         """
         :return: A mapping of all field types and their unique values (hexstrings) in this ParsedMessage.
         """
+        CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
         retVal = {}
         for fk, fv in self._fieldsflat:
-            if fk not in ParsingConstants.TYPELOOKUP:
+            if fk not in CONSTANTS_CLASS.TYPELOOKUP:
                 raise NotImplementedError(
                     "Field name {} has unknown type. The value is {}".format(fk, fv))
-            ftype = ParsingConstants.TYPELOOKUP[fk]
+            ftype = CONSTANTS_CLASS.TYPELOOKUP[fk]
             if ftype not in retVal:
                 retVal[ftype] = set()
             retVal[ftype].add(fv)
@@ -1115,5 +1160,11 @@ class ParsedMessage(object):
             ParsedMessage.__tshark.terminate()
 
 
-
-
+    @staticmethod
+    def __getCompatibleConstants():
+        if ParsedMessage.__tshark.version <= ParsingConstants226.COMPATIBLE_TO:
+            return ParsingConstants226
+        elif ParsedMessage.__tshark.version <= ParsingConstants263.COMPATIBLE_TO:
+            return ParsingConstants263
+        else:
+            raise ParsingConstants

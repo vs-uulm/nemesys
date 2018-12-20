@@ -18,7 +18,7 @@ class TsharkConnector(object):
     # __tsharkline = ["tshark", "-l", "-r", "-", "-T", "json", "-x"]
     # __tsharkline = ["tshark", "-Q", "-a", "duration:20", "-l", "-n", "-i", "-", "-T", "json", "-x"]
     __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:3600", "-l", "-n", "-i", "-", "-T", "json", "-x",
-                  "-o", "tcp.analyze_sequence_numbers: FALSE"]
+                  "-o", "tcp.analyze_sequence_numbers:FALSE"]
     # __header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, 1)
 
 
@@ -28,11 +28,17 @@ class TsharkConnector(object):
         self.__tsharkqueue = Queue()
         self.__tempfile = None  # type: io.BufferedRandom
         self.__tempreader = None  # type: io.BufferedReader
+        self.__version = None
 
 
     @property
     def linktype(self):
         return self.__linktype
+
+
+    @property
+    def version(self):
+        return self.__version
 
 
     def writePacket(self, paketdata: bytes):
@@ -139,6 +145,8 @@ class TsharkConnector(object):
         """
 
         if self.__tshark is None or self.__tshark.poll() is not None:
+            self.__version = TsharkConnector.checkTsharkCompatibility()[0]
+
             header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, self.__linktype)
 
             # create tempfile
@@ -175,6 +183,13 @@ class TsharkConnector(object):
         return self.__tshark.poll() is None if self.__tshark else False
 
 
-
-
+    @staticmethod
+    def checkTsharkCompatibility():
+        versionstring = subprocess.check_output(("tshark", "-v"))
+        versionlist = versionstring.split(maxsplit=4)
+        if versionlist[2] not in (b'2.2.6', b'2.6.3'):
+            print("WARNING: Unchecked version of tshark in use! Dissections may be misfunctioning of faulty. "
+                  "Check compatibility of JSON output!\n")
+            return versionlist[2], False
+        return versionlist[2], True
 

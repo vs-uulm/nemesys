@@ -20,7 +20,7 @@ https://www.usenix.org/conference/woot18/presentation/kleber
 
 ## Release: WOOT18
 
-**Code author:** Stephan Kleber, *Institute of Distributed Systems, Ulm University*
+**Code author:** Stephan Kleber ([stephan.kleber@uni-ulm.de](mailto:stephan.kleber@uni-ulm.de)), *Institute of Distributed Systems, Ulm University*
 
 NEMESYS is a novel method to infer structure from network messages of binary protocols. 
 The method derives field boundaries from the distribution of value changes throughout individual messages. 
@@ -43,13 +43,14 @@ Have a look into `nemesys.py` resp. `nemesys_fms.py` to get an impression of the
 * Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)
   -- ~~currently NOT the official~~ [~~"next" branch~~](https://github.com/netzob/netzob/tree/next/netzob)! --
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
-    * clone Netzob next branch to a : `git clone --single-branch -b fix-layer-build git@github.com:skleber/netzob.git` 
+    * clone Netzob fix-layer-build branch to a local folder:  
+      `git clone --single-branch -b fix-layer-build git@github.com:skleber/netzob.git` 
     * install it: `python setup.py install`
-* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) = 2.2.6 
+* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) version in [2.2.6, 2.6.3]
   (possibly other versions, depending on the compatibility of the JSON-output format of dissected messages,
   report further working versions e. g. per github issue)  
-  *Note: NEMESYS can be used without tshark as long as no FMS validation (in package `validation`) 
-  against a real dissector is required.*
+  *Note: NEMESYS can be used without tshark as long as FMS validation (in package `validation`) 
+  against a real dissector is NOT required.*
 
 
 
