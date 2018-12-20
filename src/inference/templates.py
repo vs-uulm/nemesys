@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Iterable, Sequence
+from typing import List, Dict, Union, Iterable, Sequence, Tuple
 import numpy, scipy.spatial, itertools
 from abc import ABC, abstractmethod
 
@@ -125,14 +125,18 @@ class DistanceCalculator(object):
         """
         self._method = method
         self._segments = list()  # type: List[MessageSegment]
+        self._quicksegments = list()  # type: List[Tuple[int, int, Tuple[float]]]
+        """List of Tuples: (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)"""
         # ensure that all segments have analysis values
         firstSegment = next(iter(segments))
-        for seg in segments:
+        for idx, seg in enumerate(segments):
             self._segments.append(firstSegment.fillCandidate(seg))
+            self._quicksegments.append((idx, seg.length, tuple(seg.values)))
         # distance matrix for all rows and columns in order of self._segments
-        self._distances = self._getDistanceMatrix(
-            DistanceCalculator._calcDistancesPerLen(
-                self._groupByLength(), method=method))  # type: numpy.array()
+        self._distances = self._getDistanceMatrix(self._embdedAndCalcDistances())
+        # self._distances = self._getDistanceMatrix(
+        #     DistanceCalculator._calcDistancesPerLen(
+        #         self._groupByLength(), method=method))  # type: numpy.array()
 
     @property
     def distanceMatrix(self) -> numpy.ndarray:
@@ -217,7 +221,7 @@ class DistanceCalculator(object):
                 Alist.append(self.pairDistance(A, B))
         return numpy.array(distances)
 
-    def _groupByLength(self) -> Dict[int, List[MessageSegment]]:
+    def _groupByLength(self) -> Dict[int, List[Tuple[int, int, Tuple[float]]]]:
         """
         Groups segments by value length.
 
@@ -226,50 +230,117 @@ class DistanceCalculator(object):
         :return: a dict mapping the length to the list of MessageSegments of that length.
         """
         segsByLen = dict()
-        for seg in self._segments:
-            seglen = len(seg.bytes)
+        for seg in self._quicksegments:
+            seglen = seg[1]
             if seglen not in segsByLen:
                 segsByLen[seglen] = list()
             segsByLen[seglen].append(seg)
         return segsByLen
 
-    @staticmethod
-    def _calcDistancesPerLen(segLenGroups: Dict[int, List[MessageSegment]], method='cosine') -> List[InterSegment]:
+    def _calcDistancesPerLen(self, segLenGroups: Dict[int, List[MessageSegment]]) -> List[InterSegment]:
         """
         Calculates distances within groups of equally lengthy segments.
 
         Used in constructor.
 
         :param segLenGroups: a dict mapping the length to the list of MessageSegments of that length.
-        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
-            defaults to 'cosine'.
         :return: flat list of pairwise distances for all length groups.
         """
         distance = list()
         for l, segGroup in segLenGroups.items():  # type: int, List[MessageSegment]
-            distance.extend(DistanceCalculator._calcDistances(segGroup, method=method))
+            segindices = [self._segments.index(seg) for seg in segGroup]
+            qsegs = [self._quicksegments[idx] for idx in segindices]
+            distance.extend(DistanceCalculator._calcDistances(qsegs, method=self._method))
+        # TODO perf
         return distance
 
     @staticmethod
-    def __prepareValuesMatrix(segments: List[MessageSegment], method):
+    def __prepareValuesMatrix(segments: List[Tuple[int, int, Tuple[float]]], method):
+        # TODO if this should become is a performance killer, drop support for cosine and correlation of unsuitable segments altogether
+
         # fallback for vectors of length 1
-        if len(segments[0].values) == 1:
-            method = 'cityblock'
+        if segments[0][1] == 1:
+            # there is no simple fallback solution for 'correlate'
+            # factor = 2 if method == 'correlate' else 1
+            if method == 'cosine':
+                raise NotImplementedError("There is no simple fallback solution to correlate segments of length 1!")
+            if method == 'cosine':
+                method = 'canberra'
 
         if method == 'cosine':
             # comparing to zero vectors is undefined in cosine.
             # Its semantically equivalent to a (small) horizontal vector
             segmentValuesMatrix = numpy.array(
-                [seg.values if (numpy.array(seg.values) != 0).any() else [1e-16]*len(seg.values) for seg in segments])
+                [seg[2] if (numpy.array(seg[2]) != 0).any() else [1e-16]*len(seg[2]) for seg in segments])
         else:
-            segmentValuesMatrix = numpy.array([seg.values for seg in segments])
+            segmentValuesMatrix = numpy.array([seg[2] for seg in segments])
 
         return method, segmentValuesMatrix
 
+    @staticmethod
+    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='cosine') -> List[
+        Tuple[int, int, float]
+    ]:
+        """
+        Calculates pairwise distances for all input segments.
+        The values of all segments have to be of the same length!
+
+        :param segments: list of segments to calculate their similarity/distance for.
+        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
+            defaults to 'cosine'.
+        :return: List of all pairwise distances between segements.
+        """
+        if DistanceCalculator.debug:
+            import time
+            tPrep = time.time()
+            print('Prepare values.', end='')
+        method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
+
+        if DistanceCalculator.debug:
+            tPdist = time.time()
+            print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
+        # This is the poodle's core
+        segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
+
+        if DistanceCalculator.debug:
+            tExpand = time.time()
+            print(' {:.3f}s\nExpand compressed pairs.'.format(tExpand-tPdist), end='')
+        segPairs = list()
+        for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
+            if numpy.isnan(simi):
+                if method == 'cosine':
+                    if segA[2] == segB[2] \
+                            or numpy.isnan(segA[2]).all() and numpy.isnan(segB[2]).all():
+                        segSimi = 0
+                    elif numpy.isnan(segA[2]).any() or numpy.isnan(segB[2]).any():
+                        segSimi = 1
+                        # TODO better handling of segments with NaN parts.
+                        # print('Set max distance for NaN segments with values: {} and {}'.format(
+                        #     segA[2], segB[2]))
+                    else:
+                        raise ValueError('An unresolved zero-values vector could not be handled by method ' + method +
+                                         ' the segment values are: {}\nand {}'.format(segA[2], segB[2]))
+                elif method == 'correlation':
+                    # TODO validate this assumption about the interpretation of uncorrelatable segments.
+                    if segA[2] == segB[2]:
+                        segSimi = 0.0
+                    else:
+                        segSimi = 9.9
+                else:
+                    raise NotImplementedError('Handling of NaN distances needs to be defined for method ' + method)
+            else:
+                segSimi = simi
+            segPairs.append((segA[0], segB[0], segSimi))
+        if DistanceCalculator.debug:
+            tFinal = time.time()
+            print(" {:.3f}s".format(tFinal-tExpand))
+        return segPairs
 
     @staticmethod
-    def _calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
+    def __calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
         """
+        LEGACY/FALLBACK
+
         Calculates pairwise distances for all input segments.
         The values of all segments have to be of the same length!
 
@@ -279,16 +350,21 @@ class DistanceCalculator(object):
         :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
         """
         if DistanceCalculator.debug:
-            print('Prepare values.')
+            import time
+            tPrep = time.time()
+            print('Prepare values.', end='')
+        # TODO perf
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
 
         if DistanceCalculator.debug:
-            print('call pdist from scipy.')
+            tPdist = time.time()
+            print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
         # This is the poodle's core
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
 
         if DistanceCalculator.debug:
-            print('Expand compressed pairs.')
+            tExpand = time.time()
+            print(' {:.3f}s\nExpand compressed pairs.'.format(tExpand-tPdist), end='')
         segPairs = list()
         for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
             if numpy.isnan(simi):
@@ -315,9 +391,14 @@ class DistanceCalculator(object):
             else:
                 segSimi = simi
             segPairs.append(InterSegment(segA, segB, segSimi))
+        if DistanceCalculator.debug:
+            tFinal = time.time()
+            print(" {:.3f}s".format(tFinal-tExpand))
         return segPairs
 
-    def _getDistanceMatrix(self, distances: List[InterSegment]) -> numpy.ndarray:
+    def _getDistanceMatrix(self, distances: List[
+        Tuple[int, int, float]
+    ]) -> numpy.ndarray:
         """
         Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
         The order of the matrix elements in each row and column is the same as in self._segments.
@@ -338,53 +419,66 @@ class DistanceCalculator(object):
         #     simtrx[row, col] = intseg.distance
         #     simtrx[col, row] = intseg.distance
         from inference.segmentHandler import matrixFromTpairs
-        simtrx = matrixFromTpairs([(ise.segA,ise.segB, ise.distance) for ise in distances], self._segments)
+        simtrx = matrixFromTpairs([(ise[0], ise[1], ise[2]) for ise in distances], range(len(self._quicksegments)),
+                                  incomparable=-1)  # TODO check for incomparable values (resolve and replace the negative value)
         return simtrx
 
     @staticmethod
-    def _embedSegment(shortSegment: MessageSegment, longSegment: MessageSegment, method='canberra'):
+    def _embedSegment(shortSegment: Tuple[int, int, Tuple[float]], longSegment: Tuple[int, int, Tuple[float]],
+                      method='canberra'):
         """
         Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
 
         :return: The minimal partial distance between the segments, wrapped in an InterSegment.
         """
-        assert longSegment.length > shortSegment.length
+        assert longSegment[1] > shortSegment[1]
 
-        maxOffset = longSegment.length - shortSegment.length
+        maxOffset = longSegment[1] - shortSegment[1]
 
         subsets = list()
-        for offset in range(0,maxOffset):
-            offSegment = MessageSegment(longSegment.analyzer, longSegment.offset + offset, shortSegment.length)
-            subsets.append(offSegment)
+        for offset in range(0, maxOffset):
+            offSegment = longSegment[2][offset:offset + shortSegment[1]]
+            subsets.append((-1, shortSegment[1], offSegment))
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(subsets, method)
 
-        subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, numpy.array([shortSegment.values]), method)
+        subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, numpy.array([shortSegment[2]]), method)
         shift = subsetsSimi.argmin() # TODO: for debugging
-        distance = subsetsSimi.min() * shortSegment.length/longSegment.length
+        distance = subsetsSimi.min() * shortSegment[1]/longSegment[1]
 
-        return method, shift, InterSegment(shortSegment, longSegment, distance)
+        return method, shift, (shortSegment[0], longSegment[0], distance)
 
-    def _embdedAndCalcDistances(self, segments: List[MessageSegment], method='canberra'):
+    def _embdedAndCalcDistances(self) -> \
+            List[Tuple[int, int, float]]:
         """
         Embed all shorter Segments into all larger ones and use the resulting pairwise distances to generate a
         complete distance list of all combinations of the into segment list regardless of their length.
 
-        :param segments:
-        :param method:
         :return:
         """
-        raise NotImplementedError()
-        # TODO: implement
-        # a) for segments of identical length: call _calcDistancesPerLen()
-        # b) on segments with mismatching length: _embedSegment as follows:
-        #   for all length groups, sorted by length decreasing
-        #       for all length groups with length < current length
-        #           for all segments in "sorter length" group
-        #               for all segments in current length group
-        #                   _embedSegment(shorter in longer)
-        #                   add embedding similarity to list of InterSegments
-        #
-
+        lenGrps = self._groupByLength()
+        distance = list()  # type: List[Tuple[int, int, float]]
+        rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
+        for outerlen in rslens:
+            outersegs = lenGrps[outerlen]
+            if DistanceCalculator.debug:
+                print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
+            # a) for segments of identical length: call _calcDistancesPerLen()
+            distance.extend(DistanceCalculator._calcDistances(outersegs, method=self._method))
+            # b) on segments with mismatching length: _embedSegment:
+            #       for all length groups with length < current length
+            for innerlen in rslens[rslens.index(outerlen)+1:]:
+                innersegs = lenGrps[innerlen]
+                if DistanceCalculator.debug:
+                    print("\t\tinnersegs, length {}, segments {}".format(innerlen, len(innersegs)))
+                # for all segments in "shorter length" group
+                #     for all segments in current length group
+                for iseg in innersegs:
+                    for oseg in outersegs:
+                        # _embedSegment(shorter in longer)
+                        embedded = DistanceCalculator._embedSegment(iseg, oseg, self._method)
+                        # add embedding similarity to list of InterSegments
+                        distance.append(embedded[2])
+        return distance
 
 
 

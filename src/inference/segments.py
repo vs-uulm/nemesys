@@ -40,7 +40,7 @@ class MessageAnalyzer(ABC):
 
     @property
     @abstractmethod
-    def domain(self):
+    def domain(self) -> Tuple[int, int]:
         """
         :return: The value domain (min and max) of the analyzer
         """

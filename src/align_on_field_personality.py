@@ -65,11 +65,11 @@ if __name__ == '__main__':
 
     print("Segmenting messages...", end=' ')
     # # segment messages according to true fields from the labels
-    # segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
     # segsByLen = groupByLength(segmentedMessages)
 
     # segment messages into fixed size chunks for testing
-    segmentedMessages = segmentsFixed(analyzerType,analysisArgs,comparator,4)
+    # segmentedMessages = segmentsFixed(analyzerType,analysisArgs,comparator,4)
     print("done.")
 
 
@@ -102,9 +102,10 @@ if __name__ == '__main__':
     #
     #
     #
-    print("Calculate segment distance...")
     chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+    print("Calculate distance for {} segments...".format(len(chainedSegments)))
     dc = DistanceCalculator(chainedSegments)  # Pairwise similarity of segments: dc.distanceMatrix
+    IPython.embed()
     # convert dc.distanceMatrix from being a distance to a similarity measure
     print("Convert to segment similarity...")
     similarityMatrix = dc.similarityMatrix()
@@ -119,7 +120,7 @@ if __name__ == '__main__':
 
         # Needleman-Wunsch alignment score of the two messages:
         nwscores.append((msg0, msg1, hirsch.nwScore(segseq0, segseq1)[-1]))
-        print('.', end='')
+        print('.', end='', flush=True)
 
     print("\nCalculate message similarity from alignment scores...")
     # convert nwscores from being a similarity to a distance measure
@@ -152,7 +153,10 @@ if __name__ == '__main__':
         print('Cluster', clunu)
         print(tabulate([[s.bytes.hex() for s in m] for m in seclu], disable_numparse=True))
 
-    # # TODO test calls for validating _embedSegment -> doctest there?!
+
+
+
+    # # TODO: these are test calls for validating _embedSegment -> doctest there?!
     # m, s, inters = DistanceCalculator._embedSegment(segsByLen[4][50], segsByLen[8][50])
     #
     # overlay = ([None] * s + inters.segA.values, inters.segB.values)
