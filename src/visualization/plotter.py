@@ -28,6 +28,7 @@ class MessagePlotter(object):
         """
         plt.rc('xtick', labelsize=4)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=4)  # fontsize of the tick labels
+        plt.rc('legend', frameon=False)
 
         self._specimens = specimens
         self._title = analysisTitle

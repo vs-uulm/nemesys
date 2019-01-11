@@ -155,6 +155,7 @@ class DistanceCalculator(object):
 
         :return: The pairwise similarities of all segments in this object represented as an symmetric array.
         """
+        # TODO check if still necessary, since _embdedAndCalcDistances now returns normalized values
         distanceMax = {
             'cosine': 1,
             'correlation': 2,
@@ -254,6 +255,7 @@ class DistanceCalculator(object):
         # TODO perf
         return distance
 
+
     @staticmethod
     def __prepareValuesMatrix(segments: List[Tuple[int, int, Tuple[float]]], method):
         # TODO if this should become is a performance killer, drop support for cosine and correlation of unsuitable segments altogether
@@ -278,7 +280,7 @@ class DistanceCalculator(object):
         return method, segmentValuesMatrix
 
     @staticmethod
-    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='cosine') -> List[
+    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
         Tuple[int, int, float]
     ]:
         """
@@ -299,6 +301,8 @@ class DistanceCalculator(object):
         if DistanceCalculator.debug:
             tPdist = time.time()
             print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
+        if len(segments) == 1:
+            return [(segments[0][0], segments[0][0], 0)]
         # This is the poodle's core
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
 
@@ -453,9 +457,11 @@ class DistanceCalculator(object):
         Embed all shorter Segments into all larger ones and use the resulting pairwise distances to generate a
         complete distance list of all combinations of the into segment list regardless of their length.
 
-        :return:
+        :return: List of Tuples
+            (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
         lenGrps = self._groupByLength()
+
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
         for outerlen in rslens:
@@ -463,7 +469,8 @@ class DistanceCalculator(object):
             if DistanceCalculator.debug:
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
-            distance.extend(DistanceCalculator._calcDistances(outersegs, method=self._method))
+            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
+            distance.extend([(i,l, (d * self._normFactor(outerlen))**2) for i,l,d in ilDist])
             # b) on segments with mismatching length: _embedSegment:
             #       for all length groups with length < current length
             for innerlen in rslens[rslens.index(outerlen)+1:]:
@@ -477,9 +484,29 @@ class DistanceCalculator(object):
                         # _embedSegment(shorter in longer)
                         embedded = DistanceCalculator._embedSegment(iseg, oseg, self._method)
                         # add embedding similarity to list of InterSegments
-                        distance.append(embedded[2])
+                        interseg = embedded[2]
+                        dlDist = (interseg[0], interseg[1], (interseg[2] * self._normFactor(innerlen))**2)  # minimum of dimensions
+                        distance.append(dlDist)
         return distance
 
+
+    def _normFactor(self, dimensions):
+        distanceMax = {
+            'cosine': 1,
+            'correlation': 2,
+            'canberra': None,
+            'euclidean': None,
+            'sqeuclidean': None
+        }
+        if self._method == 'canberra':
+            distanceMax['canberra'] = dimensions  # max number of dimensions
+        elif self._method == 'euclidean':
+            domainSize = self._segments[0].analyzer.domain[1] - self._segments[0].analyzer.domain[0]
+            distanceMax['euclidean'] = dimensions * domainSize
+        elif self._method == 'sqeuclidean':
+            domainSize = self._segments[0].analyzer.domain[1] - self._segments[0].analyzer.domain[0]
+            distanceMax['sqeuclidean'] = dimensions * domainSize**2
+        return 1 / distanceMax[self._method]
 
 
 class Template(AbstractSegment):
@@ -571,15 +598,11 @@ class TemplateGenerator(DistanceCalculator):
             always is the (possibly empty) noise.
         :return: clusters of similar segments
         """
-        clusters = [[]]
-        for eqLenSegs in self._groupByLength().values():
-            clusterInGroup = self.getClusters(eqLenSegs, **kwargs)
-            if not filterNoise:
-                if -1 in clusterInGroup:
-                    clusters[0].extend(clusterInGroup[-1])
-            noiseFiltered = [v for k, v in clusterInGroup.items() if k > -1]
-            clusters.extend(noiseFiltered)  # omit noise
-        return clusters
+        clusters = self.getClusters(self._segments, **kwargs)
+        if filterNoise and -1 in clusters: # omit noise
+            del clusters[-1]
+        clusterlist = [clusters[l] for l in sorted(clusters.keys())]
+        return clusterlist
 
 
     def _similaritiesSubset(self, cluster: Sequence[MessageSegment]) -> numpy.ndarray:
@@ -692,6 +715,8 @@ class TemplateGenerator(DistanceCalculator):
             else:
                 self.min_cluster_size = None
 
+            self.min_samples = 2
+
 
         def getClusterLabels(self) -> numpy.ndarray:
             """
@@ -705,17 +730,18 @@ class TemplateGenerator(DistanceCalculator):
             if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
                 return numpy.zeros_like(self._distances[0], int)
 
-            dbscan = HDBSCAN(metric='precomputed', allow_single_cluster=True, # cluster_selection_method='leaf',
-                             min_samples=self.min_cluster_size)  #min_cluster_size
-            # print("HDBSCAN min cluster size:", self.min_cluster_size)
-            print("HDBSCAN min samples:", self.min_cluster_size)
+            dbscan = HDBSCAN(metric='precomputed', allow_single_cluster=True, cluster_selection_method='leaf',
+                             min_cluster_size=self.min_cluster_size,
+                             min_samples=self.min_samples
+                             )
+            print("HDBSCAN min cluster size:", self.min_cluster_size, "min samples:", self.min_samples)
             dbscan.fit(self._distances)
             # TODO import IPython; IPython.embed()
             return dbscan.labels_
 
 
         def __repr__(self):
-            return 'HDBSCAN mcs {}'.format(self.min_cluster_size)
+            return 'HDBSCAN mcs {} ms {}'.format(self.min_cluster_size, self.min_samples)
 
 
     class DBSCAN(Clusterer):

@@ -39,7 +39,7 @@ class DistancesPlotter(MessagePlotter):
 
 
     def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
-                               labels: List, templates: List=None, plotEdges = False, countMarkers = False):
+                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
         Plot distances of segments according to (presumably multidimensional) features.
         This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
@@ -241,45 +241,16 @@ class DistancesPlotter(MessagePlotter):
         """
         Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
 
-        # :param segments: Segments of equal lengths to calculate pairwise distances from and plot these.
-        :param tg: A template generator object of segments of one length to derive similarities.
+        :param tg: A template generator object of segments that all have pairwise similarities assigned
+            of which to derive segment groups, similarities, and templates.
         :param labels: list of labels in the order of segments as they are contained in tg.segments.
         """
-        # segments: List[MessageSegment]
-        # tg = TemplateGenerator(segments)  # type: TemplateGenerator
-        """A template generator object of which to derive segment groups, similarities, and templates."""
-
         assert type(labels) == numpy.ndarray
+        assert len(tg.segments) == len(tg.distanceMatrix)  # all have pairwise similarities assigned
 
-        lenGrps = tg._groupByLength()
-        if len(lenGrps) > 1:
-            raise ValueError('Only segments of one single length in the TemplateGenerator are accepted as input.')
-
-        # Keep loop for later extension
-        for lenGrp in lenGrps.values():
-            if len(lenGrp) < 2:
-                continue
-            # # Keep for extension to generate cluster labels
-            # similarities = tg._similaritiesSubset(lenGrp)
-            # labels = tg.getClusterLabels(similarities)
-
-            # Prevent ordering errors (remove if we choose to support multiple plots (lenGrps) at once)
-            assert lenGrp == tg.segments
-
-            ulab = set(labels)
-            clusters = list()
-            for l in ulab:
-                class_member_mask = (labels == l)
-                clusters.append([ seg for seg in compress(lenGrp, class_member_mask) ])
-
-            if len(tg.segments[0].values) > 2:
-                similarities = tg.distanceMatrix
-                self._plotManifoldDistances(lenGrp, similarities, labels)
-            else:
-                self._plot2dDistances(lenGrp, labels)
-
-
-
+        segGroup = tg.segments
+        similarities = tg.distanceMatrix
+        self._plotManifoldDistances(segGroup, similarities, labels)
 
 
     @staticmethod

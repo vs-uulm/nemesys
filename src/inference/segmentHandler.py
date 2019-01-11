@@ -143,7 +143,8 @@ def segments2types(segments: List[TypedSegment]) -> Dict[str, List[TypedSegment]
     Rearrange a list of typed segments into a dict of type: list(segments of that type)
 
     :param segments:
-    :return:
+    :return: A dict of
+        fieldtype (str) : segments of this type (list)
     """
     typegroups = dict()
     for seg in segments:
