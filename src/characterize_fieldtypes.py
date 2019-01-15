@@ -146,8 +146,8 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
     # print(len(clusters), len(noise))
 
     segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
-                                                    " ".join([str(slen) for slen in segLengths]),
-                                                   tg.clusterer if tg.clusterer else 'n/a'),
+                                                    next(iter(segLengths)) if len(segLengths) == 0 else 'mixedamount',
+                                                    tg.clusterer if tg.clusterer else 'n/a'),
                           segmentClusters) ]
     return segmentClusters
 
@@ -215,6 +215,7 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
         # noise statistics
         if noise:
             numNoise = len(noise)
+            numSegs += numNoise
             ratioNoise = numNoise / numSegs
             noiseTypes = {ft for ft, seg in noise}
 
@@ -295,7 +296,7 @@ if __name__ == '__main__':
     splitFieldLength = False
     if not splitFieldLength:  # dummy to select between old, field-size dependent and new, general similarity
         distance_method = 'canberra'
-        mcs = 25
+        mcs = 15
         minlength = 3
 
         from itertools import chain, compress
@@ -303,10 +304,16 @@ if __name__ == '__main__':
         filteredSegments = sorted(filteredSegments, key=lambda x: x.length)  # sorted only for visual representation in heatmap below
         print("done.")
 
+        # for cnt in (125):
+        cnt = 125
         print("Calculate distances...")
         tg = TemplateGenerator(filteredSegments, distance_method)
+        eps = cnt * .01
+
         print("Clustering...")
-        segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=mcs) # epsilon=2.5)
+        # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=mcs)
+        segmentGroups = segments2clusteredTypes(tg, analysisTitle,
+                                                clustererClass=TemplateGenerator.DBSCAN, epsilon=eps, minpts=20)
         # re-extract cluster labels for segments
         labels = numpy.array([
             labelForSegment(segmentGroups, seg) for seg in tg.segments
@@ -315,30 +322,67 @@ if __name__ == '__main__':
         typeDict = segments2types(filteredSegments)
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # Testing for mixed-length field type identification efficacy
-        lenMasks = {}
-        for idx, seg in enumerate(filteredSegments):
-            if not seg.length in lenMasks:
-                lenMasks[seg.length] = [False] * len(filteredSegments)
-            lenMasks[seg.length][idx] = True
-
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        segFieldtypes = [seg.fieldtype if pseg.fieldtype != seg.fieldtype else '' for seg, pseg in
-                         zip(filteredSegments, filteredSegments[:1] + filteredSegments)]
-        # # equal lengths
-        # l4 = tg.distanceMatrix[lenMasks[4]][:,numpy.array(lenMasks[4])]
-        # # unequal lengths
-        # l4 = tg.distanceMatrix[lenMasks[4]][:,~numpy.array(lenMasks[4])]
-        IPython.embed()  # TODO here I am!
-        # # distance to one field candidate
-        # sns.set(font_scale=.6)
-        # sns.barplot(list(range(tg.distanceMatrix.shape[0])), tg.distanceMatrix[180,])
-        # plt.show()
-        # # distance matrix heatmap (sorted above for this plot)
-        # xymax = 160
-        # sns.heatmap(tg.distanceMatrix[:xymax,:xymax], xticklabels=segFieldtypes[:xymax], yticklabels=segFieldtypes[:xymax])
-        # plt.show()
+        # # Testing for mixed-length field type identification efficacy
+        # lenMasks = {}
+        # for idx, seg in enumerate(filteredSegments):
+        #     if not seg.length in lenMasks:
+        #         lenMasks[seg.length] = [False] * len(filteredSegments)
+        #     lenMasks[seg.length][idx] = True
+        #
+        # import seaborn as sns
+        # import matplotlib.pyplot as plt
+        # from tabulate import tabulate
+        # segFieldtypes = [seg.fieldtype if pseg.fieldtype != seg.fieldtype else '' for seg, pseg in
+        #                  zip(filteredSegments, filteredSegments[:1] + filteredSegments)]
+        # # # equal lengths
+        # # l4 = tg.distanceMatrix[lenMasks[4]][:,numpy.array(lenMasks[4])]
+        # # # unequal lengths
+        # # l4 = tg.distanceMatrix[lenMasks[4]][:,~numpy.array(lenMasks[4])]
+        # # # Structure of segmentGroups
+        # # segmentGroups[0]  # page (here: all)
+        # # segmentGroups[0][0]  # pagetitle
+        # clusters = segmentGroups[0][1]  # clusters
+        # # segmentGroups[0][1][0]  # cluster 0
+        # # segmentGroups[0][1][0][0]  # cluster 0: title
+        # # segmentGroups[0][1][0][1]  # cluster 0: elements
+        # # segmentGroups[0][1][0][1][0]  # cluster 0: element 0
+        # # segmentGroups[0][1][0][1][0][0]  # cluster 0: element 0: str(type, sum type elements)
+        # # segmentGroups[0][1][0][1][0][1]  # cluster 0: element 0: MessageSegment
+        #
+        # segsByLen = dict()
+        # clusterStats = list()
+        # for ctitle, typedelements in clusters:
+        #     celements = [s for t, s in typedelements]
+        #     segsByLen[ctitle] = groupByLength([celements])
+        #     cntPerLen = [(l, len(segs)) for l, segs in segsByLen[ctitle].items()]
+        #     majOfLen = (-1, -1)  # length, count
+        #     for l, c in cntPerLen:
+        #         if c > majOfLen[1]:
+        #             majOfLen = (l, c)
+        #     majEqDistMax = tg.pairwiseDistance(segsByLen[ctitle][majOfLen[0]], segsByLen[ctitle][majOfLen[0]]).max()
+        #     majNeqDist = tg.pairwiseDistance(
+        #             chain.from_iterable([s for l, s in segsByLen[ctitle].items() if l != majOfLen[0]]),
+        #             segsByLen[ctitle][majOfLen[0]])
+        #     majNeqDistMin = majNeqDist.min() if len(majNeqDist) > 0 else None
+        #     clusterStats.append((
+        #         ctitle, cntPerLen, majOfLen[0], majEqDistMax, majNeqDistMin
+        #     ))
+        #
+        # # distribution of distances of 4 and 8 byte segments
+        # globLenGrps = groupByLength([filteredSegments])
+        # pw4 = tg.pairwiseDistance(globLenGrps[4], globLenGrps[4])
+        # pw8 = tg.pairwiseDistance(globLenGrps[4], globLenGrps[8])
+        # mask=numpy.tril(numpy.full_like(pw4, True, bool))
+        #
+        # IPython.embed()  # TODO here I am!
+        # # # distance to one field candidate
+        # # sns.set(font_scale=.6)
+        # # sns.barplot(list(range(tg.distanceMatrix.shape[0])), tg.distanceMatrix[180,])
+        # # plt.show()
+        # # # distance matrix heatmap (sorted above for this plot)
+        # # xymax = 160
+        # # sns.heatmap(tg.distanceMatrix[:xymax,:xymax], xticklabels=segFieldtypes[:xymax], yticklabels=segFieldtypes[:xymax])
+        # # plt.show()
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         print("Plot distances...")
@@ -353,6 +397,15 @@ if __name__ == '__main__':
         for pagetitle, segmentClusters in segmentGroups:
             plotMultiSegmentLines(segmentClusters, "{} ({})".format(pagetitle, distance_method), True, typeDict)
 
+        # del segmentGroups
+        # del tg
+        # del sdp
+
+        from utils.baseAlgorithms import tril
+        import numpy
+        print("distances median", numpy.median(tril(tg.distanceMatrix)))
+
+        IPython.embed()  # TODO here I am!
 
     else:
         segsByLen = groupByLength(segmentedMessages)
@@ -426,8 +479,8 @@ if __name__ == '__main__':
 
 
 
-        if args.interactive:
-            IPython.embed()
+    if args.interactive:
+        IPython.embed()
 
 
 

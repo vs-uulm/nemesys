@@ -27,3 +27,6 @@ def sad(v, u):
     return numpy.sum(numpy.abs(numpy.subtract(v, u)))
 
 
+def tril(arrayIn: numpy.ndarray):
+    mask = numpy.tril(numpy.full_like(arrayIn, True, bool))
+    return arrayIn[mask]

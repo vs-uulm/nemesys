@@ -3,7 +3,7 @@ Batch handling of multiple segments.
 """
 
 import numpy
-from typing import List, Dict, Tuple, Union, Sequence, TypeVar
+from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
@@ -121,7 +121,7 @@ def segmentsFixed(analyzerType: type, analysisArgs: Union[Tuple, None], comparat
     return segments
 
 
-def groupByLength(segmentedMessages) -> Dict[int, List[MessageSegment]]:
+def groupByLength(segmentedMessages: Iterable) -> Dict[int, List[MessageSegment]]:
     """
     Regroup a list of lists of segments into groups of segments that have equal length
 

@@ -826,7 +826,7 @@ class TemplateGenerator(DistanceCalculator):
             # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self._distances.shape[0]-1)) )])
             disttril = numpy.tril(self._distances)
             alldist = [e for e in disttril.flat if e > 0]
-            axr.hist(alldist, round(log(len(alldist))))
+            axr.hist(alldist, 50)
 
             # plt.plot(smoothdists, alpha=.8)
             # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
@@ -843,7 +843,7 @@ class TemplateGenerator(DistanceCalculator):
             # plt.show()
             plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
             plt.close('all')
-            # plt.clf()
+            plt.clf()
 
             # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
             # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
@@ -932,7 +932,7 @@ class TemplateGenerator(DistanceCalculator):
             If not given (None), it is autoconfigured.
         :return: A dict of labels to lists of segments with that label.
         """
-        clustererClass = TemplateGenerator.HDBSCAN
+        clustererClass = kwargs['clustererClass'] if 'clustererClass' in kwargs else TemplateGenerator.HDBSCAN
 
         similarities = self._similaritiesSubset(segments)
         try:
@@ -943,7 +943,8 @@ class TemplateGenerator(DistanceCalculator):
                 if 'epsilon' in kwargs:
                     # fixed epsilon
                     import math
-                    self.clusterer.minpts = round(math.log(similarities.shape[0]))
+                    self.clusterer.minpts = kwargs['minpts'] if 'minpts' in kwargs else \
+                        round(math.log(similarities.shape[0]))
                     self.clusterer.epsilon = kwargs['epsilon']  # 1.0
                 elif 'min_cluster_size' in kwargs:
                     self.clusterer.min_cluster_size = kwargs['min_cluster_size']
