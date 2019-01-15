@@ -156,8 +156,8 @@ if __name__ == '__main__':
 
 
 
-    # # TODO: these are test calls for validating _embedSegment -> doctest there?!
-    # m, s, inters = DistanceCalculator._embedSegment(segsByLen[4][50], segsByLen[8][50])
+    # # TODO: these are test calls for validating embedSegment -> doctest there?!
+    # m, s, inters = DistanceCalculator.embedSegment(segsByLen[4][50], segsByLen[8][50])
     #
     # overlay = ([None] * s + inters.segA.values, inters.segB.values)
     # from visualization.singlePlotter import SingleMessagePlotter

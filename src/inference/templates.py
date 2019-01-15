@@ -428,12 +428,18 @@ class DistanceCalculator(object):
         return simtrx
 
     @staticmethod
-    def _embedSegment(shortSegment: Tuple[int, int, Tuple[float]], longSegment: Tuple[int, int, Tuple[float]],
-                      method='canberra'):
+    def embedSegment(shortSegment: Tuple[int, int, Tuple[float]], longSegment: Tuple[int, int, Tuple[float]],
+                     method='canberra'):
         """
         Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
 
-        :return: The minimal partial distance between the segments, wrapped in an InterSegment.
+        :param shortSegment:
+        :param longSegment:
+        :param method: distance method to use
+        :return: The minimal partial distance between the segments, wrapped in an "InterSegment-Tuple":
+            (method, offset, (
+                index of shortSegment, index of longSegment, distance betweent the two
+            ))
         """
         assert longSegment[1] > shortSegment[1]
 
@@ -450,6 +456,11 @@ class DistanceCalculator(object):
         distance = subsetsSimi.min() * shortSegment[1]/longSegment[1]
 
         return method, shift, (shortSegment[0], longSegment[0], distance)
+
+    @staticmethod
+    def thresholdFunction(x):
+        return 1 / (1 + numpy.exp(-numpy.pi ** 2 * (x - 0.5)))
+
 
     def _embdedAndCalcDistances(self) -> \
             List[Tuple[int, int, float]]:
@@ -470,8 +481,8 @@ class DistanceCalculator(object):
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
             ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
-            distance.extend([(i,l, (d * self._normFactor(outerlen))**2) for i,l,d in ilDist])
-            # b) on segments with mismatching length: _embedSegment:
+            distance.extend([(i,l, DistanceCalculator.thresholdFunction(d * self._normFactor(outerlen))) for i,l,d in ilDist])
+            # b) on segments with mismatching length: embedSegment:
             #       for all length groups with length < current length
             for innerlen in rslens[rslens.index(outerlen)+1:]:
                 innersegs = lenGrps[innerlen]
@@ -481,16 +492,32 @@ class DistanceCalculator(object):
                 #     for all segments in current length group
                 for iseg in innersegs:
                     for oseg in outersegs:
-                        # _embedSegment(shorter in longer)
-                        embedded = DistanceCalculator._embedSegment(iseg, oseg, self._method)
+                        # embedSegment(shorter in longer)
+                        embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
                         # add embedding similarity to list of InterSegments
                         interseg = embedded[2]
-                        dlDist = (interseg[0], interseg[1], (interseg[2] * self._normFactor(innerlen))**2)  # minimum of dimensions
+                        dlDist = (interseg[0], interseg[1], (
+                            DistanceCalculator.thresholdFunction(
+                                interseg[2]) * self._normFactor(innerlen)))  # minimum of dimensions
                         distance.append(dlDist)
         return distance
 
 
     def _normFactor(self, dimensions):
+        return DistanceCalculator.normFactor(self._method, dimensions, self._segments[0].analyzer.domain)
+
+
+    @staticmethod
+    def normFactor(method: str, dimensions: int, analyzerDomain: Tuple[float, float]):
+        """
+        For a distance value with given parameters, calculate the factor to normalize this distance.
+        This is static for cosine and correlation, but dynamic for canberra and euclidean measures.
+
+        :param method: distance calculation method. One of cosine, correlation, canberra, euclidean, sqeuclidean
+        :param dimensions: dimensions of the
+        :param analyzerDomain: the value domain of the used analyzer
+        :return:
+        """
         distanceMax = {
             'cosine': 1,
             'correlation': 2,
@@ -498,23 +525,29 @@ class DistanceCalculator(object):
             'euclidean': None,
             'sqeuclidean': None
         }
-        if self._method == 'canberra':
+        assert method in distanceMax
+        if method == 'canberra':
             distanceMax['canberra'] = dimensions  # max number of dimensions
-        elif self._method == 'euclidean':
-            domainSize = self._segments[0].analyzer.domain[1] - self._segments[0].analyzer.domain[0]
+        elif method == 'euclidean':
+            domainSize = analyzerDomain[1] - analyzerDomain[0]
             distanceMax['euclidean'] = dimensions * domainSize
-        elif self._method == 'sqeuclidean':
-            domainSize = self._segments[0].analyzer.domain[1] - self._segments[0].analyzer.domain[0]
+        elif method == 'sqeuclidean':
+            domainSize = analyzerDomain[1] - analyzerDomain[0]
             distanceMax['sqeuclidean'] = dimensions * domainSize**2
-        return 1 / distanceMax[self._method]
+        return 1 / distanceMax[method]
 
 
 class Template(AbstractSegment):
+    """
+    Calculates a template (mean values per of vector component).
+    """
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray],
-                 baseSegments: List[MessageSegment]):
+                 baseSegments: List[MessageSegment],
+                 method='canberra'):
         self.values = values
         self.baseSegments = baseSegments  # list/cluster of MessageSegments this template was generated from.
         self.checkSegmentsAnalysis()
+        self._method = method
 
 
     def checkSegmentsAnalysis(self):
@@ -543,6 +576,66 @@ class Template(AbstractSegment):
         return super().correlate(haystack, method)
 
 
+    def distancesTo(self):
+        """
+        Calculate the normalized distances to the template (cluster center).
+
+        Currently only supports single length segments.
+
+        :return: array of distances
+        """
+        baseValues = numpy.array([seg.values for seg in self.baseSegments])
+        assert baseValues.shape[1] == self.values.shape[0], "cannot calc distances to mixed lengths segments"
+        cenDist = scipy.spatial.distance.cdist(self.values.reshape((1, self.values.shape[0])),
+                                               baseValues, self._method)
+        normf = DistanceCalculator.normFactor(self._method, len(self.values), self.baseSegments[0].analyzer.domain)
+        return normf * cenDist
+
+
+    def distancesToMixedLength(self):
+        """
+
+        :return: List of Tuples of distances and offsets: -n for center, +n for segment
+        """
+        distances = [None] * len(self.baseSegments)
+        lengthGroups = dict()
+        for idx, bs in enumerate(self.baseSegments):
+            if bs.length not in lengthGroups:
+                lengthGroups[bs.length] = list()
+            lengthGroups[bs.length].append(idx)
+        for length, group in lengthGroups.items():
+            if length == len(self.values):
+                normf = DistanceCalculator.normFactor(self._method, len(self.values),
+                                                      self.baseSegments[0].analyzer.domain)
+                dist = normf * scipy.spatial.distance.cdist(self.values.reshape((1, self.values.shape[0])),
+                                                    numpy.array([self.baseSegments[i].values for i in group]),
+                                                    self._method)
+                for i, d in zip(group, dist):
+                    distances[i] = (d, 0)  # 0-offset
+                continue
+
+            if length < len(self.values):
+                longList = [(None, len(self.values), self.values)]
+                shortList = [(i, length, tuple(self.baseSegments[i].values)) for i in group]
+            else:
+                longList = [(i, length, tuple(self.baseSegments[i].values)) for i in group]
+                shortList = [(None, len(self.values), self.values)]
+
+            for shortS in shortList:
+                normf = DistanceCalculator.normFactor(self._method, shortS[1],
+                                                      self.baseSegments[0].analyzer.domain)
+                for longS in longList:
+                    embedding = DistanceCalculator.embedSegment(shortS, longS, self._method)
+                    idxShort = embedding[2][0]
+                    idxLong = embedding[2][1]
+                    dist = normf * embedding[2][2]
+                    idx = idxShort if idxLong is None else idxLong
+                    offset = embedding[1]
+                    if idxShort is None: offset = -offset
+                    distances[idx] = (dist, offset)
+        return distances
+
+
     def __hash__(self):
         return hash(tuple(self.values))
 
@@ -559,7 +652,7 @@ class TemplateGenerator(DistanceCalculator):
     """
     Generate templates for a list of segments according to their distance.
     """
-    def __init__(self, segments: List[MessageSegment], method='cosine'):
+    def __init__(self, segments: List[MessageSegment], method='canberra'):
         """
         Find similar segments, group them, and return a template for each group.
 

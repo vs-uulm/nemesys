@@ -27,6 +27,11 @@ def sad(v, u):
     return numpy.sum(numpy.abs(numpy.subtract(v, u)))
 
 
-def tril(arrayIn: numpy.ndarray):
+def tril(arrayIn: numpy.ndarray) -> numpy.ndarray:
+    """
+
+    :param arrayIn:
+    :return: lower triangle values of arrayIn
+    """
     mask = numpy.tril(numpy.full_like(arrayIn, True, bool))
     return arrayIn[mask]
