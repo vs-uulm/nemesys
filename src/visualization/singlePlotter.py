@@ -222,3 +222,7 @@ class SingleMessagePlotter(MessagePlotter):
         plt.autoscale(tight=True)
 
 
+    def histogram(self, x, **kwargs):
+        plt.hist(x, **kwargs)
+        plt.autoscale(tight=True)
+

@@ -6,26 +6,39 @@ into a table of cluster quality scores. It expects the input to be named cluster
 and outputs scoreTable.csv
 """
 
+cols = [
+    #   0           1           2               3               4          5           6
+    'run_title', 'trace', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'
+]
+
 import csv
 cstat = dict()
 with open('clusterStatisticsHDBSCAN.csv', 'r') as csvfile:
-    cstatr = csv.reader(csvfile)
-    next(cstatr)
-    for title, *row in cstatr:
-        if title not in cstat:
-            cstat[title] = list()
-        cstat[title].append(row)
+    cstatr = csv.DictReader(csvfile)
+
+    for colheader in cols:
+        if colheader not in cstatr.fieldnames:
+            print("incompatible csv format!", colheader, "missing.")
+            print(cstatr.fieldnames)
+            exit(1)
+
+    for row in cstatr:
+        analysis = (row[cols[0]], row[cols[1]])
+        if analysis not in cstat:
+            cstat[analysis] = list()
+        cstat[analysis].append(row)
 
 from tabulate import tabulate
 
 # min precision per run
-mppr = {k: min([float(e[2]) for e in v]) for k, v in cstat.items()}
+mppr = {k: min([float(e[cols[4]]) for e in v if e[cols[3]] != "NOISE"]) for k, v in cstat.items()
+        if len([c[cols[4]] for c in v if c[cols[3]] != "NOISE"]) > 0}
 smppr = sorted(list(mppr.items()), key=lambda x: x[1])
-print(tabulate(smppr, headers=['Analysis','Min precision per run'], tablefmt="pipe"))
+print(tabulate(smppr, headers=['Analysis', 'Min precision per run'], tablefmt="pipe"))
 
 def typedrecallsums(clusterlist):
     # recall for clusters and their most frequent type
-    typedrecall = [(e[1].split(':')[0], float(e[3])) for e in clusterlist]
+    typedrecall = [(e[cols[3]].split(':')[0], float(e[cols[5]])) for e in clusterlist]
 
     # recall sums per group of field type in all clusters
     trsums = dict()
@@ -39,10 +52,10 @@ def typedrecallsums(clusterlist):
 # leastmixedrecallsums = typedrecallsums(cstat[smppr[-1][0]])
 
 # scores per run (sorted by min precision per run)
-mcstat = [{'analysis': k, 'mppr': mppr[k], **typedrecallsums(cstat[k])} for k in [l[0] for l in smppr]]
+mcstat = [{'analysis': k[0], 'atrace': k[1], 'mppr': mppr[k], **typedrecallsums(cstat[k])} for k in [l[0] for l in smppr]]
 
 # make score table from list of dicts
-scoreheaders = sorted({t for e in mcstat for t in list(e.keys())}, key=lambda x: 'analysis_' if x == 'mppr' else x)
+scoreheaders = sorted({t for e in mcstat for t in list(e.keys())}, key=lambda x: 'az_' if x in ('mppr', 'NOISE') else x)
 scoretable = [ [ e[h] if h in e else None for h in scoreheaders ] for e in mcstat]
 print(tabulate(scoretable, scoreheaders, tablefmt="pipe"))
 

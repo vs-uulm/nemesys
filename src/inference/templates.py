@@ -117,13 +117,17 @@ class DistanceCalculator(object):
 
     debug = True
 
-    def __init__(self, segments: Iterable[MessageSegment], method='canberra'):
+    def __init__(self, segments: Iterable[MessageSegment], method='canberra',
+                 thresholdFunction=None, thresholdArgs = None
+                 ):
         """
         Determine the distance between the given segments.
 
         :param segments:
         """
         self._method = method
+        self.thresholdFunction = thresholdFunction if thresholdFunction else DistanceCalculator.neutralThreshold
+        self.thresholdArgs = thresholdArgs
         self._segments = list()  # type: List[MessageSegment]
         self._quicksegments = list()  # type: List[Tuple[int, int, Tuple[float]]]
         """List of Tuples: (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)"""
@@ -458,9 +462,12 @@ class DistanceCalculator(object):
         return method, shift, (shortSegment[0], longSegment[0], distance)
 
     @staticmethod
-    def thresholdFunction(x):
-        return 1 / (1 + numpy.exp(-numpy.pi ** 2 * (x - 0.5)))
+    def sigmoidThreshold(x, shift=0.5):
+        return 1 / (1 + numpy.exp(-numpy.pi ** 2 * (x - shift)))
 
+    @staticmethod
+    def neutralThreshold(x):
+        return x
 
     def _embdedAndCalcDistances(self) -> \
             List[Tuple[int, int, float]]:
@@ -481,7 +488,8 @@ class DistanceCalculator(object):
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
             ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
-            distance.extend([(i,l, DistanceCalculator.thresholdFunction(d * self._normFactor(outerlen))) for i,l,d in ilDist])
+            distance.extend([(i,l, self.thresholdFunction(
+                d * self._normFactor(outerlen), **self.thresholdArgs)) for i,l,d in ilDist])
             # b) on segments with mismatching length: embedSegment:
             #       for all length groups with length < current length
             for innerlen in rslens[rslens.index(outerlen)+1:]:
@@ -497,8 +505,8 @@ class DistanceCalculator(object):
                         # add embedding similarity to list of InterSegments
                         interseg = embedded[2]
                         dlDist = (interseg[0], interseg[1], (
-                            DistanceCalculator.thresholdFunction(
-                                interseg[2]) * self._normFactor(innerlen)))  # minimum of dimensions
+                                self.thresholdFunction(
+                                interseg[2] * self._normFactor(innerlen), **self.thresholdArgs)))  # minimum of dimensions
                         distance.append(dlDist)
         return distance
 
@@ -652,13 +660,14 @@ class TemplateGenerator(DistanceCalculator):
     """
     Generate templates for a list of segments according to their distance.
     """
-    def __init__(self, segments: List[MessageSegment], method='canberra'):
+    def __init__(self, segments: List[MessageSegment], method='canberra',
+                 thresholdFunction=None, thresholdArgs = None):
         """
         Find similar segments, group them, and return a template for each group.
 
         :param segments:
         """
-        super().__init__(segments, method)
+        super().__init__(segments, method, thresholdFunction, thresholdArgs)
         self.clusterer = None  # type: TemplateGenerator.Clusterer
 
     @staticmethod
