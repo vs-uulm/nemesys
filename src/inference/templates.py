@@ -508,6 +508,7 @@ class DistanceCalculator(object):
                                 self.thresholdFunction(
                                 interseg[2] * self._normFactor(innerlen), **self.thresholdArgs)))  # minimum of dimensions
                         distance.append(dlDist)
+        print("Calculated distances for {} segment pairs.".format(len(distance)))
         return distance
 
 
@@ -543,6 +544,26 @@ class DistanceCalculator(object):
             domainSize = analyzerDomain[1] - analyzerDomain[0]
             distanceMax['sqeuclidean'] = dimensions * domainSize**2
         return 1 / distanceMax[method]
+
+
+    def neigbors(self, segment: MessageSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
+        home = self._segments.index(segment)
+        if subset:
+            subsetMap = [None] * len(subset)
+            for idx, alls in enumerate(self._segments):
+                try:
+                    subsetMap[subset.index(alls)] = idx
+                except ValueError:
+                    continue
+            assert None not in subsetMap
+
+        mask = list(range(home)) + list(range(home + 1, self._distances.shape[0])) \
+            if not subset else subsetMap   # remove self identity
+
+        candNeigbors = self._distances[:, home]
+        neighbors = sorted([(nidx, candNeigbors[n]) for nidx, n in enumerate(mask)], key=lambda x: x[1])
+        return neighbors
+
 
 
 class Template(AbstractSegment):

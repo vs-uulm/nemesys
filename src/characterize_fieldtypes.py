@@ -129,20 +129,26 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
     numNoise = len(noise)
     if numNoise > 0:
         noiseSegLengths = {seg.length for seg in noise}
+        outputLengths = [str(slen) for slen in noiseSegLengths]
+        if len(outputLengths) > 5:
+            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
         segLengths.update(noiseSegLengths)
         noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
         segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-            analysisTitle, " ".join([str(slen) for slen in noiseSegLengths]), numNoise),
+            analysisTitle, " ".join(outputLengths), numNoise),
                                    [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
                                     for cseg in noise] )) # ''
     for cnum, segs in enumerate(clusters):
         clusterDists = tg.pairwiseDistance(segs, segs)
         typegroups = segments2types(segs)
         clusterSegLengths = {seg.length for seg in segs}
+        outputLengths = [str(slen) for slen in clusterSegLengths]
+        if len(outputLengths) > 5:
+            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
         segLengths.update(clusterSegLengths)
 
         segmentGroups = ('{} ({} bytes), Cluster #{}: {} Seg.s ($d_{{max}}$={:.3f})'.format(
-            analysisTitle, " ".join([str(slen) for slen in clusterSegLengths]),
+            analysisTitle, " ".join(outputLengths),
             cnum, len(segs), clusterDists.max()), list())
         for ftype, tsegs in typegroups.items():  # [label, segment]
             segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
@@ -185,7 +191,7 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     :param typeDict: dict of types (str-keys: list of segments) present in the segmentGroups
     :return:
     """
-    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups) + 1, isInteractive=args.interactive)
+    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=args.interactive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
     numSegs = 0
     if typeDict:  # calculate conciseness, correctness = precision, and recall
@@ -199,8 +205,6 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
         numClusters = len(clusters)
         numFtypes = len(typeDict)
         conciseness = numClusters / numFtypes
-
-        mmp.axes[-1].text(0, 0, "conciseness = {:.2f}".format(conciseness))
 
         from collections import Counter
         for clusterSegs in clusters:
@@ -361,9 +365,11 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         for l, c in cntPerLen:
             if c > majOfLen[1]:
                 majOfLen = (l, c)
+        majSegs = segsByLen[ctitle][majOfLen[0]]
+
 
         # "center" of cluster
-        majLenValues = numpy.array([seg.values for seg in segsByLen[ctitle][majOfLen[0]]])
+        majLenValues = numpy.array([seg.values for seg in majSegs])
         center = majLenValues.mean(0)  # mean per component on axis 0
         # alternative: best fit for all mixed length segments, requires the offset for each shorter segment
         # (thats a lot, if the majority is shorter than other contained segments as for ntp100-timestamp+checksum)
@@ -392,41 +398,58 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         clusterStats.append((
             ctitle, cntPerLen, majOfLen[0], majEqDistMax, majNeqDistMin, center, majCentDist, nemajCentDist
         ))
-        # # overlay plot of mixed length matches
-        # if majNeqDistMin:
-        #     minoffset = min(nemajCentOffsList)
-        #     maxoffset = max(nemajCentOffsList)
-        #     majValuesList = majLenValues.tolist()
-        #     if minoffset < 0:
-        #         majValuesList = [[numpy.nan]*abs(minoffset) + v for v in majValuesList]
-        #         nemajCentOffsList = [o - minoffset for o in nemajCentOffsList]
-        #     nemajMaxLength = max([s.length for s in nemaj])
-        #     maxOffsetLength = maxoffset + nemajMaxLength if maxoffset > 0 else abs(minoffset) + nemajMaxLength
-        #     nemajValuesList = [
-        #         [numpy.nan] * o + s.values +
-        #         [numpy.nan] * (maxOffsetLength - o - s.length)
-        #         for s, o in zip(nemaj, nemajCentOffsList)]
-        #     IPython.embed()
-        #     plt.plot(numpy.array(majValuesList).transpose(), color='b', alpha=.1)
-        #     plt.plot(numpy.array(nemajValuesList).transpose(),
-        #              color='r', alpha=.8)
-        #     plt.show()
+        # overlay plot of mixed length matches
+        if majNeqDistMin:
+            minoffset = min(nemajCentOffsList)
+            maxoffset = max(nemajCentOffsList)
+            majValuesList = majLenValues.tolist()
+            if minoffset < 0:
+                majValuesList = [[numpy.nan]*abs(minoffset) + v for v in majValuesList]
+                nemajCentOffsList = [o - minoffset for o in nemajCentOffsList]
+            nemajMaxLength = max([s.length for s in nemaj])
+            maxOffsetLength = maxoffset + nemajMaxLength if maxoffset > 0 else abs(minoffset) + nemajMaxLength
+            nemajValuesList = [
+                [numpy.nan] * o + s.values +
+                [numpy.nan] * (maxOffsetLength - o - s.length)
+                for s, o in zip(nemaj, nemajCentOffsList)]
+
+            # plot overlay of most similar segments of unequal length
+            mmp = MultiMessagePlotter(specimens, "mixedneighbors-" + ctitle, len(nemaj[:50]), isInteractive=False)
+            # TODO plot multiple pages if more than 50 subfigs are needed
+            for eIdx, nemEl in enumerate(nemaj[:50]):
+                nemNeighbors = tg.neigbors(nemEl, majSegs)
+                nearestNeighbor = majSegs[nemNeighbors[0][0]]
+                alpha = .8
+                for nearestValues in [majValuesList[nemNeighbors[i][0]] for i in range(min(8, len(nemNeighbors)))]:
+                    mmp.plotToSubfig(eIdx, nearestValues, color='r', alpha=alpha)
+                    alpha -= .8/8
+                mmp.plotToSubfig(eIdx, nemajValuesList[eIdx], color='b')
+                mmp.textInEachAx([None] * eIdx +
+                                 ["$d_{{min}}$ = {:.3f}".format(nemNeighbors[0][1])])
+            mmp.writeOrShowFigure()
+            # IPython.embed()
+
+
+
+            # # plot allover alignment of all unequal length segments with all equal ones
+            # plt.plot(numpy.array(majValuesList).transpose(), color='b', alpha=.1)
+            # plt.plot(numpy.array(nemajValuesList).transpose(),
+            #          color='r', alpha=.8)
+            # plt.show()
+
+            # # distribution of distances of majority length and not-equal to majority lengthy segments
+            # pwcd = sorted(majEqDist)[-20:] + sorted(majNeqDist.flat)[:20]
+            # sns.barplot(list(range(len(pwcd))), pwcd)
+            # pwcd = sorted(majEqDist)[-20:] + sorted(majNeqDist.flat)[:20]
+
 
     print(tabulate(clusterStats,
                    headers=["ctitle", "cntPerLen", "majOfLen", "majEqDistMax", "majNeqDistMin",
                             "center", "majCentDist", "nemajCentDist"]))
 
-    # # distribution of distances of 4 and 8 byte segments
-    # globLenGrps = groupByLength([filteredSegments])
-    # pw4 = tg.pairwiseDistance(globLenGrps[4], globLenGrps[4])
-    # pw8 = tg.pairwiseDistance(globLenGrps[4], globLenGrps[8])
-    # mask = numpy.tril(numpy.full_like(pw4, True, bool))
-    # pw4d = list(reversed(sorted(pw4[mask])))
-    # pw8d = list(reversed(sorted(pw8.flat)))
-    # pwcd = pw4d[-20:] + pw8d[:20]
-    # # sns.barplot(list(range(len(pwcd))), pwcd)
 
-    # IPython.embed()  # TODO here I am!
+
+    IPython.embed()  # TODO here I am!
     # # # distance to one field candidate
     # # sns.set(font_scale=.6)
     # # sns.barplot(list(range(tg.distanceMatrix.shape[0])), tg.distanceMatrix[180,])
@@ -521,25 +544,29 @@ if __name__ == '__main__':
     parser.add_argument('--isolengths', help='Cluster fields of same size isolatedly.', action="store_true")
     parser.add_argument('--iterate', help='Iterate over DBSCAN parameters to select valid eps and threshold-shift.',
                         action="store_true")
-    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=1.0)
+    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=1.2)
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
-    if args.isolength and args.iterate:
-        print('Iterating clustering parameters over isolated-lengths fields is not implemented!')
+    if args.isolengths and args.iterate:
+        print('Iterating clustering parameters over isolated-lengths fields is not implemented.')
+        exit(2)
+    if args.epsilon and (args.isolengths or args.iterate):
+        print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
         exit(2)
 
     # fix the analysis method to VALUE
-    analyzerType = analyses['value']
+    analysisTitle = 'value'
+    analyzerType = analyses[analysisTitle]
     analysisArgs = None
     # if args.analysis not in analyses:
     #     print('Analysis {} unknown. Available methods are:\n' + ', '.join(analyses.keys()) + '.')
     #     exit(2)
     # analyzerType = analyses[args.analysis]
     # analysisArgs = args.parameters
-    analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
+    # analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
 
     # fix the distance method to canberra
     distance_method = 'canberra'
@@ -563,7 +590,8 @@ if __name__ == '__main__':
             # value below ~128 and > 16 (?) bytes (and some other heuristics for shorter ones)
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
-            evaluateFieldTypeClustering(filteredSegments, 1.2, TemplateGenerator.sigmoidThreshold, {'shift': .6})
+            # epsion should be 1.2 (default)
+            evaluateFieldTypeClustering(filteredSegments, args.epsilon, TemplateGenerator.sigmoidThreshold, {'shift': .6})
     else:
         evaluateFieldTypeClusteringWithIsolatedLengths()
 

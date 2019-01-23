@@ -311,3 +311,7 @@ class MultiMessagePlotter(MessagePlotter):
                         newHandles.append(handle)
                 ax.legend(newHandles, newLabels)
 
+
+    def plotToSubfig(self, subfigid: int, values: Union[List, numpy.ndarray], **plotkwArgs):
+        self._axes.flat[subfigid].plot(values, **plotkwArgs)
+
