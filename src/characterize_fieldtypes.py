@@ -413,23 +413,24 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
                 [numpy.nan] * (maxOffsetLength - o - s.length)
                 for s, o in zip(nemaj, nemajCentOffsList)]
 
-            # plot overlay of most similar segments of unequal length
-            mmp = MultiMessagePlotter(specimens, "mixedneighbors-" + ctitle, len(nemaj[:50]), isInteractive=False)
-            # TODO plot multiple pages if more than 50 subfigs are needed
-            for eIdx, nemEl in enumerate(nemaj[:50]):
-                nemNeighbors = tg.neigbors(nemEl, majSegs)
-                nearestNeighbor = majSegs[nemNeighbors[0][0]]
-                alpha = .8
-                for nearestValues in [majValuesList[nemNeighbors[i][0]] for i in range(min(8, len(nemNeighbors)))]:
-                    mmp.plotToSubfig(eIdx, nearestValues, color='r', alpha=alpha)
-                    alpha -= .8/8
-                mmp.plotToSubfig(eIdx, nemajValuesList[eIdx], color='b')
-                mmp.textInEachAx([None] * eIdx +
-                                 ["$d_{{min}}$ = {:.3f}".format(nemNeighbors[0][1])])
-            mmp.writeOrShowFigure()
-            # IPython.embed()
-
-
+            # # plot overlay of most similar segments of unequal length
+            # mmp = MultiMessagePlotter(specimens, "mixedneighbors-" + ctitle, len(nemaj[:50]), isInteractive=False)
+            # # TODO plot multiple pages if more than 50 subfigs are needed
+            # for eIdx, nemEl in enumerate(nemaj[:50]):
+            #     nemNeighbors = tg.neigbors(nemEl, majSegs)
+            #     nearestNeighbor = majSegs[nemNeighbors[0][0]]
+            #     alpha = .8
+            #     for nearestValues in [majValuesList[nemNeighbors[i][0]] for i in range(min(8, len(nemNeighbors)))]:
+            #         mmp.plotToSubfig(eIdx, nearestValues, color='r', alpha=alpha)
+            #         alpha -= .8/8
+            #     mmp.plotToSubfig(eIdx, nemajValuesList[eIdx], color='b')
+            #     mmp.textInEachAx([None] * eIdx +
+            #                      ["$d_{{min}}$ = {:.3f}".format(nemNeighbors[0][1])])
+            # if len(nemaj) > 0:
+            #     mmp.writeOrShowFigure()
+            # else:
+            #     print(mmp.title, "has no neighbor entries.")
+            # del mmp
 
             # # plot allover alignment of all unequal length segments with all equal ones
             # plt.plot(numpy.array(majValuesList).transpose(), color='b', alpha=.1)
@@ -495,7 +496,7 @@ def iterateDBSCANParameters():
 
     print("done.")
 
-    for cnt in (90, 100, 110, 120, 125, 130):  # , 140, 150
+    for cnt in (100, 120, 130, 150, 160):
         eps = cnt * .01
         for threshFunc, threshArgs in (
                 (TemplateGenerator.neutralThreshold, {}),
@@ -553,7 +554,7 @@ if __name__ == '__main__':
     if args.isolengths and args.iterate:
         print('Iterating clustering parameters over isolated-lengths fields is not implemented.')
         exit(2)
-    if args.epsilon and (args.isolengths or args.iterate):
+    if args.epsilon != parser.get_default('epsilon') and (args.isolengths or args.iterate):
         print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
         exit(2)
 
@@ -591,7 +592,8 @@ if __name__ == '__main__':
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)
-            evaluateFieldTypeClustering(filteredSegments, args.epsilon, TemplateGenerator.sigmoidThreshold, {'shift': .6})
+            evaluateFieldTypeClustering(filteredSegments, args.epsilon, TemplateGenerator.neutralThreshold, {})
+                                                     # TemplateGenerator.sigmoidThreshold, {'shift': .6})
     else:
         evaluateFieldTypeClusteringWithIsolatedLengths()
 

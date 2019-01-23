@@ -118,10 +118,24 @@ class DistanceCalculator(object):
     debug = True
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
-                 thresholdFunction=None, thresholdArgs = None
+                 thresholdFunction = None, thresholdArgs = {}
                  ):
         """
         Determine the distance between the given segments.
+
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>>
+        >>> bytedata = bytes([1,2,3,4])
+        >>> message = RawMessage(bytedata)
+        >>> analyzer = Value(message)
+        >>> segments = [MessageSegment(analyzer, 0, 4)]
+        >>> dc = DistanceCalculator(segments)
+       	outersegs, length 4, segments 1
+        Prepare values. 0.000s
+        call pdist from scipy.Calculated distances for 1 segment pairs.
+
 
         :param segments:
         """
@@ -436,6 +450,10 @@ class DistanceCalculator(object):
                      method='canberra'):
         """
         Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
+        Enumerates all possible shifts of overlaying the short above of the long segment and returns the minimum
+        distance of any of the distance calculations performed for each of these overlays.
+
+        The distance is normalized to the length of the shorter tuple
 
         :param shortSegment:
         :param longSegment:
@@ -450,14 +468,14 @@ class DistanceCalculator(object):
         maxOffset = longSegment[1] - shortSegment[1]
 
         subsets = list()
-        for offset in range(0, maxOffset):
+        for offset in range(0, maxOffset + 1):
             offSegment = longSegment[2][offset:offset + shortSegment[1]]
             subsets.append((-1, shortSegment[1], offSegment))
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(subsets, method)
 
         subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, numpy.array([shortSegment[2]]), method)
-        shift = subsetsSimi.argmin() # TODO: for debugging
-        distance = subsetsSimi.min() * shortSegment[1]/longSegment[1]
+        shift = subsetsSimi.argmin() # for debugging and evaluation
+        distance = subsetsSimi.min()
 
         return method, shift, (shortSegment[0], longSegment[0], distance)
 
@@ -488,8 +506,13 @@ class DistanceCalculator(object):
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
             ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
-            distance.extend([(i,l, self.thresholdFunction(
-                d * self._normFactor(outerlen), **self.thresholdArgs)) for i,l,d in ilDist])
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            distance.extend([(i,l,
+                              self.thresholdFunction(
+                                  d * self._normFactor(outerlen),
+                                  **self.thresholdArgs))
+                             for i,l,d in ilDist])
+            # # # # # # # # # # # # # # # # # # # # # # # #
             # b) on segments with mismatching length: embedSegment:
             #       for all length groups with length < current length
             for innerlen in rslens[rslens.index(outerlen)+1:]:
@@ -504,9 +527,15 @@ class DistanceCalculator(object):
                         embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
                         # add embedding similarity to list of InterSegments
                         interseg = embedded[2]
+                        # # # # # # # # # # # # # # # # # # # # # # # #
                         dlDist = (interseg[0], interseg[1], (
-                                self.thresholdFunction(
-                                interseg[2] * self._normFactor(innerlen), **self.thresholdArgs)))  # minimum of dimensions
+                                    self.thresholdFunction(
+                                        interseg[2] * self._normFactor(innerlen) +
+                                        .33 * (outerlen - innerlen) * self._normFactor(outerlen),
+                                        **self.thresholdArgs)
+                                    )
+                                )  # minimum of dimensions
+                        # # # # # # # # # # # # # # # # # # # # # # # #
                         distance.append(dlDist)
         print("Calculated distances for {} segment pairs.".format(len(distance)))
         return distance

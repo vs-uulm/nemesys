@@ -34,6 +34,10 @@ class MessagePlotter(object):
         self._title = analysisTitle
         self._interactive = isInteractive
 
+    @property
+    def title(self) -> str:
+        return self._title
+
 
     def writeOrShowFigure(self):
         """
@@ -79,4 +83,5 @@ class MessagePlotter(object):
         :param compareValue: The second list of values of another analysis result
         """
         ax.fill_between(range(len(analysisResult)), analysisResult, compareValue, color='b', alpha=.4)
+
 

@@ -28,6 +28,7 @@ class MessageAnalyzer(ABC):
         :param message:
         :param unit:
         """
+        assert isinstance(message, AbstractMessage)
         self._message = message
         self._unit = unit
         self._analysisArgs = None
