@@ -8,14 +8,14 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
-from typing import Iterable
 from os.path import isfile
 from itertools import chain
 
 from inference.templates import TemplateGenerator
 from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types
+from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
+    filterSegments
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.multiPlotter import MultiMessagePlotter
@@ -25,45 +25,17 @@ from visualization.distancesPlotter import DistancesPlotter
 debug = False
 
 
-
-def filterSegments(segments) -> List:
-    """
-    Filter input segment for only those segments that are adding relevant information for further analysis.
-
-    :param segments:
-    :return:
-    """
-    # filter out segments shorter than 3 bytes
-    filteredSegments = [t for t in segments if t.length > 2]
-
-    # filter out segments that contain no relevant byte data, i. e., all-zero byte sequences
-    filteredSegments = [t for t in filteredSegments if t.bytes.count(b'\x00') != len(t.bytes)]
-
-    # filter out segments that resulted in no relevant feature data, i. e.,
-    # (0, .., 0) | (nan, .., nan) | or a mixture of both
-    filteredSegments = [s for s in filteredSegments if
-                        numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
-
-    # filter out identical segments
-    uniqueFeatures = set()
-    fS = filteredSegments
-    filteredSegments = list()
-    for s in fS:
-        svt = tuple(s.values)
-        if svt not in uniqueFeatures:
-            uniqueFeatures.add(svt)
-            filteredSegments.append(s)
-
-    # sorted only for visual representation in heatmap or similar
-    filteredSegments = sorted(filteredSegments, key=lambda x: x.length)
-
-    return filteredSegments
-
-
 def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
         -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
+    """
+    Cluster segments and arrange them into groups of types.
+
+    :param segments:
+    :param analysisTitle:
+    :return:
+    """
+
     typegroups = segments2types(segments)
-    # plotLinesSegmentValues([(typelabel, typ) for typelabel, tgroup in typegroups.items() for typ in tgroup])
 
     segmentGroups = list()  # type: List[Tuple[str, List[Tuple[str, TypedSegment]]]
     # one plot per type with clusters
@@ -81,86 +53,11 @@ def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
                                        [('', cseg) for cseg in noise]))
 
         if len(clusters) > 0:
-            # plotLinesSegmentValues([(str(clusternum) + ftype + str(len(clustersegs)), seg)
-            #                     for clusternum, clustersegs in enumerate(clusters) for seg in clustersegs])
             for clusternum, clustersegs in enumerate(clusters):
                 segmentClusters[1].append(('Cluster #{}: {} Seg.s'.format(clusternum, len(clustersegs)),
                                            [('', cseg) for cseg in clustersegs]))
             segmentGroups.append(segmentClusters)
     return segmentGroups
-
-
-def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs) \
-        -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
-    """
-    Cluster segments according to the distance of their feature vectors.
-    Keep and label segments classified as noise.
-
-    :param tg:
-    :param analysisTitle:
-    :param kwargs: arguments for the clusterer
-    :return: List/Tuple structure of annotated analyses, clusters, and segments.
-        List [ of
-            Tuples (
-                 "analysis label",
-                 List [ of cluster
-                    Tuples (
-                        "cluster label",
-                        List [ of segment
-                            Tuples (
-                                "segment label (e. g. field type)",
-                                MessageSegment object
-                            )
-                        ]
-                    )
-                ]
-            )
-        ]
-    """
-    print("Clustering segments...")
-    if not kwargs:
-        noise, *clusters = tg.clusterSimilarSegments(False)
-    else:
-        noise, *clusters = tg.clusterSimilarSegments(False, **kwargs)
-    print("{} clusters generated from {} segments".format(len(clusters), len(tg.segments)))
-
-    segmentClusters = list()
-    segLengths = set()
-    numNoise = len(noise)
-    if numNoise > 0:
-        noiseSegLengths = {seg.length for seg in noise}
-        outputLengths = [str(slen) for slen in noiseSegLengths]
-        if len(outputLengths) > 5:
-            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
-        segLengths.update(noiseSegLengths)
-        noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
-        segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-            analysisTitle, " ".join(outputLengths), numNoise),
-                                   [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
-                                    for cseg in noise] )) # ''
-    for cnum, segs in enumerate(clusters):
-        clusterDists = tg.pairwiseDistance(segs, segs)
-        typegroups = segments2types(segs)
-        clusterSegLengths = {seg.length for seg in segs}
-        outputLengths = [str(slen) for slen in clusterSegLengths]
-        if len(outputLengths) > 5:
-            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
-        segLengths.update(clusterSegLengths)
-
-        segmentGroups = ('{} ({} bytes), Cluster #{}: {} Seg.s ($d_{{max}}$={:.3f})'.format(
-            analysisTitle, " ".join(outputLengths),
-            cnum, len(segs), clusterDists.max()), list())
-        for ftype, tsegs in typegroups.items():  # [label, segment]
-            segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
-        segmentClusters.append(segmentGroups)
-
-    # print(len(clusters), len(noise))
-
-    segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
-                                                    next(iter(segLengths)) if len(segLengths) == 0 else 'mixedamount',
-                                                    tg.clusterer if tg.clusterer else 'n/a'),
-                          segmentClusters) ]
-    return segmentClusters
 
 
 def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
@@ -330,8 +227,6 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
     #         lenMasks[seg.length] = [False] * len(filteredSegments)
     #     lenMasks[seg.length][idx] = True
     #
-    import seaborn as sns
-    import matplotlib.pyplot as plt
     from tabulate import tabulate
     from inference.templates import Template
     from utils.baseAlgorithms import tril
@@ -496,14 +391,14 @@ def iterateDBSCANParameters():
 
     print("done.")
 
-    for cnt in (100, 120, 130, 150, 160):
+    for cnt in (180, 200, 220, 240, 260): # (170, 180, 190, 200, 210):# (100, 120, 130, 150, 160):
         eps = cnt * .01
         for threshFunc, threshArgs in (
                 (TemplateGenerator.neutralThreshold, {}),
                 # (TemplateGenerator.sigmoidThreshold, {'shift': .2}),
-                (TemplateGenerator.sigmoidThreshold, {'shift': .4}),
-                (TemplateGenerator.sigmoidThreshold, {'shift': .5}),
-                (TemplateGenerator.sigmoidThreshold, {'shift': .6}),
+                # (TemplateGenerator.sigmoidThreshold, {'shift': .4}),
+                # (TemplateGenerator.sigmoidThreshold, {'shift': .5}),
+                # (TemplateGenerator.sigmoidThreshold, {'shift': .6}),
                 # (TemplateGenerator.sigmoidThreshold, {'shift': .8}),
         ):
             evaluateFieldTypeClustering(filteredSegments, eps, threshFunc, threshArgs)

@@ -16,7 +16,8 @@ from validation.dissectorMatcher import MessageComparator
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
-from characterize_fieldtypes import analyses, segments2clusteredTypes, plotMultiSegmentLines, labelForSegment, filterSegments
+from characterize_fieldtypes import analyses, plotMultiSegmentLines, labelForSegment
+from inference.segmentHandler import segments2clusteredTypes, filterSegments
 
 
 def removeIdenticalLabels(plt):

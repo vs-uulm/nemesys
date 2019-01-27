@@ -14,10 +14,11 @@ import itertools
 from inference.templates import TemplateGenerator, DistanceCalculator, InterSegment
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segmentsFixed, matrixFromTpairs
+from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
+    segments2clusteredTypes, filterSegments
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from characterize_fieldtypes import analyses, segments2clusteredTypes, filterSegments, labelForSegment
+from characterize_fieldtypes import analyses, labelForSegment
 
 debug = False
 
