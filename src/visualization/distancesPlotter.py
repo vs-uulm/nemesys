@@ -146,6 +146,12 @@ class DistancesPlotter(MessagePlotter):
                 # TODO is it desired to have colors of clusters or types here?
                 for seg in compress(segments, type_member_mask):
                     axSeg.plot(seg.values, c=fColor, alpha=0.05)
+        else:
+            for c, l in enumerate(ulab):
+                lColor = self._cm(cIdx[c])
+                class_member_mask = (labels == l)
+                for seg in compress(segments, class_member_mask):
+                    axSeg.plot(seg.values, c=lColor, alpha=0.1)
 
 
         # place the label/type legend at the best position

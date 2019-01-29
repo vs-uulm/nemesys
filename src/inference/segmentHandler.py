@@ -211,6 +211,8 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
 
     Used in constructor.
 
+    TODO check/assert that the diagonal is only zeros
+
     :param distances: The pairwise similarities to arrange.
         0. T: segA
         1. T: segB

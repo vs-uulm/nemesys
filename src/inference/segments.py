@@ -333,9 +333,12 @@ class MessageAnalyzer(ABC):
 
 
     @staticmethod
-    def calcEntropy(tokens):
+    def calcEntropy(tokens, alphabet_len = 2):
         """
         Calculates the entropy within `tokens`.
+
+        # len(alphabet) would give a dynamic alphabet length.
+        # when working on bytes, assume 256.
 
         :return: entropy in token list
         """
@@ -348,9 +351,6 @@ class MessageAnalyzer(ABC):
             else:
                 alphabet[x] = 1
 
-        # len(alphabet) would give a dynamic alphabet length.
-        # since we are working on bytes, we assume 256.
-        alphabet_len = 2
         entropy = 0
         for x in alphabet:
             # probability of value in string

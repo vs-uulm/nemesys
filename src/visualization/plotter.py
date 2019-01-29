@@ -50,7 +50,7 @@ class MessagePlotter(object):
         plt.suptitle('{} | {}'.format(pcapName, self._title))
         plt.tight_layout(rect=[0,0,1,.95])
 
-        if not exists(plotfile) and not self._interactive:
+        if not self._interactive and not exists(plotfile):
             plt.savefig(plotfile)
             print('plot written to file', plotfile)
         else:

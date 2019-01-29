@@ -424,6 +424,20 @@ analyses = {
 
 
 
+epspertrace = {
+    "dhcp_SMIA2011101X_deduped-100.pcap" : 1.8,
+    "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8, # or anything between 1.8 - 2.6
+    "smb_SMIA20111010-one_deduped-100.pcap" : 1.6,
+    "dns_ictf2010_deduped-100.pcap" : None,
+    "ntp_SMIA-20111010_deduped-100.pcap" : 1.5,
+    "dhcp_SMIA2011101X_deduped-1000.pcap": 2.4,
+    "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4, # or anything between 1.0 - 2.8
+    "smb_SMIA20111010-one_deduped-1000.pcap": 2.2,
+    "dns_ictf2010_deduped-982-1000.pcap" : 2.4, # or anything between 1.6 - 2.8
+    "ntp_SMIA-20111010_deduped-1000.pcap": 2.8
+}
+
+
 
 
 if __name__ == '__main__':
