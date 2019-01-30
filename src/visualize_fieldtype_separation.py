@@ -67,7 +67,7 @@ if __name__ == '__main__':
     for l, t in zip(typelabels, templates):
         labels[tg.segments.index(t.medoid)] = l
 
-    # sdp = DistancesPlotter(specimens, 'distances-testcase', args.interactive)
+    # sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
     # sdp.plotDistances(tg, numpy.array(labels))
     # sdp.writeOrShowFigure()
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         plt.hist([match, mismatch], numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])
         plt.legend()
         plt.show()
-        # TODO plot in subfigures
+        # TODO plot in subfigures on one page
 
 
     if args.interactive:

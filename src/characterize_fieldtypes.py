@@ -283,9 +283,9 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         nemajCentDist = numpy.array(nemajCentDistList).min() if len(nemajCentDistList) > 0 else None
 
         # max of distances between equal size segments
-        majEqDist = tril(tg.pairwiseDistance(segsByLen[ctitle][majOfLen[0]], segsByLen[ctitle][majOfLen[0]]))
+        majEqDist = tril(tg.similaritiesSubset(segsByLen[ctitle][majOfLen[0]]))
         majEqDistMax = majEqDist.max()
-        majNeqDist = tg.pairwiseDistance(
+        majNeqDist = tg.similaritiesSubset(
             [seg for l, seglist in segsByLen[ctitle].items() for seg in seglist if l != majOfLen[0]],
             segsByLen[ctitle][majOfLen[0]])
         # min of distances between unequal size segments

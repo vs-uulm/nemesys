@@ -260,7 +260,7 @@ class DistancesPlotter(MessagePlotter):
 
 
     @staticmethod
-    def plotSegmentDistanceDistribution(tg):
+    def plotSegmentDistanceDistribution(tg: DistanceCalculator):
         """
         Plot distribution of distances to identify density boundaries for clusters.
 
@@ -271,9 +271,9 @@ class DistancesPlotter(MessagePlotter):
         """
         from utils.baseAlgorithms import tril
         statistics = list()
-        cltrs = tg._groupByLength()
+        cltrs = tg._groupByLength()  # TODO fix segment representation for cltrs
         for cluster in cltrs.values():
-            similarities = tril(tg.pairwiseDistance(cluster))
+            similarities = tril(tg.similaritiesSubset(cluster))
             statistics.append(tril(similarities))
 
         plt.rc('xtick', labelsize=6)  # fontsize of the tick labels

@@ -217,14 +217,10 @@ class DistanceCalculator(object):
         b = self._segments.index(B)
         return self._distances[a,b]
 
-    def pairwiseDistance(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
+    def similaritiesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
             -> numpy.ndarray:
         """
         Retrieve a matrix of pairwise distances for two lists of segments.
-
-        >>> c1 = [c for s,c in clusters[1][1]]
-        >>> (tg._similaritiesSubset(c1) == tg.pairwiseDistance(c1,c1)).all()
-        >>> %timeit tg.pairwiseDistance(c1,c1)
 
         :param As: List of segments
         :param Bs: List of segments
@@ -246,26 +242,6 @@ class DistanceCalculator(object):
 
         for i,k in transformatorK.items():
             for j,l in transformatorL.items():
-                simtrx[i,j] = self._distances[k,l]
-        return simtrx
-
-    def similaritiesSubset(self, cluster: Sequence[MessageSegment]) \
-            -> numpy.ndarray:
-        """
-        From self._distances, extract a submatrix of distances for the given list of message segments.
-
-        TODO remove, its obsolete
-
-        :param cluster: The segments to get the distance matrix for. They need to be in this object's segments list.
-        :return: Matrix of pairwise distances between the given segments with rows and cols in the order of this list.
-        """
-        numsegs = len(cluster)
-        simtrx = numpy.ones((numsegs, numsegs))
-        transformator = dict()
-        for i, seg in enumerate(cluster):
-            transformator[i] = self._segments.index(seg)
-        for i,k in transformator.items():
-            for j,l in transformator.items():
                 simtrx[i,j] = self._distances[k,l]
         return simtrx
 
@@ -755,7 +731,7 @@ class Template(AbstractSegment):
             center = self.medoid
 
         # look up the distances between the base segments
-        distances = dc.pairwiseDistance([center], self.baseSegments)
+        distances = dc.similaritiesSubset([center], self.baseSegments)
         offsets = [0] * len(self.baseSegments)
         medoidIndex = dc.segments.index(center)
         globalIndices = [dc.segments.index(bs) for bs in self.baseSegments]
@@ -869,7 +845,7 @@ class TemplateGenerator(DistanceCalculator):
         :param segments: a list of segments that must be known to this template generator.
         :return: The MessageSegment from segments that is the list's medoid.
         """
-        distSubMatrix = self.pairwiseDistance(segments, segments)
+        distSubMatrix = self.similaritiesSubset(segments)
         mid = distSubMatrix.sum(axis=1).argmin()
         return segments[mid]
 

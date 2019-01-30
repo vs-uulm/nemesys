@@ -283,7 +283,7 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
                                    [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
                                     for cseg in noise] )) # ''
     for cnum, segs in enumerate(clusters):
-        clusterDists = tg.pairwiseDistance(segs, segs)
+        clusterDists = tg.similaritiesSubset(segs)
         typegroups = segments2types(segs)
         clusterSegLengths = {seg.length for seg in segs}
         outputLengths = [str(slen) for slen in clusterSegLengths]
