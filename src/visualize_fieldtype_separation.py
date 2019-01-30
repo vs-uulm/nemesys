@@ -67,12 +67,13 @@ if __name__ == '__main__':
     for l, t in zip(typelabels, templates):
         labels[tg.segments.index(t.medoid)] = l
 
-    # sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
-    # sdp.plotDistances(tg, numpy.array(labels))
-    # sdp.writeOrShowFigure()
+    sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
+    sdp.plotDistances(tg, numpy.array(labels))
+    sdp.writeOrShowFigure()
 
-    import matplotlib.pyplot as plt
-    for typlabl, typlate in zip(typelabels, templates):
+    # import matplotlib.pyplot as plt
+    mmp = MultiMessagePlotter(specimens, 'histo-templatecenters', len(templates))
+    for figIdx, (typlabl, typlate) in enumerate(zip(typelabels, templates)):
         # h_match histogram of distances to medoid for segments of typlate's type
         match = [di for di, of in typlate.distancesToMixedLength(tg)]
         # abuse template to get distances to non-matching field types
@@ -82,10 +83,9 @@ if __name__ == '__main__':
         mismatch = [di for di, of in mismatchtemplate.distancesToMixedLength(tg)]
         # plot both histograms h overlapping (i.e. for each "bin" have two bars).
         # the bins denote ranges of distances from the medoid
-        plt.hist([match, mismatch], numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])
-        plt.legend()
-        plt.show()
-        # TODO plot in subfigures on one page
+        mmp.histoToSubfig(figIdx, [match, mismatch], bins=numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])
+    # plot in subfigures on one page
+    mmp.writeOrShowFigure()
 
 
     if args.interactive:

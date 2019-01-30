@@ -245,7 +245,7 @@ class DistanceCalculator(object):
                 simtrx[i,j] = self._distances[k,l]
         return simtrx
 
-    def _groupByLength(self) -> Dict[int, List[Tuple[int, int, Tuple[float]]]]:
+    def groupByLength(self) -> Dict[int, List[Tuple[int, int, Tuple[float]]]]:
         """
         Groups segments by value length.
 
@@ -483,7 +483,7 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
-        lenGrps = self._groupByLength()  # segment list is in format of self._quicksegments
+        lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length

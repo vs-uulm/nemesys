@@ -271,8 +271,8 @@ class DistancesPlotter(MessagePlotter):
         """
         from utils.baseAlgorithms import tril
         statistics = list()
-        cltrs = tg._groupByLength()  # TODO fix segment representation for cltrs
-        for cluster in cltrs.values():
+        cltrs = [[tg.segments[idx] for idx, *rest in cluster] for cluster in tg.groupByLength().values()]
+        for cluster in cltrs:
             similarities = tril(tg.similaritiesSubset(cluster))
             statistics.append(tril(similarities))
 

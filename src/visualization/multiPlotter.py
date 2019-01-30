@@ -315,3 +315,9 @@ class MultiMessagePlotter(MessagePlotter):
     def plotToSubfig(self, subfigid: int, values: Union[List, numpy.ndarray], **plotkwArgs):
         self._axes.flat[subfigid].plot(values, **plotkwArgs)
 
+
+    def histoToSubfig(self, subfigid: int, data, **kwargs):
+        self._axes.flat[subfigid].hist(data, **kwargs)
+        self._axes.flat[subfigid].legend()
+
+
