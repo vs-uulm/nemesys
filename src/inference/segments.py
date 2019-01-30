@@ -31,7 +31,7 @@ class MessageAnalyzer(ABC):
         assert isinstance(message, AbstractMessage)
         self._message = message
         self._unit = unit
-        self._analysisArgs = None
+        self._analysisArgs = tuple()
         self._values = None
         self._startskip = 0
 
@@ -89,6 +89,7 @@ class MessageAnalyzer(ABC):
 
 
     def setAnalysisParams(self, *args):
+        assert isinstance(args, Iterable)
         self._analysisArgs = args
 
 
@@ -542,7 +543,7 @@ class MessageSegment(AbstractSegment):
         """
 
         # calculate values by the given analysis method, if not provided
-        if not analyzer.values:
+        if analyzer.values is None:
             self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
                                                                  analyzer.message, analyzer.analysisParams)
         else:
@@ -567,7 +568,7 @@ class MessageSegment(AbstractSegment):
 
     @property
     def values(self):
-        if super().values:
+        if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
             return self.analyzer.value(self.offset, self.offset+self.length)
@@ -622,12 +623,14 @@ class MessageSegment(AbstractSegment):
             # any correlation makes only sense for values originating from the same analysis method.
             if type(candidate.analyzer) != type(self.analyzer) \
                     or candidate.analyzer.analysisParams != self.analyzer.analysisParams:
-                raise ValueError('The analysis methods of this MessageSegment ({}({})) and '
-                                 'the haystack to correlate it to ({}({})) are not compatible.'.format(
-                    type(self.analyzer).__name__, ', '.join([str(a) for a in self.analyzer.analysisParams]),
+                raise ValueError('The analysis methods of this MessageSegment [{} ({})] and '
+                                 'the haystack to correlate it to [{} ({})] are not compatible.'.format(
+                    type(self.analyzer).__name__, ', '.join([str(a) for a in self.analyzer.analysisParams])
+                        if isinstance(candidate.analyzer.analysisParams, Iterable) else 'no parameters',
                     type(candidate.analyzer).__name__, ', '.join([str(a) for a in candidate.analyzer.analysisParams])
+                        if isinstance(candidate.analyzer.analysisParams, Iterable) else 'no parameters'
                 ))
-            if not candidate.values:
+            if candidate.values is None:
                 candidate.analyzer.analyze()
         if isinstance(candidate, AbstractMessage):  # make a segment from the whole message
             analyzer = MessageAnalyzer.findExistingAnalysis(
@@ -646,7 +649,7 @@ class MessageSegment(AbstractSegment):
 
 
     def __repr__(self):
-        if self.values and isinstance(self.values, list) and len(self.values) > 3:
+        if self.values is not None and isinstance(self.values, list) and len(self.values) > 3:
             printValues = str(self.values[:3])[:-1] + '...'
         else:
             printValues = str(self.values)

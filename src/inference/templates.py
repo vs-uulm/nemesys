@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.analyzers import MessageAnalyzer
-from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment
+from inference.analyzers import MessageAnalyzer, Value
+from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment, HelperSegment
 
 
 
@@ -165,6 +165,8 @@ class DistanceCalculator(object):
         for idx, seg in enumerate(segments):
             self._segments.append(firstSegment.fillCandidate(seg))
             self._quicksegments.append((idx, seg.length, tuple(seg.values)))
+        # offset of inner segment to outer segment (key: tuple(i, o))
+        self._offsets = dict()
         # distance matrix for all rows and columns in order of self._segments
         self._distances = self._getDistanceMatrix(self._embdedAndCalcDistances())
 
@@ -188,12 +190,6 @@ class DistanceCalculator(object):
         similarityMatrix = 1 - self._distances
         return similarityMatrix
 
-    def _maxDimension(self, segmentX: int, segmentY: int):
-        """
-        :return: Minimum of the value dimensions of the measured pair of segments
-        """
-        return min(len(self._segments[segmentX].values), len(self._segments[segmentY].values))
-
     @property
     def segments(self) -> List[MessageSegment]:
         """
@@ -201,33 +197,77 @@ class DistanceCalculator(object):
         """
         return self._segments
 
+    @property
+    def offsets(self) -> Dict[int, int]:
+        """
+        :return: In case of mixed-length distances, this returns a mapping of segment-index pairs to the
+        positive or negative offset of the smaller segment from the larger segment start position.
+        """
+        return self._offsets
+
     def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
         """
-        Retrieve the distance of two segments.
+        Retrieve the distance between two segments.
 
-        :param A:
-        :param B:
+        :param A: segment A
+        :param B: segment B
         :return:
         """
         a = self._segments.index(A)
         b = self._segments.index(B)
         return self._distances[a,b]
 
-    def pairwiseDistance(self, As: List[MessageSegment], Bs: List[MessageSegment]) -> numpy.ndarray:
+    def pairwiseDistance(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
+            -> numpy.ndarray:
         """
-        Retrieve the matrix of pairwise distances for two lists of segments.
+        Retrieve a matrix of pairwise distances for two lists of segments.
+
+        >>> c1 = [c for s,c in clusters[1][1]]
+        >>> (tg._similaritiesSubset(c1) == tg.pairwiseDistance(c1,c1)).all()
+        >>> %timeit tg.pairwiseDistance(c1,c1)
 
         :param As: List of segments
         :param Bs: List of segments
         :return: Matrix of distances: As are rows, Bs are columns.
         """
-        distances = list()
-        for A in As:
-            Alist = list()
-            distances.append(Alist)
-            for B in Bs:
-                Alist.append(self.pairDistance(A, B))
-        return numpy.array(distances)
+        clusterI = As
+        clusterJ = As if Bs is None else Bs
+        simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+
+        transformatorK = dict()  # maps indices i from clusterI to matrix rows k
+        for i, seg in enumerate(clusterI):
+            transformatorK[i] = self._segments.index(seg)
+        if Bs is not None:
+            transformatorL = dict()  # maps indices j from clusterJ to matrix cols l
+            for j, seg in enumerate(clusterJ):
+                transformatorL[j] = self._segments.index(seg)
+        else:
+            transformatorL = transformatorK
+
+        for i,k in transformatorK.items():
+            for j,l in transformatorL.items():
+                simtrx[i,j] = self._distances[k,l]
+        return simtrx
+
+    def similaritiesSubset(self, cluster: Sequence[MessageSegment]) \
+            -> numpy.ndarray:
+        """
+        From self._distances, extract a submatrix of distances for the given list of message segments.
+
+        TODO remove, its obsolete
+
+        :param cluster: The segments to get the distance matrix for. They need to be in this object's segments list.
+        :return: Matrix of pairwise distances between the given segments with rows and cols in the order of this list.
+        """
+        numsegs = len(cluster)
+        simtrx = numpy.ones((numsegs, numsegs))
+        transformator = dict()
+        for i, seg in enumerate(cluster):
+            transformator[i] = self._segments.index(seg)
+        for i,k in transformator.items():
+            for j,l in transformator.items():
+                simtrx[i,j] = self._distances[k,l]
+        return simtrx
 
     def _groupByLength(self) -> Dict[int, List[Tuple[int, int, Tuple[float]]]]:
         """
@@ -245,28 +285,19 @@ class DistanceCalculator(object):
             segsByLen[seglen].append(seg)
         return segsByLen
 
-    def _calcDistancesPerLen(self, segLenGroups: Dict[int, List[MessageSegment]]) -> List[InterSegment]:
-        """
-        Calculates distances within groups of equally lengthy segments.
-
-        Used in constructor.
-
-        :param segLenGroups: a dict mapping the length to the list of MessageSegments of that length.
-        :return: flat list of pairwise distances for all length groups.
-        """
-        distance = list()
-        for l, segGroup in segLenGroups.items():  # type: int, List[MessageSegment]
-            segindices = [self._segments.index(seg) for seg in segGroup]
-            qsegs = [self._quicksegments[idx] for idx in segindices]
-            distance.extend(DistanceCalculator._calcDistances(qsegs, method=self._method))
-        # TODO perf
-        return distance
-
-
     @staticmethod
-    def __prepareValuesMatrix(segments: List[Tuple[int, int, Tuple[float]]], method):
-        # TODO if this should become is a performance killer, drop support for cosine and correlation of unsuitable segments altogether
+    def __prepareValuesMatrix(segments: List[Tuple[int, int, Tuple[float]]], method) -> Tuple[str, numpy.ndarray]:
+        """
+        Prepare a values matrix as input for distance calculation. This means extracting the values from all segments
+        and placing them into an array. The preparation also includes handling of cosine zero vectors.
 
+        # TODO if this should become is a performance killer, drop support for cosine and correlation
+          of unsuitable segments altogether
+
+        :param segments: List of the indices and length and values in format of self._quicksegments
+        :param method: The distance method to use
+        :return: A tuple of the method-str (may have been adjusted) and the values matrix as numpy array.
+        """
         # fallback for vectors of length 1
         if segments[0][1] == 1:
             # there is no simple fallback solution for 'correlate'
@@ -286,8 +317,9 @@ class DistanceCalculator(object):
 
         return method, segmentValuesMatrix
 
+
     @staticmethod
-    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
+    def __calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
         Tuple[int, int, float]
     ]:
         """
@@ -347,69 +379,10 @@ class DistanceCalculator(object):
             print(" {:.3f}s".format(tFinal-tExpand))
         return segPairs
 
-    @staticmethod
-    def __calcDistances(segments: List[MessageSegment], method='cosine') -> List[InterSegment]:
-        """
-        LEGACY/FALLBACK
-
-        Calculates pairwise distances for all input segments.
-        The values of all segments have to be of the same length!
-
-        :param segments: list of segments to calculate their similarity/distance for.
-        :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
-            defaults to 'cosine'.
-        :return: List of all pairwise distances between segements encapsulated in InterSegment-objects.
-        """
-        if DistanceCalculator.debug:
-            import time
-            tPrep = time.time()
-            print('Prepare values.', end='')
-        # TODO perf
-        method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
-
-        if DistanceCalculator.debug:
-            tPdist = time.time()
-            print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
-        # This is the poodle's core
-        segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
-
-        if DistanceCalculator.debug:
-            tExpand = time.time()
-            print(' {:.3f}s\nExpand compressed pairs.'.format(tExpand-tPdist), end='')
-        segPairs = list()
-        for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
-            if numpy.isnan(simi):
-                if method == 'cosine':
-                    if segA.values == segB.values \
-                            or numpy.isnan(segA.values).all() and numpy.isnan(segB.values).all():
-                        segSimi = 0
-                    elif numpy.isnan(segA.values).any() or numpy.isnan(segB.values).any():
-                        segSimi = 1
-                        # TODO better handling of segments with NaN parts.
-                        # print('Set max distance for NaN segments with values: {} and {}'.format(
-                        #     segA.values, segB.values))
-                    else:
-                        raise ValueError('An unresolved zero-values vector could not be handled by method ' + method +
-                                         ' the segment values are: {}\nand {}'.format(segA.values, segB.values))
-                elif method == 'correlation':
-                    # TODO validate this assumption about the interpretation of uncorrelatable segments.
-                    if segA.values == segB.values:
-                        segSimi = 0.0
-                    else:
-                        segSimi = 9.9
-                else:
-                    raise NotImplementedError('Handling of NaN distances needs to be defined for method ' + method)
-            else:
-                segSimi = simi
-            segPairs.append(InterSegment(segA, segB, segSimi))
-        if DistanceCalculator.debug:
-            tFinal = time.time()
-            print(" {:.3f}s".format(tFinal-tExpand))
-        return segPairs
 
     def _getDistanceMatrix(self, distances: List[
-        Tuple[int, int, float]
-    ]) -> numpy.ndarray:
+                                                    Tuple[int, int, float]
+                                                ]) -> numpy.ndarray:
         """
         Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
         The order of the matrix elements in each row and column is the same as in self._segments.
@@ -422,8 +395,9 @@ class DistanceCalculator(object):
         """
         from inference.segmentHandler import matrixFromTpairs
         simtrx = matrixFromTpairs([(ise[0], ise[1], ise[2]) for ise in distances], range(len(self._quicksegments)),
-                                  incomparable=-1)  # TODO check for incomparable values (resolve and replace the negative value)
+                                  incomparable=-1)  # TODO hanlde incomparable values (resolve and replace the negative value)
         return simtrx
+
 
     @staticmethod
     def embedSegment(shortSegment: Tuple[int, int, Tuple[float]], longSegment: Tuple[int, int, Tuple[float]],
@@ -435,9 +409,9 @@ class DistanceCalculator(object):
 
         The distance is normalized to the length of the shorter tuple
 
-        :param shortSegment:
-        :param longSegment:
-        :param method: distance method to use
+        :param shortSegment: The shorter of the two input segments.
+        :param longSegment: The longer of the two input segments.
+        :param method: The distance method to use.
         :return: The minimal partial distance between the segments, wrapped in an "InterSegment-Tuple":
             (method, offset, (
                 index of shortSegment, index of longSegment, distance betweent the two
@@ -460,12 +434,26 @@ class DistanceCalculator(object):
         return method, shift, (shortSegment[0], longSegment[0], distance)
 
     @staticmethod
-    def sigmoidThreshold(x, shift=0.5):
+    def sigmoidThreshold(x: float, shift=0.5):
+        """
+        Standard sigmoid threshold function to transform x.
+
+        :param x: The (distance) value to transform.
+        :param shift: The shift of the threshold between 0 and 1.
+        :return: The transformed (distance) value.
+        """
         return 1 / (1 + numpy.exp(-numpy.pi ** 2 * (x - shift)))
 
     @staticmethod
-    def neutralThreshold(x):
+    def neutralThreshold(x: float):
+        """
+        Nuetral dummy threshold function to NOT transform x.
+
+        :param x: The (distance) value NOT to transform.
+        :return: The original (distance) value.
+        """
         return x
+
 
     def _embdedAndCalcDistances(self) -> \
             List[Tuple[int, int, float]]:
@@ -519,7 +507,7 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
-        lenGrps = self._groupByLength()
+        lenGrps = self._groupByLength()  # segment list is in format of self._quicksegments
 
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
@@ -528,7 +516,7 @@ class DistanceCalculator(object):
             if DistanceCalculator.debug:
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
-            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
+            ilDist = DistanceCalculator.__calcDistances(outersegs, method=self._method)
             # # # # # # # # # # # # # # # # # # # # # # # #
             distance.extend([(i,l,
                               self.thresholdFunction(
@@ -560,11 +548,19 @@ class DistanceCalculator(object):
                                 )  # minimum of dimensions
                         # # # # # # # # # # # # # # # # # # # # # # # #
                         distance.append(dlDist)
+                        self._offsets[(interseg[0], interseg[1])] = embedded[1]
         print("Calculated distances for {} segment pairs.".format(len(distance)))
         return distance
 
 
-    def _normFactor(self, dimensions):
+    def _normFactor(self, dimensions: int):
+        """
+        For a distance value with given number of dimensions, calculate the factor to normalize this distance.
+        For further parameters for this calculation, it uses this objects configuration.
+
+        :param dimensions: The number of dimensions of the shorter segment
+        :return: Factor to multiply to the corresponding distance to normalize it to 1.
+        """
         return DistanceCalculator.normFactor(self._method, dimensions, self._segments[0].analyzer.domain)
 
 
@@ -575,9 +571,9 @@ class DistanceCalculator(object):
         This is static for cosine and correlation, but dynamic for canberra and euclidean measures.
 
         :param method: distance calculation method. One of cosine, correlation, canberra, euclidean, sqeuclidean
-        :param dimensions: dimensions of the
+        :param dimensions: The number of dimensions of the shorter segment
         :param analyzerDomain: the value domain of the used analyzer
-        :return:
+        :return: Factor to multiply to the corresponding distance to normalize it to 1.
         """
         distanceMax = {
             'cosine': 1,
@@ -597,13 +593,11 @@ class DistanceCalculator(object):
             distanceMax['sqeuclidean'] = dimensions * domainSize**2
         return 1 / distanceMax[method]
 
-
     def neigbors(self, segment: MessageSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
         """
-
-        :param segment:
-        :param subset:
-        :return: a ascendingly sorted list of neighbors of segment
+        :param segment: Segment to get the neigbors for.
+        :param subset: The subset of MessageSegments to use from this DistanceCalculator object, if any.
+        :return: An ascendingly sorted list of neighbors of parameter segment
             from all the segments in this object (if subset is None)
             or from the segments in subset.
             The result is a list of tuples with
@@ -629,14 +623,19 @@ class DistanceCalculator(object):
         return neighbors
 
 
-
 class Template(AbstractSegment):
     """
-    Calculates a template (mean values per of vector component).
+    Represents a template for some group of similar MessageSegments
+    A Templates values are either the values of a medoid or the mean of values per vector component.
     """
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
                  baseSegments: List[MessageSegment],
                  method='canberra'):
+        """
+        :param values: The values of the template (e. g. medoid or mean)
+        :param baseSegments: The Segments this template represents and is based on.
+        :param method: The distance method to use for calculating further distances if necessary.
+        """
         if isinstance(values, MessageSegment):
             self.values = values.values
             self.medoid = values
@@ -649,6 +648,12 @@ class Template(AbstractSegment):
 
 
     def checkSegmentsAnalysis(self):
+        """
+        Validate that all base segments of this tempalte are configured with the same type of analysis.
+
+        :raises: ValueError if not all analysis types and parameters of the base segments are identical.
+        :return: Doesn't return anything if all is well. Raises a ValueError otherwise.
+        """
         for bs in self.baseSegments[1:]:
             if type(self.baseSegments[0].analyzer) != type(bs.analyzer) \
                     or self.baseSegments[0].analyzer.analysisParams != bs.analyzer.analysisParams:
@@ -664,6 +669,13 @@ class Template(AbstractSegment):
                   haystack: Iterable[Union[MessageSegment, AbstractMessage]],
                   method=AbstractSegment.CORR_COSINE
                   ) -> List[CorrelatedSegment]:
+        """
+        TODO This is an old experimental method. Remove it?
+
+        :param haystack:
+        :param method:
+        :return:
+        """
         if all(isinstance(hay, AbstractMessage) for hay in haystack):
             haystack = [ MessageSegment(
                 MessageAnalyzer.findExistingAnalysis(
@@ -676,11 +688,11 @@ class Template(AbstractSegment):
 
     def distancesTo(self):
         """
-        Calculate the normalized distances to the template (cluster center).
+        Calculate the normalized distances to the template (cluster center, not medoid).
 
-        Currently only supports single length segments.
+        Only supports single length segments and does not support a threshold function.
 
-        :return: array of distances
+        :return: Array of distances
         """
         baseValues = numpy.array([seg.values for seg in self.baseSegments])
         assert baseValues.shape[1] == self.values.shape[0], "cannot calc distances to mixed lengths segments"
@@ -690,57 +702,86 @@ class Template(AbstractSegment):
         return normf * cenDist
 
 
-    def distancesToMixedLength(self):
+    def distancesToMixedLength(self, dc: DistanceCalculator=None):
         """
+        Get distances to the medoid of this template.
+        If no DistanceCalculator is given. does not support a threshold function.
 
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from inference.templates import DistanceCalculator, Template
+        >>> listOfSegments = generateTestSegments()
+        >>> dc = DistanceCalculator(listOfSegments)
+        >>> center = [1,3,7,9]  # "mean"
+        >>> tempearly = Template(center, listOfSegments)
+        >>> tempearly.distancesToMixedLength(dc)
+        [(0.24615384615384617, 0),
+         (0.28452020202020201, 0),
+         (0.1734090909090909, 0),
+         (0.40136363636363637, 1),
+         (0.33166666666666667, 0),
+         (0.8842955900308842, -3),
+         (0.6777991452991452, 1),
+         (0.48911159263271942, 0),
+         (0.37115384615384617, 0)]
+        >>> center = listOfSegments[0]  # "medoid"
+        >>> template = Template(center, listOfSegments)
+        >>> template.distancesToMixedLength(dc)
+        [(0.0, 0),
+         (0.082500000000000004, 1),
+         (0.19361111111111112, 1),
+         (0.23642857142857143, 1),
+         (0.16500000000000001, 1),
+         (0.85871661340592575, -3),
+         (0.76178228544666893, 1),
+         (0.24295774647887325, 0),
+         (0.125, 0)]
+
+        :param dc: DistanceCalculator to look up precomputed distances and offsets
         :return: List of Tuples of distances and offsets: -n for center, +n for segment
         """
-        distances = [None] * len(self.baseSegments)
+        # create a map from the length groups to the baseSegments index
         lengthGroups = dict()
         for idx, bs in enumerate(self.baseSegments):
             if bs.length not in lengthGroups:
                 lengthGroups[bs.length] = list()
             lengthGroups[bs.length].append(idx)
-        for length, group in lengthGroups.items():
-            if length == len(self.values):
-                # TODO fix this, according to embedAndCalc...
-                normf = DistanceCalculator.normFactor(self._method, len(self.values),
-                                                      self.baseSegments[0].analyzer.domain)
-                dist = normf * scipy.spatial.distance.cdist(self.values.reshape((1, self.values.shape[0])),
-                                                    numpy.array([self.baseSegments[i].values for i in group]),
-                                                    self._method)
-                for i, d in zip(group, dist):
-                    distances[i] = (d, 0)  # 0-offset
-                continue
+        if not (self.medoid and dc):
+            # calculate distance to given template center values
+            centerAnalysis = Value(AbstractMessage(bytes(self.values)))
+            center = HelperSegment(centerAnalysis, 0, len(self.values))
+            center.values = self.values
+            dc = DistanceCalculator(self.baseSegments + [center], self._method)
+        else:
+            center = self.medoid
 
-            if length < len(self.values):
-                longList = [(None, len(self.values), self.values)]
-                shortList = [(i, length, tuple(self.baseSegments[i].values)) for i in group]
-            else:
-                longList = [(i, length, tuple(self.baseSegments[i].values)) for i in group]
-                shortList = [(None, len(self.values), self.values)]
-
-            for shortS in shortList:
-                # TODO fix this, according to embedAndCalc...
-                normf = DistanceCalculator.normFactor(self._method, shortS[1],
-                                                      self.baseSegments[0].analyzer.domain)
-                for longS in longList:
-                    embedding = DistanceCalculator.embedSegment(shortS, longS, self._method)
-                    idxShort = embedding[2][0]
-                    idxLong = embedding[2][1]
-                    dist = normf * embedding[2][2]
-                    idx = idxShort if idxLong is None else idxLong
-                    offset = embedding[1]
-                    if idxShort is None: offset = -offset
-                    distances[idx] = (dist, offset)
-        return distances
+        # look up the distances between the base segments
+        distances = dc.pairwiseDistance([center], self.baseSegments)
+        offsets = [0] * len(self.baseSegments)
+        medoidIndex = dc.segments.index(center)
+        globalIndices = [dc.segments.index(bs) for bs in self.baseSegments]
+        # collect offsets
+        for bs, gs in enumerate(globalIndices):
+            if (medoidIndex, gs) in dc.offsets:
+                offsets[bs] = -dc.offsets[(medoidIndex, gs)]  # TODO check sign
+            if (gs, medoidIndex) in dc.offsets:
+                offsets[bs] = dc.offsets[(gs, medoidIndex)]
+        distOffs = [(distances[0, idx], offsets[idx]) for idx in range(len(self.baseSegments))]
+        return distOffs
 
 
     def __hash__(self):
+        """
+        :return: Hash-representation of the template based on the values of it.
+            (Templates are considered equal if their values are equal!)
+        """
         return hash(tuple(self.values))
 
 
     def __repr__(self):
+        """
+        :return: A fixed-length color-coded visual representation of this template,
+            NOT representing the template value itself!
+        """
         oid = hash(self)
         # return '{:02x}'.format(oid % 0xffff)
         import visualization.bcolors as bcolors
@@ -752,35 +793,16 @@ class TemplateGenerator(DistanceCalculator):
     """
     Generate templates for a list of segments according to their distance.
     """
+
     def __init__(self, segments: List[MessageSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = {}):
         """
         Find similar segments, group them, and return a template for each group.
 
-        :param segments:
+        :param segments: Segments to base the templates on.
         """
         super().__init__(segments, method, thresholdFunction, thresholdArgs)
         self.clusterer = None  # type: TemplateGenerator.Clusterer
-
-    @staticmethod
-    def __altSimilarities(segmentGroup: List[MessageSegment]):
-        """
-        Calculates pairwise similarities for all segments.
-        Less efficient than calcSimilarities()
-        This method is to validate the correct function of calcSimilarities()
-
-        :param segmentGroup: list of segments to calculate their similarity/distance for.
-        :return: List of all pairwise similarities between segements encapsulated in InterSegment-objects.
-        """
-
-        combinations = [(segmentGroup[p1], segmentGroup[p2])
-                     for p1 in range(len(segmentGroup))
-                     for p2 in range(p1 + 1, len(segmentGroup))]
-        segPairs = list()
-        for (segA, segB) in combinations:
-            segPairs.append(InterSegment(segA, segB,
-                                         scipy.spatial.distance.cosine(segA.values, segB.values)))
-        return segPairs
 
     def clusterSimilarSegments(self, filterNoise=True, **kwargs) -> List[List[MessageSegment]]:
         """
@@ -799,23 +821,161 @@ class TemplateGenerator(DistanceCalculator):
         return clusterlist
 
 
-    def _similaritiesSubset(self, cluster: Sequence[MessageSegment]) -> numpy.ndarray:
+    def getClusters(self, segments: Sequence[MessageSegment], **kwargs) -> Dict[int, List[MessageSegment]]:
         """
-        From self._distances, extract a submatrix of distances for the given list of message segments.
+        Do the initialization of the clusterer and perform the clustering.
 
-        :param cluster: The segments to get the distance matrix for. The segments need to be of equal length.
-        :return: Matrix of pairwise distances between the given segments with rows and cols in the order of this list.
+        :param segments: List of equally lengthy segments.
+        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
+            If not given (None), it is autoconfigured.
+        :return: A dict of labels to lists of segments with that label.
         """
-        numsegs = len(cluster)
-        simtrx = numpy.ones((numsegs, numsegs))
-        transformator = dict()
-        for i, seg in enumerate(cluster):
-            transformator[i] = self._segments.index(seg)
-        for i,k in transformator.items():
-            for j,l in transformator.items():
-                simtrx[i,j] = self._distances[k,l]
-        return simtrx
+        clustererClass = kwargs['clustererClass'] if 'clustererClass' in kwargs else TemplateGenerator.HDBSCAN
 
+        similarities = self.similaritiesSubset(segments)
+        try:
+            if not 'epsilon' in kwargs and not 'min_cluster_size' in kwargs:
+                self.clusterer = clustererClass(similarities, True)
+            else:
+                self.clusterer = clustererClass(similarities, False)
+                if 'epsilon' in kwargs:
+                    # fixed epsilon
+                    import math
+                    self.clusterer.minpts = kwargs['minpts'] if 'minpts' in kwargs else \
+                        round(math.log(similarities.shape[0]))
+                    self.clusterer.epsilon = kwargs['epsilon']  # 1.0
+                elif 'min_cluster_size' in kwargs:
+                    self.clusterer.min_cluster_size = kwargs['min_cluster_size']
+            labels = self.clusterer.getClusterLabels()
+        except ValueError as e:
+            print(segments)
+            # import tabulate
+            # print(tabulate.tabulate(similarities))
+            raise e
+        assert isinstance(labels, numpy.ndarray)
+        ulab = set(labels)
+
+        segmentClusters = dict()
+        for l in ulab:
+            class_member_mask = (labels == l)
+            segmentClusters[l] = [seg for seg in itertools.compress(segments, class_member_mask)]
+        return segmentClusters
+
+
+    def findMedoid(self, segments: List[MessageSegment]) -> MessageSegment:
+        """
+        Find the medoid closest describing the given list of segments.
+
+        :param segments: a list of segments that must be known to this template generator.
+        :return: The MessageSegment from segments that is the list's medoid.
+        """
+        distSubMatrix = self.pairwiseDistance(segments, segments)
+        mid = distSubMatrix.sum(axis=1).argmin()
+        return segments[mid]
+
+
+    def generateTemplatesForClusters(self, segmentClusters: Iterable[List[MessageSegment]], medoid=True) \
+            -> List[Template]:
+        """
+        Find templates representing the message segments in the input clusters.
+
+        :param medoid: Use medoid as template (supports mixed-length clusters) if true (default),
+            use mean of segment values if false (supports only single-length clusters)
+        :param segmentClusters: list of input clusters
+        :return: list of templates for input clusters
+        """
+        templates = list()
+        for cluster in segmentClusters:
+            if not medoid:
+                segValues = numpy.array([ seg.values for seg in cluster ])
+                center = numpy.mean(segValues, 0)
+            else:
+                center = self.findMedoid(cluster)
+            templates.append(Template(center, cluster))
+        return templates
+
+
+    def generateTemplates(self, **kwargs) -> List[Template]:
+        """
+        Generate templates for all clusters. Triggers a new clustering run.
+
+        >>> from pprint import pprint
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from utils.loader import BaseLoader
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        >>>     bytes([1, 2, 3, 4]),
+        >>>     bytes([   2, 3, 4]),
+        >>>     bytes([   1, 3, 4]),
+        >>>     bytes([   2, 4   ]),
+        >>>     bytes([   2, 3   ]),
+        >>>     bytes([20, 30, 37, 50, 69, 2, 30]),
+        >>>     bytes([        37,  5, 69       ]),
+        >>>     bytes([70, 2, 3, 4]),
+        >>>     bytes([3, 2, 3, 4])
+        >>>     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> specimens = BaseLoader(messages)
+        >>> tg = TemplateGenerator(segments)
+        >>> clusters = tg.getClusters(segments, clustererClass=TemplateGenerator.DBSCAN,
+        ...         epsilon=1.0, minpts=3,
+        ...         thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        >>> templates = tg.generateTemplates(clustererClass=TemplateGenerator.DBSCAN,
+        ...     epsilon=1.0, minpts=3,
+        ...     thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        >>> pprint([t.baseSegments for t in templates])
+        [[MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
+          MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
+          MessageSegment 3 bytes: 010304 | values: [1, 3, 4],
+          MessageSegment 2 bytes: 0204 | values: [2, 4],
+          MessageSegment 2 bytes: 0203 | values: [2, 3],
+          MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
+          MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]]
+        >>> pprint(clusters)
+        {-1: [MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...,
+              MessageSegment 3 bytes: 250545 | values: [37, 5, 69]],
+         0: [MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
+             MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
+             MessageSegment 3 bytes: 010304 | values: [1, 3, 4],
+             MessageSegment 2 bytes: 0204 | values: [2, 4],
+             MessageSegment 2 bytes: 0203 | values: [2, 3],
+             MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
+             MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]}
+
+        >>> labels = [-1]*len(segments)
+        >>> for i, t in enumerate(templates):
+        ...     for s in t.baseSegments:
+        ...         labels[segments.index(s)] = i
+        ...     labels[segments.index(t.medoid)] = "({})".format(i)
+        >>> from visualization.distancesPlotter import DistancesPlotter
+        >>> sdp = DistancesPlotter(specimens, 'distances-testcase', True)
+        >>> sdp.plotDistances(tg, numpy.array(labels))
+        >>> sdp.writeOrShowFigure()
+
+
+        :param kwargs: call the clusterer with these parameters. See getClusters().
+        :return: A list of Templates for all clusters.
+        """
+        # retrieve all clusters and omit noise for template generation.
+        allClusters = [cluster for label, cluster in self.getClusters(self.segments, **kwargs).items() if label > -1]
+        return self.generateTemplatesForClusters(allClusters)
+
+
+
+
+
+
+
+
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # # # TemplateGenerator.Clusterer classes # # # # # # #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Clusterer(ABC):
         """
@@ -823,7 +983,6 @@ class TemplateGenerator(DistanceCalculator):
         """
         def __init__(self, distances: numpy.ndarray):
             self._distances = distances
-
 
         @abstractmethod
         def getClusterLabels(self) -> numpy.ndarray:
@@ -932,12 +1091,10 @@ class TemplateGenerator(DistanceCalculator):
 
             if autoconfigure:
                 from math import log
-
                 lnN = round(log(self._distances.shape[0]))
                 self.min_cluster_size = self.steepestSlope()[0] # round(lnN * 1.5)
             else:
                 self.min_cluster_size = None
-
             self.min_samples = 2
 
 
@@ -980,13 +1137,36 @@ class TemplateGenerator(DistanceCalculator):
                 self.minpts, self.epsilon = None, None
 
 
+        def getClusterLabels(self) -> numpy.ndarray:
+            """
+            Cluster the entries in the similarities parameter by DBSCAN
+            and return the resulting labels.
+
+            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
+            """
+            import sklearn.cluster
+
+            if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
+                return numpy.zeros_like(self._distances[0], int)
+
+            dbscan = sklearn.cluster.DBSCAN(eps=self.epsilon, min_samples=self.minpts)
+            print("DBSCAN epsilon:", self.epsilon, "minpts:", self.minpts)
+            dbscan.fit(self._distances)
+            return dbscan.labels_
+
+
+        def __repr__(self):
+            return 'DBSCAN eps {:0.3f} mpt'.format(self.epsilon, self.minpts) \
+                if self.epsilon and self.minpts \
+                else 'DBSCAN unconfigured (need to set epsilon and minpts)'
+
+
         def _autoconfigure(self):
             """
             Auto configure the clustering parameters epsilon and minPts regarding the input data
 
             :return: minpts, epsilon
             """
-            from math import log
 
             minpts, steepslopeK = self.steepestSlope()
 
@@ -1122,175 +1302,8 @@ class TemplateGenerator(DistanceCalculator):
                 ).argmax()
             return int(round(kneeX))
 
-
-        def getClusterLabels(self) -> numpy.ndarray:
-            """
-            Cluster the entries in the similarities parameter by DBSCAN
-            and return the resulting labels.
-
-            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
-            """
-            import sklearn.cluster
-
-            if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
-                return numpy.zeros_like(self._distances[0], int)
-
-            dbscan = sklearn.cluster.DBSCAN(eps=self.epsilon, min_samples=self.minpts)
-            print("DBSCAN epsilon:", self.epsilon, "minpts:", self.minpts)
-            dbscan.fit(self._distances)
-            return dbscan.labels_
-
-
-        def __repr__(self):
-            return 'DBSCAN eps {:0.3f} mpt'.format(self.epsilon, self.minpts) \
-                if self.epsilon and self.minpts \
-                else 'DBSCAN unconfigured (need to set epsilon and minpts)'
-
-
-
-    def getClusters(self, segments: Sequence[MessageSegment], **kwargs) -> Dict[int, List[MessageSegment]]:
-        """
-        Do the initialization of the clusterer and performe the clustering.
-
-        :param segments: List of equally lengthy segments.
-        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
-            If not given (None), it is autoconfigured.
-        :return: A dict of labels to lists of segments with that label.
-        """
-        clustererClass = kwargs['clustererClass'] if 'clustererClass' in kwargs else TemplateGenerator.HDBSCAN
-
-        similarities = self._similaritiesSubset(segments)
-        try:
-            if not 'epsilon' in kwargs and not 'min_cluster_size' in kwargs:
-                self.clusterer = clustererClass(similarities, True)
-            else:
-                self.clusterer = clustererClass(similarities, False)
-                if 'epsilon' in kwargs:
-                    # fixed epsilon
-                    import math
-                    self.clusterer.minpts = kwargs['minpts'] if 'minpts' in kwargs else \
-                        round(math.log(similarities.shape[0]))
-                    self.clusterer.epsilon = kwargs['epsilon']  # 1.0
-                elif 'min_cluster_size' in kwargs:
-                    self.clusterer.min_cluster_size = kwargs['min_cluster_size']
-            labels = self.clusterer.getClusterLabels()
-        except ValueError as e:
-            print(segments)
-            # import tabulate
-            # print(tabulate.tabulate(similarities))
-            raise e
-        assert isinstance(labels, numpy.ndarray)
-        ulab = set(labels)
-
-        segmentClusters = dict()
-        for l in ulab:
-            class_member_mask = (labels == l)
-            segmentClusters[l] = [seg for seg in itertools.compress(segments, class_member_mask)]
-        return segmentClusters
-
-
-    def findMedoid(self, segments: List[MessageSegment]) -> MessageSegment:
-        """
-        Find the medoid closest describing the given list of segments.
-        :param segments: a list of segments that must be known to this template generator.
-        :return: The MessageSegment from segments that is the list's medoid.
-        """
-        distSubMatrix = self.pairwiseDistance(segments, segments)
-        mid = distSubMatrix.sum(axis=1).argmin()
-        return segments[mid]
-
-
-    def generateTemplatesForClusters(self, segmentClusters: Iterable[List[MessageSegment]], medoid=True) \
-            -> List[Template]:
-        """
-        Find templates representing the message segments in the input clusters.
-
-        :param medoid: Use medoid as template (supports mixed-length clusters) if true (default),
-            use mean of segment values if false (supports only single-length clusters)
-        :param segmentClusters: list of input clusters
-        :return: list of templates for input clusters
-        """
-        templates = list()
-        for cluster in segmentClusters:
-            if not medoid:
-                segValues = numpy.array([ seg.values for seg in cluster ])
-                center = numpy.mean(segValues, 0)
-            else:
-                center = self.findMedoid(cluster)
-            templates.append(Template(center, cluster))
-        return templates
-
-
-    def generateTemplates(self, **kwargs) -> List[Template]:
-        """
-        Generate templates for all clusters. Triggers a new clustering run.
-
-        >>> from pprint import pprint
-        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from utils.loader import BaseLoader
-        >>> from inference.templates import *
-        >>> from inference.analyzers import Value
-        >>>
-        >>> bytedata = [
-        >>>     bytes([1, 2, 3, 4]),
-        >>>     bytes([   2, 3, 4]),
-        >>>     bytes([   1, 3, 4]),
-        >>>     bytes([   2, 4   ]),
-        >>>     bytes([   2, 3   ]),
-        >>>     bytes([20, 30, 37, 50, 69, 2, 30]),
-        >>>     bytes([        37,  5, 69       ]),
-        >>>     bytes([70, 2, 3, 4]),
-        >>>     bytes([3, 2, 3, 4])
-        >>>     ]
-        >>> messages  = [RawMessage(bd) for bd in bytedata]
-        >>> analyzers = [Value(message) for message in messages]
-        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
-        >>> specimens = BaseLoader(messages)
-        >>> tg = TemplateGenerator(segments)
-        >>> clusters = tg.getClusters(segments, clustererClass=TemplateGenerator.DBSCAN,
-        ...         epsilon=1.0, minpts=3,
-        ...         thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
-        >>> templates = tg.generateTemplates(clustererClass=TemplateGenerator.DBSCAN,
-        ...     epsilon=1.0, minpts=3,
-        ...     thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
-        >>> pprint([t.baseSegments for t in templates])
-        [[MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
-          MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
-          MessageSegment 3 bytes: 010304 | values: [1, 3, 4],
-          MessageSegment 2 bytes: 0204 | values: [2, 4],
-          MessageSegment 2 bytes: 0203 | values: [2, 3],
-          MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
-          MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]]
-        >>> pprint(clusters)
-        {-1: [MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...,
-              MessageSegment 3 bytes: 250545 | values: [37, 5, 69]],
-         0: [MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
-             MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
-             MessageSegment 3 bytes: 010304 | values: [1, 3, 4],
-             MessageSegment 2 bytes: 0204 | values: [2, 4],
-             MessageSegment 2 bytes: 0203 | values: [2, 3],
-             MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
-             MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]}
-
-        >>> labels = [-1]*len(segments)
-        >>> for i, t in enumerate(templates):
-        ...     for s in t.baseSegments:
-        ...         labels[segments.index(s)] = i
-        ...     labels[segments.index(t.medoid)] = "({})".format(i)
-        >>> from visualization.distancesPlotter import DistancesPlotter
-        >>> sdp = DistancesPlotter(specimens, 'distances-testcase', True)
-        >>> sdp.plotDistances(tg, numpy.array(labels))
-        >>> sdp.writeOrShowFigure()
-
-
-        :param kwargs: call the clusterer with these parameters. See getClusters().
-        :return: A list of Templates for all clusters.
-        """
-        # retrieve all clusters and omit noise for template generation.
-        allClusters = [cluster for label, cluster in self.getClusters(self.segments, **kwargs).items() if label > -1]
-        return self.generateTemplatesForClusters(allClusters)
-
-
-
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # END # TemplateGenerator.Clusterer classes # END # # #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 

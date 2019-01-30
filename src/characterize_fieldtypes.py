@@ -11,7 +11,7 @@ import argparse, IPython
 from os.path import isfile
 from itertools import chain
 
-from inference.templates import TemplateGenerator
+from inference.templates import TemplateGenerator, DistanceCalculator
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
@@ -249,6 +249,8 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
     # # segmentGroups[0][1][0][1][0][0]  # cluster 0: element 0: str(type, sum type elements)
     # # segmentGroups[0][1][0][1][0][1]  # cluster 0: element 0: MessageSegment
 
+    DistanceCalculator.debug = False
+
     segsByLen = dict()
     clusterStats = list()
     for ctitle, typedelements in clusters:
@@ -284,7 +286,7 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         majEqDist = tril(tg.pairwiseDistance(segsByLen[ctitle][majOfLen[0]], segsByLen[ctitle][majOfLen[0]]))
         majEqDistMax = majEqDist.max()
         majNeqDist = tg.pairwiseDistance(
-            chain.from_iterable([s for l, s in segsByLen[ctitle].items() if l != majOfLen[0]]),
+            [seg for l, seglist in segsByLen[ctitle].items() for seg in seglist if l != majOfLen[0]],
             segsByLen[ctitle][majOfLen[0]])
         # min of distances between unequal size segments
         majNeqDistMin = majNeqDist.min() if len(majNeqDist) > 0 else None

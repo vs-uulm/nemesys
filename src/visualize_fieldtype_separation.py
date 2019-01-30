@@ -10,7 +10,7 @@ import argparse, IPython
 from os.path import isfile
 from itertools import chain
 
-from inference.templates import TemplateGenerator
+from inference.templates import TemplateGenerator, Template
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
@@ -67,17 +67,25 @@ if __name__ == '__main__':
     for l, t in zip(typelabels, templates):
         labels[tg.segments.index(t.medoid)] = l
 
-    sdp = DistancesPlotter(specimens, 'distances-testcase', args.interactive)
-    sdp.plotDistances(tg, numpy.array(labels))
-    sdp.writeOrShowFigure()
+    # sdp = DistancesPlotter(specimens, 'distances-testcase', args.interactive)
+    # sdp.plotDistances(tg, numpy.array(labels))
+    # sdp.writeOrShowFigure()
 
-    for typlate in templates:
-        # TODO h_match histogram of distances to medoid for segments of typlate's type
-        # TODO h_mimatch histogram of distances to medoid for segments that are not of typlate's type
-        # TODO plot both histograms h overlapping (i.e. for each "bin" have two bars,
-        #   one for h_match besides one for h_mimatch)
-        #   the bins denote ranges of distances from the medoid
-        pass
+    import matplotlib.pyplot as plt
+    for typlabl, typlate in zip(typelabels, templates):
+        # h_match histogram of distances to medoid for segments of typlate's type
+        match = [di for di, of in typlate.distancesToMixedLength(tg)]
+        # abuse template to get distances to non-matching field types
+        filtermismatch = [typegroups[tl] for tl in typelabels if tl != typlabl]
+        mismatchtemplate = Template(typlate.medoid, list(chain.from_iterable(filtermismatch)))
+        # h_mimatch histogram of distances to medoid for segments that are not of typlate's type
+        mismatch = [di for di, of in mismatchtemplate.distancesToMixedLength(tg)]
+        # plot both histograms h overlapping (i.e. for each "bin" have two bars).
+        # the bins denote ranges of distances from the medoid
+        plt.hist([match, mismatch], numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])
+        plt.legend()
+        plt.show()
+        # TODO plot in subfigures
 
 
     if args.interactive:

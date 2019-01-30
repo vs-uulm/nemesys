@@ -264,17 +264,17 @@ class DistancesPlotter(MessagePlotter):
         """
         Plot distribution of distances to identify density boundaries for clusters.
 
+        TODO test
+
         :param tg:
         :return:
         """
+        from utils.baseAlgorithms import tril
         statistics = list()
         cltrs = tg._groupByLength()
         for cluster in cltrs.values():
-            similarities = tg._similaritiesSubset(cluster)
-            mask = numpy.tril(numpy.ones(similarities.shape)) != 0
-            statistics.append(
-                similarities[mask]
-            )
+            similarities = tril(tg.pairwiseDistance(cluster))
+            statistics.append(tril(similarities))
 
         plt.rc('xtick', labelsize=6)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=6)  # fontsize of the tick labels

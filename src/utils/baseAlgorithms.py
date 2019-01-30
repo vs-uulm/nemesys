@@ -29,9 +29,35 @@ def sad(v, u):
 
 def tril(arrayIn: numpy.ndarray) -> numpy.ndarray:
     """
+    >>> a = numpy.array([[1,2,3,4],[2,3,4,5],[3,4,5,6],[4,5,6,7]])
+    >>> tril(a)
+    array([2, 3, 4, 4, 5, 6])
 
-    :param arrayIn:
-    :return: lower triangle values of arrayIn
+    :param arrayIn: a symmetrical matrix
+    :return: lower triangle values of arrayIn removing the identity (diagonal).
     """
-    mask = numpy.tril(numpy.full_like(arrayIn, True, bool))
+    premask = numpy.full_like(arrayIn, True, bool)
+    mask = numpy.tril(premask, k=-1)  # mask including the first diagonal
     return arrayIn[mask]
+
+
+def generateTestSegments():
+    from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    from inference.analyzers import Value
+    from inference.segments import MessageSegment
+
+    bytedata = [
+        bytes([1, 2, 3, 4]),
+        bytes([2, 3, 4]),
+        bytes([1, 3, 4]),
+        bytes([2, 4]),
+        bytes([2, 3]),
+        bytes([20, 30, 37, 50, 69, 2, 30]),
+        bytes([37, 5, 69]),
+        bytes([70, 2, 3, 4]),
+        bytes([3, 2, 3, 4])
+    ]
+    messages = [RawMessage(bd) for bd in bytedata]
+    analyzers = [Value(message) for message in messages]
+    segments = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+    return segments
