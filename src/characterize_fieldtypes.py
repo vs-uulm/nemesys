@@ -189,8 +189,8 @@ def evaluateFieldTypeClusteringWithIsolatedLengths():
                 print("Plot distances...")
                 sdp = DistancesPlotter(specimens, 'distances-{}-{}-{}-{}'.format(
                     length, analysisTitle, distance_method, tg.clusterer if tg.clusterer else 'n/a'), args.interactive)
-                # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-                sdp.plotDistances(tg, labels)
+                # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+                sdp.plotSegmentDistances(tg, labels)
                 sdp.writeOrShowFigure()
 
                 print("Prepare output...")
@@ -347,7 +347,7 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
 
 
 
-    IPython.embed()  # TODO here I am!
+    # IPython.embed()  # TODO here I am!
     # # # distance to one field candidate
     # # sns.set(font_scale=.6)
     # # sns.barplot(list(range(tg.distanceMatrix.shape[0])), tg.distanceMatrix[180,])
@@ -357,11 +357,6 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
     # # sns.heatmap(tg.distanceMatrix[:xymax,:xymax], xticklabels=segFieldtypes[:xymax], yticklabels=segFieldtypes[:xymax])
     # # plt.show()
 
-    # # TODO Find an hint for DBSCAN epsilon in the distribution of distances
-    # # median of distances
-    # from utils.baseAlgorithms import tril
-    # import numpy
-    # print("distances median", numpy.median(tril(tg.distanceMatrix)))
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     titleFormat = "{} ({}, {}-{})".format(
@@ -372,8 +367,8 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
     sdp = DistancesPlotter(specimens, 'distances-' + titleFormat,
                            args.interactive)
     # old: 'mixedlength', analysisTitle, distance_method, tg.clusterer if tg.clusterer else 'n/a'
-    # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-    sdp.plotDistances(tg, labels)
+    # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+    sdp.plotSegmentDistances(tg, labels)
     sdp.writeOrShowFigure()
     del sdp
 

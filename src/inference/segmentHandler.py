@@ -47,7 +47,7 @@ def symbolsFromSegments(segmentsPerMsg):
     return [Symbol([Field(segment.bytes) for segment in sorted(segSeq, key=lambda f: f.offset)], messages=[segSeq[0].message]) for segSeq in segmentsPerMsg ]
 
 
-def segmentsFromLabels(analyzer, labels) -> List[TypedSegment]:
+def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
     """
     Segment messages according to true fields from the labels
     and mark each segment with its true type.
@@ -61,11 +61,11 @@ def segmentsFromLabels(analyzer, labels) -> List[TypedSegment]:
     for ftype, flen in labels:
         segments.append(TypedSegment(analyzer, offset, flen, ftype))
         offset += flen
-    return segments
+    return tuple(segments)
 
 
 def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
-                       unit=MessageAnalyzer.U_BYTE) -> List[List[TypedSegment]]:
+                       unit=MessageAnalyzer.U_BYTE) -> List[Tuple[TypedSegment]]:
     """
     :return: list of lists of segments that are annotated with their field type.
     """
@@ -76,14 +76,19 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
     return segmentedMessages
 
 
-def segmentsFixed(analyzerType: type, analysisArgs: Union[Tuple, None], comparator, length: int,
-                       unit=MessageAnalyzer.U_BYTE) -> List[Tuple[MessageSegment]]:
+def segmentsFixed(length: int, comparator,
+                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE) \
+        -> List[Tuple[MessageSegment]]:
     """
     Segment messages into fixed size chunks.
 
-    :param length: The length for all the segments. Overhanging final segments shorter than length will be padded with
-        nans.
-    :return: Segments of the analyzer's message according to the true format
+    :param length: Fixed length for all segments. Overhanging segments at the end that are shorter than length
+        will be padded with NANs.
+    :param comparator: Comparator that contains the payload messages.
+    :param analyzerType: Type of the analysis. Subclass of inference.analyzers.MessageAnalyzer.
+    :param analysisArgs: Arguments for the analysis method.
+    :param unit: Base unit for the analysis. Either MessageAnalyzer.U_BYTE or MessageAnalyzer.U_NIBBLE.
+    :return: Segments of the analyzer's message according to the true format.
     """
     segments = list()
     for l4msg, rmsg in comparator.messages.items():

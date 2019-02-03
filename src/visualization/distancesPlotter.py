@@ -5,7 +5,7 @@ import numpy
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
-from typing import List, Any
+from typing import List, Any, Union
 from itertools import compress
 
 from visualization.plotter import MessagePlotter
@@ -38,16 +38,17 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
-                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, MessageSegment, Any]],
+                              similarities: numpy.ndarray,
+                              labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
         Plot distances of segments according to (presumably multidimensional) features.
         This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
         arranging the segments relative to each other according to their distances using Multidimensional Scaling (MDS).
         See module `manifold` from package `sklearn`.
 
-        Besides the distances, this function plots the feature values of each given segment above each other;
-        they are colored according to the given labels.
+        If segments is a list of `TypedSegment` or `MessageSegment`, this function plots the feature values of each
+        given segment overlaying each other besides the distances; they are colored according to the given labels.
 
         :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
@@ -146,12 +147,14 @@ class DistancesPlotter(MessagePlotter):
                 # TODO is it desired to have colors of clusters or types here?
                 for seg in compress(segments, type_member_mask):
                     axSeg.plot(seg.values, c=fColor, alpha=0.05)
-        else:
+        elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
                 lColor = self._cm(cIdx[c])
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)
+        else:
+            axSeg.text(.5, .5, 'nothing to plot\n(message alignment)', horizontalalignment='center')
 
 
         # place the label/type legend at the best position
@@ -243,7 +246,7 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotDistances(self, tg: DistanceCalculator, labels: numpy.ndarray):
+    def plotSegmentDistances(self, tg: DistanceCalculator, labels: numpy.ndarray):
         """
         Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
 
@@ -256,7 +259,7 @@ class DistancesPlotter(MessagePlotter):
 
         segGroup = tg.segments
         similarities = tg.distanceMatrix
-        self._plotManifoldDistances(segGroup, similarities, labels)
+        self.plotManifoldDistances(segGroup, similarities, labels)
 
 
     @staticmethod
@@ -291,3 +294,5 @@ class DistancesPlotter(MessagePlotter):
             ax.set_title(str(len(stat)))
         plt.tight_layout()
         plt.show()
+
+

@@ -153,8 +153,8 @@ if __name__ == '__main__':
             print("Plot distances...")
             sdp = DistancesPlotter(specimens, 'distances-{}-{}-DBSCANe{}'.format(
                 length, analysisTitle, tg.clusterer.epsilon if tg.clusterer else 'n/a'), args.interactive)
-            # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-            sdp.plotDistances(tg, labels)
+            # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+            sdp.plotSegmentDistances(tg, labels)
             sdp.writeOrShowFigure()
 
 
@@ -198,7 +198,7 @@ if __name__ == '__main__':
 
     # print("Plotting templates...")
     # import analysis_message_segments as ams
-    # ams.plotDistances(tg)
+    # ams.plotSegmentDistances(tg)
 
     # templates = tg.generateTemplates()
 

@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 import numpy
 
 
+debug = False
+
 class Alignment(ABC):
 
     SCORE_GAP = 0
@@ -11,9 +13,7 @@ class Alignment(ABC):
 
     def __init__(self, similarityMatrix):
         """
-        TODO: similarityMatrix needs to contain values for pairs of non-equal length segments, too!
-
-        :param similarityMatrix: normalized similarity matrix (0..1)
+        :param similarityMatrix: normalized similarity matrix (0..1) of segments
             with 1 meaning identity and 0 maximum dissimilarity.
         """
 
@@ -45,7 +45,8 @@ class HirschbergOnSegmentSimilarity(Alignment):
         :param message0: list of indices of the similarity matrix denoting the columns representing a specific segment.
         :param message1: list of indices of the similarity matrix denoting the rows representing a specific segment.
         """
-        from tabulate import tabulate
+        assert all(isinstance(i, int) or isinstance(i, numpy.integer) for i in message0)
+        assert all(isinstance(i, int) or isinstance(i, numpy.integer) for i in message1)
 
         # Peter H. Sellers: On the Theory and Computation of Evolutionary Distances.
         # In: SIAM Journal on Applied Mathematics. Band 26, Nr. 4, Juni 1974, S. 787–793, JSTOR:2099985.
@@ -88,15 +89,17 @@ class HirschbergOnSegmentSimilarity(Alignment):
             messageA = leftA + rghtA
             messageB = leftB + rghtB
 
-        print("return:")
-        print(tabulate((messageA,messageB)))
+        if debug:
+            from tabulate import tabulate
+            print("return:")
+            print(tabulate((messageA,messageB)))
 
         return messageA, messageB
 
 
-    def nwScore(self, tokensX: List[int], tokensY: List[int]):
+    def nwScore(self, tokensX: List[int], tokensY: List[int]) -> numpy.ndarray:
         """
-        calculate a nwscore for two lists of tokens.
+        Calculate a Needleman-Wunsch score for two lists of tokens.
 
         >>> from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
         >>> from tabulate import tabulate
@@ -118,10 +121,11 @@ class HirschbergOnSegmentSimilarity(Alignment):
         1  4  -1  0
         -  -  --  -
 
-
-        :param tokensX:
-        :param tokensY:
-        :return:
+        :param tokensX: List of indices in the similarity matrix, representing message X
+        :param tokensY: List of indices of in the similarity matrix, representing message Y
+        :return: The match scores of the "last" line of the alignment matrix. The rightmost value is interpreted as
+            the score of the similarity between the whole two input messages.
+            TODO is that right? should it not be the max of the line in case of mismatches at the end?
         """
         score = numpy.empty([2,len(tokensY)+1])  # 2*length(Y) array
         score[0,] = 0

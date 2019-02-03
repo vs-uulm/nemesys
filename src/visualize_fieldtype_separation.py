@@ -68,7 +68,7 @@ if __name__ == '__main__':
         labels[tg.segments.index(t.medoid)] = l
 
     sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
-    sdp.plotDistances(tg, numpy.array(labels))
+    sdp.plotSegmentDistances(tg, numpy.array(labels))
     sdp.writeOrShowFigure()
 
     # import matplotlib.pyplot as plt

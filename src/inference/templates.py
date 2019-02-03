@@ -169,11 +169,16 @@ class DistanceCalculator(object):
         self._offsets = dict()
         # distance matrix for all rows and columns in order of self._segments
         self._distances = self._getDistanceMatrix(self._embdedAndCalcDistances())
+        # prepare lookup for matrix indices
+        self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
+        # TODO replace _(quick)segments,index() lookups by queries to this lookup-dict
 
     @property
     def distanceMatrix(self) -> numpy.ndarray:
         """
         The order of the matrix elements in each row and column is the same as in self.segments.
+
+        >>> (numpy.diag(dc.distanceMatrix()) == 0).all()
 
         :return: The normalized pairwise distances of all segments in this object represented as an symmetric array.
         """
@@ -184,6 +189,8 @@ class DistanceCalculator(object):
         Converts the distances into similarities using the knowledge about distance method and analysis type.
 
         The order of the matrix elements in each row and column is the same as in self.segments.
+
+        >>> (numpy.diag(dc.similarityMatrix()) == 1).all()
 
         :return: The pairwise similarities of all segments in this object represented as an symmetric array.
         """
@@ -203,7 +210,23 @@ class DistanceCalculator(object):
         :return: In case of mixed-length distances, this returns a mapping of segment-index pairs to the
         positive or negative offset of the smaller segment from the larger segment start position.
         """
+        # is set in the constructor and should therefore be always valid.
         return self._offsets
+
+    def segments2index(self, segmentList: Iterable[MessageSegment]):
+        """
+
+        >>> dc = DistanceCalculator()
+        >>> msgI = numpy.random.randint(len(dc.segments), size=10)
+        >>> msgS = dc.segments2index([dc.segments[i] for i in msg0])
+        >>> numpy.all([i==s for i, s in zip(msgI, msgS)])
+        True
+
+        :param segmentList: List of segments
+        :return: List of indices for the given segments
+        """
+        return [self._seg2idx[seg] for seg in segmentList]
+
 
     def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
         """
@@ -309,21 +332,21 @@ class DistanceCalculator(object):
         """
         if DistanceCalculator.debug:
             import time
-            tPrep = time.time()
-            print('Prepare values.', end='')
+            # tPrep = time.time()
+            # print('Prepare values.', end='')
         method, segmentValuesMatrix = DistanceCalculator.__prepareValuesMatrix(segments, method)
 
-        if DistanceCalculator.debug:
-            tPdist = time.time()
-            print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
+        # if DistanceCalculator.debug:
+            # tPdist = time.time()  # Does not take a noticable amount of time: mostly some milliseconds
+            # print(' {:.3f}s\ncall pdist from scipy.'.format(tPdist-tPrep), end='')
         if len(segments) == 1:
             return [(segments[0][0], segments[0][0], 0)]
         # This is the poodle's core
         segPairSimi = scipy.spatial.distance.pdist(segmentValuesMatrix, method)
 
-        if DistanceCalculator.debug:
-            tExpand = time.time()
-            print(' {:.3f}s\nExpand compressed pairs.'.format(tExpand-tPdist), end='')
+        # if DistanceCalculator.debug:
+        #     tExpand = time.time()
+        #     print(' {:.3f}s\nExpand compressed pairs.'.format(tExpand-tPdist), end='')
         segPairs = list()
         for (segA, segB), simi in zip(itertools.combinations(segments, 2), segPairSimi):
             if numpy.isnan(simi):
@@ -350,9 +373,9 @@ class DistanceCalculator(object):
             else:
                 segSimi = simi
             segPairs.append((segA[0], segB[0], segSimi))
-        if DistanceCalculator.debug:
-            tFinal = time.time()
-            print(" {:.3f}s".format(tFinal-tExpand))
+        # if DistanceCalculator.debug:
+        #     tFinal = time.time()  # Does not take a noticable amount of time: mostly some milliseconds, seldom about half a second
+        #     print(" {:.3f}s".format(tFinal-tExpand))
         return segPairs
 
 
@@ -423,7 +446,7 @@ class DistanceCalculator(object):
     @staticmethod
     def neutralThreshold(x: float):
         """
-        Nuetral dummy threshold function to NOT transform x.
+        Neutral dummy threshold function to NOT transform x.
 
         :param x: The (distance) value NOT to transform.
         :return: The original (distance) value.
@@ -492,6 +515,7 @@ class DistanceCalculator(object):
             if DistanceCalculator.debug:
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
+            # TODO something outside of __calcDistances takes a lot longer to return during the embedding loop. Investigate.
             ilDist = DistanceCalculator.__calcDistances(outersegs, method=self._method)
             # # # # # # # # # # # # # # # # # # # # # # # #
             distance.extend([(i,l,
@@ -929,7 +953,7 @@ class TemplateGenerator(DistanceCalculator):
         ...     labels[segments.index(t.medoid)] = "({})".format(i)
         >>> from visualization.distancesPlotter import DistancesPlotter
         >>> sdp = DistancesPlotter(specimens, 'distances-testcase', True)
-        >>> sdp.plotDistances(tg, numpy.array(labels))
+        >>> sdp.plotSegmentDistances(tg, numpy.array(labels))
         >>> sdp.writeOrShowFigure()
 
 
@@ -1071,7 +1095,7 @@ class TemplateGenerator(DistanceCalculator):
                 self.min_cluster_size = self.steepestSlope()[0] # round(lnN * 1.5)
             else:
                 self.min_cluster_size = None
-            self.min_samples = 2
+            self.min_samples = 3
 
 
         def getClusterLabels(self) -> numpy.ndarray:
