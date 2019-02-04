@@ -8,7 +8,7 @@ Similar fields are then aligned.
 """
 
 import argparse, IPython
-from os.path import isfile, splitext, basename, exists
+from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 import itertools, pickle
 
@@ -113,17 +113,23 @@ class SegmentedMessages(object):
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 
-    def clusterMessageTypes(self) -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray]:
+    def clusterMessageTypes(self, min_cluster_size = 10, min_samples = 2) \
+            -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, TemplateGenerator.Clusterer]:
         from inference.templates import TemplateGenerator
         hdbscan = TemplateGenerator.HDBSCAN(self._distances, None)
-        hdbscan.min_cluster_size = 3
+        hdbscan.min_cluster_size = min_cluster_size
+        hdbscan.min_samples = min_samples
         labels = hdbscan.getClusterLabels()
         ulab = set(labels)
         segmentClusters = dict()
         for l in ulab:
             class_member_mask = (labels == l)
             segmentClusters[l] = [seg for seg in itertools.compress(self._segmentedMessages, class_member_mask)]
-        return segmentClusters, labels
+
+        print(len([ul for ul in ulab if ul >= 0]), "Clusters found",
+              "(with noise", len(segmentClusters[-1]) if -1 in segmentClusters else 0, ")")
+
+        return segmentClusters, labels, hdbscan
 
     def similaritiesSubset(self, As: Sequence[Tuple[MessageSegment]], Bs: Sequence[Tuple[MessageSegment]] = None) \
                 -> numpy.ndarray:
@@ -153,8 +159,41 @@ class SegmentedMessages(object):
                 simtrx[i, j] = self._distances[k, l]
         return simtrx
 
+    def alignMessageType(self, msgcluster: List[Tuple[MessageSegment]]):
+        # distances within this cluster
+        distSubMatrix = self.similaritiesSubset(msgcluster)
+        # determine the medoid
+        mid = distSubMatrix.sum(axis=1).argmin()
+        assert msgcluster[mid] in msgcluster, "Medoid message was not found in cluster"
+        commonmsg = self._dc.segments2index(msgcluster[mid])  # medoid message for this cluster (message type candidate)
 
+        # message tuples from cluster sorted distances to medoid
+        distToCommon = sorted([(idx, distSubMatrix[mid, idx])
+                               for idx, msg in enumerate(msgcluster) if idx != mid], key=lambda x: x[1])
 
+        # calculate alignments to commonmsg
+        subhirsch = HirschbergOnSegmentSimilarity(self._dc.similarityMatrix())
+        clusteralignment = numpy.array([commonmsg], dtype=numpy.int64)
+        # simple progressive alignment
+        for idx, dst in distToCommon:
+            gappedcommon = clusteralignment[0].tolist()  # make a copy of the line (otherwise we modify the referred line afterwards!)
+            # replace all gaps introduced in commonmsg by segment from the next closest aligned at this position
+            for alpos, alseg in enumerate(clusteralignment[0]):
+                if alseg == -1:
+                    for gapaligned in clusteralignment[:,alpos]:
+                        if gapaligned > -1:
+                            gappedcommon[alpos] = gapaligned
+                            break
+            commonaligned, currentaligned = subhirsch.align(gappedcommon, self._dc.segments2index(msgcluster[idx]))
+
+            # add gap in already aligned messages
+            for gappos, seg in enumerate(commonaligned):
+                if seg == -1:
+                    clusteralignment = numpy.insert(clusteralignment, gappos, -1, axis=1)
+
+            # add the new message, aligned to all others via the common one, to the end of the matrix
+            clusteralignment = numpy.append(clusteralignment, [currentaligned], axis=0)
+        return clusteralignment
 
 
 
@@ -202,39 +241,15 @@ if __name__ == '__main__':
         # # 2. segment messages into fixed size chunks for testing
         # segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
         # # 3. segment messages by NEMESYS
+        # segmentedMessages = ...
         print("done.")
 
-        # TODO filter segments to reduce similarity calculation load - use command line parameter to toggle filtering on/off
-        # for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
-        #     filteredSegments = filterSegments(segments)
-        #
-        #     # if length < 3:
-        #     #     continue
-        #     # if len(filteredSegments) < 16:
-        #     #     print("Too few relevant segments for length {} after Filtering. {} segments remaining:".format(
-        #     #         length, len(filteredSegments)
-        #     #     ))
-        #     #     for each in filteredSegments:
-        #     #         print("   ", each)
-        #     #     print()
-        #     #     continue
-        #
-        #     typeDict = segments2types(filteredSegments)
-        #
-        #     print("Calculate distances...")
-        #     tg = TemplateGenerator(filteredSegments, distance_method)
-        #
-        #     segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=5)
-        #     # re-extract cluster labels for segments
-        #     labels = numpy.array([
-        #         labelForSegment(segmentGroups, seg) for seg in tg.segments
-        #     ])
-        #
-        #     # print("Prepare output...")
-        #
-        #
-
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+
+        # TODO filter segments to reduce similarity calculation load - use command line parameter to toggle filtering on/off
+        # filteredSegments = filterSegments(chainedSegments)
+        # if length < 3:
+        #     pass  # Handle short segments
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         dc = DistanceCalculator(chainedSegments)  # Pairwise similarity of segments: dc.distanceMatrix
@@ -254,71 +269,28 @@ if __name__ == '__main__':
 
     sm = SegmentedMessages(dc, segmentedMessages)
     print('Clustering messages...')
-    messageClusters, labels = sm.clusterMessageTypes()
+    messageClusters, labels, clusterer = sm.clusterMessageTypes()
 
-    # print('Prepare output...')
-    # from visualization.distancesPlotter import DistancesPlotter
-    # dp = DistancesPlotter(specimens, 'message-alignment-distances-{}'.format(tokenizer), args.interactive)
-    # dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
-    # dp.writeOrShowFigure()
+    print('Prepare output...')
+    from visualization.distancesPlotter import DistancesPlotter
+    dp = DistancesPlotter(specimens, 'message-distances-{}-{}'.format(tokenizer, clusterer), args.interactive)
+    dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
+    dp.writeOrShowFigure()
+
+    # IPython.embed()
 
     from tabulate import tabulate
+    alignedClusters = dict()
     for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
-        # distances within this cluster
-        distSubMatrix = sm.similaritiesSubset(msgcluster)
-        # determine the medoid
-        mid = distSubMatrix.sum(axis=1).argmin()
-        assert msgcluster[mid] in msgcluster, "Medoid message was not found in cluster"
-        commonmsg = dc.segments2index(msgcluster[mid])  # medoid message for this cluster (message type candidate)
-
-        # message tuples from cluster sorted distances to medoid
-        distToCommon = sorted([(idx, distSubMatrix[mid, idx])
-                               for idx, msg in enumerate(msgcluster) if idx != mid], key=lambda x: x[1])
-
-        # calculate alignments to commonmsg
-        subhirsch = HirschbergOnSegmentSimilarity(dc.similarityMatrix())
-        clusteralignment = numpy.array([commonmsg], dtype=numpy.int64)
-        # TODO Simple progressive alignment
-        for idx, dst in distToCommon:
-            gappedcommon = clusteralignment[0].tolist()  # make a copy of the line (otherwise we modify the referred line afterwards!)
-            # replace all gaps introduced in commonmsg by segment from the next closest aligned at this position
-            for alpos, alseg in enumerate(clusteralignment[0]):
-                if alseg == -1:
-                    for gapaligned in clusteralignment[:,alpos]:
-                        if gapaligned > -1:
-                            gappedcommon[alpos] = gapaligned
-                            break
-            # print("gappedcommon", gappedcommon)
-            # print("clusteralignment[0]", clusteralignment[0])
-            try:
-                commonaligned, currentaligned = subhirsch.align(gappedcommon, dc.segments2index(msgcluster[idx]))
-
-                # add gap in already aligned messages
-                for gappos, seg in reversed(list(enumerate(commonaligned))):
-                    if seg == -1:
-                        # print("commonaligned, currentaligned\n", tabulate([commonaligned, currentaligned]))
-                        # IPython.embed()
-                        clusteralignment = numpy.insert(clusteralignment, gappos, -1, axis=1)
-
-                # add the new message, aligned to all others via the common one, to the end of the matrix
-                #
-                # print("before")
-                # print(tabulate(clusteralignment))
-                try:
-                    clusteralignment = numpy.append(clusteralignment, [currentaligned], axis=0)
-                    print("after")
-                    print(tabulate(clusteralignment))
-                except ValueError as e:
-                    print(e)
-                    IPython.embed()
-            except AssertionError as e:
-                print("Assertion failed")
-                IPython.embed()
+        clusteralignment = sm.alignMessageType(msgcluster)
 
         # print gaps at the corresponding positions
         print('Cluster', clunu)
         print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
                         for m in clusteralignment], disable_numparse=True))
+
+        alignedClusters[clunu] = [[dc.segments[s] if s != -1 else None for s in m]
+                        for m in clusteralignment]
 
         """
         >>> print("aligned")
@@ -326,8 +298,23 @@ if __name__ == '__main__':
         >>> print("raw")
         >>> print(tabulate([[s.bytes.hex() for s in m] for m in msgcluster], disable_numparse=True))
         """
-
         # IPython.embed()
+
+    import csv
+    reportFolder = "reports"
+    fileNameS = "NEMETYL-symbols-{}-{}".format(clusterer, pcapName)
+    csvpath = join(reportFolder, fileNameS + '.csv')
+    if not exists(csvpath):
+        with open(csvpath, 'w') as csvfile:
+            symbolcsv = csv.writer(csvfile)
+            for clunu, clusg in alignedClusters.items():
+                symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
+                symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
+                symbolcsv.writerow(["---"]*5)
+    else:
+        print("Symbols not saved. File {} already exists.".format(csvpath))
+        if not args.interactive:
+            IPython.embed()
 
 
 
