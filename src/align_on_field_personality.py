@@ -12,11 +12,11 @@ from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 import itertools, pickle
 
-from inference.templates import TemplateGenerator, DistanceCalculator
+from inference.templates import TemplateGenerator, DistanceCalculator, DCexperiment
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
-    segments2clusteredTypes, filterSegments
+    segments2clusteredTypes, filterSegments, searchSeqOfSeg, tabuSeqOfSeg
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses, labelForSegment
@@ -113,6 +113,7 @@ class SegmentedMessages(object):
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 
+    # 10 2
     def clusterMessageTypes(self, min_cluster_size = 10, min_samples = 2) \
             -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, TemplateGenerator.Clusterer]:
         from inference.templates import TemplateGenerator
@@ -204,6 +205,90 @@ class SegmentedMessages(object):
 
 
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # Evaluation helpers  # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+def delign(segseqA):
+    return [s for s in segseqA if s >= -1]
+
+# realign
+def relign(segseqA, segseqB):
+    hirsch = HirschbergOnSegmentSimilarity(dc.similarityMatrix())
+    return hirsch.align(dc.segments2index([s for s in segseqA if isinstance(s, MessageSegment)]),
+                        dc.segments2index([s for s in segseqB if isinstance(s, MessageSegment)]))
+
+def resolveIdx2Seg(segseq):
+    print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
+                        for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
+
+def columnOfAlignment(alignedSegments: List[List[MessageSegment]], colnum: int):
+    return [msg[colnum] for msg in alignedSegments]
+
+def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]], colnum: int):
+    """
+    Similarities of entries 1 to n of one column to its first (not None) entry.
+
+    :param dc:
+    :param alignedSegments:
+    :param colnum:
+    :return:
+    """
+    column = [msg[colnum] for msg in alignedSegments] #columnOfAlignment(alignedSegments, colnum)
+
+    # strip Nones
+    nonepos = [idx for idx, seg in enumerate(column) if seg is None]
+    stripedcol = [seg for seg in column if seg is not None]
+
+    dists2first = ["- (reference)"] + dc.similaritiesSubset(stripedcol[0:1], stripedcol[1:]).tolist()[0]
+
+    # re-insert Nones
+    for idx in nonepos:
+        dists2first.insert(idx, None)
+
+    # transpose
+    d2ft = list(map(list, zip(column, dists2first)))
+    return d2ft
+
+def printSegDist(d2ft: List[Tuple[MessageSegment, float]]):
+    print(tabulate([(s.bytes.hex() if isinstance(s, MessageSegment) else "-", d) for s, d in d2ft],
+                   headers=['Seg (hex)', 'Distance'], floatfmt=".4f"))
+
+def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
+            coordA: Tuple[int, int], coordB: Tuple[int, int]):
+    """
+    Distance between segments that are selected by coordinates in an alignment
+
+    :param dc: DistanceCalculator holding the segment distances.
+    :param alignedSegments: 2-dimensional list holding the alignment
+    :param coordA: Coordinates of segment A within the alignment
+    :param coordB: Coordinates of segment B within the alignment
+    :return:
+    """
+    segA = alignedSegments[coordA[0]][coordA[1]]
+    print(segA)
+    segB = alignedSegments[coordB[0]][coordB[1]]
+    print(segB)
+    return dc.pairDistance(segA, segB)
+
+def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
+    return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # END : Evaluation helpers  # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -252,7 +337,7 @@ if __name__ == '__main__':
         #     pass  # Handle short segments
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
-        dc = DistanceCalculator(chainedSegments)  # Pairwise similarity of segments: dc.distanceMatrix
+        dc = DCexperiment(chainedSegments, 0.33)  # Pairwise similarity of segments: dc.distanceMatrix
         with open(dccachefn, 'wb') as f:
             pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
     else:
@@ -273,7 +358,7 @@ if __name__ == '__main__':
 
     print('Prepare output...')
     from visualization.distancesPlotter import DistancesPlotter
-    dp = DistancesPlotter(specimens, 'message-distances-{}-{}'.format(tokenizer, clusterer), args.interactive)
+    dp = DistancesPlotter(specimens, 'message-distances-{}-{}'.format(tokenizer, clusterer), False)
     dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
     dp.writeOrShowFigure()
 

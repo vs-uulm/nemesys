@@ -318,7 +318,7 @@ class DistanceCalculator(object):
 
 
     @staticmethod
-    def __calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
+    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
         Tuple[int, int, float]
     ]:
         """
@@ -515,8 +515,8 @@ class DistanceCalculator(object):
             if DistanceCalculator.debug:
                 print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
-            # TODO something outside of __calcDistances takes a lot longer to return during the embedding loop. Investigate.
-            ilDist = DistanceCalculator.__calcDistances(outersegs, method=self._method)
+            # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
+            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
             # # # # # # # # # # # # # # # # # # # # # # # #
             distance.extend([(i,l,
                               self.thresholdFunction(
@@ -1305,5 +1305,93 @@ class TemplateGenerator(DistanceCalculator):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # # # END # TemplateGenerator.Clusterer classes # END # # #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
+
+
+
+
+
+
+class DCexperiment(DistanceCalculator):
+    def __init__(self, segments: Iterable[MessageSegment], reliefFactor=.5):
+        self._reliefFactor = reliefFactor
+        super().__init__(segments, method='canberra',
+                 thresholdFunction = None, thresholdArgs = None)
+
+
+
+    def _embdedAndCalcDistances(self, ) -> \
+            List[Tuple[int, int, float]]:
+        lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
+
+        distance = list()  # type: List[Tuple[int, int, float]]
+        rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
+        for outerlen in rslens:
+            outersegs = lenGrps[outerlen]
+            if DistanceCalculator.debug:
+                print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
+            # a) for segments of identical length: call _calcDistancesPerLen()
+            # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
+            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            distance.extend([(i,l,
+                              self.thresholdFunction(
+                                  d * self._normFactor(outerlen),
+                                  **self.thresholdArgs))
+                             for i,l,d in ilDist])
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # b) on segments with mismatching length: embedSegment:
+            #       for all length groups with length < current length
+            for innerlen in rslens[rslens.index(outerlen)+1:]:
+                innersegs = lenGrps[innerlen]
+                if DistanceCalculator.debug:
+                    print("\t\tinnersegs, length {}, segments {}".format(innerlen, len(innersegs)))
+                # for all segments in "shorter length" group
+                #     for all segments in current length group
+                for iseg in innersegs:
+                    for oseg in outersegs:
+                        # embedSegment(shorter in longer)
+                        embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
+                        # add embedding similarity to list of InterSegments
+                        interseg = embedded[2]
+
+                        distEmb = interseg[2]  # d_e
+                        ratio = (outerlen - innerlen) * self._normFactor(outerlen)  # ratio = 1 - (l_i/l_o)
+                        penalty = innerlen/outerlen**2
+                        # self._reliefFactor  # f
+
+                        mlDistance = \
+                            (1-ratio) * distEmb \
+                            + ratio \
+                            + ratio * penalty * (1-distEmb) \
+                            - self._reliefFactor * ratio * (1-distEmb)
+
+                        # # # # # # # # # # # # # # # # # # # # # # # #
+                        dlDist = (interseg[0], interseg[1], (
+                                    self.thresholdFunction(
+                                        mlDistance,
+                                        **self.thresholdArgs)
+                                    )
+                                )  # minimum of dimensions
+                        # # # # # # # # # # # # # # # # # # # # # # # #
+                        distance.append(dlDist)
+                        self._offsets[(interseg[0], interseg[1])] = embedded[1]
+        print("Calculated distances for {} segment pairs.".format(len(distance)))
+        return distance
+
+
+
+
+
+
+
+
+
+
+
 
 
