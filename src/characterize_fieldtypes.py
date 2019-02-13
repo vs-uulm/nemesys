@@ -8,7 +8,7 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
-from os.path import isfile
+from os.path import isfile, basename
 from itertools import chain
 
 from inference.templates import TemplateGenerator, DistanceCalculator
@@ -498,7 +498,12 @@ if __name__ == '__main__':
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)
-            evaluateFieldTypeClustering(filteredSegments, args.epsilon, TemplateGenerator.neutralThreshold, {})
+
+            pcapbasename = basename(specimens.pcapFileName)
+            epsilon = args.epsilon  # TODO make "not set" epsilon and "default" distinguishable
+            if args.epsilon == 1.2 and pcapbasename in epspertrace:
+                epsilon = epspertrace[pcapbasename]
+            evaluateFieldTypeClustering(filteredSegments, epsilon, TemplateGenerator.neutralThreshold, {})
                                                      # TemplateGenerator.sigmoidThreshold, {'shift': .6})
     else:
         evaluateFieldTypeClusteringWithIsolatedLengths()
