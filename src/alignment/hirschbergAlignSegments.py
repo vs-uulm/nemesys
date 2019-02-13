@@ -7,9 +7,9 @@ debug = False
 
 class Alignment(ABC):
 
-    SCORE_GAP = 0
+    SCORE_GAP = -5
     SCORE_MATCH = 5  # use as factor, to multiply with the similarity matrix.
-    SCORE_MISMATCH = -5
+    SCORE_MISMATCH = -1
 
     def __init__(self, similarityMatrix):
         """
@@ -17,7 +17,8 @@ class Alignment(ABC):
             with 1 meaning identity and 0 maximum dissimilarity.
         """
 
-        self._similarities = similarityMatrix * Alignment.SCORE_MATCH
+        self._similarities = similarityMatrix \
+                             * (Alignment.SCORE_MATCH - Alignment.SCORE_MISMATCH) + Alignment.SCORE_MISMATCH
         """
         matrix of similarities: higher values denote closer match
 
@@ -204,17 +205,26 @@ class NWonSegmentSimilarity(Alignment):
                 alignmentA.append(m0v)
                 alignmentB.append(-1)
                 i -= 1
-            else:
+            elif j > 0 and scores[i, j] == scores[i, j - 1] + Alignment.SCORE_GAP:
                 alignmentA.append(-1)
                 alignmentB.append(m1v)
                 j -= 1
+            else:
+                from tabulate import tabulate
+                print("\nMessages to align:")
+                print(message0)
+                print(message1)
+                print()
+                print(tabulate(scores))
+                print()
+                raise Exception("Alignment failed at i={:.3f} and j={:.3f} (gap cost {:.3f})".format(i, j, Alignment.SCORE_GAP))
         return alignmentA[::-1], alignmentB[::-1]
 
 
     def _scoreMatrix(self, message0, message1):
         scores = numpy.empty([len(message0)+1, len(message1)+1])
-        scores[0,] = 0
-        scores[:,0] = 0
+        scores[0,] = [j * Alignment.SCORE_GAP for j in range(scores.shape[1])]  # alternatively: constant 0
+        scores[:,0] = [i * Alignment.SCORE_GAP for i in range(scores.shape[0])]  # alternatively: constant 0
         for i in range(1,scores.shape[0]):
             for j in range(1,scores.shape[1]):
                 scoreSub = scores[i-1,j-1] + self._similarities[message0[i-1], message1[j-1]]

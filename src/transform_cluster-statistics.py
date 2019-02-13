@@ -36,6 +36,8 @@ mppr = {k: min([float(e[cols[4]]) for e in v if e[cols[3]] != "NOISE"]) for k, v
 smppr = sorted(list(mppr.items()), key=lambda x: x[1])
 print(tabulate(smppr, headers=['Analysis', 'Min precision per run'], tablefmt="pipe"))
 
+# TODO set typedrecallsum to explicit "0.0" for types that are present in trace but not the majority of any cluster.
+
 def typedrecallsums(clusterlist):
     # recall for clusters and their most frequent type
     typedrecall = [(e[cols[3]].split(':')[0], float(e[cols[5]])) for e in clusterlist]
