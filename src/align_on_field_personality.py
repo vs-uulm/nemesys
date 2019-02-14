@@ -12,7 +12,7 @@ from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 import itertools, pickle
 
-from inference.templates import TemplateGenerator, DistanceCalculator, DCexperiment
+from inference.templates import TemplateGenerator, DistanceCalculator
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
@@ -241,7 +241,7 @@ def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegme
     nonepos = [idx for idx, seg in enumerate(column) if seg is None]
     stripedcol = [seg for seg in column if seg is not None]
 
-    dists2first = ["- (reference)"] + dc.similaritiesSubset(stripedcol[0:1], stripedcol[1:]).tolist()[0]
+    dists2first = ["- (reference)"] + dc.distancesSubset(stripedcol[0:1], stripedcol[1:]).tolist()[0]
 
     # re-insert Nones
     for idx in nonepos:
@@ -337,7 +337,7 @@ if __name__ == '__main__':
         #     pass  # Handle short segments
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
-        dc = DCexperiment(chainedSegments, 0.33)  # Pairwise similarity of segments: dc.distanceMatrix
+        dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
         with open(dccachefn, 'wb') as f:
             pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
     else:

@@ -283,9 +283,9 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         nemajCentDist = numpy.array(nemajCentDistList).min() if len(nemajCentDistList) > 0 else None
 
         # max of distances between equal size segments
-        majEqDist = tril(tg.similaritiesSubset(segsByLen[ctitle][majOfLen[0]]))
-        majEqDistMax = majEqDist.max()
-        majNeqDist = tg.similaritiesSubset(
+        majEqDist = tril(tg.distancesSubset(segsByLen[ctitle][majOfLen[0]]))
+        majEqDistMax = majEqDist.max() if majEqDist.size > 0 else -1
+        majNeqDist = tg.distancesSubset(
             [seg for l, seglist in segsByLen[ctitle].items() for seg in seglist if l != majOfLen[0]],
             segsByLen[ctitle][majOfLen[0]])
         # min of distances between unequal size segments
@@ -425,7 +425,7 @@ epspertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap" : 1.8,
     "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8, # or anything between 1.8 - 2.6
     "smb_SMIA20111010-one_deduped-100.pcap" : 1.6,
-    "dns_ictf2010_deduped-100.pcap" : None,
+#    "dns_ictf2010_deduped-100.pcap" : 1.0,  # None/Anything, "nothing" to cluster
     "ntp_SMIA-20111010_deduped-100.pcap" : 1.5,
     "dhcp_SMIA2011101X_deduped-1000.pcap": 2.4,
     "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4, # or anything between 1.0 - 2.8
@@ -451,7 +451,7 @@ if __name__ == '__main__':
     parser.add_argument('--isolengths', help='Cluster fields of same size isolatedly.', action="store_true")
     parser.add_argument('--iterate', help='Iterate over DBSCAN parameters to select valid eps and threshold-shift.',
                         action="store_true")
-    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=1.2)
+    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=2.4)
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):

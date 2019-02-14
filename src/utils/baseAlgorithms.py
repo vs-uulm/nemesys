@@ -54,7 +54,7 @@ def generateTestSegments():
         bytes([2, 3]),
         bytes([20, 30, 37, 50, 69, 2, 30]),
         bytes([37, 5, 69]),
-        bytes([70, 2, 3, 4]),
+        bytes([0, 0, 0, 0]),
         bytes([3, 2, 3, 4])
     ]
     messages = [RawMessage(bd) for bd in bytedata]

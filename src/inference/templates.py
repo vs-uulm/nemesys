@@ -122,7 +122,8 @@ class DistanceCalculator(object):
     debug = True
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
-                 thresholdFunction = None, thresholdArgs = None
+                 thresholdFunction = None, thresholdArgs = None,
+                 reliefFactor=.33
                  ):
         """
         Determine the distance between the given segments.
@@ -135,10 +136,10 @@ class DistanceCalculator(object):
         >>> message = RawMessage(bytedata)
         >>> analyzer = Value(message)
         >>> segments = [MessageSegment(analyzer, 0, 4)]
+        >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
-       	outersegs, length 4, segments 1
-        Prepare values. 0.000s
-        call pdist from scipy.Calculated distances for 1 segment pairs.
+        Calculated distances for 1 segment pairs.
+
 
         :param segments: The segments to calculate pairwise distances from
         :param method: The distance method to use for calculating pairwise distances. Supported methods are
@@ -154,6 +155,7 @@ class DistanceCalculator(object):
         :return: A normalized distance matrix for all input segments.
             If necessary, performs an embedding of mixed-length segments to determine cross-length distances.
         """
+        self._reliefFactor = reliefFactor
         self._method = method
         self.thresholdFunction = thresholdFunction if thresholdFunction else DistanceCalculator.neutralThreshold
         self.thresholdArgs = thresholdArgs if thresholdArgs else {}
@@ -168,7 +170,7 @@ class DistanceCalculator(object):
         # offset of inner segment to outer segment (key: tuple(i, o))
         self._offsets = dict()
         # distance matrix for all rows and columns in order of self._segments
-        self._distances = self._getDistanceMatrix(self._embdedAndCalcDistances())
+        self._distances = DistanceCalculator._getDistanceMatrix(self._embdedAndCalcDistances(), len(self._quicksegments))
         # prepare lookup for matrix indices
         self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
         # TODO replace _(quick)segments,index() lookups by queries to this lookup-dict
@@ -178,7 +180,26 @@ class DistanceCalculator(object):
         """
         The order of the matrix elements in each row and column is the same as in self.segments.
 
-        >>> (numpy.diag(dc.distanceMatrix()) == 0).all()
+        >>> from tabulate import tabulate
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> print((numpy.diag(dc.distanceMatrix) == 0).all())
+        True
+        >>> print(tabulate(dc.distanceMatrix))
+        --------  --------  --------  ---------  ---------  --------  --------  -  --------
+        0         0.214375  0.301667  0.440536   0.3975     0.808358  0.748036  1  0.125
+        0.214375  0         0.111111  0.347593   0.297407   0.788166  0.679282  1  0.214375
+        0.301667  0.111111  0         0.367667   0.414506   0.793554  0.695926  1  0.301667
+        0.440536  0.347593  0.367667  0          0.0714286  0.695948  0.651706  1  0.440536
+        0.3975    0.297407  0.414506  0.0714286  0          0.709111  0.700497  1  0.3975
+        0.808358  0.788166  0.793554  0.695948   0.709111   0         0.576613  1  0.795818
+        0.748036  0.679282  0.695926  0.651706   0.700497   0.576613  0         1  0.748036
+        1         1         1         1          1          1         1         0  1
+        0.125     0.214375  0.301667  0.440536   0.3975     0.795818  0.748036  1  0
+        --------  --------  --------  ---------  ---------  --------  --------  -  --------
 
         :return: The normalized pairwise distances of all segments in this object represented as an symmetric array.
         """
@@ -190,7 +211,43 @@ class DistanceCalculator(object):
 
         The order of the matrix elements in each row and column is the same as in self.segments.
 
-        >>> (numpy.diag(dc.similarityMatrix()) == 1).all()
+        >>> from tabulate import tabulate
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([0, 0, 0, 0]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> print((numpy.diag(dc.similarityMatrix()) == 1).all())
+        True
+        >>> print(tabulate(dc.similarityMatrix()))
+        --------  --------  --------  --------  --------  --------  --------  -  --------
+        1         0.785625  0.698333  0.559464  0.6025    0.191642  0.251964  0  0.875
+        0.785625  1         0.888889  0.652407  0.702593  0.211834  0.320718  0  0.785625
+        0.698333  0.888889  1         0.632333  0.585494  0.206446  0.304074  0  0.698333
+        0.559464  0.652407  0.632333  1         0.928571  0.304052  0.348294  0  0.559464
+        0.6025    0.702593  0.585494  0.928571  1         0.290889  0.299503  0  0.6025
+        0.191642  0.211834  0.206446  0.304052  0.290889  1         0.423387  0  0.204182
+        0.251964  0.320718  0.304074  0.348294  0.299503  0.423387  1         0  0.251964
+        0         0         0         0         0         0         0         1  0
+        0.875     0.785625  0.698333  0.559464  0.6025    0.204182  0.251964  0  1
+        --------  --------  --------  --------  --------  --------  --------  -  --------
+
 
         :return: The pairwise similarities of all segments in this object represented as an symmetric array.
         """
@@ -205,8 +262,88 @@ class DistanceCalculator(object):
         return self._segments
 
     @property
-    def offsets(self) -> Dict[int, int]:
+    def offsets(self) -> Dict[Tuple[int, int], int]:
         """
+        >>> from tabulate import tabulate
+        >>> import math
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([0, 0, 0, 0]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> print(tabulate(dc.offsets.items()))
+        ------  -
+        (4, 7)  0
+        (4, 6)  0
+        (3, 2)  1
+        (4, 8)  1
+        (4, 5)  5
+        (2, 8)  1
+        (6, 0)  1
+        (7, 5)  0
+        (0, 5)  3
+        (4, 2)  0
+        (3, 7)  0
+        (2, 5)  4
+        (8, 5)  3
+        (1, 0)  1
+        (6, 5)  2
+        (4, 0)  1
+        (2, 7)  0
+        (6, 7)  0
+        (6, 8)  1
+        (1, 5)  4
+        (3, 1)  0
+        (3, 0)  1
+        (3, 8)  1
+        (2, 0)  1
+        (1, 8)  1
+        (3, 6)  0
+        (1, 7)  0
+        (3, 5)  5
+        (4, 1)  0
+        ------  -
+        >>> offpairs = [["-"*(off*2) + dc.segments[pair[0]].bytes.hex(), dc.segments[pair[1]].bytes.hex()]
+        ...                     for pair, off in dc.offsets.items()]
+        >>> for opsub in range(1, math.ceil(len(offpairs)/5)):
+        ...     print(tabulate(map(list,zip(*offpairs[(opsub-1)*5:opsub*5])), numalign="left"))
+        --------  ------  ------  --------  --------------
+        0203      0203    --0204  --0203    ----------0203
+        00000000  250545  010304  03020304  141e253245021e
+        --------  ------  ------  --------  --------------
+        --------  --------  --------------  --------------  ------
+        --010304  --250545  00000000        ------01020304  0203
+        03020304  01020304  141e253245021e  141e253245021e  010304
+        --------  --------  --------------  --------------  ------
+        --------  --------------  --------------  --------  --------------
+        0204      --------010304  ------03020304  --020304  ----250545
+        00000000  141e253245021e  141e253245021e  01020304  141e253245021e
+        --------  --------------  --------------  --------  --------------
+        --------  --------  --------  --------  --------------
+        --0203    010304    250545    --250545  --------020304
+        01020304  00000000  00000000  03020304  141e253245021e
+        --------  --------  --------  --------  --------------
+        ------  --------  --------  --------  --------
+        0204    --0204    --0204    --010304  --020304
+        020304  01020304  03020304  01020304  03020304
+        ------  --------  --------  --------  --------
+
         :return: In case of mixed-length distances, this returns a mapping of segment-index pairs to the
         positive or negative offset of the smaller segment from the larger segment start position.
         """
@@ -216,9 +353,13 @@ class DistanceCalculator(object):
     def segments2index(self, segmentList: Iterable[MessageSegment]):
         """
 
-        >>> dc = DistanceCalculator()
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
         >>> msgI = numpy.random.randint(len(dc.segments), size=10)
-        >>> msgS = dc.segments2index([dc.segments[i] for i in msg0])
+        >>> msgS = dc.segments2index([dc.segments[i] for i in msgI])
         >>> numpy.all([i==s for i, s in zip(msgI, msgS)])
         True
 
@@ -232,6 +373,32 @@ class DistanceCalculator(object):
         """
         Retrieve the distance between two segments.
 
+        >>> from itertools import combinations
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([0, 0, 0, 0]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> for a,b in list(combinations(range(len(dc.segments)), 2)):
+        ...     if not dc.pairDistance(segments[a], segments[b]) == dc.distanceMatrix[a,b]:
+        ...         print("Failed")
+
         :param A: segment A
         :param B: segment B
         :return:
@@ -240,10 +407,22 @@ class DistanceCalculator(object):
         b = self._segments.index(B)
         return self._distances[a,b]
 
-    def similaritiesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
+    def distancesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
             -> numpy.ndarray:
         """
         Retrieve a matrix of pairwise distances for two lists of segments.
+
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> dc.distancesSubset(segments[:3], segments[-3:])
+        array([[ 0.74803615,  1.        ,  0.125     ],
+               [ 0.67928229,  1.        ,  0.214375  ],
+               [ 0.69592646,  1.        ,  0.30166667]])
+        >>> (dc.distancesSubset(segments[:3], segments[-3:]) == dc.distanceMatrix[:3,-3:]).all()
+        True
 
         :param As: List of segments
         :param Bs: List of segments
@@ -274,6 +453,19 @@ class DistanceCalculator(object):
 
         Used in constructor.
 
+        >>> from pprint import pprint
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> pprint(dc.groupByLength())
+        {2: [(3, 2, (2, 4)), (4, 2, (2, 3))],
+         3: [(1, 3, (2, 3, 4)), (2, 3, (1, 3, 4)), (6, 3, (37, 5, 69))],
+         4: [(0, 4, (1, 2, 3, 4)), (7, 4, (0, 0, 0, 0)), (8, 4, (3, 2, 3, 4))],
+         7: [(5, 7, (20, 30, 37, 50, 69, 2, 30))]}
+
+
         :return: a dict mapping the length to the list of MessageSegments of that length.
         """
         segsByLen = dict()
@@ -289,6 +481,33 @@ class DistanceCalculator(object):
         """
         Prepare a values matrix as input for distance calculation. This means extracting the values from all segments
         and placing them into an array. The preparation also includes handling of cosine zero vectors.
+
+        >>> from tabulate import tabulate
+        >>> testdata =  [(0, 4, (1, 2, 3, 4)),
+        ...              (1, 3, (2, 3, 4)),
+        ...              (2, 3, (1, 3, 4)),
+        ...              (3, 2, (2, 4)),
+        ...              (4, 2, (2, 3)),
+        ...              (5, 7, (20, 30, 37, 50, 69, 2, 30)),
+        ...              (6, 3, (37, 5, 69)),
+        ...              (7, 4, (0, 0, 0, 0)),
+        ...              (8, 4, (3, 2, 3, 4))]
+        >>> prepMtx = DistanceCalculator._DistanceCalculator__prepareValuesMatrix(testdata, 'canberra')
+        >>> print(prepMtx[0])
+        canberra
+        >>> print(tabulate(prepMtx[1]))
+        --  --  --  --  --  -  --
+         1   2   3   4
+         2   3   4
+         1   3   4
+         2   4
+         2   3
+        20  30  37  50  69  2  30
+        37   5  69
+         0   0   0   0
+         3   2   3   4
+        --  --  --  --  --  -  --
+
 
         # TODO if this should become is a performance killer, drop support for cosine and correlation
           of unsuitable segments altogether
@@ -325,9 +544,27 @@ class DistanceCalculator(object):
         Calculates pairwise distances for all input segments.
         The values of all segments have to be of the same length!
 
+        >>> from pprint import pprint
+        >>> testdata =  [(0, 4, (1, 2, 3, 4)),
+        ...              (1, 4, (70, 42, 12, 230)),
+        ...              (2, 4, (0, 0, 0, 0)),
+        ...              (3, 4, (1, 2, 3, 4)),
+        ...              (4, 4, (3, 2, 3, 4))]
+        >>> pprint(DistanceCalculator._calcDistances(testdata, 'canberra'))
+        [(0, 1, 3.4467338608183682),
+         (0, 2, 4.0),
+         (0, 3, 0.0),
+         (0, 4, 0.5),
+         (1, 2, 4.0),
+         (1, 3, 3.4467338608183682),
+         (1, 4, 3.3927110940809571),
+         (2, 3, 4.0),
+         (2, 4, 4.0),
+         (3, 4, 0.5)]
+
         :param segments: list of segments to calculate their similarity/distance for.
         :param method: The method to use for distance calculation. See scipy.spatial.distance.pdist.
-            defaults to 'cosine'.
+            defaults to 'canberra'.
         :return: List of all pairwise distances between segements.
         """
         if DistanceCalculator.debug:
@@ -378,22 +615,54 @@ class DistanceCalculator(object):
         #     print(" {:.3f}s".format(tFinal-tExpand))
         return segPairs
 
-
-    def _getDistanceMatrix(self, distances: List[
-                                                    Tuple[int, int, float]
-                                                ]) -> numpy.ndarray:
+    @staticmethod
+    def _getDistanceMatrix(distances: List[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:
         """
         Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
         The order of the matrix elements in each row and column is the same as in self._segments.
 
+        Distances for pair not included in the list parameter are considered incomparable and set to -1 in the
+        resulting matrix.
+
         Used in constructor.
+
+        >>> from tabulate import tabulate
+        >>> from inference.templates import DistanceCalculator
+        >>> testdata =  [(3, 3, 0.0),
+        ...              (0, 3, 0.80835755871765202),
+        ...              (5, 3, 1.0),
+        ...              (1, 3, 0.78816607689353413),
+        ...              (4, 3, 0.57661277498012198),
+        ...              (2, 3, 0.7091107871720117),
+        ...              (0, 5, 1.0),
+        ...              (1, 0, 0.21437499999999998),
+        ...              (1, 5, 1.0),
+        ...              (4, 0, 0.74803614550403941),
+        ...              (4, 5, 1.0),
+        ...              (2, 0, 0.39749999999999996),
+        ...              (2, 5, 1.0),
+        ...              (1, 4, 0.67928228544666891),
+        ...              (2, 1, 0.2974074074074074),
+        ...              (2, 4, 0.70049738841405507),
+        ...              (2, 2, 0.0)]
+        >>> dm = DistanceCalculator._getDistanceMatrix(testdata, 7)
+        >>> print(tabulate(dm))
+        ---------  ---------  ---------  ---------  ---------  --  --
+         0          0.214375   0.3975     0.808358   0.748036   1  -1
+         0.214375   0          0.297407   0.788166   0.679282   1  -1
+         0.3975     0.297407   0          0.709111   0.700497   1  -1
+         0.808358   0.788166   0.709111   0          0.576613   1  -1
+         0.748036   0.679282   0.700497   0.576613   0          1  -1
+         1          1          1          1          1          0  -1
+        -1         -1         -1         -1         -1         -1   0
+        ---------  ---------  ---------  ---------  ---------  --  --
 
         :param distances: The pairwise similarities to arrange.
         :return: The distance matrix for the given similarities.
-            1 for each undefined element, 0 in the diagonal, even if not given in the input.
+            -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from inference.segmentHandler import matrixFromTpairs
-        simtrx = matrixFromTpairs([(ise[0], ise[1], ise[2]) for ise in distances], range(len(self._quicksegments)),
+        simtrx = matrixFromTpairs([(ise[0], ise[1], ise[2]) for ise in distances], range(segmentCount),
                                   incomparable=-1)  # TODO hanlde incomparable values (resolve and replace the negative value)
         return simtrx
 
@@ -406,7 +675,31 @@ class DistanceCalculator(object):
         Enumerates all possible shifts of overlaying the short above of the long segment and returns the minimum
         distance of any of the distance calculations performed for each of these overlays.
 
-        The distance is normalized to the length of the shorter tuple
+        >>> testdata = [(0, 4, [1, 2, 3, 4]),
+        ...             (1, 3,    [2, 3, 4]),
+        ...             (2, 3,    [1, 3, 4]),
+        ...             (3, 2,       [2, 4]),
+        ...             (4, 2,    [2, 3]),
+        ...             (5, 7, [20, 30, 37, 50, 69, 2, 30]),
+        ...             (6, 3,         [37,  5, 69]),
+        ...             (7, 4, [0, 0, 0, 0]),
+        ...             (8, 4, [3, 2, 3, 4])]
+        >>> DistanceCalculator.embedSegment(testdata[1], testdata[0], method='canberra')
+        ('canberra', 1, (1, 0, 0.0))
+        >>> DistanceCalculator.embedSegment(testdata[2], testdata[0])
+        ('canberra', 1, (2, 0, 0.33333333333333331))
+        >>> DistanceCalculator.embedSegment(testdata[3], testdata[2])
+        ('canberra', 1, (3, 2, 0.20000000000000001))
+        >>> DistanceCalculator.embedSegment(testdata[6], testdata[0])
+        ('canberra', 1, (6, 0, 2.037846856340007))
+        >>> DistanceCalculator.embedSegment(testdata[7], testdata[5])
+        ('canberra', 0, (7, 5, 4.0))
+        >>> DistanceCalculator.embedSegment(testdata[3], testdata[0])
+        ('canberra', 1, (3, 0, 0.14285714285714285))
+        >>> DistanceCalculator.embedSegment(testdata[4], testdata[0])
+        ('canberra', 1, (4, 0, 0.0))
+        >>> DistanceCalculator.embedSegment(testdata[6], testdata[5])
+        ('canberra', 2, (6, 5, 0.81818181818181823))
 
         :param shortSegment: The shorter of the two input segments.
         :param longSegment: The longer of the two input segments.
@@ -437,6 +730,12 @@ class DistanceCalculator(object):
         """
         Standard sigmoid threshold function to transform x.
 
+        >>> DistanceCalculator.sigmoidThreshold(.42)
+        0.31226136010788613
+
+        >>> DistanceCalculator.sigmoidThreshold(.23)
+        0.065083072323092628
+
         :param x: The (distance) value to transform.
         :param shift: The shift of the threshold between 0 and 1.
         :return: The transformed (distance) value.
@@ -447,6 +746,9 @@ class DistanceCalculator(object):
     def neutralThreshold(x: float):
         """
         Neutral dummy threshold function to NOT transform x.
+
+        >>> DistanceCalculator.neutralThreshold(42.23)
+        42.23
 
         :param x: The (distance) value NOT to transform.
         :return: The original (distance) value.
@@ -461,47 +763,39 @@ class DistanceCalculator(object):
         complete distance list of all combinations of the into segment list regardless of their length.
 
         >>> from tabulate import tabulate
-        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.templates import *
-        >>> from inference.analyzers import Value
-        >>>
-        >>> bytedata = [
-        >>>     bytes([1, 2, 3, 4]),
-        >>>     bytes([   2, 3, 4]),
-        >>>     bytes([   1, 3, 4]),
-        >>>     bytes([   2, 4   ]),
-        >>>     bytes([   2, 3   ]),
-        >>>     bytes([20, 30, 37, 50, 69, 2, 30]),
-        >>>     bytes([        37,  5, 69       ]),
-        >>>     bytes([70, 2, 3, 4]),
-        >>>     bytes([3, 2, 3, 4])
-        >>>     ]
-        >>> messages  = [RawMessage(bd) for bd in bytedata]
-        >>> analyzers = [Value(message) for message in messages]
-        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
-        >>> print(tabulate([
-        >>>     [ segments[0].values, segments[1].values, dc.pairDistance(segments[0], segments[1]) ],
-        >>>     [ segments[0].values, segments[2].values, dc.pairDistance(segments[0], segments[2]) ],
-        >>>     [ segments[0].values, segments[3].values, dc.pairDistance(segments[0], segments[3]) ],
-        >>>     [ segments[0].values, segments[4].values, dc.pairDistance(segments[0], segments[4]) ],
-        >>>     [ segments[5].values, segments[6].values, dc.pairDistance(segments[5], segments[6]) ],
-        >>>     [ segments[0].values, segments[7].values, dc.pairDistance(segments[0], segments[7]) ],
-        >>>     [ segments[3].values, segments[4].values, dc.pairDistance(segments[3], segments[4]) ],
-        >>>     [ segments[0].values, segments[8].values, dc.pairDistance(segments[0], segments[8]) ],
-        >>> ]))
-
         Calculated distances for 37 segment pairs.
-        ---------------------------  -------------  ---------
-        [1, 2, 3, 4]                 [2, 3, 4]      0.25
-        [1, 2, 3, 4]                 [1, 3, 4]      0.364286
-        [1, 2, 3, 4]                 [2, 4]         0.571429
-        [1, 2, 3, 4]                 [2, 3]         0.5
-        [20, 30, 37, 50, 69, 2, 30]  [37, 5, 69]    0.844156
-        [1, 2, 3, 4]                 [70, 2, 3, 4]  0.242958
-        [2, 4]                       [2, 3]         0.0714286
-        [1, 2, 3, 4]                 [3, 2, 3, 4]   0.125
-        ---------------------------  -------------  ---------
+        >>> print(tabulate([
+        ...     [ min(segments[0].length, segments[1].length), segments[0].values, segments[1].values, dc.pairDistance(segments[0], segments[1]) ],
+        ...     [ min(segments[0].length, segments[2].length), segments[0].values, segments[2].values, dc.pairDistance(segments[0], segments[2]) ],
+        ...     [ min(segments[2].length, segments[3].length), segments[2].values, segments[3].values, dc.pairDistance(segments[2], segments[3]) ],
+        ...     [ min(segments[6].length, segments[0].length), segments[6].values, segments[0].values, dc.pairDistance(segments[6], segments[0]) ],
+        ...     [ min(segments[5].length, segments[7].length), segments[5].values, segments[7].values, dc.pairDistance(segments[5], segments[7]) ],
+        ...     [ min(segments[0].length, segments[3].length), segments[0].values, segments[3].values, dc.pairDistance(segments[0], segments[3]) ],
+        ...     [ min(segments[0].length, segments[4].length), segments[0].values, segments[4].values, dc.pairDistance(segments[0], segments[4]) ],
+        ...     [ min(segments[5].length, segments[6].length), segments[5].values, segments[6].values, dc.pairDistance(segments[5], segments[6]) ],
+        ...     [ min(segments[0].length, segments[7].length), segments[0].values, segments[7].values, dc.pairDistance(segments[0], segments[7]) ],
+        ...     [ min(segments[3].length, segments[4].length), segments[3].values, segments[4].values, dc.pairDistance(segments[3], segments[4]) ],
+        ...     [ min(segments[0].length, segments[8].length), segments[0].values, segments[8].values, dc.pairDistance(segments[0], segments[8]) ],
+        ... ]))
+        ...
+        -  ---------------------------  ------------  ---------
+        3  [1, 2, 3, 4]                 [2, 3, 4]     0.214375
+        3  [1, 2, 3, 4]                 [1, 3, 4]     0.301667
+        2  [1, 3, 4]                    [2, 4]        0.367667
+        3  [37, 5, 69]                  [1, 2, 3, 4]  0.748036
+        4  [20, 30, 37, 50, 69, 2, 30]  [0, 0, 0, 0]  1
+        2  [1, 2, 3, 4]                 [2, 4]        0.440536
+        2  [1, 2, 3, 4]                 [2, 3]        0.3975
+        3  [20, 30, 37, 50, 69, 2, 30]  [37, 5, 69]   0.576613
+        4  [1, 2, 3, 4]                 [0, 0, 0, 0]  1
+        2  [2, 4]                       [2, 3]        0.0714286
+        4  [1, 2, 3, 4]                 [3, 2, 3, 4]  0.125
+        -  ---------------------------  ------------  ---------
+
 
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
@@ -518,15 +812,15 @@ class DistanceCalculator(object):
             # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
             ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
             # # # # # # # # # # # # # # # # # # # # # # # #
-            distance.extend([(i,l,
+            distance.extend([(i, l,
                               self.thresholdFunction(
                                   d * self._normFactor(outerlen),
                                   **self.thresholdArgs))
-                             for i,l,d in ilDist])
+                             for i, l, d in ilDist])
             # # # # # # # # # # # # # # # # # # # # # # # #
             # b) on segments with mismatching length: embedSegment:
             #       for all length groups with length < current length
-            for innerlen in rslens[rslens.index(outerlen)+1:]:
+            for innerlen in rslens[rslens.index(outerlen) + 1:]:
                 innersegs = lenGrps[innerlen]
                 if DistanceCalculator.debug:
                     print("\t\tinnersegs, length {}, segments {}".format(innerlen, len(innersegs)))
@@ -538,14 +832,25 @@ class DistanceCalculator(object):
                         embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
                         # add embedding similarity to list of InterSegments
                         interseg = embedded[2]
+
+                        distEmb = interseg[2] * self._normFactor(innerlen)  # d_e
+                        ratio = (outerlen - innerlen) / outerlen  # ratio = 1 - (l_i/l_o)
+                        penalty = innerlen / outerlen ** 2
+                        # self._reliefFactor  # f
+
+                        mlDistance = \
+                            (1 - ratio) * distEmb \
+                            + ratio \
+                            + ratio * penalty * (1 - distEmb) \
+                            - self._reliefFactor * ratio * (1 - distEmb)
+
                         # # # # # # # # # # # # # # # # # # # # # # # #
                         dlDist = (interseg[0], interseg[1], (
-                                    self.thresholdFunction(
-                                        interseg[2] * self._normFactor(innerlen) +
-                                        .33 * (outerlen - innerlen) * self._normFactor(outerlen),
-                                        **self.thresholdArgs)
-                                    )
-                                )  # minimum of dimensions
+                            self.thresholdFunction(
+                                mlDistance,
+                                **self.thresholdArgs)
+                        )
+                                  )  # minimum of dimensions
                         # # # # # # # # # # # # # # # # # # # # # # # #
                         distance.append(dlDist)
                         self._offsets[(interseg[0], interseg[1])] = embedded[1]
@@ -569,6 +874,13 @@ class DistanceCalculator(object):
         """
         For a distance value with given parameters, calculate the factor to normalize this distance.
         This is static for cosine and correlation, but dynamic for canberra and euclidean measures.
+
+        >>> DistanceCalculator.normFactor("euclidean", 4, (0.0, 2.0))
+        0.125
+        >>> DistanceCalculator.normFactor("canberra", 4, (0.0, 2.0))
+        0.25
+        >>> DistanceCalculator.normFactor("cosine", 4, (0.0, 2.0))
+        1.0
 
         :param method: distance calculation method. One of cosine, correlation, canberra, euclidean, sqeuclidean
         :param dimensions: The number of dimensions of the shorter segment
@@ -595,6 +907,38 @@ class DistanceCalculator(object):
 
     def neigbors(self, segment: MessageSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
         """
+
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from inference.templates import *
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([0, 0, 0, 0]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> nbrs = dc.neigbors(segments[2], segments[3:7])
+        >>> dsts = [dc.pairDistance(segments[2], segments[3]),
+        ...         dc.pairDistance(segments[2], segments[4]),
+        ...         dc.pairDistance(segments[2], segments[5]),
+        ...         dc.pairDistance(segments[2], segments[6])]
+        >>> nbrs
+        [(0, 0.3676666666666667), (1, 0.41450617283950619), (3, 0.69592645998558034), (2, 0.7935542543548032)]
+        >>> [dsts[a] for a,b in nbrs] == [a[1] for a in nbrs]
+        True
+
         :param segment: Segment to get the neigbors for.
         :param subset: The subset of MessageSegments to use from this DistanceCalculator object, if any.
         :return: An ascendingly sorted list of neighbors of parameter segment
@@ -621,6 +965,33 @@ class DistanceCalculator(object):
         neighbors = sorted([(nidx, candNeigbors[n]) for nidx, n in enumerate(mask) if n is not None],
                            key=lambda x: x[1])
         return neighbors
+
+    # @staticmethod
+    # def loadCached(analysisTitle: str, tokenizer: str, pcapfilename: str):
+    #     """
+    #     Loads a cached DistanceCalculator instance from the filesystem. If none is found or the requested parameters
+    #     differ, return None.
+    #
+    #     :return: A cached DistanceCalculator or None
+    #     """
+    #     from os.path import isfile, splitext, basename, exists, join
+    #     import pickle
+    #     from validation.dissectorMatcher import MessageComparator
+    #
+    #     # cache the DistanceCalculator to the filesystem
+    #     pcapName = splitext(basename(pcapfilename))[0]
+    #     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
+    #     if not exists(dccachefn):
+    #         return None
+    #     else:
+    #         print("Load distances from cache file {}".format(dccachefn))
+    #         segmentedMessages, comparator, dc = pickle.load(open(dccachefn, 'rb'))
+    #         if not (isinstance(comparator, MessageComparator)
+    #                 and isinstance(dc, DistanceCalculator)):
+    #             print('Loading of cached distances failed.')
+    #             return None
+    #         specimens = comparator.specimens
+    #         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
 
 
 class Template(AbstractSegment):
@@ -707,34 +1078,46 @@ class Template(AbstractSegment):
         Get distances to the medoid of this template.
         If no DistanceCalculator is given. does not support a threshold function.
 
+        >>> from tabulate import tabulate
+        >>> from scipy.spatial.distance import cdist
         >>> from utils.baseAlgorithms import generateTestSegments
         >>> from inference.templates import DistanceCalculator, Template
         >>> listOfSegments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(listOfSegments)
+        Calculated distances for 37 segment pairs.
         >>> center = [1,3,7,9]  # "mean"
         >>> tempearly = Template(center, listOfSegments)
-        >>> tempearly.distancesToMixedLength(dc)
-        [(0.24615384615384617, 0),
-         (0.28452020202020201, 0),
-         (0.1734090909090909, 0),
-         (0.40136363636363637, 1),
-         (0.33166666666666667, 0),
-         (0.8842955900308842, -3),
-         (0.6777991452991452, 1),
-         (0.48911159263271942, 0),
-         (0.37115384615384617, 0)]
+        >>> dtml = tempearly.distancesToMixedLength(dc)
+        Calculated distances for 46 segment pairs.
+        >>> cdist([center], [listOfSegments[0].values], "canberra")[0,0]/len(center) == dtml[0][0]
+        True
+        >>> print(tabulate(dtml))
+        --------  --
+        0.246154   0
+        0.373087   0
+        0.285795   0
+        0.539909   1
+        0.497917   0
+        0.825697  -3
+        0.682057   1
+        1          0
+        0.371154   0
+        --------  --
         >>> center = listOfSegments[0]  # "medoid"
         >>> template = Template(center, listOfSegments)
-        >>> template.distancesToMixedLength(dc)
-        [(0.0, 0),
-         (0.082500000000000004, 1),
-         (0.19361111111111112, 1),
-         (0.23642857142857143, 1),
-         (0.16500000000000001, 1),
-         (0.85871661340592575, -3),
-         (0.76178228544666893, 1),
-         (0.24295774647887325, 0),
-         (0.125, 0)]
+        >>> print(tabulate(template.distancesToMixedLength(dc)))
+        --------  --
+        0          0
+        0.214375   1
+        0.301667   1
+        0.440536   1
+        0.3975     1
+        0.808358  -3
+        0.748036   1
+        1          0
+        0.125      0
+        --------  --
 
         :param dc: DistanceCalculator to look up precomputed distances and offsets
         :return: List of Tuples of distances and offsets: -n for center, +n for segment
@@ -755,7 +1138,7 @@ class Template(AbstractSegment):
             center = self.medoid
 
         # look up the distances between the base segments
-        distances = dc.similaritiesSubset([center], self.baseSegments)
+        distances = dc.distancesSubset([center], self.baseSegments)
         offsets = [0] * len(self.baseSegments)
         medoidIndex = dc.segments.index(center)
         globalIndices = [dc.segments.index(bs) for bs in self.baseSegments]
@@ -832,7 +1215,7 @@ class TemplateGenerator(DistanceCalculator):
         """
         clustererClass = kwargs['clustererClass'] if 'clustererClass' in kwargs else TemplateGenerator.HDBSCAN
 
-        similarities = self.similaritiesSubset(segments)
+        similarities = self.distancesSubset(segments)
         try:
             if not 'epsilon' in kwargs and not 'min_cluster_size' in kwargs:
                 self.clusterer = clustererClass(similarities, True)
@@ -869,7 +1252,7 @@ class TemplateGenerator(DistanceCalculator):
         :param segments: a list of segments that must be known to this template generator.
         :return: The MessageSegment from segments that is the list's medoid.
         """
-        distSubMatrix = self.similaritiesSubset(segments)
+        distSubMatrix = self.distancesSubset(segments)
         mid = distSubMatrix.sum(axis=1).argmin()
         return segments[mid]
 
@@ -906,27 +1289,31 @@ class TemplateGenerator(DistanceCalculator):
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
-        >>>     bytes([1, 2, 3, 4]),
-        >>>     bytes([   2, 3, 4]),
-        >>>     bytes([   1, 3, 4]),
-        >>>     bytes([   2, 4   ]),
-        >>>     bytes([   2, 3   ]),
-        >>>     bytes([20, 30, 37, 50, 69, 2, 30]),
-        >>>     bytes([        37,  5, 69       ]),
-        >>>     bytes([70, 2, 3, 4]),
-        >>>     bytes([3, 2, 3, 4])
-        >>>     ]
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([70, 2, 3, 4]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
         >>> messages  = [RawMessage(bd) for bd in bytedata]
         >>> analyzers = [Value(message) for message in messages]
         >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
         >>> specimens = BaseLoader(messages)
+        >>> DistanceCalculator.debug = False
         >>> tg = TemplateGenerator(segments)
+        Calculated distances for 37 segment pairs.
         >>> clusters = tg.getClusters(segments, clustererClass=TemplateGenerator.DBSCAN,
         ...         epsilon=1.0, minpts=3,
         ...         thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        DBSCAN epsilon: 1.0 minpts: 3
         >>> templates = tg.generateTemplates(clustererClass=TemplateGenerator.DBSCAN,
         ...     epsilon=1.0, minpts=3,
         ...     thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        DBSCAN epsilon: 1.0 minpts: 3
         >>> pprint([t.baseSegments for t in templates])
         [[MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
           MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
@@ -946,15 +1333,17 @@ class TemplateGenerator(DistanceCalculator):
              MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
              MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]}
 
-        >>> labels = [-1]*len(segments)
-        >>> for i, t in enumerate(templates):
-        ...     for s in t.baseSegments:
-        ...         labels[segments.index(s)] = i
-        ...     labels[segments.index(t.medoid)] = "({})".format(i)
-        >>> from visualization.distancesPlotter import DistancesPlotter
-        >>> sdp = DistancesPlotter(specimens, 'distances-testcase', True)
-        >>> sdp.plotSegmentDistances(tg, numpy.array(labels))
-        >>> sdp.writeOrShowFigure()
+        # Example, not to run by doctest:
+        #
+        labels = [-1]*len(segments)
+        for i, t in enumerate(templates):
+            for s in t.baseSegments:
+                labels[segments.index(s)] = i
+            labels[segments.index(t.medoid)] = "({})".format(i)
+        from visualization.distancesPlotter import DistancesPlotter
+        sdp = DistancesPlotter(specimens, 'distances-testcase', True)
+        sdp.plotSegmentDistances(tg, numpy.array(labels))
+        sdp.writeOrShowFigure()
 
 
         :param kwargs: call the clusterer with these parameters. See getClusters().
@@ -1015,11 +1404,11 @@ class TemplateGenerator(DistanceCalculator):
             This test uses a non-symmetric matrix to detect bugs if any. This is NOT a use case example!
             >>> from inference.templates import *
             >>> clusterer = TemplateGenerator.DBSCAN(numpy.array([[0.0, 0.5, 0.8],[0.1, 0.0, 0.9],[0.7,0.3,0.0]]),
-            >>>     autoconfigure=False)
+            ...     autoconfigure=False)
             >>> print(clusterer._distances)
-            array([[ 0. ,  0.5,  0.8],
-                   [ 0.1,  0. ,  0.9],
-                   [ 0.7,  0.3,  0. ]])
+            [[ 0.   0.5  0.8]
+             [ 0.1  0.   0.9]
+             [ 0.7  0.3  0. ]]
             >>> clusterer._nearestPerNeigbor()
             [(1, 0.5), (0, 0.10000000000000001), (1, 0.29999999999999999)]
 
@@ -1314,74 +1703,6 @@ class TemplateGenerator(DistanceCalculator):
 
 
 
-
-
-class DCexperiment(DistanceCalculator):
-    def __init__(self, segments: Iterable[MessageSegment], reliefFactor=.5):
-        self._reliefFactor = reliefFactor
-        super().__init__(segments, method='canberra',
-                 thresholdFunction = None, thresholdArgs = None)
-
-
-
-    def _embdedAndCalcDistances(self, ) -> \
-            List[Tuple[int, int, float]]:
-        lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
-
-        distance = list()  # type: List[Tuple[int, int, float]]
-        rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
-        for outerlen in rslens:
-            outersegs = lenGrps[outerlen]
-            if DistanceCalculator.debug:
-                print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
-            # a) for segments of identical length: call _calcDistancesPerLen()
-            # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
-            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            distance.extend([(i,l,
-                              self.thresholdFunction(
-                                  d * self._normFactor(outerlen),
-                                  **self.thresholdArgs))
-                             for i,l,d in ilDist])
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            # b) on segments with mismatching length: embedSegment:
-            #       for all length groups with length < current length
-            for innerlen in rslens[rslens.index(outerlen)+1:]:
-                innersegs = lenGrps[innerlen]
-                if DistanceCalculator.debug:
-                    print("\t\tinnersegs, length {}, segments {}".format(innerlen, len(innersegs)))
-                # for all segments in "shorter length" group
-                #     for all segments in current length group
-                for iseg in innersegs:
-                    for oseg in outersegs:
-                        # embedSegment(shorter in longer)
-                        embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
-                        # add embedding similarity to list of InterSegments
-                        interseg = embedded[2]
-
-                        distEmb = interseg[2]  # d_e
-                        ratio = (outerlen - innerlen) * self._normFactor(outerlen)  # ratio = 1 - (l_i/l_o)
-                        penalty = innerlen/outerlen**2
-                        # self._reliefFactor  # f
-
-                        mlDistance = \
-                            (1-ratio) * distEmb \
-                            + ratio \
-                            + ratio * penalty * (1-distEmb) \
-                            - self._reliefFactor * ratio * (1-distEmb)
-
-                        # # # # # # # # # # # # # # # # # # # # # # # #
-                        dlDist = (interseg[0], interseg[1], (
-                                    self.thresholdFunction(
-                                        mlDistance,
-                                        **self.thresholdArgs)
-                                    )
-                                )  # minimum of dimensions
-                        # # # # # # # # # # # # # # # # # # # # # # # #
-                        distance.append(dlDist)
-                        self._offsets[(interseg[0], interseg[1])] = embedded[1]
-        print("Calculated distances for {} segment pairs.".format(len(distance)))
-        return distance
 
 
 

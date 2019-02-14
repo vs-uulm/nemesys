@@ -276,7 +276,7 @@ class DistancesPlotter(MessagePlotter):
         statistics = list()
         cltrs = [[tg.segments[idx] for idx, *rest in cluster] for cluster in tg.groupByLength().values()]
         for cluster in cltrs:
-            similarities = tril(tg.similaritiesSubset(cluster))
+            similarities = tril(tg.distancesSubset(cluster))
             statistics.append(tril(similarities))
 
         plt.rc('xtick', labelsize=6)  # fontsize of the tick labels
