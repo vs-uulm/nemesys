@@ -39,9 +39,23 @@ class HirschbergOnSegmentSimilarity(Alignment):
     def align(self, message0: List[int], message1: List[int]):
         """
 
+        >>> import numpy, tabulate
+        >>> simtx = numpy.array([
+        ...     [5.0,1.0,0.4,1.8,2.5],
+        ...     [0.7,5.0,1.0,2.8,1.5],
+        ...     [2.4,0.9,5.0,0.8,2.5],
+        ...     [0.0,1.0,1.8,5.0,2.5],
+        ...     [0.0,1.0,1.8,2.5,5.0]
+        ... ])
+        >>> m0 = [2,4,3,0]
+        >>> m1 = [1,4,0]
         >>> hirsch = HirschbergOnSegmentSimilarity(simtx)
         >>> haligned = hirsch.align(m0,m1)
-        >>> tabulate(haligned)
+        >>> print(tabulate.tabulate(haligned))
+        -  -  --  -
+        2  4   3  0
+        1  4  -1  0
+        -  -  --  -
 
         :param message0: list of indices of the similarity matrix denoting the columns representing a specific segment.
         :param message1: list of indices of the similarity matrix denoting the rows representing a specific segment.
@@ -102,8 +116,6 @@ class HirschbergOnSegmentSimilarity(Alignment):
         """
         Calculate a Needleman-Wunsch score for two lists of tokens.
 
-        >>> from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-        >>> from tabulate import tabulate
         >>> import numpy
         >>> simtx = numpy.array([
         ...     [5.0,1.0,0.4,1.8,2.5],
@@ -115,12 +127,8 @@ class HirschbergOnSegmentSimilarity(Alignment):
         >>> m0 = [2,4,3,0]
         >>> m1 = [1,4,0]
         >>> hirsch = HirschbergOnSegmentSimilarity(simtx)
-        >>> score = hirsch.nwScore(m0,m1)
-        >>> print(tabulate([score]))
-        -  -  --  -
-        2  4   3  0
-        1  4  -1  0
-        -  -  --  -
+        >>> print(hirsch.nwScore(m0, m1))
+        [-20.  -10.   23.4  57.4]
 
         :param tokensX: List of indices in the similarity matrix, representing message X
         :param tokensY: List of indices of in the similarity matrix, representing message Y
@@ -161,8 +169,7 @@ class NWonSegmentSimilarity(Alignment):
     def align(self, message0: List[int], message1: List[int]):
         """
 
-        >>> from alignment.hirschbergAlignSegments import NWonSegmentSimilarity, HirschbergOnSegmentSimilarity
-        >>> import numpy
+        >>> import numpy, tabulate
         >>> simtx = numpy.array([
         ...     [ 5.0,-5.0,-5.0,-5.0,-5.0],
         ...     [-5.0, 5.0,-5.0,-5.0,-5.0],
@@ -173,6 +180,7 @@ class NWonSegmentSimilarity(Alignment):
         >>> m0 = [2,4,3,0]
         >>> m1 = [1,4,0]
         >>> nwalign = NWonSegmentSimilarity(simtx)
+        >>> print(tabulate.tabulate(nwalign.align(m0, m1)))
         --  --  -  --  -
         -1   2  4   3  0
          1  -1  4  -1  0

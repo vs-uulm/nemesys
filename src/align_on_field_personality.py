@@ -75,7 +75,19 @@ class SegmentedMessages(object):
         """
         Calculate a similarity matrix of messages from nwscores yielded by HirschbergOnSegmentSimilarity.
 
-        >>> (numpy.diag(sm.distanceMatrix()) > 0).all()
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> m0 = segments[:3]
+        >>> m1 = segments[3:5]
+        >>> m2 = segments[5:9]
+        >>> sm = SegmentedMessages(dc, [m0, m1, m2])
+        Calculate message alignment scores ...
+        Calculate message similarity from alignment scores...
+        >>> (numpy.diag(sm.similarities) > 0).all()
+        True
 
         :return: Similarity matrix for messages
         """
@@ -94,7 +106,19 @@ class SegmentedMessages(object):
         """
         For clustering, convert the nwscores-based similarity matrix to a distance measure.
 
-        >>> (numpy.diag(sm.distanceMatrix()) == 0).all()
+        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> segments = generateTestSegments()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+        Calculated distances for 37 segment pairs.
+        >>> m0 = segments[:3]
+        >>> m1 = segments[3:5]
+        >>> m2 = segments[5:9]
+        >>> sm = SegmentedMessages(dc, [m0, m1, m2])
+        Calculate message alignment scores ...
+        Calculate message similarity from alignment scores...
+        >>> (numpy.diag(sm.distances) == 0).all()
+        True
 
         :param similarityMatrix: Similarity matrix for messages
         :return: Distance matrix for messages

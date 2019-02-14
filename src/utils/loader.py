@@ -66,7 +66,7 @@ class SpecimenLoader(BaseLoader):
             l5msgs = PCAPImporter.readFile(pcap, importLayer=5).values()  # type: List[L4NetworkMessage]
         else:
             # read messages at given layer for the Netzob inference
-            absLayer = 3 + layer if relativeToIP else layer
+            absLayer = 2 + layer if relativeToIP else layer
             l5msgs = PCAPImporter.readFile(pcap, importLayer=absLayer).values()  # type: List[AbstractMessage]
         # read messages as raw for tshark input
         l1msgs = PCAPImporter.readFile(pcap, importLayer=1).values()  # type: List[RawMessage]
