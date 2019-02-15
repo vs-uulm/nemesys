@@ -38,7 +38,7 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotManifoldDistances(self, segments: List[Union[MessageSegment, MessageSegment, Any]],
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, Any]],
                               similarities: numpy.ndarray,
                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
@@ -57,7 +57,7 @@ class DistancesPlotter(MessagePlotter):
             symmetric matrix, rows/columns in the order of `segments`
         :param labels: Labels of strings (or ints or any other printable type) identifying the cluster for each segment
         :param templates: Templates of clusters to be printed alongside with the feature values.
-            CURRENTLY UNUSED
+            CURRENTLY UNTESTED
         :param plotEdges: Plot of edges between each pair of segment markers.
             Caution: Adds n^2 lines which takes very long compared to the scatterplot and
             quickly becomes a huge load especially when rendering the plot as PDF.
@@ -71,6 +71,37 @@ class DistancesPlotter(MessagePlotter):
         typsize = 30   # type markers: size factor
         # self._cm          # label color map
         fcm = cm.cubehelix  # type color map
+
+        # identify unique labels
+        ulab = sorted(set(labels))
+
+        # subsample if segment count is larger than maxSamples
+        maxSamples = 1000
+        originalSegmentCount = len(segments)
+        if originalSegmentCount > 2*maxSamples:
+            import math
+            ratiorev = originalSegmentCount / maxSamples
+            step2keep = math.floor(ratiorev)
+            lab2idx = dict()
+            for idx, lab in enumerate(labels):
+                if lab not in lab2idx:
+                    lab2idx[lab] = list()
+                lab2idx[lab].append(idx)
+            # copy list to remove elements without side-effects
+            segments = segments.copy()
+            # to save the indices to be removed
+            idx2rem = list()
+            # determines a subset evenly distributed over all clusters while honoring the ratio to reduce to.
+            for lab, ics in lab2idx.items():
+                keep = set(ics[::step2keep])
+                idx2rem.extend(set(ics) - keep)
+            idx2rem = sorted(idx2rem, reverse=True)
+            for idx in idx2rem:
+                del segments[idx]
+            labels = numpy.delete(labels, idx2rem, 0)
+            similarities = numpy.delete(numpy.delete(similarities, idx2rem, 0), idx2rem, 1)
+        else:
+            idx2rem = None
 
         # prepare MDS
         seed = numpy.random.RandomState(seed=3)
@@ -88,9 +119,9 @@ class DistancesPlotter(MessagePlotter):
         fig = self._fig
         axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
 
+        if idx2rem is not None:
+            axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
 
-        # identify unique labels
-        ulab = sorted(set(labels))
         # omit noise in cluster labels if types are plotted anyway.
         if isinstance(segments[0], TypedSegment):
             for l in ulab:
