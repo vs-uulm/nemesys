@@ -434,7 +434,7 @@ epspertrace = {
     "ntp_SMIA-20111010_deduped-1000.pcap": 2.8
 }
 
-
+epsdefault = 2.4
 
 
 if __name__ == '__main__':
@@ -451,7 +451,8 @@ if __name__ == '__main__':
     parser.add_argument('--isolengths', help='Cluster fields of same size isolatedly.', action="store_true")
     parser.add_argument('--iterate', help='Iterate over DBSCAN parameters to select valid eps and threshold-shift.',
                         action="store_true")
-    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=2.4)
+
+    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=epsdefault)
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
@@ -484,7 +485,7 @@ if __name__ == '__main__':
     comparator = MessageComparator(specimens, 2, True, debug=debug)
 
     # segment messages according to true fields from the labels
-    print("Segmenting messages...", end=' ')
+    print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
 
 
@@ -501,7 +502,7 @@ if __name__ == '__main__':
 
             pcapbasename = basename(specimens.pcapFileName)
             epsilon = args.epsilon  # TODO make "not set" epsilon and "default" distinguishable
-            if args.epsilon == 1.2 and pcapbasename in epspertrace:
+            if args.epsilon == epsdefault and pcapbasename in epspertrace:
                 epsilon = epspertrace[pcapbasename]
             evaluateFieldTypeClustering(filteredSegments, epsilon, TemplateGenerator.neutralThreshold, {})
                                                      # TemplateGenerator.sigmoidThreshold, {'shift': .6})

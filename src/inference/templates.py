@@ -119,7 +119,7 @@ class DistanceCalculator(object):
     Wrapper to calculate and look up pairwise distances between segments.
     """
 
-    debug = True
+    debug = False
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = None,
@@ -807,7 +807,7 @@ class DistanceCalculator(object):
         for outerlen in rslens:
             outersegs = lenGrps[outerlen]
             if DistanceCalculator.debug:
-                print("\toutersegs, length {}, segments {}".format(outerlen, len(outersegs)))
+                print("    outersegs, length {}, segments {}".format(outerlen, len(outersegs)))
             # a) for segments of identical length: call _calcDistancesPerLen()
             # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
             ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
@@ -823,7 +823,9 @@ class DistanceCalculator(object):
             for innerlen in rslens[rslens.index(outerlen) + 1:]:
                 innersegs = lenGrps[innerlen]
                 if DistanceCalculator.debug:
-                    print("\t\tinnersegs, length {}, segments {}".format(innerlen, len(innersegs)))
+                    print("        innersegs, length {}, segments {}".format(innerlen, len(innersegs)))
+                else:
+                    print(" .", end="", flush=True)
                 # for all segments in "shorter length" group
                 #     for all segments in current length group
                 for iseg in innersegs:
@@ -854,6 +856,8 @@ class DistanceCalculator(object):
                         # # # # # # # # # # # # # # # # # # # # # # # #
                         distance.append(dlDist)
                         self._offsets[(interseg[0], interseg[1])] = embedded[1]
+            if not DistanceCalculator.debug:
+                print()
         print("Calculated distances for {} segment pairs.".format(len(distance)))
         return distance
 
