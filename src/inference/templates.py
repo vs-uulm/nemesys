@@ -120,6 +120,7 @@ class DistanceCalculator(object):
     """
 
     debug = False
+    offsetCutoff = 6
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = None,
@@ -156,6 +157,7 @@ class DistanceCalculator(object):
             If necessary, performs an embedding of mixed-length segments to determine cross-length distances.
         """
         self._reliefFactor = reliefFactor
+        self._offsetCutoff = DistanceCalculator.offsetCutoff
         self._method = method
         self.thresholdFunction = thresholdFunction if thresholdFunction else DistanceCalculator.neutralThreshold
         self.thresholdArgs = thresholdArgs if thresholdArgs else {}
@@ -711,7 +713,10 @@ class DistanceCalculator(object):
         """
         assert longSegment[1] > shortSegment[1]
 
-        maxOffset = longSegment[1] - shortSegment[1]
+        if DistanceCalculator.offsetCutoff is not None:
+            maxOffset = min(DistanceCalculator.offsetCutoff, longSegment[1] - shortSegment[1])
+        else:
+            maxOffset = longSegment[1] - shortSegment[1]
 
         subsets = list()
         for offset in range(0, maxOffset + 1):
@@ -802,6 +807,9 @@ class DistanceCalculator(object):
         """
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
+        import time
+        pit_start = time.time()
+
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
         for outerlen in rslens:
@@ -858,7 +866,9 @@ class DistanceCalculator(object):
                         self._offsets[(interseg[0], interseg[1])] = embedded[1]
             if not DistanceCalculator.debug:
                 print()
-        print("Calculated distances for {} segment pairs.".format(len(distance)))
+
+        runtime = time.time() - pit_start
+        print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(len(distance), runtime))
         return distance
 
 
@@ -970,32 +980,61 @@ class DistanceCalculator(object):
                            key=lambda x: x[1])
         return neighbors
 
-    # @staticmethod
-    # def loadCached(analysisTitle: str, tokenizer: str, pcapfilename: str):
-    #     """
-    #     Loads a cached DistanceCalculator instance from the filesystem. If none is found or the requested parameters
-    #     differ, return None.
-    #
-    #     :return: A cached DistanceCalculator or None
-    #     """
-    #     from os.path import isfile, splitext, basename, exists, join
-    #     import pickle
-    #     from validation.dissectorMatcher import MessageComparator
-    #
-    #     # cache the DistanceCalculator to the filesystem
-    #     pcapName = splitext(basename(pcapfilename))[0]
-    #     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    #     if not exists(dccachefn):
-    #         return None
-    #     else:
-    #         print("Load distances from cache file {}".format(dccachefn))
-    #         segmentedMessages, comparator, dc = pickle.load(open(dccachefn, 'rb'))
-    #         if not (isinstance(comparator, MessageComparator)
-    #                 and isinstance(dc, DistanceCalculator)):
-    #             print('Loading of cached distances failed.')
-    #             return None
-    #         specimens = comparator.specimens
-    #         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+    @staticmethod
+    def _checkCacheFile(analysisTitle: str, tokenizer: str, pcapfilename: str):
+        from os.path import isfile, splitext, basename, exists, join
+        pcapName = splitext(basename(pcapfilename))[0]
+        dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
+        if not exists(dccachefn):
+            return False, dccachefn
+        else:
+            return True, dccachefn
+
+    @staticmethod
+    def loadCached(analysisTitle: str, tokenizer: str, pcapfilename: str) -> Tuple[
+            List[Tuple[MessageSegment]], 'MessageComparator', 'DistanceCalculator'
+    ]:
+        """
+        Loads a cached DistanceCalculator instance from the filesystem. If none is found or the requested parameters
+        differ, return None.
+
+        :return: A cached DistanceCalculator or None
+        """
+        import pickle
+        from validation.dissectorMatcher import MessageComparator
+
+        dccacheexists, dccachefn = DistanceCalculator._checkCacheFile(analysisTitle, tokenizer, pcapfilename)
+
+        if dccacheexists:
+            print("Load distances from cache file {}".format(dccachefn))
+            segmentedMessages, comparator, dc = pickle.load(open(dccachefn, 'rb'))
+            if not (isinstance(comparator, MessageComparator)
+                    and isinstance(dc, DistanceCalculator)
+                    and isinstance(segmentedMessages, List)
+            ):
+                raise TypeError("Cached objects in file " + dccachefn + " are of unexpected type.")
+            return segmentedMessages, comparator, dc
+        else:
+            raise FileNotFoundError("Cache file " + dccachefn + " not found.")
+
+    def saveCached(self, analysisTitle: str, tokenizer: str, comparator: 'MessageComparator', segmentedMessages: List[Tuple[MessageSegment]]):
+        """
+        cache the DistanceCalculator and necessary auxiliary objects comparator and segmentedMessages to the filesystem
+
+        :param analysisTitle:
+        :param tokenizer:
+        :param comparator:
+        :param segmentedMessages:
+        :return:
+        """
+        import pickle
+        dccacheexists, dccachefn = DistanceCalculator._checkCacheFile(
+            analysisTitle, tokenizer, comparator.specimens.pcapFileName)
+        if not dccacheexists:
+            with open(dccachefn, 'wb') as f:
+                pickle.dump((segmentedMessages, comparator, self), f, pickle.HIGHEST_PROTOCOL)
+        else:
+            raise FileExistsError("Cache file" + dccachefn + " already exists. Abort saving.")
 
 
 class Template(AbstractSegment):
@@ -1703,9 +1742,61 @@ class TemplateGenerator(DistanceCalculator):
 
 
 
+class DelegatingDC(DistanceCalculator):
+    """
+    Subclass to encapsulate (and redirect if necessary) segemnt lookups to representatives.
+    This reduces the size of the matrix (considerable) by the amount of duplicate feature values
+    and other segment types for which hypothesis-driven distance values are more appropriate (like textual fields).
+
+    """
+    def __init__(self, segments: Iterable[MessageSegment]):
+        # TODO prior to insert entries into the matrix, filter segments
+        # for special treatment and generate templates for them
+
+        deduplicated, dedupTemplates = DelegatingDC._templates4duplicates(segments)
+
+        filteredSegments = deduplicated + dedupTemplates
+        super().__init__(filteredSegments)
 
 
+    @staticmethod
+    def _templates4duplicates(segments: Iterable[MessageSegment]):
+        # filter out identical segments
+        uniqueFeatures = dict()
+        for s in segments:
+            svt = tuple(s.values)
+            if svt not in uniqueFeatures:
+                uniqueFeatures[svt] = list()
+            uniqueFeatures[svt].append(s)
+        filteredSegments = [s[0] for f, s in uniqueFeatures.items() if len(s) == 1]
+        duplicates = {f: s for f, s in uniqueFeatures.items() if len(s) > 1}
 
+        # generate template for each duplicate list
+        templates = [Template(f, s) for f, s in duplicates.items()]
+
+        return filteredSegments, templates
+
+
+    @staticmethod
+    def _templates4chars(segments: Iterable[MessageSegment]):
+        # TODO sort out char sequences and handle independently: e. g. in general
+        # value below ~128 and > 16 (?) bytes (and some other heuristics for shorter ones)
+        raise NotImplementedError()
+
+    @staticmethod
+    def _templates4allZeros(segments: Iterable[MessageSegment]):
+        # filter out segments that contain no relevant byte data, i. e., all-zero byte sequences
+        filteredSegments = [t for t in segments if t.bytes.count(b'\x00') != len(t.bytes)]
+
+        # filter out segments that resulted in no relevant feature data, i. e.,
+        # (0, .., 0) | (nan, .., nan) | or a mixture of both
+        filteredSegments = [s for s in filteredSegments if
+                            numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
+        raise NotImplementedError()
+
+    @staticmethod
+    def _templates4Paddings(segments: Iterable[MessageSegment]):
+        raise NotImplementedError()
 
 
 

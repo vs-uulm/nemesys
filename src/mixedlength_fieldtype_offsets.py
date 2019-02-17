@@ -7,9 +7,10 @@ Real field types are separated using ground truth and the quality of this separa
 """
 
 import argparse, IPython
-from os.path import isfile
+from os.path import isfile, basename, splitext
 from itertools import chain
 from tabulate import tabulate
+from math import ceil, floor
 
 from inference.templates import DistanceCalculator
 from inference.segments import TypedSegment
@@ -30,6 +31,7 @@ analyzerType = Value
 analysisArgs = None
 # fix the distance method to canberra
 distance_method = 'canberra'
+tokenizer = 'tshark-unfiltered'
 
 
 
@@ -47,21 +49,41 @@ if __name__ == '__main__':
         print('File not found: ' + args.pcapfilename)
         exit(1)
 
-    # dissect and label messages
-    print("Load messages...")
-    specimens = SpecimenLoader(args.pcapfilename, 2, True)
-    comparator = MessageComparator(specimens, 2, True, debug=debug)
+    try:
+        segmentedMessages, comparator, dc = DistanceCalculator.loadCached(analysisTitle, tokenizer, args.pcapfilename)
+        chainedSegments = list(chain.from_iterable(segmentedMessages))
+    except (TypeError, FileNotFoundError) as e:
+        if isinstance(e, TypeError):
+            print('Loading of cached distances failed. Continuing:')
+        doCacheDC = isinstance(e, FileNotFoundError)
+        segmentedMessages, comparator, dc = None, None, None
 
-    # segment messages according to true fields from the labels
-    print("Segmenting messages...", end=' ')
-    segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    filteredSegments = list(chain.from_iterable(segmentedMessages))
-    dc = DistanceCalculator(filteredSegments)
+    if (segmentedMessages, comparator, dc) == (None, None, None):
+        # dissect and label messages
+        print("Load messages from {}...".format(args.pcapfilename))
+        specimens = SpecimenLoader(args.pcapfilename, 2, True)
+        comparator = MessageComparator(specimens, 2, True, debug=debug)
 
-    typegroups = segments2types(filteredSegments)
+        # segment messages according to true fields from the labels
+        print("Segmenting messages...")
+        segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+        chainedSegments = list(chain.from_iterable(segmentedMessages))
+        print("Calculate distance for {} segments...".format(len(chainedSegments)))
+        dc = DistanceCalculator(chainedSegments)
+        if doCacheDC:
+            try:
+                dc.saveCached(analysisTitle, tokenizer, comparator, segmentedMessages)
+                print("Distances saved to cache file.")
+            except FileExistsError as e:
+                print(e)
+
+    typegroups = segments2types(chainedSegments)
     typelabels = list(typegroups.keys())
 
+    stats2plot = list()
     maxpairs = 100
+    # statistics per group:
+    # determine relevant pairs by assuming (only) within one field type there are valid distances/offsets
     for typlab, typgrp in typegroups.items():
         segidcs = dc.segments2index(typgrp)
         segpairs = dc.offsets.keys()
@@ -69,36 +91,83 @@ if __name__ == '__main__':
         pairoffsets = {pair: dc.offsets[pair] for pair in typpairs}
         pairsimi = {pair: dc.distanceMatrix[pair] for pair in typpairs}
 
+        # "pair (indices)", "distance", "remaining trail", "innerlen", "outerlen"
         offsetpairs = dict()
         for pair, offset in pairoffsets.items():
             if offset not in offsetpairs:
                 offsetpairs[offset] = list()
             innerlen = min(dc.segments[pair[0]].length, dc.segments[pair[1]].length)
             outerlen = max(dc.segments[pair[0]].length, dc.segments[pair[1]].length)
-            offsetpairs[offset].append((pair, pairsimi[pair], innerlen + offset - outerlen, innerlen, outerlen))
+            offsetpairs[offset].append((
+                pair, pairsimi[pair],
+                innerlen + offset - outerlen, innerlen, outerlen
+            ))
 
         print("\nType:", typlab)
         if len(offsetpairs) > 0:
-            for offset, pairs in offsetpairs.items():
-                print("Offset", offset, "({} pairs truncated to {})".format(len(offsetpairs), maxpairs)
-                    if maxpairs < len(offsetpairs) else "")
-                print(tabulate(pairs[:100], headers=["pair", "dist", "rest", "innerlen", "outerlen"]))
+            alloffsets = len(pairoffsets)
+            # for offset, pairs in offsetpairs.items():
+            #     print("Offset", offset, "({} pairs truncated to {})".format(len(offsetpairs), maxpairs)
+            #         if maxpairs < len(offsetpairs) else "")
+            #     print(tabulate(pairs[:100], headers=["pair", "dist", "trail", "innerlen", "outerlen"]))
 
             simimeans = sorted([(o, numpy.mean([s[1] for s in p])) for o, p in offsetpairs.items()], key=lambda k: k[0])
             simimins = sorted([(o, numpy.min([s[1] for s in p])) for o, p in offsetpairs.items()], key=lambda k: k[0])
             simimaxs = sorted([(o, numpy.max([s[1] for s in p])) for o, p in offsetpairs.items()], key=lambda k: k[0])
+            # import matplotlib.pyplot as plt
+            # plt.scatter([simi[0] for simi in simimeans], [simi[1] for simi in simimeans])
+            # plt.scatter([simi[0] for simi in simimins], [simi[1] for simi in simimins], alpha=.3)
+            # plt.scatter([simi[0] for simi in simimaxs], [simi[1] for simi in simimaxs], alpha=.3)
+            # plt.savefig("offset2distance-{}-{}-.pdf".format(splitext(basename(args.pcapfilename))[0], typlab))
+            stats2plot.append((
+                typlab,
+                ([simi[0] for simi in simimeans], [simi[1] for simi in simimeans]),
+                ([simi[0] for simi in simimins], [simi[1] for simi in simimins]),
+                ([simi[0] for simi in simimaxs], [simi[1] for simi in simimaxs])
+            ))
 
-            import matplotlib.pyplot as plt
-            plt.plot([simi[0] for simi in simimeans], [simi[1] for simi in simimeans])
-            plt.plot([simi[0] for simi in simimins], [simi[1] for simi in simimins], alpha=.3)
-            plt.plot([simi[0] for simi in simimaxs], [simi[1] for simi in simimaxs], alpha=.3)
-            plt.show()
+            #        %/p    f  l
+            count = { 25 : [0, 0],
+                      10 : [0, 0],
+                       6 : [0, 0],
+                       4 : [0, 0],
+                       2 : [0, 0]
+                    }
+            for offset, pairs in offsetpairs.items():
+                for pair, dist, trail, ilen, olen in pairs:
+                    #        %/p    first              last
+                    verge = { 25 : [ceil(olen * 0.25), floor(olen * (1 - 0.25) - ilen)],  # the end of the inner segment should fall beyond the verge
+                              10 : [ceil(olen * 0.1),  floor(olen * 0.9 - ilen)],  # the end of the inner segment should fall beyond the verge
+                               6 : [6,                 olen - 6 - ilen],
+                               4 : [4,                 olen - 4 - ilen],
+                               2 : [2,                 olen - 2 - ilen]
+                            }
+                    for k in count.keys():
+                        if offset <= verge[k][0]:
+                            count[k][0] += 1
+                        elif offset >= verge[k][1]:  # do not count double if inner segment is larger than outer - 2*verge
+                            count[k][1] += 1
+            percent = [(m, oc[0]/alloffsets, oc[1]/alloffsets) for m, oc in count.items()]
+            print(typlab + ":")
+            print(tabulate([(m, f, l, *count[m]) for m, f, l in percent], headers=[
+                "verge", "%first", "%last", "#first", "#last"]))
+            # print(tabulate([(m, *oc) for m, oc in count.items()] , headers=["verge", "#first", "#last"]))
+            # print()
+            # print(tabulate(percent, headers=["verge", "%first", "%last"]))
+
+            # IPython.embed()
         else:
             print("No mixed-length segment pairs.")
 
-        IPython.embed()
 
-
+    mmp = MultiMessagePlotter(comparator.specimens, "offset2distance", len(stats2plot))
+    mmp.scatterInEachAx(([s2p[1] for s2p in stats2plot]), marker="o") # means
+    mmp.scatterInEachAx(([s2p[2] for s2p in stats2plot]), marker="v")  # mins
+    mmp.scatterInEachAx(([s2p[3] for s2p in stats2plot]), marker="^")  # maxs
+    mmp.nameEachAx([s2p[0] for s2p in stats2plot]) # labels
+    mmp.writeOrShowFigure()
+    # TODO reintegrage statistics from across field types
+    # IPython.embed()
 
     # # import matplotlib.pyplot as plt
     # mmp = MultiMessagePlotter(specimens, 'histo-templatecenters', len(templates))
