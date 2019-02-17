@@ -36,7 +36,7 @@ def typedrecallsums(clusterlist):
 
 if __name__ == '__main__':
     cstat = dict()
-    with open('reports/clusterStatisticsHDBSCAN.csv', 'r') as csvfile:
+    with open('clusterStatisticsHDBSCAN.csv', 'r') as csvfile:
         cstatr = csv.DictReader(csvfile)
 
         for colheader in cols:
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     scoretable = [ [ e[h] if h in e else None for h in scoreheaders ] for e in mcstat]
     print(tabulate(scoretable, scoreheaders, tablefmt="pipe"))
 
-    with open('reports/scoreTable.csv', 'w') as scorefile:
+    with open('scoreTable.csv', 'w') as scorefile:
         sfw = csv.writer(scorefile)
         sfw.writerow(scoreheaders)
         for line in scoretable:

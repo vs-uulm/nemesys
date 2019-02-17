@@ -494,13 +494,13 @@ if __name__ == '__main__':
             iterateDBSCANParameters()
         else:
             filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
-            # TODO sort out char sequences and handle independently: e. g. in general
-            # value below ~128 and > 16 (?) bytes (and some other heuristics for shorter ones)
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)
+            # SUPERSEDED!
 
             pcapbasename = basename(specimens.pcapFileName)
+            print("Trace:", pcapbasename)
             epsilon = args.epsilon  # TODO make "not set" epsilon and "default" distinguishable
             if args.epsilon == epsdefault and pcapbasename in epspertrace:
                 epsilon = epspertrace[pcapbasename]
