@@ -7,7 +7,7 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
-from inference.templates import TemplateGenerator
+from inference.templates import AbstractClusterer
 
 
 def segmentMeans(segmentsPerMsg: List[List]):
@@ -210,6 +210,9 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
         0. T: segA
         1. T: segB
         2. float: distance
+    :param segmentOrder: The segments in ordering they should be represented in the matrix
+    :param identity: The value pairs of identical segments should receive in the matrix
+    :param incomparable: The value incomparable segment pairs should get in the matrix
     :return: The distance matrix for the given similarities.
         1 for each undefined element, 0 in the diagonal, even if not given in the input.
     """
@@ -227,13 +230,13 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
     return simtrx
 
 
-def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs) \
+def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
     Keep and label segments classified as noise.
 
-    :param tg: TemplateGenerator object that contains all the segments to be clustered
+    :param clusterer: Clusterer object that contains all the segments to be clustered
     :param analysisTitle: the string to be used as label for the result
     :param kwargs: arguments for the clusterer
     :return: List/Tuple structure of annotated analyses, clusters, and segments.
@@ -255,11 +258,8 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
         ]
     """
     print("Clustering segments...")
-    if not kwargs:
-        noise, *clusters = tg.clusterSimilarSegments(False)
-    else:
-        noise, *clusters = tg.clusterSimilarSegments(False, **kwargs)
-    print("{} clusters generated from {} segments".format(len(clusters), len(tg.segments)))
+    noise, *clusters = clusterer.clusterSimilarSegments(False)
+    print("{} clusters generated from {} segments".format(len(clusters), len(clusterer.segments)))
 
     segmentClusters = list()
     segLengths = set()
@@ -276,7 +276,7 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
                                    [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
                                     for cseg in noise] )) # ''
     for cnum, segs in enumerate(clusters):
-        clusterDists = tg.distancesSubset(segs)
+        clusterDists = clusterer.distanceCalculator.distancesSubset(segs)
         typegroups = segments2types(segs)
         clusterSegLengths = {seg.length for seg in segs}
         outputLengths = [str(slen) for slen in clusterSegLengths]
@@ -295,7 +295,7 @@ def segments2clusteredTypes(tg : TemplateGenerator, analysisTitle: str, **kwargs
 
     segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
                                                     next(iter(segLengths)) if len(segLengths) == 0 else 'mixedamount',
-                                                    tg.clusterer if tg.clusterer else 'n/a'),
+                                                    clusterer if clusterer else 'n/a'),
                           segmentClusters) ]
     return segmentClusters
 

@@ -129,7 +129,6 @@ class DistanceCalculator(object):
         """
         Determine the distance between the given segments.
 
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
         >>>
@@ -215,7 +214,6 @@ class DistanceCalculator(object):
 
         >>> from tabulate import tabulate
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
@@ -269,7 +267,6 @@ class DistanceCalculator(object):
         >>> from tabulate import tabulate
         >>> import math
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
@@ -323,7 +320,7 @@ class DistanceCalculator(object):
         ------  -
         >>> offpairs = [["-"*(off*2) + dc.segments[pair[0]].bytes.hex(), dc.segments[pair[1]].bytes.hex()]
         ...                     for pair, off in dc.offsets.items()]
-        >>> for opsub in range(1, math.ceil(len(offpairs)/5)):
+        >>> for opsub in range(1, int(math.ceil(len(offpairs)/5))):
         ...     print(tabulate(map(list,zip(*offpairs[(opsub-1)*5:opsub*5])), numalign="left"))
         --------  ------  ------  --------  --------------
         0203      0203    --0204  --0203    ----------0203
@@ -377,7 +374,6 @@ class DistanceCalculator(object):
 
         >>> from itertools import combinations
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
@@ -949,7 +945,6 @@ class DistanceCalculator(object):
         """
 
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
@@ -1008,7 +1003,7 @@ class DistanceCalculator(object):
 
     @staticmethod
     def _checkCacheFile(analysisTitle: str, tokenizer: str, pcapfilename: str):
-        from os.path import isfile, splitext, basename, exists, join
+        from os.path import splitext, basename, exists
         pcapName = splitext(basename(pcapfilename))[0]
         dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
         if not exists(dccachefn):
@@ -1061,6 +1056,19 @@ class DistanceCalculator(object):
                 pickle.dump((segmentedMessages, comparator, self), f, pickle.HIGHEST_PROTOCOL)
         else:
             raise FileExistsError("Cache file" + dccachefn + " already exists. Abort saving.")
+
+
+    def findMedoid(self, segments: List[MessageSegment]) -> MessageSegment:
+        """
+        Find the medoid closest describing the given list of segments.
+
+        :param segments: a list of segments that must be known to this template generator.
+        :return: The MessageSegment from segments that is the list's medoid.
+        """
+        distSubMatrix = self.distancesSubset(segments)
+        mid = distSubMatrix.sum(axis=1).argmin()
+        return segments[mid]
+
 
 
 class Template(AbstractSegment):
@@ -1251,92 +1259,30 @@ class Template(AbstractSegment):
 
 
 
-class TemplateGenerator(DistanceCalculator):
+class TemplateGenerator(object):
     """
     Generate templates for a list of segments according to their distance.
     """
 
-    def __init__(self, segments: List[MessageSegment], method='canberra',
-                 thresholdFunction = None, thresholdArgs = {}):
+    def __init__(self, dc: DistanceCalculator, clusterer: 'AbstractClusterer'):
         """
         Find similar segments, group them, and return a template for each group.
 
-        :param segments: Segments to base the templates on.
+        :param dc: Segment distances to base the templates on.
         """
-        super().__init__(segments, method, thresholdFunction, thresholdArgs)
-        self.clusterer = None  # type: TemplateGenerator.Clusterer
+        self._dc = dc
+        self._clusterer = clusterer
 
-    def clusterSimilarSegments(self, filterNoise=True, **kwargs) -> List[List[MessageSegment]]:
-        """
-        Find suitable discrimination between dissimilar segments.
+    @property
+    def distanceCalculator(self):
+        return self._dc
 
-        Currently only returning groups of messages with available pairwise distance for all members.
+    @property
+    def clusterer(self):
+        return self._clusterer
 
-        :param: if filterNoise is False, the first element in the returned list of clusters
-            always is the (possibly empty) noise.
-        :return: clusters of similar segments
-        """
-        clusters = self.getClusters(self._segments, **kwargs)
-        if filterNoise and -1 in clusters: # omit noise
-            del clusters[-1]
-        clusterlist = [clusters[l] for l in sorted(clusters.keys())]
-        return clusterlist
-
-
-    def getClusters(self, segments: Sequence[MessageSegment], **kwargs) -> Dict[int, List[MessageSegment]]:
-        """
-        Do the initialization of the clusterer and perform the clustering.
-
-        :param segments: List of equally lengthy segments.
-        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
-            If not given (None), it is autoconfigured.
-        :return: A dict of labels to lists of segments with that label.
-        """
-        clustererClass = kwargs['clustererClass'] if 'clustererClass' in kwargs else TemplateGenerator.HDBSCAN
-
-        similarities = self.distancesSubset(segments)
-        try:
-            if not 'epsilon' in kwargs and not 'min_cluster_size' in kwargs:
-                self.clusterer = clustererClass(similarities, True)
-            else:
-                self.clusterer = clustererClass(similarities, False)
-                if 'epsilon' in kwargs:
-                    # fixed epsilon
-                    import math
-                    self.clusterer.minpts = kwargs['minpts'] if 'minpts' in kwargs else \
-                        round(math.log(similarities.shape[0]))
-                    self.clusterer.epsilon = kwargs['epsilon']  # 1.0
-                elif 'min_cluster_size' in kwargs:
-                    self.clusterer.min_cluster_size = kwargs['min_cluster_size']
-            labels = self.clusterer.getClusterLabels()
-        except ValueError as e:
-            print(segments)
-            # import tabulate
-            # print(tabulate.tabulate(similarities))
-            raise e
-        assert isinstance(labels, numpy.ndarray)
-        ulab = set(labels)
-
-        segmentClusters = dict()
-        for l in ulab:
-            class_member_mask = (labels == l)
-            segmentClusters[l] = [seg for seg in itertools.compress(segments, class_member_mask)]
-        return segmentClusters
-
-
-    def findMedoid(self, segments: List[MessageSegment]) -> MessageSegment:
-        """
-        Find the medoid closest describing the given list of segments.
-
-        :param segments: a list of segments that must be known to this template generator.
-        :return: The MessageSegment from segments that is the list's medoid.
-        """
-        distSubMatrix = self.distancesSubset(segments)
-        mid = distSubMatrix.sum(axis=1).argmin()
-        return segments[mid]
-
-
-    def generateTemplatesForClusters(self, segmentClusters: Iterable[List[MessageSegment]], medoid=True) \
+    @staticmethod
+    def generateTemplatesForClusters(dc: DistanceCalculator, segmentClusters: Iterable[List[MessageSegment]], medoid=True) \
             -> List[Template]:
         """
         Find templates representing the message segments in the input clusters.
@@ -1352,19 +1298,18 @@ class TemplateGenerator(DistanceCalculator):
                 segValues = numpy.array([ seg.values for seg in cluster ])
                 center = numpy.mean(segValues, 0)
             else:
-                center = self.findMedoid(cluster)
+                center = dc.findMedoid(cluster)
             templates.append(Template(center, cluster))
         return templates
 
 
-    def generateTemplates(self, **kwargs) -> List[Template]:
+    def generateTemplates(self) -> List[Template]:
         """
         Generate templates for all clusters. Triggers a new clustering run.
 
         >>> from pprint import pprint
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
         >>> from utils.loader import BaseLoader
-        >>> from inference.templates import *
         >>> from inference.analyzers import Value
         >>>
         >>> bytedata = [
@@ -1383,15 +1328,12 @@ class TemplateGenerator(DistanceCalculator):
         >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
         >>> specimens = BaseLoader(messages)
         >>> DistanceCalculator.debug = False
-        >>> tg = TemplateGenerator(segments)
+        >>> dc = DistanceCalculator(segments, thresholdFunction=DistanceCalculator.neutralThreshold, thresholdArgs=None)
         Calculated distances for 37 segment pairs.
-        >>> clusters = tg.getClusters(segments, clustererClass=TemplateGenerator.DBSCAN,
-        ...         epsilon=1.0, minpts=3,
-        ...         thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        >>> clusterer = DBSCANsegmentClusterer(dc, eps=1.0, min_samples=3)
         DBSCAN epsilon: 1.0 minpts: 3
-        >>> templates = tg.generateTemplates(clustererClass=TemplateGenerator.DBSCAN,
-        ...     epsilon=1.0, minpts=3,
-        ...     thresholdFunction=TemplateGenerator.neutralThreshold, thresholdArgs=None)
+        >>> tg = TemplateGenerator(dc, clusterer)
+        >>> templates = tg.generateTemplates()
         DBSCAN epsilon: 1.0 minpts: 3
         >>> pprint([t.baseSegments for t in templates])
         [[MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
@@ -1401,7 +1343,7 @@ class TemplateGenerator(DistanceCalculator):
           MessageSegment 2 bytes: 0203 | values: [2, 3],
           MessageSegment 4 bytes: 46020304... | values: [70, 2, 3...,
           MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...]]
-        >>> pprint(clusters)
+        >>> pprint(clusterer.getClusters())
         {-1: [MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...,
               MessageSegment 3 bytes: 250545 | values: [37, 5, 69]],
          0: [MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
@@ -1425,12 +1367,11 @@ class TemplateGenerator(DistanceCalculator):
         sdp.writeOrShowFigure()
 
 
-        :param kwargs: call the clusterer with these parameters. See getClusters().
         :return: A list of Templates for all clusters.
         """
         # retrieve all clusters and omit noise for template generation.
-        allClusters = [cluster for label, cluster in self.getClusters(self.segments, **kwargs).items() if label > -1]
-        return self.generateTemplatesForClusters(allClusters)
+        allClusters = [cluster for label, cluster in self._clusterer.getClusters().items() if label > -1]
+        return TemplateGenerator.generateTemplatesForClusters(self._dc, allClusters)
 
 
 
@@ -1439,340 +1380,413 @@ class TemplateGenerator(DistanceCalculator):
 
 
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # Clusterer classes # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # # # # TemplateGenerator.Clusterer classes # # # # # # #
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Clusterer(ABC):
-        """
-        Wrapper for any clustering implementation to select and adapt the autoconfiguration of the parameters.
-        """
-        def __init__(self, distances: numpy.ndarray):
-            self._distances = distances
-
-        @abstractmethod
-        def getClusterLabels(self) -> numpy.ndarray:
-            """
-            Cluster the entries in the similarities parameter
-            and return the resulting labels.
-
-            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
-            """
-            raise NotImplementedError("This method needs to be implemented using a cluster algorithm.")
-
-
-        def lowertriangle(self):
-            """
-            Distances is a symmetric matrix, and we often only need one triangle:
-            :return: the lower triangle of the matrix, all other elements of the matrix are set to nan
-            """
-            mask = numpy.tril(numpy.ones(self._distances.shape)) != 0
-            dist = self._distances.copy()
-            dist[~mask] = numpy.nan
-            return dist
-
-
-        def _nearestPerNeigbor(self) -> List[Tuple[int, float]]:
-            """
-            see also DistanceCalculator.neighbors()
-            In comparison to the general implementation in DistanceCalculator, this one does not return a sorted list,
-            but just the closest neighbor and its index for all segments.
-
-            This test uses a non-symmetric matrix to detect bugs if any. This is NOT a use case example!
-            >>> from inference.templates import *
-            >>> clusterer = TemplateGenerator.DBSCAN(numpy.array([[0.0, 0.5, 0.8],[0.1, 0.0, 0.9],[0.7,0.3,0.0]]),
-            ...     autoconfigure=False)
-            >>> print(clusterer._distances)
-            [[ 0.   0.5  0.8]
-             [ 0.1  0.   0.9]
-             [ 0.7  0.3  0. ]]
-            >>> clusterer._nearestPerNeigbor()
-            [(1, 0.5), (0, 0.10000000000000001), (1, 0.29999999999999999)]
-
-            :return: a list of the nearest neighbors of each segment in this clusterer object, omitting self identity.
-            The position in the list is the index of the segment in the distance matrix.
-            The result is a list of tuples with
-                * the index of the neigbor (from the distance matrix) and
-                * the distance to this neighbor
-            """
-            neibrNearest = list()
-            for homeidx in range(self._distances.shape[0]):
-                # mask self identity by "None"-value
-                mask = list(range(homeidx)) + [None] + list(range(homeidx + 1, self._distances.shape[0]))
-                candNeigbors = self._distances[homeidx]
-                minNidx = mask[0]
-                for nidx in mask[1:]:
-                    if nidx is not None and (minNidx is None or candNeigbors[nidx] < candNeigbors[minNidx]):
-                        minNidx = nidx
-                minNdst = candNeigbors[minNidx]
-                neibrNearest.append((minNidx, minNdst))
-            return neibrNearest
-
-
-        def steepestSlope(self):
-            from math import log
-
-            lnN = round(log(self._distances.shape[0]))
-
-            # simple and (too) generic heuristic: MinPts ≈ ln(n)
-            minpts = lnN
-
-            # find the first increase, in the mean of the first 2*lnN nearest neighbor distances for all ks,
-            # which is larger than the mean of those increases
-            # Inspired by Fatma Ozge Ozkok, Mete Celik: "A New Approach to Determine Eps Parameter of DBSCAN Algorithm"
-            npn = self._nearestPerNeigbor()
-            dpnmln = [numpy.mean([dpn[k] for nid, dpn in npn if dpn[k] > 0][:2 * lnN]) for k in range(0, len(npn) - 1)]
-            deltamln = numpy.ediff1d(dpnmln)
-            deltamlnmean = deltamln.mean() # + deltamln.std()
-            for k, a in enumerate(deltamln[lnN:], lnN):
-                if a > deltamlnmean:
-                    minpts = k + 1
-                    break
-
-            steepslopeK = minpts
-            # add standard deviation to mean-threshold for eps (see authors above)
-            deltamlnmean = deltamln.mean() + 2 * deltamln.std()
-            for k, a in enumerate(deltamln[minpts-1:], minpts-1):
-                if a > deltamlnmean:
-                    steepslopeK = k + 1
-                    break
-
-            return minpts, steepslopeK
-
-
-        @abstractmethod
-        def __repr__(self):
-            raise NotImplementedError("This method needs to be implemented giving the configuration of this clusterer.")
-
-
-    class HDBSCAN(Clusterer):
-        """
-        Hierarchical Density-Based Spatial Clustering of Applications with Noise
-
-        https://github.com/scikit-learn-contrib/hdbscan
+class AbstractClusterer(ABC):
+    """
+    Wrapper for any clustering implementation to select and adapt the autoconfiguration of the parameters.
+    """
+    def __init__(self, dc: DistanceCalculator, segments: Sequence[MessageSegment] = None):
         """
 
-        def __init__(self, distances: numpy.ndarray, autoconfigure=True):
-            super().__init__(distances)
-
-            if autoconfigure:
-                from math import log
-                lnN = round(log(self._distances.shape[0]))
-                self.min_cluster_size = self.steepestSlope()[0] # round(lnN * 1.5)
-            else:
-                self.min_cluster_size = None
-            self.min_samples = 3
-
-
-        def getClusterLabels(self) -> numpy.ndarray:
-            """
-            Cluster the entries in the similarities parameter by DBSCAN
-            and return the resulting labels.
-
-            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
-            """
-            from hdbscan import HDBSCAN
-
-            if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
-                return numpy.zeros_like(self._distances[0], int)
-
-            dbscan = HDBSCAN(metric='precomputed', allow_single_cluster=True, cluster_selection_method='leaf',
-                             min_cluster_size=self.min_cluster_size,
-                             min_samples=self.min_samples
-                             )
-            print("HDBSCAN min cluster size:", self.min_cluster_size, "min samples:", self.min_samples)
-            dbscan.fit(self._distances)
-            # TODO import IPython; IPython.embed()
-            return dbscan.labels_
-
-
-        def __repr__(self):
-            return 'HDBSCAN mcs {} ms {}'.format(self.min_cluster_size, self.min_samples)
-
-
-    class DBSCAN(Clusterer):
+        :param dc:
+        :param segments: subset of segments from dc to cluster, use all segments in dc if None
         """
-        Wrapper for DBSCAN from the sklearn.cluster module including autoconfiguration of the parameters.
+        self._dc = dc
+        if segments is None:
+            self._distances = dc.distanceMatrix
+            self._segments = dc.segments
+        else:
+            self._segments = segments
+            self._distances = self._dc.distancesSubset(segments)
+
+    @property
+    def segments(self):
+        return self._segments
+
+    @property
+    def distanceCalculator(self):
+        return self._dc
+
+    def clusterSimilarSegments(self, filterNoise=True) -> List[List[MessageSegment]]:
+        """
+        Find suitable discrimination between dissimilar segments.
+
+        Works on representatives for segments of identical features.
+
+        :param: if filterNoise is False, the first element in the returned list of clusters
+            always is the (possibly empty) noise.
+        :return: clusters of similar segments
+        """
+        clusters = self.getClusters()
+        if filterNoise and -1 in clusters: # omit noise
+            del clusters[-1]
+        clusterlist = [clusters[l] for l in sorted(clusters.keys())]
+        return clusterlist
+
+    def getClusters(self) -> Dict[int, List[MessageSegment]]:
+        """
+        Do the initialization of the clusterer and perform the clustering of the list of segments contained in the
+        distance calculator.
+
+        Works on representatives for segments of identical features.
+
+        :return: A dict of labels to lists of segments with that label.
+        """
+        try:
+            labels = self.getClusterLabels()
+        except ValueError as e:
+            print(self._segments)
+            # import tabulate
+            # print(tabulate.tabulate(similarities))
+            raise e
+        assert isinstance(labels, numpy.ndarray)
+        ulab = set(labels)
+
+        segmentClusters = dict()
+        for l in ulab:
+            class_member_mask = (labels == l)
+            segmentClusters[l] = [seg for seg in itertools.compress(self._segments, class_member_mask)]
+        return segmentClusters
+
+    @abstractmethod
+    def getClusterLabels(self) -> numpy.ndarray:
+        """
+        Cluster the entries in the similarities parameter
+        and return the resulting labels.
+
+        :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
+        """
+        raise NotImplementedError("This method needs to be implemented using a cluster algorithm.")
+
+    def lowertriangle(self):
+        """
+        Distances is a symmetric matrix, and we often only need one triangle:
+        :return: the lower triangle of the matrix, all other elements of the matrix are set to nan
+        """
+        mask = numpy.tril(numpy.ones(self._distances.shape)) != 0
+        dist = self._distances.copy()
+        dist[~mask] = numpy.nan
+        return dist
+
+    def _nearestPerNeigbor(self) -> List[Tuple[int, float]]:
+        """
+        see also DistanceCalculator.neighbors()
+        In comparison to the general implementation in DistanceCalculator, this one does not return a sorted list,
+        but just the closest neighbor and its index for all segments.
+
+        This test uses a non-symmetric matrix to detect bugs if any. This is NOT a use case example!
+        >>> clusterer = DBSCANsegmentClusterer(numpy.array([[0.0, 0.5, 0.8],[0.1, 0.0, 0.9],[0.7,0.3,0.0]]),
+        ...     autoconfigure=False)
+        >>> print(clusterer._distances)
+        [[ 0.   0.5  0.8]
+         [ 0.1  0.   0.9]
+         [ 0.7  0.3  0. ]]
+        >>> clusterer._nearestPerNeigbor()
+        [(1, 0.5), (0, 0.10000000000000001), (1, 0.29999999999999999)]
+
+        :return: a list of the nearest neighbors of each segment in this clusterer object, omitting self identity.
+        The position in the list is the index of the segment in the distance matrix.
+        The result is a list of tuples with
+            * the index of the neigbor (from the distance matrix) and
+            * the distance to this neighbor
+        """
+        neibrNearest = list()
+        for homeidx in range(self._distances.shape[0]):
+            # mask self identity by "None"-value
+            mask = list(range(homeidx)) + [None] + list(range(homeidx + 1, self._distances.shape[0]))
+            candNeigbors = self._distances[homeidx]
+            minNidx = mask[0]
+            for nidx in mask[1:]:
+                if nidx is not None and (minNidx is None or candNeigbors[nidx] < candNeigbors[minNidx]):
+                    minNidx = nidx
+            minNdst = candNeigbors[minNidx]
+            neibrNearest.append((minNidx, minNdst))
+        return neibrNearest
+
+    def steepestSlope(self):
+        from math import log
+
+        lnN = round(log(self._distances.shape[0]))
+
+        # simple and (too) generic heuristic: MinPts ≈ ln(n)
+        minpts = lnN
+
+        # find the first increase, in the mean of the first 2*lnN nearest neighbor distances for all ks,
+        # which is larger than the mean of those increases
+        # Inspired by Fatma Ozge Ozkok, Mete Celik: "A New Approach to Determine Eps Parameter of DBSCAN Algorithm"
+        npn = [self._dc.neigbors(seg) for seg in self._dc.segments]
+        dpnmln = [numpy.mean([idn[k][1] for idn in npn if idn[k][1] > 0][:2 * lnN]) for k in range(0, len(npn) - 1)]
+        deltamln = numpy.ediff1d(dpnmln)
+        deltamlnmean = deltamln.mean() # + deltamln.std()
+        for k, a in enumerate(deltamln[lnN:], lnN):
+            if a > deltamlnmean:
+                minpts = k + 1
+                break
+
+        steepslopeK = minpts
+        # add standard deviation to mean-threshold for eps (see authors above)
+        deltamlnmean = deltamln.mean() + 2 * deltamln.std()
+        for k, a in enumerate(deltamln[minpts-1:], minpts-1):
+            if a > deltamlnmean:
+                steepslopeK = k + 1
+                break
+
+        return minpts, steepslopeK
+
+    @abstractmethod
+    def __repr__(self):
+        raise NotImplementedError("This method needs to be implemented giving the configuration of this clusterer.")
+
+
+class HDBSCANsegmentClusterer(AbstractClusterer):
+    """
+    Hierarchical Density-Based Spatial Clustering of Applications with Noise
+
+    https://github.com/scikit-learn-contrib/hdbscan
+    """
+
+    def __init__(self, dc: DistanceCalculator, **kwargs):
         """
 
-        def __init__(self, distances: numpy.ndarray, autoconfigure=True):
-            super().__init__(distances)
-            if autoconfigure:
-                self.minpts, self.epsilon = self._autoconfigure()
-            else:
-                self.minpts, self.epsilon = None, None
+        :param dc:
+        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
+            If not given (None), it is autoconfigured.
+        """
+        super().__init__(dc)
+
+        if len(kwargs) == 0:
+            # from math import log
+            # lnN = round(log(self._distances.shape[0]))
+            self.min_cluster_size = self.steepestSlope()[0] # round(lnN * 1.5)
+        elif 'min_cluster_size' in kwargs:
+            self.min_cluster_size = kwargs['min_cluster_size']
+        else:
+            raise ValueError("Parameters for HDBSCAN without autoconfiguration missing. "
+                             "Requires min_cluster_size.")
+        self.min_samples = 3
 
 
-        def getClusterLabels(self) -> numpy.ndarray:
-            """
-            Cluster the entries in the similarities parameter by DBSCAN
-            and return the resulting labels.
+    def getClusterLabels(self) -> numpy.ndarray:
+        """
+        Cluster the entries in the similarities parameter by DBSCAN
+        and return the resulting labels.
 
-            :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
-            """
-            import sklearn.cluster
+        :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
+        """
+        from hdbscan import HDBSCAN
 
-            if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
-                return numpy.zeros_like(self._distances[0], int)
+        if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
+            return numpy.zeros_like(self._distances[0], int)
 
-            dbscan = sklearn.cluster.DBSCAN(eps=self.epsilon, min_samples=self.minpts)
-            print("DBSCAN epsilon:", self.epsilon, "minpts:", self.minpts)
-            dbscan.fit(self._distances)
-            return dbscan.labels_
-
-
-        def __repr__(self):
-            return 'DBSCAN eps {:0.3f} mpt'.format(self.epsilon, self.minpts) \
-                if self.epsilon and self.minpts \
-                else 'DBSCAN unconfigured (need to set epsilon and minpts)'
+        dbscan = HDBSCAN(metric='precomputed', allow_single_cluster=True, cluster_selection_method='leaf',
+                         min_cluster_size=self.min_cluster_size,
+                         min_samples=self.min_samples
+                         )
+        print("HDBSCAN min cluster size:", self.min_cluster_size, "min samples:", self.min_samples)
+        dbscan.fit(self._distances)
+        # TODO import IPython; IPython.embed()
+        return dbscan.labels_
 
 
-        def _autoconfigure(self):
-            """
-            Auto configure the clustering parameters epsilon and minPts regarding the input data
-
-            :return: minpts, epsilon
-            """
-
-            minpts, steepslopeK = self.steepestSlope()
-
-            # get minpts-nearest-neighbor distance:
-            neighdists = self._knearestdistance(round(steepslopeK + (self._distances.shape[0] - steepslopeK) * .2))
-                    # round(minpts + 0.5 * (self._distances.shape[0] - minpts))
-            # # lower factors resulted in only few small clusters, since the density distribution is to uneven
-            # # (for DBSCAN?)
-
-            # # get mean of minpts-nearest-neighbors:
-            # neighdists = self._knearestmean(minpts)
-            # # it gives no significantly better results than the direct k-nearest distance,
-            # # but requires more computation.
+    def __repr__(self):
+        return 'HDBSCAN mcs {} ms {}'.format(self.min_cluster_size, self.min_samples)
 
 
-            # # knee calculation by rule of thumb
-            # kneeX = self._kneebyruleofthumb(neighdists)
-            # # result is far (too far) left of the actual knee
+class DBSCANsegmentClusterer(AbstractClusterer):
+    """
+    Wrapper for DBSCAN from the sklearn.cluster module including autoconfiguration of the parameters.
+    """
 
-            # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
-            from kneed import KneeLocator
-            kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='increasing')
-            kneeX = kneel.knee
-            # # knee is too far right/value too small to be useful: the clusters are small/zero size and few,
-            # # perhaps density distribution too uneven in this use case?
-            # kneel.plot_knee_normalized()
+    def __init__(self, dc: DistanceCalculator, **kwargs):
+        """
+        :param dc:
+        :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
+            If not given (None), it is autoconfigured.
+        """
+        super().__init__(dc)
+        if len(kwargs) == 0:
+            self.min_samples, self.eps = self._autoconfigure()
+        else:
+            if not 'eps' in kwargs or not 'min_samples' in kwargs:
+                raise ValueError("Parameters for DBSCAN without autoconfiguration missing. "
+                                 "Requires epsilon and min_cluster_size.")
+            self.min_samples, self.eps = kwargs['min_samples'], kwargs['eps']
 
-            # steepest-drop position:
-            # kneeX = numpy.ediff1d(neighdists).argmax()
-            # # better results than "any of the" knee values
+    def getClusterLabels(self) -> numpy.ndarray:
+        """
+        Cluster the entries in the similarities parameter by DBSCAN
+        and return the resulting labels.
 
-            if isinstance(kneeX, int):
-                epsilon = neighdists[kneeX]
-            else:
-                print("Warning: Kneedle could not find a knee in {}-nearest distribution.".format(minpts))
-                epsilon = 0.0
+        :return: (numbered) cluster labels for each segment in the order given in the (symmetric) distance matrix
+        """
+        import sklearn.cluster
 
-            if not epsilon > 0.0:  # fallback if epsilon becomes zero
-                lt = self.lowertriangle()
-                epsilon = numpy.nanmean(lt) + numpy.nanstd(lt)
+        if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
+            return numpy.zeros_like(self._distances[0], int)
 
-
-            # DEBUG and TESTING
-            #
-            # plots of k-nearest-neighbor distance histogram and "knee"
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(1, 2)
-
-            axl, axr = ax.flat
-
-            # for k in range(0, 100, 10):
-            #     alpha = .4
-            #     if k == minpts:
-            #         alpha = 1
-            #     plt.plot(sorted([dpn[k] for nid, dpn in npn]), alpha=alpha, label=k)
-
-            # farthest
-            # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
-            # axl.plot(dpnmln, alpha=.4)
-            # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self._distances.shape[0]-1)) )])
-            disttril = numpy.tril(self._distances)
-            alldist = [e for e in disttril.flat if e > 0]
-            axr.hist(alldist, 50)
-
-            # plt.plot(smoothdists, alpha=.8)
-            # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
-            axl.axvline(steepslopeK, linestyle='dotted', color='blue', alpha=.4)
-            left = axl.get_xlim()[0]
-            bottom = axl.get_ylim()[1]
-            # axl.text(left, bottom,"mpt={}, eps={:0.3f}".format(minpts, epsilon))
-            # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
-            # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
-            # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
-            axl.legend()
-            # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self._distances.max(), self._distances.mean()))
-            import time
-            # plt.show()
-            plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
-            plt.close('all')
-            plt.clf()
-
-            # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
-            # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
-            # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
-            # import IPython; IPython.embed()
-            #
-            # DEBUG and TESTING
-
-            return minpts, epsilon
+        dbscan = sklearn.cluster.DBSCAN(eps=self.eps, min_samples=self.min_samples)
+        print("DBSCAN epsilon:", self.eps, "minpts:", self.min_samples)
+        dbscan.fit(self._distances)
+        return dbscan.labels_
 
 
-        def _knearestmean(self, k: int):
-            """
-            :param k: range of neighbors to be selected
-            :return: The mean of the k-nearest neighbors for all the distances of this clusterer instance.
-            """
-            neighdistmeans = list()
-            for neighid in range(self._distances.shape[0]):
-                ndmean = numpy.mean(
-                    sorted(self._distances[:, neighid])[1:k + 1])  # shift by one: ignore self identity
-                neighdistmeans.append((neighid, ndmean))
-            neighdistmeans = sorted(neighdistmeans, key=lambda x: x[1])
-            return [e[1] for e in neighdistmeans]
+    def __repr__(self):
+        return 'DBSCAN eps {:0.3f} mpt'.format(self.eps, self.min_samples) \
+            if self.eps and self.min_samples \
+            else 'DBSCAN unconfigured (need to set epsilon and min_samples)'
 
 
-        def _knearestdistance(self, k: int):
-            """
-            :param k: neighbor to be selected
-            :return: The distances of the k-nearest neighbors for all distances of this clusterer instance.
-            """
-            if not k < self._distances.shape[0] - 1:
-                raise IndexError("k={} exeeds the number of neighbors.".format(k))
-            return sorted([dpn[k] for nid, dpn in self._nearestPerNeigbor()])
+    def _autoconfigure(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+
+        :return: minpts, epsilon
+        """
+
+        minpts, steepslopeK = self.steepestSlope()
+
+        # # another alternative to get min_cluster_size estimation
+        # import math
+        # min_cluster_size = round(math.log(similarities.shape[0]))
+
+        # get minpts-nearest-neighbor distance:
+        neighdists = self._knearestdistance(round(steepslopeK + (self._distances.shape[0] - steepslopeK) * .2))
+                # round(minpts + 0.5 * (self._distances.shape[0] - minpts))
+        # # lower factors resulted in only few small clusters, since the density distribution is to uneven
+        # # (for DBSCAN?)
+
+        # # get mean of minpts-nearest-neighbors:
+        # neighdists = self._knearestmean(minpts)
+        # # it gives no significantly better results than the direct k-nearest distance,
+        # # but requires more computation.
 
 
-        @staticmethod
-        def _kneebyruleofthumb(neighdists):
-            """
-            according to the paper
-            (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+        # # knee calculation by rule of thumb
+        # kneeX = self._kneebyruleofthumb(neighdists)
+        # # result is far (too far) left of the actual knee
 
-            :param neighdists: k-nearest-neighbor distances
-            :return: x coordinate of knee point on the distance distribution of the parameter neighdists
-            """
-            # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
-            from scipy.ndimage.filters import gaussian_filter1d
-            smoothdists = gaussian_filter1d(neighdists, numpy.log(len([n for n in neighdists if n > 0.001 * max(neighdists)])))
+        # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
+        from kneed import KneeLocator
+        kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='increasing')
+        kneeX = kneel.knee
+        # # knee is too far right/value too small to be useful: the clusters are small/zero size and few,
+        # # perhaps density distribution too uneven in this use case?
+        # kneel.plot_knee_normalized()
 
-            # approximate 2nd derivative and get its max
-            # kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()  # alternative for 2nd derivative
-            kneeX = numpy.array(
-                    [smoothdists[i+1] + smoothdists[i-1] - 2 * smoothdists[i] for i in range(1, len(smoothdists)-1)]
-                ).argmax()
-            return int(round(kneeX))
+        # steepest-drop position:
+        # kneeX = numpy.ediff1d(neighdists).argmax()
+        # # better results than "any of the" knee values
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # # END # TemplateGenerator.Clusterer classes # END # # #
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        if isinstance(kneeX, int):
+            epsilon = neighdists[kneeX]
+        else:
+            print("Warning: Kneedle could not find a knee in {}-nearest distribution.".format(minpts))
+            epsilon = 0.0
+
+        if not epsilon > 0.0:  # fallback if epsilon becomes zero
+            lt = self.lowertriangle()
+            epsilon = numpy.nanmean(lt) + numpy.nanstd(lt)
+
+
+        # DEBUG and TESTING
+        #
+        # plots of k-nearest-neighbor distance histogram and "knee"
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1, 2)
+
+        axl, axr = ax.flat
+
+        # for k in range(0, 100, 10):
+        #     alpha = .4
+        #     if k == minpts:
+        #         alpha = 1
+        #     plt.plot(sorted([dpn[k] for nid, dpn in npn]), alpha=alpha, label=k)
+
+        # farthest
+        # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
+        # axl.plot(dpnmln, alpha=.4)
+        # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self._distances.shape[0]-1)) )])
+        disttril = numpy.tril(self._distances)
+        alldist = [e for e in disttril.flat if e > 0]
+        axr.hist(alldist, 50)
+
+        # plt.plot(smoothdists, alpha=.8)
+        # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
+        axl.axvline(steepslopeK, linestyle='dotted', color='blue', alpha=.4)
+        left = axl.get_xlim()[0]
+        bottom = axl.get_ylim()[1]
+        # axl.text(left, bottom,"mpt={}, eps={:0.3f}".format(minpts, epsilon))
+        # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
+        # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
+        # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
+        axl.legend()
+        # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self._distances.max(), self._distances.mean()))
+        import time
+        # plt.show()
+        plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
+        plt.close('all')
+        plt.clf()
+
+        # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+        # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
+        # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
+        # import IPython; IPython.embed()
+        #
+        # DEBUG and TESTING
+
+        return minpts, epsilon
+
+
+    def _knearestmean(self, k: int):
+        """
+        :param k: range of neighbors to be selected
+        :return: The mean of the k-nearest neighbors for all the distances of this clusterer instance.
+        """
+        neighdistmeans = list()
+        for neighid in range(self._distances.shape[0]):
+            ndmean = numpy.mean(
+                sorted(self._distances[:, neighid])[1:k + 1])  # shift by one: ignore self identity
+            neighdistmeans.append((neighid, ndmean))
+        neighdistmeans = sorted(neighdistmeans, key=lambda x: x[1])
+        return [e[1] for e in neighdistmeans]
+
+
+    def _knearestdistance(self, k: int):
+        """
+        :param k: neighbor to be selected
+        :return: The distances of the k-nearest neighbors for all distances of this clusterer instance.
+        """
+        if not k < self._distances.shape[0] - 1:
+            raise IndexError("k={} exeeds the number of neighbors.".format(k))
+        return sorted([self._dc.neigbors(seg)[k][1] for seg in self.segments])
+
+
+    @staticmethod
+    def _kneebyruleofthumb(neighdists):
+        """
+        according to the paper
+        (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+
+        :param neighdists: k-nearest-neighbor distances
+        :return: x coordinate of knee point on the distance distribution of the parameter neighdists
+        """
+        # smooth distances to prevent ambiguities about what a "knee" in the L-curve is
+        from scipy.ndimage.filters import gaussian_filter1d
+        smoothdists = gaussian_filter1d(neighdists, numpy.log(len([n for n in neighdists if n > 0.001 * max(neighdists)])))
+
+        # approximate 2nd derivative and get its max
+        # kneeX = numpy.ediff1d(numpy.ediff1d(smoothdists)).argmax()  # alternative for 2nd derivative
+        kneeX = numpy.array(
+                [smoothdists[i+1] + smoothdists[i-1] - 2 * smoothdists[i] for i in range(1, len(smoothdists)-1)]
+            ).argmax()
+        return int(round(kneeX))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # END # # Clusterer classes # # # # # # # # # END # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 

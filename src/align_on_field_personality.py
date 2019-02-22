@@ -11,16 +11,16 @@ import argparse, IPython
 from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 import itertools, pickle
+from hdbscan import HDBSCAN
 
-from inference.templates import TemplateGenerator, DistanceCalculator
+from inference.templates import DistanceCalculator, AbstractClusterer, HDBSCANsegmentClusterer, DBSCANsegmentClusterer
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
-    segments2clusteredTypes, filterSegments, searchSeqOfSeg, tabuSeqOfSeg
+from inference.segmentHandler import matrixFromTpairs
 from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from characterize_fieldtypes import analyses, labelForSegment
+from characterize_fieldtypes import analyses
 
 debug = False
 
@@ -32,7 +32,7 @@ tokenizer = 'tshark'  # (, '4bytesfixed', 'nemesys')
 
 
 class SegmentedMessages(object):
-    def __init__(self, dc: DistanceCalculator, segmentedMessages: Sequence[Tuple[MessageSegment]]):
+    def __init__(self, dc, segmentedMessages):
         self._dc = dc
         self._segmentedMessages = segmentedMessages  # type: Sequence[Tuple[MessageSegment]]
         self._similarities = self._calcSimilarityMatrix()
@@ -140,12 +140,15 @@ class SegmentedMessages(object):
 
     # 10 2
     def clusterMessageTypes(self, min_cluster_size = 10, min_samples = 2) \
-            -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, TemplateGenerator.Clusterer]:
-        from inference.templates import TemplateGenerator
-        hdbscan = TemplateGenerator.HDBSCAN(self._distances, None)
-        hdbscan.min_cluster_size = min_cluster_size
-        hdbscan.min_samples = min_samples
-        labels = hdbscan.getClusterLabels()
+            -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, HDBSCAN]:
+        clusterer = HDBSCAN(metric='precomputed', allow_single_cluster=True, cluster_selection_method='leaf',
+                         min_cluster_size=min_cluster_size,
+                         min_samples=min_samples)
+
+        print("Messages: HDBSCAN min cluster size:", min_cluster_size, "min samples:", min_samples)
+        clusterer.fit(self._distances)
+
+        labels = clusterer.labels_
         ulab = set(labels)
         segmentClusters = dict()
         for l in ulab:
@@ -155,7 +158,7 @@ class SegmentedMessages(object):
         print(len([ul for ul in ulab if ul >= 0]), "Clusters found",
               "(with noise", len(segmentClusters[-1]) if -1 in segmentClusters else 0, ")")
 
-        return segmentClusters, labels, hdbscan
+        return segmentClusters, labels, clusterer
 
     def similaritiesSubset(self, As: Sequence[Tuple[MessageSegment]], Bs: Sequence[Tuple[MessageSegment]] = None) \
                 -> numpy.ndarray:
@@ -383,10 +386,10 @@ if __name__ == '__main__':
 
     print('Prepare output...')
     from visualization.distancesPlotter import DistancesPlotter
-    dp = DistancesPlotter(specimens, 'message-distances-{}-{}'.format(tokenizer, clusterer), False)
+    dp = DistancesPlotter(specimens, 'message-distances-{}-{} mcs {} ms {}'.format(
+        tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples), False)
     dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
     dp.writeOrShowFigure()
-
     # IPython.embed()
 
     from tabulate import tabulate
@@ -412,7 +415,8 @@ if __name__ == '__main__':
 
     import csv
     reportFolder = "reports"
-    fileNameS = "NEMETYL-symbols-{}-{}".format(clusterer, pcapName)
+    fileNameS = "NEMETYL-symbols-{} mcs {} ms {}-{}".format(
+        type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples, pcapName)
     csvpath = join(reportFolder, fileNameS + '.csv')
     if not exists(csvpath):
         with open(csvpath, 'w') as csvfile:

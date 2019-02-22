@@ -12,10 +12,12 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 import argparse, IPython
 from os.path import isfile, basename
 from itertools import chain
+import numpy
 
-
-from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes
-from inference.templates import TemplateGenerator, DistanceCalculator, DelegatingDC
+from utils.baseAlgorithms import tril
+from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, labelForSegment, \
+    plotMultiSegmentLines
+from inference.templates import TemplateGenerator, DistanceCalculator, DelegatingDC, DBSCANsegmentClusterer
 from inference.segments import TypedSegment
 
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -24,7 +26,7 @@ from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
-
+from visualization.singlePlotter import SingleMessagePlotter
 
 debug = False
 
@@ -89,17 +91,39 @@ if __name__ == '__main__':
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
     # use DBSCAN
-    segmentGroups = segments2clusteredTypes(tg, analysisTitle,
-                                            clustererClass=TemplateGenerator.DBSCAN, epsilon=epsilon, minpts=20)
+    clusterer = DBSCANsegmentClusterer(dc, eps=epsilon, min_samples=20)
+    segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
     # re-extract cluster labels for segments
+    clusterer.getClusterLabels()
     labels = numpy.array([
-        labelForSegment(segmentGroups, seg) for seg in tg.segments
+        labelForSegment(segmentGroups, seg) for seg in dc.segments
     ])
 
-    typeDict = segments2types(filteredSegments)
+    typeDict = segments2types(segments)
 
 
+    titleFormat = "{} ({}, {}-{})".format(
+        segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
+        "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
 
+    print("Plot distances...")
+    sdp = DistancesPlotter(specimens, 'distances-' + titleFormat,
+                           args.interactive)
+    # old: 'mixedlength', analysisTitle, distance_method, tg.clusterer if tg.clusterer else 'n/a'
+    # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
+    sdp.plotSegmentDistances(dc, labels)
+    sdp.writeOrShowFigure()
+    del sdp
+
+    hstplt = SingleMessagePlotter(specimens, 'histo-distance-' + titleFormat, args.interactive)
+    hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
+    hstplt.writeOrShowFigure()
+    del hstplt
+
+    print("Prepare output...")
+    for pagetitle, segmentClusters in segmentGroups:
+        plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
+                              True, typeDict, args.interactive)
 
 
 

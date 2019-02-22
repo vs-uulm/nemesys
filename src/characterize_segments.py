@@ -12,12 +12,13 @@ import utils.evaluationHelpers
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import TemplateGenerator
+from inference.templates import DistanceCalculator, DBSCANsegmentClusterer
 from validation.dissectorMatcher import MessageComparator
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
-from characterize_fieldtypes import analyses, plotMultiSegmentLines, labelForSegment
+from characterize_fieldtypes import analyses, labelForSegment
+from utils.evaluationHelpers import plotMultiSegmentLines
 from inference.segmentHandler import segments2clusteredTypes, filterSegments
 
 
@@ -44,6 +45,10 @@ def plotLinesSegmentValues(segments: List[Tuple[str, MessageSegment]]):
     # plt.legend(scatterpoints=1, loc='best', shadow=False)
     plt.show()
     plt.clf()
+
+
+
+
 
 
 if __name__ == '__main__':
@@ -140,32 +145,34 @@ if __name__ == '__main__':
             print("Calculate distances...")
             # ftype = 'id'
             # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
-            tg = TemplateGenerator(filteredSegments)
+            dc = DistanceCalculator(filteredSegments)
 
             print("Clustering...")
             # typeGroups = segments2typedClusters(segments,analysisTitle)
-            segmentGroups = segments2clusteredTypes(tg, analysisTitle)
+            clusterer = DBSCANsegmentClusterer(dc)
+            segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
             # re-extract cluster labels for segments
             labels = numpy.array([
-                labelForSegment(segmentGroups, seg) for seg in tg.segments
+                labelForSegment(segmentGroups, seg) for seg in dc.segments
             ])
 
             # # if args.distances:
             print("Plot distances...")
-            sdp = DistancesPlotter(specimens, 'distances-{}-{}-DBSCANe{}'.format(
-                length, analysisTitle, tg.clusterer.epsilon if tg.clusterer else 'n/a'), args.interactive)
+            sdp = DistancesPlotter(specimens, 'distances-{}-{}-{}'.format(
+                length, analysisTitle, clusterer), args.interactive)
             # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-            sdp.plotSegmentDistances(tg, labels)
+            sdp.plotSegmentDistances(dc, labels)
             sdp.writeOrShowFigure()
 
 
             print("Prepare output...")
             for pagetitle, segmentClusters in segmentGroups:
-                plotMultiSegmentLines(segmentClusters, pagetitle, True)
+                plotMultiSegmentLines(segmentClusters, specimens, pagetitle, True, args.interactive)
 
             typeDict = sh.segments2types(filteredSegments)
             typeGrp = [(t, [('', s) for s in typeDict[t]]) for t in typeDict.keys()]
-            plotMultiSegmentLines(typeGrp, "{} ({} bytes) fieldtypes".format(analysisTitle, length), True)
+            plotMultiSegmentLines(typeGrp, specimens, "{} ({} bytes) fieldtypes".format(analysisTitle, length),
+                                  True, args.interactive)
 
             # IPython.embed()
 

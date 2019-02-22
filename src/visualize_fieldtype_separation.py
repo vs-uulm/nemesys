@@ -10,7 +10,7 @@ import argparse, IPython
 from os.path import isfile
 from itertools import chain
 
-from inference.templates import TemplateGenerator, Template
+from inference.templates import DistanceCalculator, Template, TemplateGenerator
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -53,35 +53,35 @@ if __name__ == '__main__':
     comparator = MessageComparator(specimens, 2, True, debug=debug)
 
     # segment messages according to true fields from the labels
-    print("Segmenting messages...", end=' ')
+    print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
     filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
     # filteredSegments = list(chain.from_iterable(segmentedMessages))
-    tg = TemplateGenerator(filteredSegments)
+    dc = DistanceCalculator(filteredSegments)
 
     typegroups = segments2types(filteredSegments)
     typelabels = list(typegroups.keys())
-    templates = tg.generateTemplatesForClusters([typegroups[ft] for ft in typelabels])
+    templates = TemplateGenerator.generateTemplatesForClusters(dc, [typegroups[ft] for ft in typelabels])
 
     # labels of templates
-    labels = ['Noise'] * len(tg.segments)
+    labels = ['Noise'] * len(dc.segments)
     for l, t in zip(typelabels, templates):
-        labels[tg.segments.index(t.medoid)] = l
+        labels[dc.segments.index(t.medoid)] = l
 
     sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
-    sdp.plotSegmentDistances(tg, numpy.array(labels))
+    sdp.plotSegmentDistances(dc, numpy.array(labels))
     sdp.writeOrShowFigure()
 
     # import matplotlib.pyplot as plt
     mmp = MultiMessagePlotter(specimens, 'histo-templatecenters', len(templates))
     for figIdx, (typlabl, typlate) in enumerate(zip(typelabels, templates)):
         # h_match histogram of distances to medoid for segments of typlate's type
-        match = [di for di, of in typlate.distancesToMixedLength(tg)]
+        match = [di for di, of in typlate.distancesToMixedLength(dc)]
         # abuse template to get distances to non-matching field types
         filtermismatch = [typegroups[tl] for tl in typelabels if tl != typlabl]
         mismatchtemplate = Template(typlate.medoid, list(chain.from_iterable(filtermismatch)))
         # h_mimatch histogram of distances to medoid for segments that are not of typlate's type
-        mismatch = [di for di, of in mismatchtemplate.distancesToMixedLength(tg)]
+        mismatch = [di for di, of in mismatchtemplate.distancesToMixedLength(dc)]
         # plot both histograms h overlapping (i.e. for each "bin" have two bars).
         # the bins denote ranges of distances from the medoid
         mmp.histoToSubfig(figIdx, [match, mismatch], bins=numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])

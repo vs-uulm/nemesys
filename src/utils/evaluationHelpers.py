@@ -3,6 +3,7 @@ Module encapsulating evaluation parameters and helper functions to validate aspe
 NEMESYS and NEMETYL approaches.
 """
 from typing import Union, Tuple, List
+from utils.loader import SpecimenLoader
 
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels
@@ -12,6 +13,8 @@ from inference.segments import MessageAnalyzer, TypedSegment
 
 
 # available analysis methods
+from visualization.multiPlotter import MultiMessagePlotter
+
 analyses = {
     'bcpnm': BitCongruenceNgramMean,
     # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
@@ -56,3 +59,91 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
                                              l4msg, analysisArgs), comparator.dissections[rmsg])
         for l4msg, rmsg in comparator.messages.items()]
     return segmentedMessages
+
+
+def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
+                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False, typeDict = None,
+                          isInteractive=False):
+    """
+    This is a not awfully important helper function saving the writing of a few lines code.
+
+    :param segmentGroups:
+    :param pagetitle:
+    :param colorPerLabel:
+    :param typeDict: dict of types (str-keys: list of segments) present in the segmentGroups
+    :return:
+    """
+    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
+    mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
+    numSegs = 0
+    if typeDict:  # calculate conciseness, correctness = precision, and recall
+        clusters = [segList for label, segList in segmentGroups]
+        prList = []
+        noise = None
+        if 'Noise' in segmentGroups[0][0]:
+            noise, *clusters = clusters  # remove the noise
+            prList.append(None)
+
+        numClusters = len(clusters)
+        numFtypes = len(typeDict)
+        conciseness = numClusters / numFtypes
+
+        from collections import Counter
+        for clusterSegs in clusters:
+            typeFrequency = Counter([ft for ft, seg in clusterSegs])
+            mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
+            numMFToverall = len(typeDict[mostFreqentType.split(':', 2)[0]])
+            numSegsinCuster = len(clusterSegs)
+            numSegs += numSegsinCuster
+
+            precision = numMFTinCluster / numSegsinCuster
+            recall = numMFTinCluster / numMFToverall
+
+            prList.append((mostFreqentType, precision, recall, numSegsinCuster))
+
+        mmp.textInEachAx(["precision = {:.2f}\n"  # correctness
+                          "recall = {:.2f}".format(pr[1], pr[2]) if pr else None for pr in prList])
+
+        # noise statistics
+        if noise:
+            numNoise = len(noise)
+            numSegs += numNoise
+            ratioNoise = numNoise / numSegs
+            noiseTypes = {ft for ft, seg in noise}
+
+        import os, csv
+        clStatsFile = os.path.join('reports/', 'clusterStatisticsHDBSCAN.csv')
+        csvWriteHead = False if os.path.exists(clStatsFile) else True
+        with open(clStatsFile, 'a') as csvfile:
+            clStatscsv = csv.writer(csvfile)  # type: csv.writer
+            if csvWriteHead:
+                # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
+                clStatscsv.writerow(['run_title', 'trace', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
+            if noise:
+                # noinspection PyUnboundLocalVariable
+                clStatscsv.writerow([pagetitle, specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), ratioNoise, numNoise])
+            clStatscsv.writerows([
+                (pagetitle, specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
+            ])
+
+    mmp.writeOrShowFigure()
+    del mmp
+
+
+def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
+                    seg: MessageSegment) -> Union[str, bool]:
+    """
+    Determine group label of an segment from deep hierarchy of segment clusters/groups.
+
+    see segments2clusteredTypes()
+
+    :param segGrpHier:
+    :param seg:
+    :return:
+    """
+    for name, grp in segGrpHier[0][1]:
+        if seg in (s for t, s in grp):
+            return name.split(", ", 2)[-1]
+    return False
+
+

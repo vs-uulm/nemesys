@@ -11,7 +11,7 @@ from itertools import compress
 from visualization.plotter import MessagePlotter
 from utils.loader import SpecimenLoader
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import TemplateGenerator, Template, DistanceCalculator
+from inference.templates import Template, DistanceCalculator
 
 
 
