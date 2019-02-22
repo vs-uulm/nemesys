@@ -15,8 +15,9 @@ import itertools, pickle
 from inference.templates import TemplateGenerator, DistanceCalculator
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
+from inference.segmentHandler import groupByLength, segments2types, segmentsFixed, matrixFromTpairs, \
     segments2clusteredTypes, filterSegments, searchSeqOfSeg, tabuSeqOfSeg
+from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses, labelForSegment

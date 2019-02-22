@@ -15,8 +15,9 @@ from math import ceil, floor
 from inference.templates import DistanceCalculator
 from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
+from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
     filterSegments
+from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.multiPlotter import MultiMessagePlotter
@@ -31,7 +32,9 @@ analyzerType = Value
 analysisArgs = None
 # fix the distance method to canberra
 distance_method = 'canberra'
-tokenizer = 'tshark-unfiltered'
+# tokenizer = 'tshark-unfiltered' # obscure parameters to DC
+# tokenizer = 'tshark-deduplicated+dezeroed'  # with offsetCutoff = 6
+tokenizer = 'tshark-deduplicated+dezeroed-nooffcut'
 
 
 
@@ -51,7 +54,8 @@ if __name__ == '__main__':
 
     try:
         segmentedMessages, comparator, dc = DistanceCalculator.loadCached(analysisTitle, tokenizer, args.pcapfilename)
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
+        # chainedSegments = list(chain.from_iterable(segmentedMessages))
+        chainedSegments = filterSegments(chain.from_iterable(segmentedMessages))
     except (TypeError, FileNotFoundError) as e:
         if isinstance(e, TypeError):
             print('Loading of cached distances failed. Continuing:')
@@ -67,8 +71,10 @@ if __name__ == '__main__':
         # segment messages according to true fields from the labels
         print("Segmenting messages...")
         segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
+        # chainedSegments = list(chain.from_iterable(segmentedMessages))
+        chainedSegments = filterSegments(chain.from_iterable(segmentedMessages))
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
+        DistanceCalculator.offsetCutoff = None
         dc = DistanceCalculator(chainedSegments)
         if doCacheDC:
             try:

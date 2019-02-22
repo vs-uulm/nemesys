@@ -807,69 +807,95 @@ class DistanceCalculator(object):
         """
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
-        import time
+        import time, cProfile
         pit_start = time.time()
 
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
         for outerlen in rslens:
-            outersegs = lenGrps[outerlen]
-            if DistanceCalculator.debug:
-                print("    outersegs, length {}, segments {}".format(outerlen, len(outersegs)))
-            # a) for segments of identical length: call _calcDistancesPerLen()
-            # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
-            ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            distance.extend([(i, l,
-                              self.thresholdFunction(
-                                  d * self._normFactor(outerlen),
-                                  **self.thresholdArgs))
-                             for i, l, d in ilDist])
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            # b) on segments with mismatching length: embedSegment:
-            #       for all length groups with length < current length
-            for innerlen in rslens[rslens.index(outerlen) + 1:]:
-                innersegs = lenGrps[innerlen]
-                if DistanceCalculator.debug:
-                    print("        innersegs, length {}, segments {}".format(innerlen, len(innersegs)))
-                else:
-                    print(" .", end="", flush=True)
-                # for all segments in "shorter length" group
-                #     for all segments in current length group
-                for iseg in innersegs:
-                    for oseg in outersegs:
-                        # embedSegment(shorter in longer)
-                        embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
-                        # add embedding similarity to list of InterSegments
-                        interseg = embedded[2]
+            self._outerloop(lenGrps, outerlen, distance, rslens)
 
-                        distEmb = interseg[2] * self._normFactor(innerlen)  # d_e
-                        ratio = (outerlen - innerlen) / outerlen  # ratio = 1 - (l_i/l_o)
-                        penalty = innerlen / outerlen ** 2
-                        # self._reliefFactor  # f
+            # profiler = cProfile.Profile()
+            # int_start = time.time()
+            # stats = profiler.runctx('self._outerloop(lenGrps, outerlen, distance, rslens)', globals(), locals())
+            # int_runtime = time.time() - int_start
+            # profiler.dump_stats("embdedAndCalcDistances-{:02.1f}-{}-i{:03d}.profile".format(
+            #     int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
 
-                        mlDistance = \
-                            (1 - ratio) * distEmb \
-                            + ratio \
-                            + ratio * penalty * (1 - distEmb) \
-                            - self._reliefFactor * ratio * (1 - distEmb)
-
-                        # # # # # # # # # # # # # # # # # # # # # # # #
-                        dlDist = (interseg[0], interseg[1], (
-                            self.thresholdFunction(
-                                mlDistance,
-                                **self.thresholdArgs)
-                        )
-                                  )  # minimum of dimensions
-                        # # # # # # # # # # # # # # # # # # # # # # # #
-                        distance.append(dlDist)
-                        self._offsets[(interseg[0], interseg[1])] = embedded[1]
-            if not DistanceCalculator.debug:
-                print()
 
         runtime = time.time() - pit_start
         print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(len(distance), runtime))
         return distance
+
+
+    def _outerloop(self, lenGrps, outerlen, distance, rslens):
+        """
+        explicit function for the outer loop of _embdedAndCalcDistances() for profiling it
+
+        :return:
+        """
+        outersegs = lenGrps[outerlen]
+        if DistanceCalculator.debug:
+            print("    outersegs, length {}, segments {}".format(outerlen, len(outersegs)))
+        # a) for segments of identical length: call _calcDistancesPerLen()
+        # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
+        ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        distance.extend([(i, l,
+                          self.thresholdFunction(
+                              d * self._normFactor(outerlen),
+                              **self.thresholdArgs))
+                         for i, l, d in ilDist])
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # b) on segments with mismatching length: embedSegment:
+        #       for all length groups with length < current length
+        for innerlen in rslens[rslens.index(outerlen) + 1:]:
+            innersegs = lenGrps[innerlen]
+            if DistanceCalculator.debug:
+                print("        innersegs, length {}, segments {}".format(innerlen, len(innersegs)))
+            else:
+                print(" .", end="", flush=True)
+            # for all segments in "shorter length" group
+            #     for all segments in current length group
+            for iseg in innersegs:
+                # TODO performance improvement: embedSegment directly generates six (offset cutoff) ndarrays per run
+                # and gets called a lot of times: e.g. for dhcp-10000 511008 times alone for outerlen = 9 taking 50 sec.
+                # :
+                # instead prepare one values matrix for all outersegs of one innerseg iteration at once (the "embedded"
+                # lengths are all of innerlen, so they are compatible for one single run of cdist). Remeber offset for
+                # each "embedding subsequence", i.e. each first slice from the outerseg values.
+                # this then is a list of embedding options (to take the minimum distance from) for all outersegs
+                # embedded into the one innerseg.
+
+                for oseg in outersegs:
+                    # embedSegment(shorter in longer)
+                    embedded = DistanceCalculator.embedSegment(iseg, oseg, self._method)
+                    # add embedding similarity to list of InterSegments
+                    interseg = embedded[2]
+
+                    distEmb = interseg[2] * self._normFactor(innerlen)  # d_e
+                    ratio = (outerlen - innerlen) / outerlen  # ratio = 1 - (l_i/l_o)
+                    penalty = innerlen / outerlen ** 2
+                    # self._reliefFactor  # f
+
+                    mlDistance = \
+                        (1 - ratio) * distEmb \
+                        + ratio \
+                        + ratio * penalty * (1 - distEmb) \
+                        - self._reliefFactor * ratio * (1 - distEmb)
+
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    dlDist = (interseg[0], interseg[1], (
+                        self.thresholdFunction(
+                            mlDistance,
+                            **self.thresholdArgs)
+                    )
+                              )  # minimum of dimensions
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    distance.append(dlDist)
+                    self._offsets[(interseg[0], interseg[1])] = embedded[1]
+        if not DistanceCalculator.debug:
+            print()
 
 
     def _normFactor(self, dimensions: int):
@@ -1042,6 +1068,7 @@ class Template(AbstractSegment):
     Represents a template for some group of similar MessageSegments
     A Templates values are either the values of a medoid or the mean of values per vector component.
     """
+
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
                  baseSegments: List[MessageSegment],
                  method='canberra'):
@@ -1050,15 +1077,17 @@ class Template(AbstractSegment):
         :param baseSegments: The Segments this template represents and is based on.
         :param method: The distance method to use for calculating further distances if necessary.
         """
+        super().__init__()
         if isinstance(values, MessageSegment):
-            self.values = values.values
+            self._values = values.values
             self.medoid = values
         else:
-            self.values = values
+            self._values = values
             self.medoid = None
         self.baseSegments = baseSegments  # list/cluster of MessageSegments this template was generated from.
         self.checkSegmentsAnalysis()
         self._method = method
+        self.length = len(self._values)
 
 
     def checkSegmentsAnalysis(self):
@@ -1213,6 +1242,13 @@ class Template(AbstractSegment):
         import visualization.bcolors as bcolors
         # Template
         return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
+
+
+
+
+
+
+
 
 
 class TemplateGenerator(DistanceCalculator):
@@ -1752,7 +1788,6 @@ class DelegatingDC(DistanceCalculator):
     def __init__(self, segments: Iterable[MessageSegment]):
         # TODO prior to insert entries into the matrix, filter segments
         # for special treatment and generate templates for them
-
         deduplicated, dedupTemplates = DelegatingDC._templates4duplicates(segments)
 
         filteredSegments = deduplicated + dedupTemplates
@@ -1799,6 +1834,8 @@ class DelegatingDC(DistanceCalculator):
         raise NotImplementedError()
 
 
+    def segments2index(self, segmentList: Iterable[MessageSegment]):
+        pass
 
 
 

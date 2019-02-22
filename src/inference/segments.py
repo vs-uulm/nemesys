@@ -420,8 +420,16 @@ class AbstractSegment(ABC):
     CORR_COSINE  = 1  # Cosine Coefficient
     CORR_PEARSON = 0  # Pearson Product-Moment Correlation Coefficient
 
-    # list of analysis result values for the segment scope
-    values = None  # type: Union[List, numpy.ndarray]
+    def __init__(self):
+        # list of analysis result values for the segment scope
+        self._values = None  # type: Union[List, numpy.ndarray]
+        self.length = None
+
+
+    @property
+    def values(self):
+        return self._values
+
 
     def correlate(self,
                   haystack: Iterable['MessageSegment'],
@@ -493,7 +501,9 @@ class CorrelatedSegment(AbstractSegment):
         :param haystack: A segment where feature should be fitted into.
         :param measure: The similarity measure to use.
         """
-        self.values = values  # type: Union[List, numpy.ndarray]
+        super().__init__()
+        self._values = values  # type: Union[List, numpy.ndarray]
+        self.length = len(values)
         self.feature = feature  # type: AbstractSegment
         self.haystack = haystack  # type: MessageSegment
         self.id = "{:02x}".format(hash(tuple(feature.values)) ^ hash(tuple(haystack.values)))
@@ -541,6 +551,7 @@ class MessageSegment(AbstractSegment):
             where this segment starts.
         :param length: number of bytes which this segment is long.
         """
+        super().__init__()
 
         # calculate values by the given analysis method, if not provided
         if analyzer.values is None:

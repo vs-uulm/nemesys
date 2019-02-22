@@ -11,10 +11,11 @@ import argparse, IPython
 from os.path import isfile, basename
 from itertools import chain
 
+from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes
 from inference.templates import TemplateGenerator, DistanceCalculator
 from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
+from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
     filterSegments
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
@@ -402,39 +403,9 @@ def iterateDBSCANParameters():
 
 
 
-# available analysis methods
-analyses = {
-    'bcpnm': BitCongruenceNgramMean,
-    # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
-    'bc': BitCongruence,
-    'bcd': BitCongruenceDelta,
-    'bcdg': BitCongruenceDeltaGauss,
-    'mbhbv': HorizonBitcongruence,
-
-    'variance': ValueVariance,  # Note: VARIANCE is the inverse of PROGDIFF
-    'progdiff': ValueProgressionDelta,
-    'progcumudelta': CumulatedProgressionDelta,
-    'value': Value,
-    'ntropy': EntropyWithinNgrams,
-    'stropy': Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
-}
 
 
 
-epspertrace = {
-    "dhcp_SMIA2011101X_deduped-100.pcap" : 1.8,
-    "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8, # or anything between 1.8 - 2.6
-    "smb_SMIA20111010-one_deduped-100.pcap" : 1.6,
-#    "dns_ictf2010_deduped-100.pcap" : 1.0,  # None/Anything, "nothing" to cluster
-    "ntp_SMIA-20111010_deduped-100.pcap" : 1.5,
-    "dhcp_SMIA2011101X_deduped-1000.pcap": 2.4,
-    "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4, # or anything between 1.0 - 2.8
-    "smb_SMIA20111010-one_deduped-1000.pcap": 2.2,
-    "dns_ictf2010_deduped-982-1000.pcap" : 2.4, # or anything between 1.6 - 2.8
-    "ntp_SMIA-20111010_deduped-1000.pcap": 2.8
-}
-
-epsdefault = 2.4
 
 
 if __name__ == '__main__':

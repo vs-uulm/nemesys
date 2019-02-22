@@ -13,8 +13,9 @@ from itertools import chain
 from inference.templates import TemplateGenerator, Template
 from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import annotateFieldTypes, groupByLength, segments2types, segments2clusteredTypes, \
+from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
     filterSegments
+from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.multiPlotter import MultiMessagePlotter

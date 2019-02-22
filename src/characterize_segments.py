@@ -8,6 +8,7 @@ import argparse
 from os.path import isfile
 
 import inference.segmentHandler as sh
+import utils.evaluationHelpers
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
@@ -75,7 +76,7 @@ if __name__ == '__main__':
 
     # segment messages according to true fields from the labels
     print("Segmenting messages...", end=' ')
-    segmentedMessages = sh.annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    segmentedMessages = utils.evaluationHelpers.annotateFieldTypes(analyzerType, analysisArgs, comparator)
     segsByLen = sh.groupByLength(segmentedMessages)
     print("done.")
 

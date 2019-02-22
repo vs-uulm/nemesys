@@ -64,18 +64,6 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
     return tuple(segments)
 
 
-def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
-                       unit=MessageAnalyzer.U_BYTE) -> List[Tuple[TypedSegment]]:
-    """
-    :return: list of lists of segments that are annotated with their field type.
-    """
-    segmentedMessages = [segmentsFromLabels(
-        MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
-                                             l4msg, analysisArgs), comparator.dissections[rmsg])
-        for l4msg, rmsg in comparator.messages.items()]
-    return segmentedMessages
-
-
 def segmentsFixed(length: int, comparator,
                   analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE) \
         -> List[Tuple[MessageSegment]]:
@@ -320,7 +308,8 @@ def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
     :return:
     """
     # filter out segments shorter than 3 bytes
-    filteredSegments = [t for t in segments if t.length > 2]
+    # filteredSegments = [t for t in segments if t.length > 2]
+    filteredSegments = segments
 
     # filter out segments that contain no relevant byte data, i. e., all-zero byte sequences
     filteredSegments = [t for t in filteredSegments if t.bytes.count(b'\x00') != len(t.bytes)]
