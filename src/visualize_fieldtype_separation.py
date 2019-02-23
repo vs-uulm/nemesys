@@ -64,7 +64,8 @@ if __name__ == '__main__':
     templates = TemplateGenerator.generateTemplatesForClusters(dc, [typegroups[ft] for ft in typelabels])
 
     # labels of templates
-    labels = ['Noise'] * len(dc.segments)
+    labels = ['Noise'] * len(dc.segments)  # TODO check: list of segment indices (from raw segment list) per message
+    #                                           ^ here the question is, whether we like to print resolved segements or representatives
     for l, t in zip(typelabels, templates):
         labels[dc.segments.index(t.medoid)] = l
 

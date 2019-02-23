@@ -81,6 +81,7 @@ if __name__ == '__main__':
 
     # segment messages according to true fields from the labels
     print("Segmenting messages...")
+    # produce TypedSegments from dissection field information
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
     segments = list(chain.from_iterable(segmentedMessages))
 
@@ -98,9 +99,6 @@ if __name__ == '__main__':
     labels = numpy.array([
         labelForSegment(segmentGroups, seg) for seg in dc.segments
     ])
-
-    typeDict = segments2types(segments)
-
 
     titleFormat = "{} ({}, {}-{})".format(
         segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
@@ -121,6 +119,7 @@ if __name__ == '__main__':
     del hstplt
 
     print("Prepare output...")
+    typeDict = segments2types(segments)
     for pagetitle, segmentClusters in segmentGroups:
         plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
                               True, typeDict, args.interactive)

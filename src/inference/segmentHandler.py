@@ -7,7 +7,7 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
-from inference.templates import AbstractClusterer
+from inference.templates import AbstractClusterer, TypedTemplate
 
 
 def segmentMeans(segmentsPerMsg: List[List]):
@@ -134,16 +134,17 @@ def segments2types(segments: List[TypedSegment]) -> Dict[str, List[TypedSegment]
     """
     Rearrange a list of typed segments into a dict of type: list(segments of that type)
 
-    :param segments:
+    :param segments: Supports also non TypedSegment input by placing such segments into a [mixed] group.
     :return: A dict of
         fieldtype (str) : segments of this type (list)
     """
     typegroups = dict()
     for seg in segments:
-        if seg.fieldtype in typegroups:
-            typegroups[seg.fieldtype].append(seg)
+        fieldtype = seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else '[unknown]'
+        if fieldtype in typegroups:
+            typegroups[fieldtype].append(seg)
         else:
-            typegroups[seg.fieldtype] = [seg]
+            typegroups[fieldtype] = [seg]
     return typegroups
 
 
@@ -271,10 +272,14 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
             outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
         segLengths.update(noiseSegLengths)
         noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
-        segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-            analysisTitle, " ".join(outputLengths), numNoise),
-                                   [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
-                                    for cseg in noise] )) # ''
+        try:
+            segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
+                analysisTitle, " ".join(outputLengths), numNoise),
+                                       [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
+                                        for cseg in noise] )) # ''
+        except:
+            import IPython
+            IPython.embed()
     for cnum, segs in enumerate(clusters):
         clusterDists = clusterer.distanceCalculator.distancesSubset(segs)
         typegroups = segments2types(segs)

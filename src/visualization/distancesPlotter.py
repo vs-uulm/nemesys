@@ -277,37 +277,37 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotSegmentDistances(self, tg: DistanceCalculator, labels: numpy.ndarray):
+    def plotSegmentDistances(self, dc: DistanceCalculator, labels: numpy.ndarray):
         """
         Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
 
-        :param tg: A template generator object of segments that all have pairwise similarities assigned
+        :param dc: A template generator object of segments that all have pairwise similarities assigned
             of which to derive segment groups, similarities, and templates.
         :param labels: list of labels in the order of segments as they are contained in tg.segments.
         """
         assert type(labels) == numpy.ndarray
-        assert len(tg.segments) == len(tg.distanceMatrix)  # all have pairwise similarities assigned
+        assert len(dc.segments) == len(dc.distanceMatrix)  # all have pairwise similarities assigned
 
-        segGroup = tg.segments
-        similarities = tg.distanceMatrix
+        segGroup = dc.segments
+        similarities = dc.distanceMatrix
         self.plotManifoldDistances(segGroup, similarities, labels)
 
 
     @staticmethod
-    def plotSegmentDistanceDistribution(tg: DistanceCalculator):
+    def plotSegmentDistanceDistribution(dc: DistanceCalculator):
         """
         Plot distribution of distances to identify density boundaries for clusters.
 
         TODO test
 
-        :param tg:
+        :param dc:
         :return:
         """
         from utils.baseAlgorithms import tril
         statistics = list()
-        cltrs = [[tg.segments[idx] for idx, *rest in cluster] for cluster in tg.groupByLength().values()]
+        cltrs = [[dc.segments[idx] for idx, *rest in cluster] for cluster in dc.groupByLength().values()]
         for cluster in cltrs:
-            similarities = tril(tg.distancesSubset(cluster))
+            similarities = tril(dc.distancesSubset(cluster))
             statistics.append(tril(similarities))
 
         plt.rc('xtick', labelsize=6)  # fontsize of the tick labels

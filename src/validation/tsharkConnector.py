@@ -187,9 +187,13 @@ class TsharkConnector(object):
     def checkTsharkCompatibility():
         versionstring = subprocess.check_output(("tshark", "-v"))
         versionlist = versionstring.split(maxsplit=4)
-        if versionlist[2] not in (b'2.2.6', b'2.6.3'):
-            print("WARNING: Unchecked version of tshark in use! Dissections may be misfunctioning of faulty. "
-                  "Check compatibility of JSON output!\n")
+        if versionlist[2] < b'2.1.1':
+            raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
+                            'dissection parsing. Found tshark version {}. '
+                            'Upgrade!\”'.format(versionlist[2].decode()))
+        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5'):
+            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning of faulty. "
+                  "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
             return versionlist[2], False
         return versionlist[2], True
 

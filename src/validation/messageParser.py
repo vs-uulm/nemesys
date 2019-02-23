@@ -33,6 +33,8 @@ class ParsingConstants226(ParsingConstants):
     """
     Class to hold constants necessary for the interpretation of the tshark dissectors.
     Version for tshark 2.2.6 and compatible.
+
+    TODO Determine up to which exact tshark version this JSON output format is used.
     """
 
     COMPATIBLE_TO = b'2.2.6'
@@ -359,7 +361,9 @@ class ParsingConstants226(ParsingConstants):
 # noinspection PyDictCreation
 class ParsingConstants263(ParsingConstants226):
     """
-    Compatibility for tshark 2.6.3
+    Compatibility for tshark 2.6.3 to 2.6.5
+
+    TODO Determine starting from which exact tshark version this JSON output format is used.
 
     "_raw" field node values list
     # h - hex bytes
@@ -369,7 +373,7 @@ class ParsingConstants263(ParsingConstants226):
     # t - type
     see line 262ff: https://github.com/wireshark/wireshark/blob/3a514caaf1e3b36eb284c3a566d489aba6df5392/tools/json2pcap/json2pcap.py
     """
-    COMPATIBLE_TO = b'2.6.3'
+    COMPATIBLE_TO = b'2.6.5'
 
     pass
 
@@ -1161,9 +1165,16 @@ class ParsedMessage(object):
 
     @staticmethod
     def __getCompatibleConstants():
+        """
+        Retrieve the ParsingConstants compatible to specific versions of tshark.
+
+        TODO Determine at which exact tshark version the JSON output format is changed.
+
+        :return: Appropriate ParsingConstants class
+        """
         if ParsedMessage.__tshark.version <= ParsingConstants226.COMPATIBLE_TO:
             return ParsingConstants226
         elif ParsedMessage.__tshark.version <= ParsingConstants263.COMPATIBLE_TO:
             return ParsingConstants263
         else:
-            raise ParsingConstants
+            return ParsingConstants263

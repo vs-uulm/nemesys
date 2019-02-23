@@ -248,6 +248,11 @@ def relign(segseqA, segseqB):
                         dc.segments2index([s for s in segseqB if isinstance(s, MessageSegment)]))
 
 def resolveIdx2Seg(segseq):
+    """
+
+    :param segseq: list of segment indices (from raw segment list) per message
+    :return:
+    """
     print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
                         for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
 
@@ -399,10 +404,10 @@ if __name__ == '__main__':
 
         # print gaps at the corresponding positions
         print('Cluster', clunu)
-        print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
+        print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]  # TODO check: list of segment indices (from raw segment list) per message
                         for m in clusteralignment], disable_numparse=True))
 
-        alignedClusters[clunu] = [[dc.segments[s] if s != -1 else None for s in m]
+        alignedClusters[clunu] = [[dc.segments[s] if s != -1 else None for s in m]  # TODO check: list of segment indices (from raw segment list) per message
                         for m in clusteralignment]
 
         """
