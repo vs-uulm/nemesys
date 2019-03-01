@@ -1137,6 +1137,11 @@ class Template(AbstractSegment):
         self.length = len(self._values)
 
 
+    @property
+    def bytes(self):
+        return bytes(self._values) if isinstance(self._values, Iterable) else None
+
+
     def checkSegmentsAnalysis(self):
         """
         Validate that all base segments of this tempalte are configured with the same type of analysis.

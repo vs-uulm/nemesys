@@ -313,8 +313,8 @@ def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
     :return:
     """
     # filter out segments shorter than 3 bytes
-    # filteredSegments = [t for t in segments if t.length > 2]
-    filteredSegments = segments
+    filteredSegments = [t for t in segments if t.length > 2]
+    # filteredSegments = segments
 
     # filter out segments that contain no relevant byte data, i. e., all-zero byte sequences
     filteredSegments = [t for t in filteredSegments if t.bytes.count(b'\x00') != len(t.bytes)]

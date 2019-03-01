@@ -13,7 +13,7 @@ from typing import Sequence
 import itertools, pickle
 from hdbscan import HDBSCAN
 
-from inference.templates import DistanceCalculator, AbstractClusterer, HDBSCANsegmentClusterer, DBSCANsegmentClusterer
+from inference.templates import DistanceCalculator, DelegatingDC
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 from inference.segmentHandler import matrixFromTpairs
@@ -189,6 +189,19 @@ class SegmentedMessages(object):
         return simtrx
 
     def alignMessageType(self, msgcluster: List[Tuple[MessageSegment]]):
+        """
+        Messages segments of one cluster aligned to the medoid ("segments that is most similar too all segments")
+        of the cluster.
+
+        >>> indicesalignment, alignedsegments = sm.alignMessageType(msgcluster)
+        >>> hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in indicesalignment]
+        >>> hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
+        >>> hexalnseg == hexclualn
+        True
+
+        :param msgcluster: List of messages in the form of one tuple of segments per message.
+        :return: A numpy array containing the indices of all segments or their representatives.
+        """
         # distances within this cluster
         distSubMatrix = self.similaritiesSubset(msgcluster)
         # determine the medoid
@@ -222,7 +235,19 @@ class SegmentedMessages(object):
 
             # add the new message, aligned to all others via the common one, to the end of the matrix
             clusteralignment = numpy.append(clusteralignment, [currentaligned], axis=0)
-        return clusteralignment
+
+        alignedsegments = list()
+        for (msgidx, dst), aln in zip([(mid, 0)] + distToCommon, clusteralignment):
+            segiter = iter(msgcluster[msgidx])
+            segalnd = list()
+            for segidx in aln:
+                if segidx > -1:
+                    segalnd.append(next(segiter))
+                else:
+                    segalnd.append(None)
+            alignedsegments.append(tuple(segalnd))
+
+        return clusteralignment, alignedsegments
 
 
 
@@ -345,7 +370,8 @@ if __name__ == '__main__':
 
     # cache the DistanceCalculator to the filesystem
     pcapName = splitext(basename(args.pcapfilename))[0]
-    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
+    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'ddc')
+    # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if not exists(dccachefn):
         # dissect and label messages
         print("Load messages...")
@@ -370,7 +396,8 @@ if __name__ == '__main__':
         #     pass  # Handle short segments
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
-        dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
+        # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
+        dc = DelegatingDC(chainedSegments)
         with open(dccachefn, 'wb') as f:
             pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
     else:
@@ -400,15 +427,16 @@ if __name__ == '__main__':
     from tabulate import tabulate
     alignedClusters = dict()
     for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
-        clusteralignment = sm.alignMessageType(msgcluster)
+        clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
+        alignedClusters[clunu] = alignedsegments
 
         # print gaps at the corresponding positions
         print('Cluster', clunu)
-        print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]  # TODO check: list of segment indices (from raw segment list) per message
-                        for m in clusteralignment], disable_numparse=True))
-
-        alignedClusters[clunu] = [[dc.segments[s] if s != -1 else None for s in m]  # TODO check: list of segment indices (from raw segment list) per message
-                        for m in clusteralignment]
+        hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
+        # print(tabulate(hexalnseg, disable_numparse=True))
+        hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in clusteralignment]
+        # print(tabulate(hexclualn, disable_numparse=True))
+        hexalnseg == hexclualn
 
         """
         >>> print("aligned")
