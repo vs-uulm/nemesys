@@ -380,8 +380,8 @@ if __name__ == '__main__':
         if args.iterate:
             iterateDBSCANParameters()
         else:
-            # filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
-            filteredSegments = chain.from_iterable(segmentedMessages)
+            filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
+            # filteredSegments = chain.from_iterable(segmentedMessages)
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)

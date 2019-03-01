@@ -141,7 +141,7 @@ class DistanceCalculator(object):
 
 
 
-        :param segments: The segments to calculate pairwise distances from
+        :param segments: The segments to calculate pairwise distances from.
         :param method: The distance method to use for calculating pairwise distances. Supported methods are
             * 'canberra' (default)
             * 'euclidean'
@@ -370,6 +370,7 @@ class DistanceCalculator(object):
 
     def segments2index(self, segmentList: Iterable[MessageSegment]) -> List[int]:
         """
+        Look up the indices of the given segments.
 
         >>> from utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
@@ -1286,7 +1287,7 @@ class Template(AbstractSegment):
         return hash(tuple(self.values))
 
 
-    def __repr__(self):
+    def toColor(self):
         """
         :return: A fixed-length color-coded visual representation of this template,
             NOT representing the template value itself!
@@ -1296,6 +1297,14 @@ class Template(AbstractSegment):
         import visualization.bcolors as bcolors
         # Template
         return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
+
+    def __repr__(self):
+        if self.values is not None and isinstance(self.values, (list, tuple)) and len(self.values) > 3:
+            printValues = str(self.values[:3])[:-1] + '...'
+        else:
+            printValues = str(self.values)
+
+        return "Template {} bytes: {} | #base {}".format(self.length, printValues, len(self.baseSegments))
 
 
 class TypedTemplate(Template):
@@ -1923,12 +1932,57 @@ class DelegatingDC(DistanceCalculator):
     Subclass to encapsulate (and redirect if necessary) segemnt lookups to representatives.
     This reduces the size of the matrix (considerable) by the amount of duplicate feature values
     and other segment types for which hypothesis-driven distance values are more appropriate (like textual fields).
-
     """
+
     def __init__(self, segments: Iterable[MessageSegment]):
+        """
+        Determine the distance between the given segments using representatives
+        to delegate groups of similar segments to.
+
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments)
+         . . .
+         . .
+         .
+        <BLANKLINE>
+        Calculated distances for 45 segment pairs in ... seconds.
+        >>> ddc = DelegatingDC(segments)
+         . . .
+         . .
+         .
+        <BLANKLINE>
+        Calculated distances for 23 segment pairs in ... seconds.
+        >>> print(tabulate(enumerate(ddc.segments)))
+        -  ---------------------------------------------------------
+        0  MessageSegment 4 bytes: 00000000... | values: [0, 0, 0...
+        1  MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...
+        2  MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...
+        3  MessageSegment 3 bytes: 020304 | values: [2, 3, 4]
+        4  MessageSegment 3 bytes: 250545 | values: [37, 5, 69]
+        5  Template 2 bytes: (2, 4) | #base 2
+        6  Template 7 bytes: (20, 30, 37... | #base 3
+        -  ---------------------------------------------------------
+        >>> print(tabulate(enumerate(dc.segments)))
+        -  ------------------------------------------------------------------
+        0  MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...
+        1  MessageSegment 3 bytes: 020304 | values: [2, 3, 4]
+        2  MessageSegment 2 bytes: 0204 | values: [2, 4]
+        3  MessageSegment 2 bytes: 0204 | values: [2, 4]
+        4  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        5  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        6  MessageSegment 3 bytes: 250545 | values: [37, 5, 69]
+        7  MessageSegment 4 bytes: 00000000... | values: [0, 0, 0...
+        8  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        9  MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...
+        -  ------------------------------------------------------------------
+
+        :param segments: List of segments to calculate pairwise distances from.
+        """
         self._rawSegments = segments
 
-        # TODO prior to insert entries into the matrix, filter segments
+        # prior to insert entries into the matrix, filter segments
         # for special treatment and generate templates for them
         uniqueSegments, deduplicatingTemplates, self.reprMap = DelegatingDC._templates4duplicates(segments)
         """
@@ -1942,6 +1996,36 @@ class DelegatingDC(DistanceCalculator):
     @staticmethod
     def _templates4duplicates(segments: Sequence[MessageSegment]) -> Tuple[
            List[AbstractSegment], List[Template], Dict[MessageSegment, int]]:
+        """
+        Filter segments that are identical regarding their feature vector and replace them by templates.
+
+        >>> from pprint import pprint
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> t4d = DelegatingDC._templates4duplicates(segments)
+        >>> pprint(t4d[0])
+        [MessageSegment 4 bytes: 00000000... | values: [0, 0, 0...,
+         MessageSegment 4 bytes: 01020304... | values: [1, 2, 3...,
+         MessageSegment 4 bytes: 03020304... | values: [3, 2, 3...,
+         MessageSegment 3 bytes: 020304 | values: [2, 3, 4],
+         MessageSegment 3 bytes: 250545 | values: [37, 5, 69]]
+        >>> pprint(t4d[1])
+        [Template 2 bytes: (2, 4) | #base 2, Template 7 bytes: (20, 30, 37... | #base 3]
+        >>> pprint([sorted(((k, t4d[2][k]) for k in t4d[2].keys()), key=lambda x: x[1])])
+        [[(MessageSegment 2 bytes: 0204 | values: [2, 4], 5),
+          (MessageSegment 2 bytes: 0204 | values: [2, 4], 5),
+          (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6),
+          (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6),
+          (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6)]]
+
+
+
+        :param segments: Segments to filter
+        :return: A tuple of two lists and a dict containing:
+            1. The segments found to be unique according to their feature vectors
+            2. The representatives of the segments that are duplicates according to their feature vectors
+            3. The mapping of each duplicate segment to its representative's index
+                in self.segments and self.distanceMatrix
+        """
         # filter out identical segments
         uniqueFeatures = dict()
         for s in segments:
@@ -1998,11 +2082,43 @@ class DelegatingDC(DistanceCalculator):
 
 
     def segments2index(self, segmentList: Iterable[MessageSegment]):
+        """
+        Look up the indices of the given segments.
+        Resolves MessageSegments directly and Templates generated of similar segments to their representative's index
+        in the similarity matrix.
+
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> dc, ddc = __testing_generateTestDCandDDC(segments)
+        >>> # segments and their representatives resolved by segments2index()
+        >>> reprSegs = [(seg, ddc.segments[idx]) for idx, seg in zip(ddc.segments2index(segments), segments)]
+        >>> # validates that each segment is referenced in its representative's Template's baseSegments
+        >>> all([se in re.baseSegments for se, re in reprSegs if isinstance(re, Template)])
+        True
+        >>> # validates that each segment that is directly contained in the DelegatingDC is correctly resolved
+        >>> all([se == re for se, re in reprSegs if not isinstance(re, Template)])
+        True
+
+        :param segmentList: List of segments
+        :return: List of indices for the given segments
+        """
         return [self._seg2idx[seg] if seg in self._seg2idx else self.reprMap[seg] for seg in segmentList]
 
     @property
-    def rawSegments(self):
+    def segments(self):
         """
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> dc, ddc = __testing_generateTestDCandDDC(segments)
+        >>> print("ddc:", len(ddc.segments), "dc:", len(dc.segments))
+        ddc: 7 dc: 10
+        >>> print(tabulate(enumerate(ddc.segments[-1].baseSegments)))
+        -  ------------------------------------------------------------------
+        0  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        1  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        2  MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37...
+        -  ------------------------------------------------------------------
+
         :return: All unique segments and representatives for "feature-identical" segments in this object.
         """
         return self._segments
@@ -2010,6 +2126,14 @@ class DelegatingDC(DistanceCalculator):
     @property
     def rawSegments(self):
         """
+        The original list of segments this DelegatingDC instance was created from.
+
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> dc, ddc = __testing_generateTestDCandDDC(segments)
+        >>> ddc.rawSegments == segments
+        True
+
         :return: All raw segments in this object.
         """
         return self._rawSegments
@@ -2017,6 +2141,14 @@ class DelegatingDC(DistanceCalculator):
     def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
         """
         Retrieve the distance between two segments, resolving representatives internally if necessary.
+
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> dc, ddc = __testing_generateTestDCandDDC(segments)
+        >>> ddc.pairDistance(segments[0], segments[9])
+        0.125
+        >>> dc.pairDistance(segments[0], segments[9])
+        0.125
 
         :param A: Segment A
         :param B: Segment B
@@ -2030,6 +2162,12 @@ class DelegatingDC(DistanceCalculator):
             -> numpy.ndarray:
         """
         Retrieve a matrix of pairwise distances for two lists of segments, resolving representatives internally if necessary.
+
+        >>> from tabulate import tabulate
+        >>> segments = __testing_generateTestSegmentsWithDuplicates()
+        >>> dc, ddc = __testing_generateTestDCandDDC(segments)
+        >>> (ddc.distancesSubset(segments) == dc.distanceMatrix).all()
+        True
 
         :param As: List of segments
         :param Bs: List of segments
@@ -2052,4 +2190,51 @@ class DelegatingDC(DistanceCalculator):
 
 
 
+
+
+
+def __testing_generateTestSegmentsWithDuplicates():
+    """
+    Generates dummy segments with duplicates for testing.
+
+    :return: List of message segments.
+    """
+    from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    from inference.analyzers import Value
+    bytedata = [
+        bytes([1, 2, 3, 4]),
+        bytes([2, 3, 4]),
+        bytes([2, 4]),
+        bytes([2, 4]),
+        bytes([20, 30, 37, 50, 69, 2, 30]),
+        bytes([20, 30, 37, 50, 69, 2, 30]),
+        bytes([37, 5, 69]),
+        bytes([0, 0, 0, 0]),
+        bytes([20, 30, 37, 50, 69, 2, 30]),
+        bytes([3, 2, 3, 4])
+    ]
+    messages = [RawMessage(bd) for bd in bytedata]
+    analyzers = [Value(message) for message in messages]
+    segments = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+    return segments
+
+def __testing_generateTestDCandDDC(segments: List[MessageSegment]):
+    """
+    Generates a DistanceCalculator and a DelegatingDC from the segments parameter for testing.
+
+    :param segments: List of message segments.
+    :return: Instances of DistanceCalculator and DelegatingDC from the same segments for comparison.
+    """
+    import os
+    import sys
+    stdout = sys.stdout
+    f = open(os.devnull, 'w')
+    sys.stdout = f
+
+    DistanceCalculator.debug = False
+    dc = DistanceCalculator(segments)
+    ddc = DelegatingDC(segments)
+
+    sys.stdout = stdout
+    return dc, ddc
 
