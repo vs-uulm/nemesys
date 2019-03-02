@@ -12,6 +12,7 @@ from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 import itertools, pickle
 from hdbscan import HDBSCAN
+from sklearn.cluster import DBSCAN
 
 from inference.templates import DistanceCalculator, DelegatingDC
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
@@ -139,13 +140,26 @@ class SegmentedMessages(object):
         return distanceMatrix
 
     # 10 2
-    def clusterMessageTypes(self, min_cluster_size = 10, min_samples = 2) \
+    def clusterMessageTypesHDBSCAN(self, min_cluster_size = 10, min_samples = 2) \
             -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, HDBSCAN]:
         clusterer = HDBSCAN(metric='precomputed', allow_single_cluster=True, cluster_selection_method='leaf',
                          min_cluster_size=min_cluster_size,
                          min_samples=min_samples)
 
         print("Messages: HDBSCAN min cluster size:", min_cluster_size, "min samples:", min_samples)
+        return self._postprocessClustering(clusterer)
+
+
+    def clusterMessageTypesDBSCAN(self, eps = 1.5, min_samples = 3) \
+            -> Tuple[Dict[int, List[MessageSegment]], numpy.ndarray, DBSCAN]:
+        clusterer = DBSCAN(metric='precomputed', eps=eps,
+                         min_samples=min_samples)
+
+        print("Messages: DBSCAN epsilon:", eps, "min samples:", min_samples)
+        return self._postprocessClustering(clusterer)
+
+
+    def _postprocessClustering(self, clusterer):
         clusterer.fit(self._distances)
 
         labels = clusterer.labels_
@@ -156,9 +170,10 @@ class SegmentedMessages(object):
             segmentClusters[l] = [seg for seg in itertools.compress(self._segmentedMessages, class_member_mask)]
 
         print(len([ul for ul in ulab if ul >= 0]), "Clusters found",
-              "(with noise", len(segmentClusters[-1]) if -1 in segmentClusters else 0, ")")
+              "(with noise {})".format(len(segmentClusters[-1]) if -1 in segmentClusters else 0))
 
         return segmentClusters, labels, clusterer
+
 
     def similaritiesSubset(self, As: Sequence[Tuple[MessageSegment]], Bs: Sequence[Tuple[MessageSegment]] = None) \
                 -> numpy.ndarray:
@@ -413,16 +428,24 @@ if __name__ == '__main__':
     # IPython.embed()
 
     sm = SegmentedMessages(dc, segmentedMessages)
-    print('Clustering messages...')
-    messageClusters, labels, clusterer = sm.clusterMessageTypes()
+    for eps in (0.1, ): # (0.06, 0.08, ):
+        print('Clustering messages...')
+        # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
+        messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps)
+        plotTitle = "{}-{} eps {} ms {}".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
+        # plotTitle = "{}-{} mcs {} ms {}".format(
+        #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
 
-    print('Prepare output...')
-    from visualization.distancesPlotter import DistancesPlotter
-    dp = DistancesPlotter(specimens, 'message-distances-{}-{} mcs {} ms {}'.format(
-        tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples), False)
-    dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
-    dp.writeOrShowFigure()
-    # IPython.embed()
+        print('Prepare output...')
+        from visualization.distancesPlotter import DistancesPlotter
+        dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+        dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
+        dp.writeOrShowFigure()
+        # IPython.embed()
+
+    # just iterate eps
+    # exit(1)
 
     from tabulate import tabulate
     alignedClusters = dict()
@@ -436,7 +459,7 @@ if __name__ == '__main__':
         # print(tabulate(hexalnseg, disable_numparse=True))
         hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in clusteralignment]
         # print(tabulate(hexclualn, disable_numparse=True))
-        hexalnseg == hexclualn
+        print(hexalnseg == hexclualn)
 
         """
         >>> print("aligned")
@@ -448,8 +471,7 @@ if __name__ == '__main__':
 
     import csv
     reportFolder = "reports"
-    fileNameS = "NEMETYL-symbols-{} mcs {} ms {}-{}".format(
-        type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples, pcapName)
+    fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
     csvpath = join(reportFolder, fileNameS + '.csv')
     if not exists(csvpath):
         with open(csvpath, 'w') as csvfile:
@@ -457,7 +479,7 @@ if __name__ == '__main__':
             for clunu, clusg in alignedClusters.items():
                 symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
                 symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
-                symbolcsv.writerow(["---"]*5)
+                symbolcsv.writerow(["---"] * 5)
     else:
         print("Symbols not saved. File {} already exists.".format(csvpath))
         if not args.interactive:
