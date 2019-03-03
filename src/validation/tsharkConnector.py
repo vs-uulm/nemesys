@@ -81,12 +81,14 @@ class TsharkConnector(object):
                 time.sleep(.01)
             except ValueError as e:
                 raise e
-        while True:
+        emptywaitcycles = 200
+        while emptywaitcycles > 0:
             line = pipe.readline()
             if line and line != "\n":
                 # print(line.decode("utf-8"), end='')
                 queue.put(line)
             else:
+                emptywaitcycles -= 1
                 # st = time.time()
                 for x in range(5):
                     # sometimes the last "]\n" comes only after a delay
