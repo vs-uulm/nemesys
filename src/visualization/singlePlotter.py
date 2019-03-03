@@ -226,3 +226,12 @@ class SingleMessagePlotter(MessagePlotter):
         plt.hist(x, **kwargs)
         plt.autoscale(tight=True)
 
+
+    def text(self, text: str):
+        left, right = plt.xlim()
+        marginH = (right-left) * 0.05
+        top, bottom = plt.ylim()
+        marginV = (bottom - top) * 0.05
+        plt.text(left + marginH, top + marginV, text)
+
+
