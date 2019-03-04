@@ -5,6 +5,7 @@ Batch handling of multiple segments.
 import numpy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
+from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
 from inference.templates import AbstractClusterer, TypedTemplate
@@ -355,3 +356,24 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
                    headers=range(len(sequence[0])), showindex="always"))
 
 
+def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6):
+    """
+    Filter segments by some hypotheses about what might be a char sequence:
+        1. All values are < 127 (0x7f)
+        2. The sequence's values have a mean of between n and m, e. g. if 0x20 <= char <= 0x7e (printable chars)
+        3. Segment length is >= 6/8/16 ?
+
+    :param segments: List of segments to be filtered
+    :param meanCorridor: Corridor of mean value that denotes a probable char sequence.
+        A meanCorridor=(0x20, 0x7e) would ensure to include even segments of repetitions
+        of " " (bottommost printable) or "~" (topmost printable)
+    :param minLen: Minimum length of a segment to be condidered for hypothesis testing
+    :return: Filtered segments: segments that hypothetically are chars
+    """
+    filtered = [seg for seg in segments
+                if seg.length >= minLen
+                and numpy.max(seg.values) < 0x7f
+                and meanCorridor[0] <= numpy.mean([v for v in seg.values if v > 0x00]) <= meanCorridor[1]
+                and 0.66 > len(locateNonPrintable(seg.bytes))/seg.length  # from smb one-char-many-zeros segments
+                ]
+    return filtered

@@ -2064,12 +2064,21 @@ class DelegatingDC(DistanceCalculator):
         return filteredSegments, templates, mapping
 
 
-    @staticmethod
-    def _templates4chars(segments: Iterable[MessageSegment]):
+    def _templates4chars(self, segments: Iterable[MessageSegment]):
+        """
+        Manipulate (decrease) calculated distances for all char/char pairs.
 
+        :param segments:
+        :return:
+        """
+        from inference.segmentHandler import filterChars
 
-        # TODO sort out char sequences and handle independently: e. g. in general
-        # value below ~128 and > 16 (?) bytes (and some other heuristics for shorter ones)
+        charsequences = filterChars(segments)
+        charindices = self.segments2index(charsequences)
+
+        # for all combinations of pairs from charindices
+        #   decrease distance by factor 0.33 or 0.5 or x
+
         raise NotImplementedError()
 
     @staticmethod
@@ -2201,49 +2210,66 @@ class DelegatingDC(DistanceCalculator):
         Retrieve a matrix of pairwise distances for two lists of segments, making use also of representatives if any.
 
         >>> from tabulate import tabulate
+        >>> from itertools import combinations
+        >>> # generate toy values
         >>> segments = __testing_generateTestSegmentsWithDuplicates()
         >>> dc, ddc = __testing_generateTestDCandDDC(segments)
-        >>> (ddc.representativesSubset())
+        >>> segHalf = ddc.rawSegments[5:]
+        >>> # retrieve a subset with unresolved representatives
+        >>> reprMatrix, reprSegsA, reprSegsB = ddc.representativesSubset(segHalf)
+        >>> reprSegsB is None
+        True
+        >>> # generate all possible combinations of toy subset "segHalf" and retrieve baseline distances for validation
+        >>> combis = list(combinations(segHalf, 2))
+        >>> baselineDists = [dc.pairDistance(a,b) for a,b in combis]
+        >>> # map of toy segment list to indices of segments or representatives in reprMatrix/reprSegsA
+        >>> subsetIndicesMap = {i: reprSegsA.index(i) if i in reprSegsA else
+        ...    [a for a, j in enumerate(reprSegsA) if isinstance(j, Template) and i in j.baseSegments][0]
+        ...     for i in segHalf}
+        >>> reprDistances = [reprMatrix[subsetIndicesMap[a], subsetIndicesMap[b]] for a,b in combis]
+        >>> reprDistances == baselineDists
+        True
 
         :param As: List of segments
         :param Bs: List of segments
         :return: Matrix of distances: As are rows, Bs are columns.
         """
-        direct4I = {segi: self._seg2idx[segi] for segi in As if segi in self._seg2idx}  # As segments -> direct ID
-        repres4I = {segi: self.reprMap[segi] for segi in As if segi in self.reprMap}  # As segments -> representative's ID
-        unqreprI = list(set(repres4I.values()))  # unique representatives
-        drctSegI = list(direct4I.values())  # remaining direct segments
-        clusterI = drctSegI + unqreprI  # resulting list of direct and represented segments from As
-        transformatorKrepr = {orI: trI for trI, orI in enumerate(unqreprI, start=len(drctSegI))}  # original index -> new index for represented
-        transformatorK = {i: self._seg2idx[a] for i, a in
-                          enumerate(drctSegI)}  # maps indices i from clusterI to matrix rows k
-        transformatorK.update(transformatorKrepr)
-
+        transformatorK, clusterI = self.__genTransformator(As)
         if Bs is None:
             clusterJ = clusterI
             transformatorL = transformatorK
         else:
-            direct4J = {segi: self._seg2idx[segi] for segi in Bs if segi in self._seg2idx}  # Bs segments -> direct ID
-            repres4J = {segi: self.reprMap[segi] for segi in Bs if
-                        segi in self.reprMap}  # As segments -> representative's ID
-            unqreprJ = list(set(repres4J.values()))  # unique representatives
-            drctSegJ = list(direct4J.values())  # remaining direct segments
-            clusterJ = drctSegJ + unqreprJ  # resulting list of direct and represented segments from Bs
-            transformatorLrepr = {orI: trI for trI, orI in enumerate(unqreprJ, start=len(
-                drctSegJ))}  # original index -> new index for represented
-            transformatorL = {i: self._seg2idx[a] for i, a in
-                              enumerate(drctSegJ)}  # maps indices i from clusterI to matrix rows k
-            transformatorL.update(transformatorLrepr)
-
+            transformatorL, clusterJ = self.__genTransformator(Bs)
         simtrx = numpy.ones((len(clusterI), len(clusterJ)))
 
-        for i, k in transformatorK.items():
-            for j, l in transformatorL.items():
-                simtrx[i, j] = self._distances[k, l]
+        for k, i in transformatorK.items():
+            for l, j in transformatorL.items():
+                simtrx[i, j] = \
+                    self._distances[k, l]
         return simtrx, clusterI, (clusterJ if Bs is not None else None)
 
+    def __genTransformator(self, As: Sequence[MessageSegment]):
+        """
+        Generate a dictionary that points from the indices in self.segments to new indices in a list compressed to only
+        hold the segments from As. This is aware of representatives.
 
-
+        :param As: Input list of segments
+        :return: For self.segments and As as inputs, the method returns:
+            0. transformator, i. e. (index from self.segments) -> (index from cluster)
+            1. cluster, with segments resolved to representatives/templates if applicable.
+        """
+        direct4I = {segi: self._seg2idx[segi] for segi in As if segi in self._seg2idx}  # As segments -> direct ID
+        repres4I = {segi: self.reprMap[segi] for segi in As if segi in self.reprMap}  # As segments -> representative's ID
+        unqreprI = list(set(repres4I.values()))  # unique representatives
+        drctSegI = list(direct4I.values())  # remaining direct segments
+        clusterI = [self.segments[idx] for idx in
+                    drctSegI + unqreprI]  # resulting list of direct and represented segments from As
+        transformatorKrepr = {orI: trI for trI, orI in enumerate(unqreprI, start=len(
+            drctSegI))} # original index -> new index for represented
+        transformatorK = {self._seg2idx[self.segments[a]]: i for i, a in
+                          enumerate(drctSegI)}  # original index -> new index for direct segments
+        transformatorK.update(transformatorKrepr)  # maps indices i from clusterI to matrix rows k
+        return transformatorK, clusterI
 
 
 

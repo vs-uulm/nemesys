@@ -7,22 +7,18 @@ Real field types are separated using ground truth and the quality of this separa
 """
 
 import argparse, IPython
-from os.path import isfile, basename
+from os.path import isfile
 from itertools import chain
-import numpy
 
-from inference.templates import DistanceCalculator, Template, TemplateGenerator
-from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
-    filterSegments
+from inference.segmentHandler import segments2types, filterChars
+from inference.templates import DelegatingDC
+from utils.baseAlgorithms import tril
 from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from visualization.multiPlotter import MultiMessagePlotter
 from visualization.singlePlotter import SingleMessagePlotter
-from visualization.distancesPlotter import DistancesPlotter
-from inference.formatRefinement import isPrintable, locateNonPrintable
+from inference.formatRefinement import locateNonPrintable
 
 debug = False
 
@@ -32,29 +28,6 @@ analyzerType = Value
 analysisArgs = None
 # fix the distance method to canberra
 distance_method = 'canberra'
-
-
-
-
-def filterChars(segments: List[MessageSegment], meanCorridor=(0x20, 0x7e), minLen=6):
-    """
-    Filter segments by some hypotheses about what might be a char sequence:
-        1. All values are < 127 (0x7f)
-        2. The sequence's values have a mean of between n and m, e. g. if 0x20 <= char <= 0x7e (printable chars)
-        3. Segment length is >= 6/8/16 ?
-
-    :param segments: List of segments to be filtered
-    :param meanCorridor: Corridor of mean value that denotes a probable char sequence
-    :param minLen: Minimum length of a segment to be condidered for hypothesis testing
-    :return: Filtered segments: segments that hypothetically are chars
-    """
-    filtered = [seg for seg in segments
-                if seg.length >= minLen
-                and numpy.max(seg.values) < 0x7f
-                and meanCorridor[0] <= numpy.mean([v for v in seg.values if v > 0x00]) <= meanCorridor[1]
-                and 0.66 > len(locateNonPrintable(seg.bytes))/seg.length  # from smb one-char-many-zeros segments
-                ]
-    return filtered
 
 
 def tPfPfN(hypothesis: List[MessageSegment], groundtruth: List[MessageSegment]):
@@ -130,14 +103,13 @@ if __name__ == '__main__':
     # print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
     segments = list(chain.from_iterable(segmentedMessages))
-    # dc = DistanceCalculator(segments)
 
     typegroups = segments2types(segments)
     typelabels = list(typegroups.keys())
 
     filteredChars = filterChars(segments)
-    # TODO make meancorridor narrower and compare 10000s tp, fp, fn
-    filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
+    # # make meancorridor narrower and compare 10000s tp, fp, fn
+    # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
 
     charskey = 'chars'
 
@@ -147,19 +119,48 @@ if __name__ == '__main__':
         if len(nnchars) > 0:
             tp, fp, fn = tPfPfN(filteredChars, nnchars)
             print("TP:", len(tp), "FP:", len(fp), "FN", len(fn))
-            ntp, nfp, nfn = tPfPfN(filteredNarrow, nnchars)
-            print("narrow")
-            print("TP:", len(ntp), "FP:", len(nfp), "FN", len(nfn))
+            # ntp, nfp, nfn = tPfPfN(filteredNarrow, nnchars)
+            # print("narrow")
+            # print("TP:", len(ntp), "FP:", len(nfp), "FN", len(nfn))
             segmentMeans = meanHisto(nnchars)
             print("Means min: {:.3f} max: {:.3f}".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
         else:
             print("No non-zero char segments in trace. FP count:", len(filteredChars))
-            if len(filteredChars) > 0:
-                printChars(filteredChars)
-                meanHisto(filteredChars)
+            # if len(filteredChars) > 0:
+            #     printChars(filteredChars)
+            #     meanHisto(filteredChars)
     else:
         print("No char segments in trace. FP count:", len(filteredChars))
     print()
+
+    dc = DelegatingDC(segments)
+
+    # TODO distances between all pairs from typegroups[charskey]
+    #   and all pairs from typegroups[not charskey]
+    #   and all pairs between typegroups[charskey] and typegroups[not charskey]
+    # matrix4chars = dc.representativesSubset(typegroups[charskey])[0]
+    # notChars = list(chain.from_iterable([group for tkey, group in typegroups.items() if tkey != charskey]))
+    # matrixNotChars = dc.representativesSubset(notChars)[0]
+    # matrix4charsAndNot = dc.representativesSubset(typegroups[charskey], notChars)[0]
+
+    matrix4chars = dc.distancesSubset(typegroups[charskey])
+    notChars = list(chain.from_iterable([group for tkey, group in typegroups.items() if tkey != charskey]))
+    matrixNotChars = dc.distancesSubset(notChars)
+    matrix4charsAndNot = dc.distancesSubset(typegroups[charskey], notChars)
+
+    # import IPython;IPython.embed()
+
+    dist4chars = tril(matrix4chars)
+    distNotChars = tril(matrixNotChars)
+    dist4charsAndNot = tril(matrix4charsAndNot)
+
+    # TODO make boxplots for all on one page
+    smp = SingleMessagePlotter(specimens, "distances-typegroups-chars", args.interactive)
+    import matplotlib.pyplot as plt
+    plt.title("Distances between all pairs...")
+    plt.boxplot([dist4chars, distNotChars, dist4charsAndNot],
+                labels=["... of chars", "... of NOT chars", "... between chars and not"])
+    smp.writeOrShowFigure()
 
     # templates = TemplateGenerator.generateTemplatesForClusters(dc, [typegroups[ft] for ft in typelabels])
 
