@@ -1939,7 +1939,7 @@ class DelegatingDC(DistanceCalculator):
     and other segment types for which hypothesis-driven distance values are more appropriate (like textual fields).
     """
 
-    def __init__(self, segments: Iterable[MessageSegment]):
+    def __init__(self, segments: Iterable[MessageSegment], manipulateChars = True):
         """
         Determine the distance between the given segments using representatives
         to delegate groups of similar segments to.
@@ -1997,6 +1997,11 @@ class DelegatingDC(DistanceCalculator):
         filteredSegments = uniqueSegments + deduplicatingTemplates
         super().__init__(filteredSegments)
 
+        if manipulateChars:
+            # Manipulate calculated distances for all char/char pairs.
+            self._templates4chars()
+
+
 
     @staticmethod
     def _templates4duplicates(segments: Sequence[MessageSegment]) -> Tuple[
@@ -2021,7 +2026,6 @@ class DelegatingDC(DistanceCalculator):
           (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6),
           (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6),
           (MessageSegment 7 bytes: 141e253245021e... | values: [20, 30, 37..., 6)]]
-
 
 
         :param segments: Segments to filter
@@ -2072,8 +2076,6 @@ class DelegatingDC(DistanceCalculator):
             try 0.33 or 0.5 or x
         :return:
         """
-        raise NotImplementedError()
-
         from itertools import combinations
         from inference.segmentHandler import filterChars
 
@@ -2081,7 +2083,7 @@ class DelegatingDC(DistanceCalculator):
         charindices = self.segments2index(charsequences)
 
         # for all combinations of pairs from charindices
-        for a, b in combinations(charindices):
+        for a, b in combinations(charindices, 2):
             # decrease distance by factor
             self._distances[a,b] = self._distances[a,b] * charMatchGain
 

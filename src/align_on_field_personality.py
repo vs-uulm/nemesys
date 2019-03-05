@@ -57,19 +57,24 @@ class SegmentedMessages(object):
 
         :return:
         """
+        from scipy.special import comb
+        combcount = comb(len(self._segmentedMessages), 2)
+        combcstep = combcount/100
+
         # convert dc.distanceMatrix from being a distance to a similarity measure
         segmentSimilarities = self._dc.similarityMatrix()
 
         print("Calculate message alignment scores", end=' ')
         hirsch = HirschbergOnSegmentSimilarity(segmentSimilarities)
         nwscores = list()
-        for msg0, msg1 in itertools.combinations(self._segmentedMessages, 2):  # type: Tuple[MessageSegment], Tuple[MessageSegment]
+        for c, (msg0, msg1) in enumerate(itertools.combinations(self._segmentedMessages, 2)):  # type: Tuple[MessageSegment], Tuple[MessageSegment]
             segseq0 = self._dc.segments2index(msg0)
             segseq1 = self._dc.segments2index(msg1)
 
             # Needleman-Wunsch alignment score of the two messages:
             nwscores.append((msg0, msg1, hirsch.nwScore(segseq0, segseq1)[-1]))
-            print('.', end='', flush=True)
+            if c % combcstep == 0:
+                print(c, end='.', flush=True)
         print()
         return nwscores
 
@@ -428,7 +433,7 @@ if __name__ == '__main__':
     # IPython.embed()
 
     sm = SegmentedMessages(dc, segmentedMessages)
-    for eps in (0.1, ): # (0.06, 0.08, ):
+    for eps in (0.2, ): # (0.06, 0.08, ):
         print('Clustering messages...')
         # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
         messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps)
