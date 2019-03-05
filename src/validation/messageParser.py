@@ -630,6 +630,11 @@ class ParsedMessage(object):
                     protocolsvalue = ParsedMessage._getElementByName(framevalue, protocolskey)
                     if isinstance(protocolsvalue, str):
                         self.protocols = protocolsvalue.split(':')
+                        if self.relativeToIP and 'ip' not in self.protocols:
+                            errortext = "No IP layer could be identified in a message of the trace."
+                            print(errortext, "\n\nPlease investigate yourself:")
+                            IPython.embed()
+                            raise ValueError(errortext)
                         absLayNum = (self.layernumber if self.layernumber >= 0 else len(self.protocols) - 1) \
                             if not self.relativeToIP else (self.protocols.index('ip') + self.layernumber)
                         try:
