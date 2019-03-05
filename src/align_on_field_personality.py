@@ -74,7 +74,7 @@ class SegmentedMessages(object):
             # Needleman-Wunsch alignment score of the two messages:
             nwscores.append((msg0, msg1, hirsch.nwScore(segseq0, segseq1)[-1]))
             if c % combcstep == 0:
-                print(c, end='.', flush=True)
+                print(" .", end="", flush=True)
         print()
         return nwscores
 
@@ -430,65 +430,59 @@ if __name__ == '__main__':
         specimens = comparator.specimens
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
 
-    # IPython.embed()
+    from tabulate import tabulate
+    import csv
 
     sm = SegmentedMessages(dc, segmentedMessages)
-    for eps in (0.2, ): # (0.06, 0.08, ):
+    for eps in (0.04, 0.05):  # 0.06, 0.07, 0.08, 0.1, 0.16, 0.18, 0.2
         print('Clustering messages...')
-        # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
+
         messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps)
         plotTitle = "{}-{} eps {} ms {}".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
+
+        # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
         # plotTitle = "{}-{} mcs {} ms {}".format(
         #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
 
+        # plot distances and message clusters
         print('Prepare output...')
         from visualization.distancesPlotter import DistancesPlotter
         dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
         dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
         dp.writeOrShowFigure()
-        # IPython.embed()
 
-    # just iterate eps
-    # exit(1)
+        # align cluster members
+        alignedClusters = dict()
+        for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
+            clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
+            alignedClusters[clunu] = alignedsegments
 
-    from tabulate import tabulate
-    alignedClusters = dict()
-    for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
-        clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
-        alignedClusters[clunu] = alignedsegments
+            # get gaps at the corresponding positions
+            print('Cluster', clunu)
+            hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
 
-        # print gaps at the corresponding positions
-        print('Cluster', clunu)
-        hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
-        # print(tabulate(hexalnseg, disable_numparse=True))
-        hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in clusteralignment]
-        # print(tabulate(hexclualn, disable_numparse=True))
-        print(hexalnseg == hexclualn)
+            # # validate re-resolving of representatives' indices to segments
+            # # print(tabulate(hexalnseg, disable_numparse=True))
+            # hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in clusteralignment]
+            # # print(tabulate(hexclualn, disable_numparse=True))
+            # print(hexalnseg == hexclualn)
 
-        """
-        >>> print("aligned")
-        >>> print(tabulate([[dc.segments[s].bytes.hex() for s in m] for m in clusteralignment], disable_numparse=True))
-        >>> print("raw")
-        >>> print(tabulate([[s.bytes.hex() for s in m] for m in msgcluster], disable_numparse=True))
-        """
-        # IPython.embed()
-
-    import csv
-    reportFolder = "reports"
-    fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
-    csvpath = join(reportFolder, fileNameS + '.csv')
-    if not exists(csvpath):
-        with open(csvpath, 'w') as csvfile:
-            symbolcsv = csv.writer(csvfile)
-            for clunu, clusg in alignedClusters.items():
-                symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
-                symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
-                symbolcsv.writerow(["---"] * 5)
-    else:
-        print("Symbols not saved. File {} already exists.".format(csvpath))
-        if not args.interactive:
-            IPython.embed()
+        # write alignments to csv
+        reportFolder = "reports"
+        fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
+        csvpath = join(reportFolder, fileNameS + '.csv')
+        if not exists(csvpath):
+            with open(csvpath, 'w') as csvfile:
+                symbolcsv = csv.writer(csvfile)
+                for clunu, clusg in alignedClusters.items():
+                    symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
+                    symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
+                    symbolcsv.writerow(["---"] * 5)
+        else:
+            print("Symbols not saved. File {} already exists.".format(csvpath))
+            if not args.interactive:
+                IPython.embed()
 
 
 
