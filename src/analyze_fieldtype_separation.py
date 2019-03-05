@@ -9,9 +9,10 @@ Real field types are separated using ground truth and the quality of this separa
 import argparse, IPython
 from os.path import isfile
 from itertools import chain
+import matplotlib.pyplot as plt
 
 from inference.analyzers import *
-from inference.segmentHandler import segments2types, filterChars
+from inference.segmentHandler import segments2types, filterChars, searchSeqOfSeg
 from inference.templates import DelegatingDC
 from utils.baseAlgorithms import tril
 from utils.evaluationHelpers import annotateFieldTypes
@@ -81,6 +82,104 @@ def printChars(segments: List[MessageSegment]):
 
 
 
+def charsDistanceStatistics():
+    # distances between all pairs from typegroups[charskey]
+    matrix4chars = dc.representativesSubset(typegroups[charskey])[0]
+    dist4chars = tril(matrix4chars)
+    notChars = list(chain.from_iterable([group for tkey, group in typegroups.items() if tkey != charskey]))
+    # and all pairs from typegroups[not charskey]
+    matrixNotChars = dc.representativesSubset(notChars)[0]
+    distNotChars = tril(matrixNotChars)
+    # and all pairs between typegroups[charskey] and typegroups[not charskey]
+    matrix4charsAndNot = dc.representativesSubset(typegroups[charskey], notChars)[0]
+    dist4charsAndNot = tril(matrix4charsAndNot)
+
+    # import IPython;IPython.embed()
+
+    # make boxplots for all distance statistics on one page
+    smp = SingleMessagePlotter(specimens, "distances-typegroups-chars")
+    plt.title("Distances between all pairs...")
+    plt.boxplot([dist4chars, distNotChars, dist4charsAndNot],
+                labels=["... of chars", "... of NOT chars", "... between chars and not"])
+    smp.writeOrShowFigure()
+
+
+def charsValueMeanStatistics():
+    # # make meancorridor narrower and compare 10000s tp, fp, fn
+    # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
+
+    charskey = 'chars'
+
+    if charskey in typelabels:
+        # only non-null sequences quality as valid ground truth
+        nnchars = [seg for seg in typegroups[charskey] if any(val > 0 for val in seg.values)]
+        if len(nnchars) > 0:
+            tp, fp, fn = tPfPfN(filteredChars, nnchars)
+            print("TP:", len(tp), "FP:", len(fp), "FN", len(fn))
+            # ntp, nfp, nfn = tPfPfN(filteredNarrow, nnchars)
+            # print("narrow")
+            # print("TP:", len(ntp), "FP:", len(nfp), "FN", len(nfn))
+            segmentMeans = meanHisto(nnchars)
+            print("Means min: {:.3f} max: {:.3f}".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
+        else:
+            print("No non-zero char segments in trace. FP count:", len(filteredChars))
+            # if len(filteredChars) > 0:
+            #     printChars(filteredChars)
+            #     meanHisto(filteredChars)
+    else:
+        print("No char segments in trace. FP count:", len(filteredChars))
+    print()
+
+
+def ffffffff00():
+    zeros = searchSeqOfSeg(segments, b"\x00")
+    zero1b = [z for z in zeros if z.length == 1]
+    ffffs = searchSeqOfSeg(segments, b"\xff\xff\xff")
+
+    pairs00ff = dc.representativesSubset(zero1b, ffffs)
+    # resulting distance 1.0
+
+    # find segment left and right of zeros/fffs
+    leftz = {z: [segl for msg in segmentedMessages for segl, segr in zip(msg[:-1], msg[1:]) if segr == z][0] for z in
+             zero1b if z.offset > 0}
+    rightz = {z: [segr for msg in segmentedMessages for segl, segr in zip(msg[:-1], msg[1:]) if segl == z][0] for z in
+             zero1b if z.offset < len(z.message.data) - z.length}
+    leftf = {z: [segl for msg in segmentedMessages for segl, segr in zip(msg[:-1], msg[1:]) if segr == z][0] for z in
+             ffffs if z.offset > 0}
+    rightf = {z: [segr for msg in segmentedMessages for segl, segr in zip(msg[:-1], msg[1:]) if segl == z][0] for z in
+             ffffs if z.offset < len(z.message.data) - z.length}
+
+    pairs00left = dc.representativesSubset( *zip( *leftz.items() ) )
+    pairs00right = dc.representativesSubset( *zip( *rightz.items() ) )
+    pairsffleft = dc.representativesSubset( *zip( *leftf.items() ) )
+    pairsffright = dc.representativesSubset( *zip( *rightf.items() ) )
+
+    # means for smb-1000:
+    pairs00left[0].mean()
+    # 0.79837072649572638
+    pairs00right[0].mean()
+    # 0.62932046761634297
+    pairsffleft[0].mean()
+    # 0.84073738878912407
+    pairsffright[0].mean()
+    # 1.0
+
+    plt.title("Distances between...")
+    plt.boxplot([pairs00left[0][0], pairs00right[0][0], pairsffleft[0][0], pairsffright[0][0]],
+                labels=["... 0x00 and its left",
+                        "... 0x00 and its right",
+                        "... 0xff*4 and its left",
+                        "... 0x00*4 and its right"])
+    plt.show()
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Analyze fields as segments of messages and plot field type identification quality.')
@@ -108,59 +207,16 @@ if __name__ == '__main__':
     typelabels = list(typegroups.keys())
 
     filteredChars = filterChars(segments)
-    # # make meancorridor narrower and compare 10000s tp, fp, fn
-    # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
 
-    charskey = 'chars'
-
-    if charskey in typelabels:
-        # only non-null sequences quality as valid ground truth
-        nnchars = [seg for seg in typegroups[charskey] if any(val > 0 for val in seg.values)]
-        if len(nnchars) > 0:
-            tp, fp, fn = tPfPfN(filteredChars, nnchars)
-            print("TP:", len(tp), "FP:", len(fp), "FN", len(fn))
-            # ntp, nfp, nfn = tPfPfN(filteredNarrow, nnchars)
-            # print("narrow")
-            # print("TP:", len(ntp), "FP:", len(nfp), "FN", len(nfn))
-            segmentMeans = meanHisto(nnchars)
-            print("Means min: {:.3f} max: {:.3f}".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
-        else:
-            print("No non-zero char segments in trace. FP count:", len(filteredChars))
-            # if len(filteredChars) > 0:
-            #     printChars(filteredChars)
-            #     meanHisto(filteredChars)
-    else:
-        print("No char segments in trace. FP count:", len(filteredChars))
-    print()
+    # # evaluate additional filtering criteria: mean of values
+    # charsValueMeanStatistics()
 
     dc = DelegatingDC(segments)
 
-    # TODO distances between all pairs from typegroups[charskey]
-    #   and all pairs from typegroups[not charskey]
-    #   and all pairs between typegroups[charskey] and typegroups[not charskey]
-    # matrix4chars = dc.representativesSubset(typegroups[charskey])[0]
-    # notChars = list(chain.from_iterable([group for tkey, group in typegroups.items() if tkey != charskey]))
-    # matrixNotChars = dc.representativesSubset(notChars)[0]
-    # matrix4charsAndNot = dc.representativesSubset(typegroups[charskey], notChars)[0]
+    # # boxplots for char distance statistics
+    # charsStatistics()
 
-    matrix4chars = dc.distancesSubset(typegroups[charskey])
-    notChars = list(chain.from_iterable([group for tkey, group in typegroups.items() if tkey != charskey]))
-    matrixNotChars = dc.distancesSubset(notChars)
-    matrix4charsAndNot = dc.distancesSubset(typegroups[charskey], notChars)
 
-    # import IPython;IPython.embed()
-
-    dist4chars = tril(matrix4chars)
-    distNotChars = tril(matrixNotChars)
-    dist4charsAndNot = tril(matrix4charsAndNot)
-
-    # TODO make boxplots for all on one page
-    smp = SingleMessagePlotter(specimens, "distances-typegroups-chars", args.interactive)
-    import matplotlib.pyplot as plt
-    plt.title("Distances between all pairs...")
-    plt.boxplot([dist4chars, distNotChars, dist4charsAndNot],
-                labels=["... of chars", "... of NOT chars", "... between chars and not"])
-    smp.writeOrShowFigure()
 
     # templates = TemplateGenerator.generateTemplatesForClusters(dc, [typegroups[ft] for ft in typelabels])
 
@@ -191,5 +247,15 @@ if __name__ == '__main__':
     # mmp.writeOrShowFigure()
 
 
+
+
+
+
+
+
     if args.interactive:
         IPython.embed()
+
+
+
+
