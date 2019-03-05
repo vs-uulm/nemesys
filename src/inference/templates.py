@@ -2064,22 +2064,27 @@ class DelegatingDC(DistanceCalculator):
         return filteredSegments, templates, mapping
 
 
-    def _templates4chars(self, segments: Iterable[MessageSegment]):
+    def _templates4chars(self, charMatchGain = .5):
         """
         Manipulate (decrease) calculated distances for all char/char pairs.
 
-        :param segments:
+        :param charMatchGain: Factor to multiply to each distance of a chars-chars pair in self.distanceMatrix.
+            try 0.33 or 0.5 or x
         :return:
         """
+        raise NotImplementedError()
+
+        from itertools import combinations
         from inference.segmentHandler import filterChars
 
-        charsequences = filterChars(segments)
+        charsequences = filterChars(self.segments)
         charindices = self.segments2index(charsequences)
 
         # for all combinations of pairs from charindices
-        #   decrease distance by factor 0.33 or 0.5 or x
+        for a, b in combinations(charindices):
+            # decrease distance by factor
+            self._distances[a,b] = self._distances[a,b] * charMatchGain
 
-        raise NotImplementedError()
 
     @staticmethod
     def _templates4allZeros(segments: Iterable[MessageSegment]):
