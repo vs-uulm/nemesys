@@ -4,7 +4,7 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict, Set
 
 import IPython
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
@@ -493,8 +493,7 @@ class ParsedMessage(object):
     @staticmethod
     def parseMultiple(messages: List[RawMessage], layer=-1, relativeToIP=False,
                                          failOnUndissectable=True,
-                      linktype=ParsingConstants.LINKTYPES['ETHERNET']):
-        # type: () -> dict[RawMessage, 'ParsedMessage']
+                      linktype=ParsingConstants.LINKTYPES['ETHERNET']) -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
@@ -511,8 +510,8 @@ class ParsedMessage(object):
 
     @staticmethod
     def _parseMultiple(messages: List[RawMessage], target = None, layer=-1, relativeToIP=False,
-                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET']):
-        # type: () -> dict[RawMessage, 'ParsedMessage']
+                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET']) \
+            -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
@@ -1095,30 +1094,26 @@ class ParsedMessage(object):
                 print("TYPELOOKUP['{:s}'] = '???'  # has value: {:s}".format(fieldname, fieldvalue))
 
 
-    def getFieldNames(self):
-        # type: () -> list[str]
+    def getFieldNames(self) -> List[str]:
         """
         :return: The list of field names of this ParsedMessage.
         """
         return [fk for fk, fv in self._fieldsflat]
 
 
-    def getFieldValues(self):
-        # type: () -> list[str]
+    def getFieldValues(self) -> List[str]:
         """
         :return: The list of field values (hexstrings) of this ParsedMessage.
         """
         return [fv for fk, fv in self._fieldsflat]
 
-    def getFieldSequence(self):
-        # type: () -> list[tuple[str, int]]
+    def getFieldSequence(self) -> List[Tuple[str, int]]:
         """
         :return: The list of field names and their field lengths of this ParsedMessage.
         """
         return [(fk, len(fv)//2) for fk, fv in self._fieldsflat]
 
-    def getTypeSequence(self):
-        # type: () -> tuple[tuple[str, int]]
+    def getTypeSequence(self) -> Tuple[Tuple[str, int]]:
         """
         :return: The list of field types and their field lengths of this ParsedMessage.
         """
@@ -1134,8 +1129,7 @@ class ParsedMessage(object):
             retVal.append((CONSTANTS_CLASS.TYPELOOKUP[fk], len(fv)//2))
         return tuple(retVal)
 
-    def getValuesOfTypes(self):
-        # type: () -> dict[str, set[str]]
+    def getValuesOfTypes(self) -> Dict[str, Set[str]]:
         """
         :return: A mapping of all field types and their unique values (hexstrings) in this ParsedMessage.
         """
