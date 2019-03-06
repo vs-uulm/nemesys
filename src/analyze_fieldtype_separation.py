@@ -10,6 +10,7 @@ import argparse, IPython
 from os.path import isfile
 from itertools import chain
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 from inference.analyzers import *
 from inference.segmentHandler import segments2types, filterChars, searchSeqOfSeg
@@ -29,6 +30,9 @@ analyzerType = Value
 analysisArgs = None
 # fix the distance method to canberra
 distance_method = 'canberra'
+
+charskey = 'chars'
+
 
 
 def tPfPfN(hypothesis: List[MessageSegment], groundtruth: List[MessageSegment]):
@@ -76,7 +80,6 @@ def meanHisto(segments: List[MessageSegment]):
 
 
 def printChars(segments: List[MessageSegment]):
-    from tabulate import tabulate
     table = [(chars.bytes.hex(), 100*len(locateNonPrintable(chars.bytes))/chars.length, chars.bytes.decode()) for chars in segments]
     print(tabulate(table))
 
@@ -108,8 +111,6 @@ def charsValueMeanStatistics():
     # # make meancorridor narrower and compare 10000s tp, fp, fn
     # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
 
-    charskey = 'chars'
-
     if charskey in typelabels:
         # only non-null sequences quality as valid ground truth
         nnchars = [seg for seg in typegroups[charskey] if any(val > 0 for val in seg.values)]
@@ -138,6 +139,7 @@ def ffffffff00():
 
     pairs00ff = dc.representativesSubset(zero1b, ffffs)
     # resulting distance 1.0
+    print(pairs00ff)
 
     # find segment left and right of zeros/fffs
     leftz = {z: [segl for msg in segmentedMessages for segl, segr in zip(msg[:-1], msg[1:]) if segr == z][0] for z in
@@ -155,13 +157,13 @@ def ffffffff00():
     pairsffright = dc.representativesSubset( *zip( *rightf.items() ) )
 
     # means for smb-1000:
-    pairs00left[0].mean()
+    print(pairs00left[0].mean())
     # 0.79837072649572638
-    pairs00right[0].mean()
+    print(pairs00right[0].mean())
     # 0.62932046761634297
-    pairsffleft[0].mean()
+    print(pairsffleft[0].mean())
     # 0.84073738878912407
-    pairsffright[0].mean()
+    print(pairsffright[0].mean())
     # 1.0
 
     plt.title("Distances between...")
@@ -193,28 +195,27 @@ if __name__ == '__main__':
         exit(1)
 
     # dissect and label messages
-    # print("Load messages...")
+    print("Load messages...")
     specimens = SpecimenLoader(args.pcapfilename, 2, True)
     comparator = MessageComparator(specimens, 2, True, debug=debug)
     print("Trace:", specimens.pcapFileName)
 
-    # segment messages according to true fields from the labels
-    # print("Segmenting messages...")
-    segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    segments = list(chain.from_iterable(segmentedMessages))
-
-    typegroups = segments2types(segments)
-    typelabels = list(typegroups.keys())
-
-    filteredChars = filterChars(segments)
-
-    # # evaluate additional filtering criteria: mean of values
-    # charsValueMeanStatistics()
-
-    dc = DelegatingDC(segments)
-
-    # # boxplots for char distance statistics
-    # charsStatistics()
+    # # segment messages according to true fields from the labels
+    # # print("Segmenting messages...")
+    # segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    # segments = list(chain.from_iterable(segmentedMessages))
+    #
+    # # typegroups = segments2types(segments)
+    # # typelabels = list(typegroups.keys())
+    # # filteredChars = filterChars(segments)
+    #
+    # # # evaluate additional filtering criteria: mean of values
+    # # charsValueMeanStatistics()
+    #
+    # dc = DelegatingDC(segments)
+    #
+    # # # boxplots for char distance statistics
+    # # charsStatistics()
 
 
 
@@ -246,12 +247,11 @@ if __name__ == '__main__':
     # # plot in subfigures on one page
     # mmp.writeOrShowFigure()
 
+    from validation.messageParser import ParsedMessage
 
-
-
-
-
-
+    pms = [pm for pm in comparator.parsedMessages.values()]  # type: List[ParsedMessage]
+    msgtypes = {(pm.protocolname, pm.messagetype) for pm in pms}
+    print(tabulate(msgtypes))
 
     if args.interactive:
         IPython.embed()

@@ -17,10 +17,20 @@ class TsharkConnector(object):
 
     # __tsharkline = ["tshark", "-l", "-r", "-", "-T", "json", "-x"]
     # __tsharkline = ["tshark", "-Q", "-a", "duration:20", "-l", "-n", "-i", "-", "-T", "json", "-x"]
-    __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:3600", "-l", "-n", "-i", "-", "-T", "json", "-x",
-                  "-o", "tcp.analyze_sequence_numbers:FALSE"]
-    # __header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, 1)
 
+    # tshark params:
+    # -Q : keep quiet, output only real errors on stderr not some infos
+    # -a duration:600 : stop the process after five minutes
+    # -l : flush output buffering after each packet
+    # -n : Disable network object name resolution (such as hostname, TCP and UDP port names)
+    # -i - : capture on stdin
+    # -T json : set JSON output format
+    # -x : print hex of raw data (and ASCII interpretation)
+    # -o tcp.analyze_sequence_numbers:FALSE :
+    #       prevent error messages associated with the circumstance that it is no true trace tshark gets to dissect
+    #       here. Spares the necessity of restarting the tshark process after every packet.
+    __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:600", "-l", "-n", "-i", "-", "-T", "json", "-x",
+                  "-o", "tcp.analyze_sequence_numbers:FALSE"]
 
     def __init__(self, linktype : int):
         self.__linktype = linktype
