@@ -359,9 +359,11 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
 def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6):
     """
     Filter segments by some hypotheses about what might be a char sequence:
-        1. All values are < 127 (0x7f)
-        2. The sequence's values have a mean of between n and m, e. g. if 0x20 <= char <= 0x7e (printable chars)
-        3. Segment length is >= 6/8/16 ?
+        1. Segment is larger than minLen
+        2. Segment has not only 0x00 values
+        3. All values are < 127 (0x7f)
+        4. The sequence's values have a mean of between n and m, e. g. if 0x20 <= char <= 0x7e (printable chars)
+        5. The ratio of nonprintables is less than 2/3 of all values
 
     :param segments: List of segments to be filtered
     :param meanCorridor: Corridor of mean value that denotes a probable char sequence.
@@ -372,6 +374,7 @@ def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6
     """
     filtered = [seg for seg in segments
                 if seg.length >= minLen
+                and any(seg.values)
                 and numpy.max(seg.values) < 0x7f
                 and meanCorridor[0] <= numpy.mean([v for v in seg.values if v > 0x00]) <= meanCorridor[1]
                 and 0.66 > len(locateNonPrintable(seg.bytes))/seg.length  # from smb one-char-many-zeros segments

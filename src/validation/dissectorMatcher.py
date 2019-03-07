@@ -70,7 +70,7 @@ class MessageComparator(object):
 
 
     def _dissectAndLabel(self, messages: Iterable[netzob.RawMessage]) \
-            -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
+            -> Dict[netzob.RawMessage, ParsedMessage]:
         """
         :param messages: List of messages to be dissected - needs to be hashable
         :return: dict of {message: format}, where format is a list of
@@ -113,11 +113,11 @@ class MessageComparator(object):
 
 
     @property
-    def dissections(self):
+    def dissections(self) -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
         return {message: dissected.getTypeSequence() for message, dissected in self._dissections.items()}
 
     @property
-    def parsedMessages(self):
+    def parsedMessages(self) -> Dict[netzob.RawMessage, ParsedMessage]:
         return self._dissections
 
 

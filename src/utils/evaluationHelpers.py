@@ -2,19 +2,20 @@
 Module encapsulating evaluation parameters and helper functions to validate aspects of the
 NEMESYS and NEMETYL approaches.
 """
-from typing import Union, Tuple, List
-from utils.loader import SpecimenLoader
+from typing import Union, Tuple, List, TypeVar, Hashable
+from netzob.all import RawMessage
+import os, csv
 
+from utils.loader import SpecimenLoader
+from validation.dissectorMatcher import MessageComparator
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels
 from inference.segments import MessageAnalyzer, TypedSegment
-
+from visualization.multiPlotter import MultiMessagePlotter
 
 
 
 # available analysis methods
-from visualization.multiPlotter import MultiMessagePlotter
-
 analyses = {
     'bcpnm': BitCongruenceNgramMean,
     # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
@@ -44,7 +45,27 @@ epspertrace = {
     "ntp_SMIA-20111010_deduped-1000.pcap": 2.8
 }
 
+message_epspertrace = {
+    "dhcp_SMIA2011101X_deduped-100.pcap" : 0.16, # tested only on 1000s
+    "nbns_SMIA20111010-one_deduped-100.pcap" : 0.08, # tested only on 1000s
+    "smb_SMIA20111010-one_deduped-100.pcap" : 0.2, # tested only on 1000s
+    "dns_ictf2010_deduped-100.pcap" : 0.06,   # tested only on 1000s
+    "ntp_SMIA-20111010_deduped-100.pcap" : 0.18,  # tested only on 1000s
+    "dhcp_SMIA2011101X_deduped-1000.pcap": 0.16, # similar to 0.14
+    "nbns_SMIA20111010-one_deduped-1000.pcap": 0.08, # identical to 0.07
+    "smb_SMIA20111010-one_deduped-1000.pcap": 0.2,
+    "dns_ictf2010_deduped-982-1000.pcap" : 0.06, # or 0.1
+    "ntp_SMIA-20111010_deduped-1000.pcap": 0.18, # identical to 0.2
+    "dhcp_SMIA2011101X_deduped-10000.pcap": 0.16,  # tested only on 1000s
+    "nbns_SMIA20111010-one_deduped-10000.pcap": 0.08,  # tested only on 1000s
+    "smb_SMIA20111010-one_deduped-10000.pcap": 0.2,  # tested only on 1000s
+    "dns_ictf2010_deduped-9911-10000.pcap": 0.06,  # tested only on 1000s
+    "ntp_SMIA-20111010_deduped-9995-10000.pcap": 0.18,  # tested only on 1000s
+}
+
 epsdefault = 2.4
+
+clStatsFile = os.path.join('reports/', 'messagetype-cluster-statistics.csv')
 
 
 
@@ -59,6 +80,73 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
                                              l4msg, analysisArgs), comparator.dissections[rmsg])
         for l4msg, rmsg in comparator.messages.items()]
     return segmentedMessages
+
+
+# Element = TypeVar('Element')
+def writeMessageClusteringStaticstics(
+        clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
+        runtitle: str, comparator: MessageComparator):
+    """
+    calculate conciseness, correctness = precision, and recall
+
+    :return:
+    """
+    from collections import Counter
+
+    numSegs = 0
+    prList = []
+    noise = None
+    if 'Noise' in clusters:
+        noisekey = 'Noise'
+    elif -1 in clusters:
+        noisekey = -1
+    else:
+        noisekey = None
+
+    if noisekey:
+        prList.append(None)
+        noise = clusters[noisekey]
+        clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
+
+    numClusters = len(clusters)
+    numTypesOverall = Counter(groundtruth.values())
+    numTypes = len(numTypesOverall)
+    conciseness = numClusters / numTypes
+
+    for label, cluster in clusters.items():
+        # we assume correct Tuples of MessageSegments with all objects in one Tuple originating from the same message
+        typeFrequency = Counter([groundtruth[comparator.messages[element[0].message]] for element in cluster])
+        mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
+        numSegsinCuster = len(cluster)
+        numSegs += numSegsinCuster
+
+        precision = numMFTinCluster / numSegsinCuster
+        recall = numMFTinCluster / numTypesOverall[mostFreqentType]
+
+        prList.append((mostFreqentType, precision, recall, numSegsinCuster))
+
+    # noise statistics
+    if noise:
+        numNoise = len(noise)
+        numSegs += numNoise
+        ratioNoise = numNoise / numSegs
+        noiseTypes = {groundtruth[comparator.messages[element[0].message]] for element in noise}
+
+    csvWriteHead = False if os.path.exists(clStatsFile) else True
+    with open(clStatsFile, 'a') as csvfile:
+        clStatscsv = csv.writer(csvfile)  # type: csv.writer
+        if csvWriteHead:
+            # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
+            clStatscsv.writerow([
+                'run_title', 'trace', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
+        if noise:
+            # noinspection PyUnboundLocalVariable
+            clStatscsv.writerow([
+                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), ratioNoise, numNoise])
+        clStatscsv.writerows([
+            (runtitle, comparator.specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
+        ])
+
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],

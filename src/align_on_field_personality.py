@@ -7,18 +7,19 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-import argparse, IPython
+import argparse, IPython, itertools, pickle, csv
 from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
-import itertools, pickle
 from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
+from tabulate import tabulate
+from netzob.all import RawMessage
 
 from inference.templates import DistanceCalculator, DelegatingDC
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 from inference.segmentHandler import matrixFromTpairs
-from utils.evaluationHelpers import annotateFieldTypes
+from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, message_epspertrace
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
@@ -430,11 +431,13 @@ if __name__ == '__main__':
         specimens = comparator.specimens
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
 
-    from tabulate import tabulate
-    import csv
+
 
     sm = SegmentedMessages(dc, segmentedMessages)
-    for eps in (0.04, 0.05):  # 0.06, 0.07, 0.08, 0.1, 0.16, 0.18, 0.2
+
+    pcapbasename = basename(args.pcapfilename)
+    epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
+    for eps in (epsilon,):  # , 0.05 0.06, 0.07, 0.08, 0.1, 0.16, 0.18, 0.2
         print('Clustering messages...')
 
         messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps)
@@ -484,7 +487,9 @@ if __name__ == '__main__':
             if not args.interactive:
                 IPython.embed()
 
-
+        groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
+        writeMessageClusteringStaticstics(messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
 
 
     # # TODO: these are test calls for validating embedSegment -> doctest there?!
