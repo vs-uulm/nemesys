@@ -85,7 +85,7 @@ def printChars(segments: List[MessageSegment]):
 
 
 
-def charsDistanceStatistics():
+def charsDistanceStatistics(dc, typegroups):
     # distances between all pairs from typegroups[charskey]
     matrix4chars = dc.representativesSubset(typegroups[charskey])[0]
     dist4chars = tril(matrix4chars)
@@ -107,9 +107,11 @@ def charsDistanceStatistics():
     smp.writeOrShowFigure()
 
 
-def charsValueMeanStatistics():
+def charsValueMeanStatistics(filteredChars, typegroups):
     # # make meancorridor narrower and compare 10000s tp, fp, fn
     # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
+
+    typelabels = list(typegroups.keys())
 
     if charskey in typelabels:
         # only non-null sequences quality as valid ground truth
@@ -132,7 +134,8 @@ def charsValueMeanStatistics():
     print()
 
 
-def ffffffff00():
+def ffffffff00(dc, segmentedMessages):
+    segments = list(chain.from_iterable(segmentedMessages))
     zeros = searchSeqOfSeg(segments, b"\x00")
     zero1b = [z for z in zeros if z.length == 1]
     ffffs = searchSeqOfSeg(segments, b"\xff\xff\xff")
@@ -206,7 +209,6 @@ if __name__ == '__main__':
     # segments = list(chain.from_iterable(segmentedMessages))
     #
     # # typegroups = segments2types(segments)
-    # # typelabels = list(typegroups.keys())
     # # filteredChars = filterChars(segments)
     #
     # # # evaluate additional filtering criteria: mean of values
