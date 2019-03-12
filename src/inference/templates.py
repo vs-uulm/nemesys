@@ -735,6 +735,15 @@ class DistanceCalculator(object):
         >>> DistanceCalculator.embedSegment(testdata[6], testdata[5])
         ('canberra', 2, (6, 5, 0.81818181818181823))
 
+        # # TODO: these are test calls for validating embedSegment -> doctest?!
+        # m, s, inters = DistanceCalculator.embedSegment(segsByLen[4][50], segsByLen[8][50])
+        #
+        # overlay = ([None] * s + inters.segA.values, inters.segB.values)
+        # from visualization.singlePlotter import SingleMessagePlotter
+        # smp = SingleMessagePlotter(specimens, "test feature embedding", True)
+        # smp.plotAnalysis(overlay)
+        # smp.writeOrShowFigure()
+
         :param shortSegment: The shorter of the two input segments.
         :param longSegment: The longer of the two input segments.
         :param method: The distance method to use.
