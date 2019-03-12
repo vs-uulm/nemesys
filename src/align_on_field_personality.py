@@ -7,22 +7,28 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-import argparse, IPython, itertools, pickle, csv
+import argparse, IPython, itertools, pickle, csv, numpy
+import time
 from os.path import isfile, splitext, basename, exists, join
 from typing import Sequence
 from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from tabulate import tabulate
 from netzob.all import RawMessage
+import matplotlib.pyplot as plt
 
 from inference.templates import DistanceCalculator, DelegatingDC
 from alignment.hirschbergAlignSegments import Alignment, HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 from inference.segmentHandler import matrixFromTpairs
-from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, message_epspertrace
+from utils.baseAlgorithms import tril
+from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics, \
+    message_epspertrace
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
+from visualization.singlePlotter import SingleMessagePlotter
+from visualization.multiPlotter import MultiMessagePlotter
 
 debug = False
 
@@ -59,13 +65,15 @@ class SegmentedMessages(object):
         :return:
         """
         from scipy.special import comb
-        combcount = comb(len(self._segmentedMessages), 2)
+        combcount = int(comb(len(self._segmentedMessages), 2))
         combcstep = combcount/100
 
         # convert dc.distanceMatrix from being a distance to a similarity measure
         segmentSimilarities = self._dc.similarityMatrix()
 
-        print("Calculate message alignment scores", end=' ')
+        print("Calculate message alignment scores for {} messages and {} pairs".format(
+            len(self._segmentedMessages), combcount), end=' ')
+        import time; timeBegin = time.time()
         hirsch = HirschbergOnSegmentSimilarity(segmentSimilarities)
         nwscores = list()
         for c, (msg0, msg1) in enumerate(itertools.combinations(self._segmentedMessages, 2)):  # type: Tuple[MessageSegment], Tuple[MessageSegment]
@@ -77,6 +85,7 @@ class SegmentedMessages(object):
             if c % combcstep == 0:
                 print(" .", end="", flush=True)
         print()
+        print("finished in {:.2f} seconds.".format(time.time() - timeBegin))
         return nwscores
 
     def _calcSimilarityMatrix(self):
@@ -270,6 +279,43 @@ class SegmentedMessages(object):
 
         return clusteralignment, alignedsegments
 
+    def neighbors(self):
+        neighbors = list()
+        for idx, dists in enumerate(self._distances):  # type: int, numpy.ndarray
+            neighbors.append(sorted([(i, d) for i, d in enumerate(dists) if i != idx], key=lambda x: x[1]))
+        return neighbors
+
+    def autoconfigureDBSCAN(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+
+        :return: minpts, epsilon
+        """
+        from scipy.ndimage.filters import gaussian_filter1d
+        from math import log
+
+        neighbors = self.neighbors()
+        sigma = log(len(neighbors))
+        knearest = dict()
+        smoothknearest = dict()
+        seconddiff = dict()
+        seconddiffMax = (0, 0, 0)
+        for k in range(0, len(neighbors) // 10):  # first 10% of k-neigbors
+            knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
+            smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
+            # max of second difference (maximum upwards curvature) as knee
+            seconddiff[k] = numpy.diff(smoothknearest[k], 2)
+            seconddiffargmax = seconddiff[k].argmax()
+            diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
+            if diffrelmax > seconddiffMax[2]:
+                seconddiffMax = (k, seconddiffargmax, diffrelmax)
+
+        k = seconddiffMax[0]
+        x = seconddiffMax[1] + 1
+
+        epsilon = smoothknearest[k][x]
+        min_samples = round(sigma)
+        return epsilon, min_samples
 
 
 
@@ -355,6 +401,117 @@ def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
     return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
 
 
+def epsautoconfeval(epsilon):
+    """
+    # investigate distance properties for clustering autoconfiguration
+    # plots of k-nearest-neighbor distance histogram and "knee"
+
+    :param epsilon The manually determined "best" epsilon for comparison
+    :return:
+    """
+
+    # # distribution of all distances in matrix
+    # hstplt = SingleMessagePlotter(specimens, tokenizer+'-distance-distribution-histo', args.interactive)
+    # hstplt.histogram(tril(sm.distances), bins=[x / 50 for x in range(50)])
+    # plt.axvline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
+    # hstplt.text('max {:.3f}, mean {:.3f}'.format(sm.distances.max(), sm.distances.mean()))
+    # hstplt.writeOrShowFigure()
+    # del hstplt
+
+    neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
+
+    mmp = MultiMessagePlotter(specimens, tokenizer + "-k-nearest-neighbor-distance-distribution", 1, 2,
+                              isInteractive=args.interactive)
+    mmp.axes[0].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
+    mmp.axes[1].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
+
+    krange = (0, 16, 1)
+
+    for k in range(*krange):
+        knearest = sorted([nfori[k][1] for nfori in neighbors])
+        mmp.plotToSubfig(1, knearest, alpha=.4, label="k={}".format(k))
+
+    # # kneedle approach
+    # # unusable results. does not find a knee!
+    # from kneed import KneeLocator
+    # kneeK = dict()
+    # for k in range(*krange):
+    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
+    #     mmp.plotToSubfig(0, knearest, alpha=.1)  # , label="k={}".format(k)
+    #
+    #     kneel = KneeLocator(range(len(knearest)), knearest, curve='convex', direction='increasing')
+    #     kneeX = kneel.knee
+    #     kneeK[knearest[kneeX]] = k
+    #
+    # kneeDists = list(kneeK.keys())
+    # bestEpsMatchIdx = numpy.argmin([abs(kneeDist-epsilon) for kneeDist in kneeDists])
+    # bestEpsMatchDist = kneeDists[bestEpsMatchIdx]
+
+    # # range of distances for a k-neighborhood, determines the maximum range of distances
+    # # results do not correlate with a suitable choice of k compared to manual introspection.
+    # distrange4k = list()
+    # for k in range(*krange):
+    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
+    #     distrange4k.append((k, max(knearest) - min(knearest)))
+    # maxdran = max([dran[1] for dran in distrange4k])
+    # maxkran = [dran[0] for dran in distrange4k if dran[1] == maxdran][0]
+    # mmp.textInEachAx(["max range {:.2f} at k={}".format(maxdran, maxkran)])
+    # mmp.axes[0].axhline(bestEpsMatchDist, linestyle='dashed', color='blue', alpha=.4,
+    #                     label="kneedle {:.2f} of k={}".format(bestEpsMatchDist, kneeK[bestEpsMatchDist]))
+
+    # smoothing approach
+    from scipy.ndimage.filters import gaussian_filter1d
+    from math import log
+
+    sigma = log(len(neighbors))
+    knearest = dict()
+    smoothknearest = dict()
+    seconddiff = dict()
+    seconddiffMax = (0, 0, 0)
+    for k in range(0, len(neighbors) // 10):  # round(2*log(len(neighbors)))
+        knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
+        smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
+        # max of second difference (maximum upwards curvature) as knee
+        seconddiff[k] = numpy.diff(smoothknearest[k], 2)
+        seconddiffargmax = seconddiff[k].argmax()
+        diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
+        if diffrelmax > seconddiffMax[2]:
+            seconddiffMax = (k, seconddiffargmax, diffrelmax)
+
+    # prepare to plot the smoothed nearest neigbor distribution and its second derivative
+    k = seconddiffMax[0]
+    x = seconddiffMax[1] + 1
+
+    mmp.plotToSubfig(0, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=.4)
+    mmp.plotToSubfig(1, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=1, color='blue')
+    mmp.plotToSubfig(0, knearest[k], alpha=.4)
+
+    ax0twin = mmp.axes[0].twinx()
+    # mmp.plotToSubfig(ax0twin, seconddiff[k], linestyle='dotted', color='cyan', alpha=.4)
+    mmp.plotToSubfig(ax0twin, [None] + seconddiff[k].tolist(), linestyle='dotted',
+                     color='magenta', alpha=.4)
+
+    # epsilon = knearest[k][x]
+    epsilon = smoothknearest[k][x]
+
+    mmp.axes[0].axhline(epsilon, linestyle='dashed', color='blue', alpha=.4,
+                        label="curvature max {:.2f} of k={}".format(
+                            epsilon, k))
+    mmp.axes[0].axvline(x, linestyle='dashed', color='blue', alpha=.4)
+
+
+    mmp.writeOrShowFigure()
+    del mmp
+
+    # if args.interactive:
+    #     from tabulate import tabulate
+    #     IPython.embed()
+    # exit(0)
+
+    return epsilon
+
+
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # END : Evaluation helpers  # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -401,12 +558,14 @@ if __name__ == '__main__':
 
         # TODO select tokenizer by command line parameter
         print("Segmenting messages...", end=' ')
+        segmentationTime = time.time()
         # 1. segment messages according to true fields from the labels
         segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
         # # 2. segment messages into fixed size chunks for testing
         # segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
         # # 3. segment messages by NEMESYS
         # segmentedMessages = ...
+        segmentationTime = time.time() - segmentationTime
         print("done.")
 
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
@@ -418,7 +577,9 @@ if __name__ == '__main__':
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
+        dist_calc_segmentsTime = time.time()
         dc = DelegatingDC(chainedSegments)
+        dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
         with open(dccachefn, 'wb') as f:
             pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
     else:
@@ -430,76 +591,121 @@ if __name__ == '__main__':
             exit(10)
         specimens = comparator.specimens
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+        segmentationTime, dist_calc_segmentsTime = None, None
 
-
-
+    print("Calculate distance for {} messages...".format(len(segmentedMessages)))
+    dist_calc_messagesTime = time.time()
     sm = SegmentedMessages(dc, segmentedMessages)
+    dist_calc_messagesTime = time.time() - dist_calc_messagesTime
 
-    pcapbasename = basename(args.pcapfilename)
-    epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
-    for eps in (epsilon,):  # , 0.05 0.06, 0.07, 0.08, 0.1, 0.16, 0.18, 0.2
-        print('Clustering messages...')
-
-        messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps)
-        plotTitle = "{}-{} eps {} ms {}".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
-
-        # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
-        # plotTitle = "{}-{} mcs {} ms {}".format(
-        #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
-
-        # plot distances and message clusters
-        print('Prepare output...')
-        from visualization.distancesPlotter import DistancesPlotter
-        dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
-        dp.plotManifoldDistances(segmentedMessages, sm.distances, labels)
-        dp.writeOrShowFigure()
-
-        # align cluster members
-        alignedClusters = dict()
-        for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
-            clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
-            alignedClusters[clunu] = alignedsegments
-
-            # get gaps at the corresponding positions
-            print('Cluster', clunu)
-            hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
-
-            # # validate re-resolving of representatives' indices to segments
-            # # print(tabulate(hexalnseg, disable_numparse=True))
-            # hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in clusteralignment]
-            # # print(tabulate(hexclualn, disable_numparse=True))
-            # print(hexalnseg == hexclualn)
-
-        # write alignments to csv
-        reportFolder = "reports"
-        fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
-        csvpath = join(reportFolder, fileNameS + '.csv')
-        if not exists(csvpath):
-            with open(csvpath, 'w') as csvfile:
-                symbolcsv = csv.writer(csvfile)
-                for clunu, clusg in alignedClusters.items():
-                    symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
-                    symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
-                    symbolcsv.writerow(["---"] * 5)
-        else:
-            print("Symbols not saved. File {} already exists.".format(csvpath))
-            if not args.interactive:
-                IPython.embed()
-
-        groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
-        writeMessageClusteringStaticstics(messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    cluster_params_autoconfTime = time.time()
+    eps, min_samples = sm.autoconfigureDBSCAN()
+    cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
 
 
-    # # TODO: these are test calls for validating embedSegment -> doctest there?!
-    # m, s, inters = DistanceCalculator.embedSegment(segsByLen[4][50], segsByLen[8][50])
-    #
-    # overlay = ([None] * s + inters.segA.values, inters.segB.values)
-    # from visualization.singlePlotter import SingleMessagePlotter
-    # smp = SingleMessagePlotter(specimens, "test feature embedding", True)
-    # smp.plotAnalysis(overlay)
-    # smp.writeOrShowFigure()
+    # # DEBUG and TESTING
+    # #
+    # # retrieve manually determined epsilon value
+    # pcapbasename = basename(args.pcapfilename)
+    # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
+    # eps = epsautoconfeval(epsilon)
+    # #
+    # # DEBUG and TESTING
+
+
+    # cluster and align messages and calculate statistics of it
+    print('Clustering messages...')
+    cluster_messagesTime = time.time()
+    messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps, min_samples=3)
+    cluster_messagesTime = time.time() - cluster_messagesTime
+    plotTitle = "{}-{} eps {:.3f} ms {}".format(
+        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
+    # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
+    # plotTitle = "{}-{} mcs {} ms {}".format(
+    #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
+
+
+    # write message clustering statistics to csv
+    groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
+    writeMessageClusteringStaticstics(messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
+        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    for msg, mtype in groundtruth.items():
+        msg.messageType = mtype
+
+    # plot distances and message clusters
+    print("Plot distances...")
+    from visualization.distancesPlotter import DistancesPlotter
+    dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+    dp.plotManifoldDistances(
+        [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+        sm.distances, labels)  # segmentedMessages
+    dp.writeOrShowFigure()
+
+    # align cluster members
+    align_messagesTime = time.time()
+    alignedClusters = dict()
+    for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
+        clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
+        alignedClusters[clunu] = alignedsegments
+
+        # get gaps at the corresponding positions
+        print('Cluster', clunu)
+        hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
+    align_messagesTime = time.time() - align_messagesTime
+
+
+
+    alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in alignedClusters.items()}
+    statDynFields = dict()
+    for clunu, alfi in alignedFields.items():
+        statDynFields[clunu] = list()
+        for fvals in alfi:
+            if fvals[0] is not None:
+                if all([val is not None for val in fvals]):
+                    if all([val.bytes == fvals[0].bytes for val in fvals]):
+                        statDynFields[clunu].append(fvals[0].bytes)
+                    else:
+                        statDynFields[clunu].append("DYNAMIC")
+                else:
+                    statDynFields[clunu].append("DYNAMIC")  # /GAP
+            else:
+                statDynFields[clunu].append("DYNAMIC")  # /GAP
+    # statDynFields = {clunu: [fvals[0].bytes if all([val.bytes == fvals[0].bytes for val in fvals]) else "DYNAMIC" for fvals in alfi]
+    #          for clunu, alfi in alignedFields.items()}
+    clusterpairs = list(itertools.combinations(statDynFields.keys(), 2))
+    matchingClusters = [(clunuA, clunuB) for clunuA, clunuB in clusterpairs if (statDynFields[clunuA] == statDynFields[clunuB])]
+    # TODO for non-tshark tokenizers: determine as mergeable by allowing an arbitrary number of DYNAMIC/GAP fields
+    #  between identical STATIC fields in the different clusters
+    if len(matchingClusters) > 0:
+        print("Clusters could be merged:")
+        for clunuAB in matchingClusters:
+            print(tabulate([(clunu, *[fv.hex() if isinstance(fv, bytes) else fv for fv in fvals])
+                            for clunu, fvals in statDynFields.items() if clunu in clunuAB]))
+
+    # write alignments to csv
+    reportFolder = "reports"
+    fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
+    csvpath = join(reportFolder, fileNameS + '.csv')
+    if not exists(csvpath):
+        print('Write alignments to {}...'.format(csvpath))
+        with open(csvpath, 'w') as csvfile:
+            symbolcsv = csv.writer(csvfile)
+            for clunu, clusg in alignedClusters.items():
+                symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
+                symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
+                symbolcsv.writerow(["---"] * 5)
+    else:
+        print("Symbols not saved. File {} already exists.".format(csvpath))
+        if not args.interactive:
+            IPython.embed()
+
+    writePerformanceStatistics(
+        specimens, clusterer,
+        "{} {} {}".format(tokenizer, analysis_method, distance_method),
+        segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime,
+        cluster_params_autoconfTime, cluster_messagesTime, align_messagesTime
+    )
+
 
     if args.interactive:
         from tabulate import tabulate
