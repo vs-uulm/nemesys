@@ -65,7 +65,8 @@ message_epspertrace = {
 
 epsdefault = 2.4
 
-clStatsFile = os.path.join('reports/', 'messagetype-cluster-statistics.csv')
+reportFolder = "reports"
+clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
 
 
 
@@ -89,9 +90,10 @@ def writeMessageClusteringStaticstics(
     """
     calculate conciseness, correctness = precision, and recall
 
-    :return:
     """
     from collections import Counter
+
+    print('Write message cluster statistics to {}...'.format(clStatsFile))
 
     numSegs = 0
     prList = []
@@ -233,5 +235,35 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
         if seg in (s for t, s in grp):
             return name.split(", ", 2)[-1]
     return False
+
+
+def writePerformanceStatistics(specimens, clusterer, algos,
+                               segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime,
+                               cluster_params_autoconfTime, cluster_messagesTime, align_messagesTime):
+    fileNameS = "NEMETYL-performance-statistcs"
+    csvpath = os.path.join(reportFolder, fileNameS + '.csv')
+    csvWriteHead = False if os.path.exists(csvpath) else True
+
+    print('Write performance statistcs to {}...'.format(csvpath))
+    with open(csvpath, 'a') as csvfile:
+        statisticscsv = csv.writer(csvfile)
+        if csvWriteHead:
+            statisticscsv.writerow([
+                'script', 'pcap', 'parameters', 'algos',
+                'segmentation', 'dist-calc segments', 'dist-calc messages',
+                'cluster-params autoconf', 'cluster messages', 'align messages'
+            ])
+        from sklearn.cluster import DBSCAN
+        statisticscsv.writerow([
+            os.path.basename(__file__), os.path.basename(specimens.pcapFileName),
+            "{} eps {:.3f} ms {}".format(type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
+                if isinstance(clusterer, DBSCAN)
+                else "{} mcs {} ms {}".format(type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples),
+            algos,
+            segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime, cluster_params_autoconfTime,
+            cluster_messagesTime, align_messagesTime
+            ])
+
+
 
 
