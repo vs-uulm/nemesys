@@ -8,6 +8,8 @@ from matplotlib import cm, colors
 from typing import List, Any, Union
 from itertools import compress
 
+from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+
 from visualization.plotter import MessagePlotter
 from utils.loader import SpecimenLoader
 from inference.segments import MessageSegment, TypedSegment
@@ -38,7 +40,7 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, Any]],
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, RawMessage, Any]],
                               similarities: numpy.ndarray,
                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
@@ -127,7 +129,10 @@ class DistancesPlotter(MessagePlotter):
             for l in ulab:
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)
-
+        elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
+            for l in ulab:
+                if l == -1:
+                    ulab.remove(l)
 
         # prepare color space
         cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
@@ -137,7 +142,7 @@ class DistancesPlotter(MessagePlotter):
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
-            # TODO strange "bug" colors scatter plot of clusters (with few/>4? members) erratically;
+            # TODO strange "bug" colors scatter plot of clusters (with few/<4? members) erratically;
             #   labels for those additional colors are missing then;
             #   however, the number of iterations is correct (identical to the number of unique labels)
             # print(str(c), cIdx[c], lColor)
@@ -159,8 +164,11 @@ class DistancesPlotter(MessagePlotter):
 
 
         # include field type labels for TypedSegments input
-        if isinstance(segments[0], TypedSegment):
-            ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+        if isinstance(segments[0], (TypedSegment, RawMessage)):
+            if isinstance(segments[0], TypedSegment):
+                ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+            elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
+                ftypes = numpy.array([msg.messageType for msg in segments])  # PP
             # identify unique types
             utyp = sorted(set(ftypes))
             # prepare color space
@@ -175,9 +183,10 @@ class DistancesPlotter(MessagePlotter):
                           s=typsize,
                           lw=0, label=str(ft))
 
-                # TODO is it desired to have colors of clusters or types here?
-                for seg in compress(segments, type_member_mask):
-                    axSeg.plot(seg.values, c=fColor, alpha=0.05)
+                if isinstance(segments[0], TypedSegment):
+                    # TODO is it desired to have colors of clusters or types here?
+                    for seg in compress(segments, type_member_mask):
+                        axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
                 lColor = self._cm(cIdx[c])
@@ -189,7 +198,12 @@ class DistancesPlotter(MessagePlotter):
 
 
         # place the label/type legend at the best position
-        axMDS.legend(scatterpoints=1, loc='best', shadow=False)
+        if isinstance(segments[0], RawMessage):
+            axMDS.legend(bbox_to_anchor=(1.04,1), scatterpoints=1, shadow=False)
+            axSeg.patch.set_alpha(0.0)
+            axSeg.axis('off')
+        else:
+            axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
 
         if plotEdges:

@@ -47,6 +47,7 @@ class MessagePlotter(object):
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
         plotfile = join('reports', '{}_{}.pdf'.format(self._title, pcapName))
 
+        plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))
         plt.tight_layout(rect=[0,0,1,.95])
 

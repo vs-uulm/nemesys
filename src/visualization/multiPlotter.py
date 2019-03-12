@@ -312,8 +312,16 @@ class MultiMessagePlotter(MessagePlotter):
                 ax.legend(newHandles, newLabels)
 
 
-    def plotToSubfig(self, subfigid: int, values: Union[List, numpy.ndarray], **plotkwArgs):
-        self._axes.flat[subfigid].plot(values, **plotkwArgs)
+    def plotToSubfig(self, subfigid: Union[int, plt.Axes], values: Union[List, numpy.ndarray], **plotkwArgs):
+        """
+        Plot values to selected subfigure.
+
+        :param subfigid: Subfigure id to plot to.
+        :param values: Values to plot.
+        :param plotkwArgs: kwargs directly passed through to the pyplot plot function.
+        """
+        ax2plot2 = subfigid if isinstance(subfigid, plt.Axes) else self._axes.flat[subfigid]
+        ax2plot2.plot(values, **plotkwArgs)
 
 
     def histoToSubfig(self, subfigid: int, data, **kwargs):
@@ -321,3 +329,7 @@ class MultiMessagePlotter(MessagePlotter):
         self._axes.flat[subfigid].legend()
 
 
+    def writeOrShowFigure(self):
+        for sf in self.axes:
+            sf.legend()
+        super().writeOrShowFigure()
