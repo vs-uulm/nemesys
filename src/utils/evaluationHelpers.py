@@ -158,9 +158,11 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     This is a not awfully important helper function saving the writing of a few lines code.
 
     :param segmentGroups:
+    :param specimens:
     :param pagetitle:
     :param colorPerLabel:
     :param typeDict: dict of types (str-keys: list of segments) present in the segmentGroups
+    :param isInteractive:
     :return:
     """
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
@@ -254,8 +256,10 @@ def writePerformanceStatistics(specimens, clusterer, algos,
                 'cluster-params autoconf', 'cluster messages', 'align messages'
             ])
         from sklearn.cluster import DBSCAN
+        # noinspection PyUnresolvedReferences,PyPackageRequirements
+        import __main__ as main
         statisticscsv.writerow([
-            os.path.basename(__file__), os.path.basename(specimens.pcapFileName),
+            os.path.basename(main.__file__), os.path.basename(specimens.pcapFileName),
             "{} eps {:.3f} ms {}".format(type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
                 if isinstance(clusterer, DBSCAN)
                 else "{} mcs {} ms {}".format(type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples),
