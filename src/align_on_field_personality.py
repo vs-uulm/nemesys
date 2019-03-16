@@ -392,38 +392,134 @@ if __name__ == '__main__':
                                    [statDynValues[b] if b > -1 else FC_GAP for b in afciB])
                            for clupa, (afciA, afciB) in alignedFCIndices.items()}
     mergingThreshold = 0  # allow merge of clusters if at most this number of field do not match
-    matchingClusters = [ (clunuA, clunuB) for clunuA, clunuB in clusterpairs if mergingThreshold >= len(
-            [ False for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
-              if not (afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
-                         or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
-                         or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
-                         or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
-                         or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments])
-              ]
-                        ) ]
+    # matchingClusters = [ (clunuA, clunuB) for clunuA, clunuB in clusterpairs if mergingThreshold >= len(
+    #         [ False for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
+    #           if not (afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
+    #                      or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
+    #                      or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
+    #                      or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
+    #                      or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments])
+    #           ]
+    #                     ) ]
     # noinspection PyTypeChecker
-    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","AdynB0","BdynA0","BinA","AinB","ALL")] + [
+    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","AdynB0","BdynA0","BinA","AinB")] + [  # ,"ALL"
         (afcA == FC_GAP, afcB == FC_GAP,
          isinstance(afcA, (MessageSegment, Template)) and isinstance(afcB, (MessageSegment, Template)) and afcA.bytes == afcB.bytes,
          isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
          isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0},
          isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
-         isinstance(afcB, Template) and isinstance(afcB, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-         afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
-         or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
-         or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
-         or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
-         or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments]
-
+         isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
+         # afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
+         # or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
+         # or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
+         # or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
+         # or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments]
          )
          for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
     ] for clunuA, clunuB in clusterpairs }
+    matchingClusters = [(clunuA, clunuB) for clunuA, clunuB in clusterpairs if mergingThreshold >= len(
+        [ False for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult) ]
+    )]
+    # the matches on grounds of the STA value in DYN condition,
+    # with the DYN role(s) in a set in the first element of each tuple
+    dynStaPairs = list()
+    for clunuPair in matchingClusters:
+        dynRole = [ clunuPair[0] if fieldCond[-2] else clunuPair[1] for fieldCond in matchingConditions[clunuPair][1:]
+            if not any(fieldCond[:-2]) and (fieldCond[-2] or fieldCond[-1]) ]
+        if dynRole:
+            dynStaPairs.append((set(dynRole), clunuPair))
+    dynRoles = set(itertools.chain.from_iterable([dynRole for dynRole, clunuPair in dynStaPairs]))
+    # List of STA roles for each DYN role
+    staRoles = {dynRole: [clunuPair[0] if clunuPair[1] in dr else clunuPair[1] for dr, clunuPair in dynStaPairs
+                 if dynRole in dr] for dynRole in dynRoles}
+    removeFromMatchingClusters = list()
+    for dynRole, staRoleList in staRoles.items():
+        try:
+            staMismatch = False
+            staValues = None
+            clunuPairs = list()
+            for staRole in staRoleList:
+                clunuPair = (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole) \
+                    if (staRole, dynRole) in matchingConditions else None
+                if clunuPair is None:
+                    print("Skipping ({}, {})".format(staRole, dynRole))
+                    continue
+                clunuPairs.append(clunuPair)
+                cluPairCond = matchingConditions[clunuPair]
+                fieldMatches = [fieldNum for fieldNum, fieldCond in enumerate(cluPairCond[1:])
+                              if not any(fieldCond[:-2]) and (fieldCond[-2] or fieldCond[-1])]
+                curStaValues = [alignedFieldClasses[clunuPair][0][fieldMatch]
+                                if clunuPair[0] == staRole else alignedFieldClasses[clunuPair][1][fieldMatch]
+                            for fieldMatch in fieldMatches]
+                if staValues is None:  # set the static values list to the currently determined STA field values for the DYN-STA pair clunuPair
+                    staValues = curStaValues
+                elif sorted([sv.bytes for sv in staValues]) != sorted([csv.bytes for csv in curStaValues]):
+                    staMismatch = True
+                    break
+            if staMismatch:
+                # mask to remove the clunuPairs of all combinations with this dynRole
+                removeFromMatchingClusters.extend([
+                    (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole)
+                    for staRole in staRoleList
+                ])
+        except KeyError as e:
+            print(e)
+            IPython.embed()
+            raise e
+
+
+
+    #     [clunuPair for clunuPair in matchingClusters if [not any(fieldCond[:-2])
+    #                                                                for fieldCond in matchingConditions[clunuPair][1:]] ]
+    # [matchingConditions[] for clunuPair in dynStaPairs ]
+
     # determine as more than two clusters mergeable only if a match of three or more aligned fields of the scheme:
     # DYNAMIC - STATIC - STATIC does not merge different STATIC values.
-    # TODO create a tree instead of a list for filteredMatches
-    filteredMatches = [(clunuA, clunuB) for clunuA, clunuB in matchingClusters
-                       if any(clunu in itertools.chain.from_iterable(
-            [cluAB for cluAB in matchingClusters if cluAB != (clunuA, clunuB)]) for clunu in (clunuA, clunuB))]
+
+    # from anytree import Node, RenderTree
+    # clusterNodes = {clunu: Node(clunu) for clunu in messageClusters.keys()}  # type: Dict[int, Node]
+    # for clunuA, clunuB in matchingClusters:
+    #     try:
+    #         clusterNodes[clunuA].
+    #         clusterNodes[clunuA].root.parent = clusterNodes[clunuB]
+    #     except Exception as e:
+    #         print("Pair to add:", clunuA, clunuB)
+    #         print(e)
+    #         clusterTrees = {clno.root for clno in clusterNodes.values()}
+    #         for rono in clusterTrees:
+    #             for pre, fill, node in RenderTree(rono):
+    #                 print("%s%s" % (pre, node.name))
+    #         IPython.embed()
+    #         raise e
+    #
+    # clusterTrees = {clno.root for clno in clusterNodes.values()}
+    # for rono in clusterTrees:
+    #     for pre, fill, node in RenderTree(rono):
+    #         print("%s%s" % (pre, node.name))
+
+    # IPython.embed()
+
+    # chainedMatches = dict()
+    # for macl in matchingClusters:
+    #     matchingChains = [clusterChain for clusterChain in chainedMatches.keys()
+    #                      if any(clu in clusterChain for clu in macl)]
+    #     if len(matchingChains) == 0:
+    #         chainedMatches[macl] = [macl]
+    #     else:
+    #         for oldChain in matchingChains:
+    #             if oldChain not in chainedMatches:
+    #                 chainedMatches[oldChain] = list()
+    #             newChain = tuple(set(oldChain + macl))
+    #             chainedMatches[newChain] = chainedMatches[oldChain]
+    #             chainedMatches[newChain].append(macl)
+    #             if oldChain != newChain:
+    #                 del chainedMatches[oldChain]
+    # print(tabulate(chainedMatches.values()))
+
+    # # TODO create a tree instead of a list for filteredMatches
+    # filteredMatches = [(clunuA, clunuB) for clunuA, clunuB in matchingClusters
+    #                    if any(clunu in itertools.chain.from_iterable(
+    #         [cluAB for cluAB in matchingClusters if cluAB != (clunuA, clunuB)]) for clunu in (clunuA, clunuB))]
     # TODO search in filteredMatches for DYNAMIC - STATIC - STATIC with different static values and remove from matchingClusters
     if len(matchingClusters) > 0:
         print("Clusters could be merged:")
@@ -434,8 +530,9 @@ if __name__ == '__main__':
                            list(zip(*matchingConditions[clunuAB]))
                            ))
 
+    print("remove:", removeFromMatchingClusters)
 
-
+    print("remain:", set(matchingClusters) - set(removeFromMatchingClusters))
 
     # write alignments to csv
     reportFolder = "reports"
