@@ -125,7 +125,7 @@ def writeMessageClusteringStaticstics(
         precision = numMFTinCluster / numSegsinCuster
         recall = numMFTinCluster / numTypesOverall[mostFreqentType]
 
-        prList.append((mostFreqentType, precision, recall, numSegsinCuster))
+        prList.append((label, mostFreqentType, precision, recall, numSegsinCuster))
 
     # noise statistics
     if noise:
@@ -140,14 +140,16 @@ def writeMessageClusteringStaticstics(
         if csvWriteHead:
             # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
             clStatscsv.writerow([
-                'run_title', 'trace', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
+                'run_title', 'trace', 'conciseness', 'cluster_label', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
         if noise:
             # noinspection PyUnboundLocalVariable
             clStatscsv.writerow([
-                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), ratioNoise, numNoise])
+                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', '', str(noiseTypes), ratioNoise, numNoise])
         clStatscsv.writerows([
             (runtitle, comparator.specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
         ])
+
+    return prList, conciseness
 
 
 
