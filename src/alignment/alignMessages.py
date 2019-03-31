@@ -284,6 +284,7 @@ class SegmentedMessages(object):
         smoothknearest = dict()
         seconddiff = dict()
         seconddiffMax = (0, 0, 0)
+        # omit k = 0 ? No
         for k in range(0, len(neighbors) // 10):  # first 10% of k-neigbors
             knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
             smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)

@@ -373,7 +373,7 @@ if __name__ == '__main__':
 
     # check for cluster merge candidates
     print("Check for cluster merge candidates...")
-    alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in alignedClusters.items()}
+    alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in alignedClusters.items() if clunu > -1}
     FC_DYN = b"DYNAMIC"
     FC_GAP = "GAP"
     statDynFields = dict()
@@ -496,22 +496,28 @@ if __name__ == '__main__':
                     if clunu in remainingPair:
                         removeFromMatchingClusters.append(remainingPair)
 
-    if len(matchingClusters) > 0:
+    remainingClusters = set(matchingClusters) - set(removeFromMatchingClusters)
+    if len(remainingClusters) > 0:
         print("Clusters could be merged:")
-        for clunuAB in matchingClusters:
-            print(tabulate([(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
-                                      fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                            for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] +
-                           list(zip(*matchingConditions[clunuAB]))
-                           ))
+        for clunuAB in remainingClusters:
+            cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
+                       fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
+             for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + list(zip(*matchingConditions[clunuAB]))
+            fNums = []
+            for fNum, (cluA, cluB) in enumerate(zip(cluTable[0], cluTable[1])):
+                if not cluA == cluB:
+                    fNums.append(fNum)
+            cluDiff = [[col for colNum, col in enumerate(line) if colNum in fNums] for line in cluTable]
+            print(tabulate(cluDiff, headers=fNums))
+            print()
 
     print("remove:", removeFromMatchingClusters)
 
-    print("remain:", set(matchingClusters) - set(removeFromMatchingClusters))
+    print("remain:", remainingClusters)
     chainedRemains = Graph()
-    chainedRemains.add_edges_from(set(matchingClusters) - set(removeFromMatchingClusters))
+    chainedRemains.add_edges_from(remainingClusters)
     connectedClusters = list(connected_components(dracula))
-    print(connectedClusters)
+    print("connected:", connectedClusters)
 
     print("should merge:")
     # identify over-specified clusters and list which ones ideally would be merged:
