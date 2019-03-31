@@ -300,7 +300,7 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
     # print(len(clusters), len(noise))
 
     segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
-                                                    next(iter(segLengths)) if len(segLengths) == 0 else 'mixedamount',
+                                                    next(iter(segLengths)) if len(segLengths) == 1 else 'mixedamount',
                                                     clusterer if clusterer else 'n/a'),
                           segmentClusters) ]
     return segmentClusters

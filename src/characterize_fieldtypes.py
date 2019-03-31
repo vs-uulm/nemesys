@@ -13,7 +13,7 @@ from itertools import chain
 
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
     labelForSegment
-from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer
+from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -95,7 +95,7 @@ def evaluateFieldTypeClusteringWithIsolatedLengths():
             for mcs in range(3, 15):  # [ 0 ]: # range(3, 15):
                 print("Clustering...")
                 # typeGroups = segments2typedClusters(segments,analysisTitle)
-                clusterer = DBSCANsegmentClusterer(dc, min_cluster_size=mcs)
+                clusterer = HDBSCANsegmentClusterer(dc, min_cluster_size=mcs)
                 segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
                 # re-extract cluster labels for segments
                 labels = numpy.array([
