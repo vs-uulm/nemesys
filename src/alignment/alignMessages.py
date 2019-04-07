@@ -52,6 +52,7 @@ class SegmentedMessages(object):
             segseq1 = self._dc.segments2index(msg1)
 
             # Needleman-Wunsch alignment score of the two messages:
+            # TODO validate using the max, not the last entry. Any difference?
             nwscores.append((msg0, msg1, hirsch.nwScore(segseq0, segseq1)[-1]))
             if c % combcstep == 0:
                 print(" .", end="", flush=True)
@@ -87,6 +88,7 @@ class SegmentedMessages(object):
         # fill diagonal with max similarity per pair
         for ij in range(messageSimilarityMatrix.shape[0]):
             # The max similarity for a pair is len(shorter) * SCORE_MATCH
+            # see Netzob for reference
             messageSimilarityMatrix[ij,ij] = len(self._segmentedMessages[ij]) * Alignment.SCORE_MATCH
 
         return messageSimilarityMatrix
@@ -288,7 +290,7 @@ class SegmentedMessages(object):
         for k in range(0, len(neighbors) // 10):  # first 10% of k-neigbors
             knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
             smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
-            # max of second difference (maximum upwards curvature) as knee
+            # max of second difference (maximum upwards curvature) as knee (this not actually the knee!)
             seconddiff[k] = numpy.diff(smoothknearest[k], 2)
             seconddiffargmax = seconddiff[k].argmax()
             diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]

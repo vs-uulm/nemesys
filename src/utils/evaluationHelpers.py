@@ -271,5 +271,22 @@ def writePerformanceStatistics(specimens, clusterer, algos,
             ])
 
 
+def segmentInfo(comparator: MessageComparator, segment: MessageSegment):
+    pm = comparator.parsedMessages[comparator.messages[segment.message]]
+    print(pm.messagetype)
+
+    fs = pm.getFieldSequence()
+    fsnum = 0
+    offset = 0
+    while offset < segment.offset:
+        offset += fs[fsnum][1]
+        fsnum += 1
+    print(fs[fsnum][0])
+    print(pm.getTypeSequence()[fsnum][0])
+    print(segment.bytes)
+    print(segment.bytes.hex())
+
+
+
 
 

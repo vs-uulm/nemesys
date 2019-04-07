@@ -15,6 +15,7 @@ from tabulate import tabulate
 from inference.analyzers import *
 from inference.segmentHandler import segments2types, filterChars, searchSeqOfSeg
 from inference.templates import DelegatingDC
+from validation.messageParser import ParsedMessage
 from utils.baseAlgorithms import tril
 from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator
@@ -80,8 +81,11 @@ def meanHisto(segments: List[MessageSegment]):
 
 
 def printChars(segments: List[MessageSegment]):
-    table = [(chars.bytes.hex(), 100*len(locateNonPrintable(chars.bytes))/chars.length, chars.bytes.decode()) for chars in segments]
-    print(tabulate(table))
+    table = [(100*len(locateNonPrintable(chars.bytes))/chars.length,
+              chars.bytes.hex(),
+              chars.bytes.decode())
+             for chars in segments]
+    print(tabulate(table, headers=("% NON-printables", "hex", "decoded")))
 
 
 
@@ -108,9 +112,6 @@ def charsDistanceStatistics(dc, typegroups):
 
 
 def charsValueMeanStatistics(filteredChars, typegroups):
-    # # make meancorridor narrower and compare 10000s tp, fp, fn
-    # filteredNarrow = filterChars(segments, meanCorridor=(50, 115))
-
     typelabels = list(typegroups.keys())
 
     if charskey in typelabels:
@@ -119,19 +120,20 @@ def charsValueMeanStatistics(filteredChars, typegroups):
         if len(nnchars) > 0:
             tp, fp, fn = tPfPfN(filteredChars, nnchars)
             print("TP:", len(tp), "FP:", len(fp), "FN", len(fn))
-            # ntp, nfp, nfn = tPfPfN(filteredNarrow, nnchars)
-            # print("narrow")
-            # print("TP:", len(ntp), "FP:", len(nfp), "FN", len(nfn))
             segmentMeans = meanHisto(nnchars)
             print("Means min: {:.3f} max: {:.3f}".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
+            return tp, fp, fn
         else:
             print("No non-zero char segments in trace. FP count:", len(filteredChars))
-            # if len(filteredChars) > 0:
-            #     printChars(filteredChars)
-            #     meanHisto(filteredChars)
+            if len(filteredChars) > 0:
+                print("First 100 of the false positive detected chars:")
+                printChars(filteredChars[:100])
+                # meanHisto(filteredChars)
+            return [], filteredChars, []
     else:
         print("No char segments in trace. FP count:", len(filteredChars))
     print()
+    return [], filteredChars, []
 
 
 def ffffffff00(dc, segmentedMessages):
@@ -203,21 +205,30 @@ if __name__ == '__main__':
     comparator = MessageComparator(specimens, 2, True, debug=debug)
     print("Trace:", specimens.pcapFileName)
 
-    # # segment messages according to true fields from the labels
-    # # print("Segmenting messages...")
-    # segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    # segments = list(chain.from_iterable(segmentedMessages))
-    #
-    # # typegroups = segments2types(segments)
-    # # filteredChars = filterChars(segments)
-    #
-    # # # evaluate additional filtering criteria: mean of values
-    # # charsValueMeanStatistics()
-    #
+
+
+    print("Message types found in trace:")
+    pms = [pm for pm in comparator.parsedMessages.values()]  # type: List[ParsedMessage]
+    msgtypes = {(pm.protocolname, pm.messagetype) for pm in pms}
+    print(tabulate(msgtypes))
+
+
+
+    # segment messages according to true fields from the labels
+    print("Segmenting messages...", end=" ")
+    segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    segments = list(chain.from_iterable(segmentedMessages))
+
+    print("finished")
+
+    # evaluate char detection
+    typegroups = segments2types(segments)
+    filteredChars = filterChars(segments)
+    tp, fp, fn = charsValueMeanStatistics(filteredChars, typegroups)
+
+    # # boxplots for char distance statistics
     # dc = DelegatingDC(segments)
-    #
-    # # # boxplots for char distance statistics
-    # # charsStatistics()
+    # charsStatistics()
 
 
 
@@ -248,12 +259,6 @@ if __name__ == '__main__':
     #     mmp.histoToSubfig(figIdx, [match, mismatch], bins=numpy.linspace(0, 1, 20), label=[typlabl, 'not ' + typlabl])
     # # plot in subfigures on one page
     # mmp.writeOrShowFigure()
-
-    from validation.messageParser import ParsedMessage
-
-    pms = [pm for pm in comparator.parsedMessages.values()]  # type: List[ParsedMessage]
-    msgtypes = {(pm.protocolname, pm.messagetype) for pm in pms}
-    print(tabulate(msgtypes))
 
     if args.interactive:
         IPython.embed()
