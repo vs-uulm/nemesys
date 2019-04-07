@@ -115,16 +115,19 @@ class SegmentedMessages(object):
         :param similarityMatrix: Similarity matrix for messages
         :return: Distance matrix for messages
         """
-        minDim = numpy.empty(similarityMatrix.shape)
+        minScore = min(Alignment.SCORE_GAP, Alignment.SCORE_MATCH, Alignment.SCORE_MISMATCH)
+        base = numpy.empty(similarityMatrix.shape)
+        maxScore = numpy.empty(similarityMatrix.shape)
         for i in range(similarityMatrix.shape[0]):
             for j in range(similarityMatrix.shape[1]):
-                minDim[i, j] = min(  # The max similarity for a pair is len(shorter) * SCORE_MATCH
+                maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * SCORE_MATCH
                     # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
                     similarityMatrix[i, i], similarityMatrix[j, j]
-                    # len(self._segmentedMessages[i]), len(self._segmentedMessages[j])
-                ) # * Alignment.SCORE_MATCH
+                )
+                minDim = min(len(self._segmentedMessages[i]), len(self._segmentedMessages[j]))
+                base[i, j] = minScore * minDim
 
-        distanceMatrix = 1 - (similarityMatrix / minDim)
+        distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
         # TODO prevent negative values for highly mismatching messages
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
@@ -294,7 +297,7 @@ class SegmentedMessages(object):
             seconddiff[k] = numpy.diff(smoothknearest[k], 2)
             seconddiffargmax = seconddiff[k].argmax()
             diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
-            if diffrelmax > seconddiffMax[2]:
+            if sigma < seconddiffargmax < len(neighbors) - sigma and diffrelmax > seconddiffMax[2]:
                 seconddiffMax = (k, seconddiffargmax, diffrelmax)
 
         k = seconddiffMax[0]

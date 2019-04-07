@@ -175,6 +175,8 @@ def epsautoconfeval(epsilon):
     smoothknearest = dict()
     seconddiff = dict()
     seconddiffMax = (0, 0, 0)
+
+    ksteepeststats = list()
     for k in range(0, len(neighbors) // 10):  # round(2*log(len(neighbors)))
         knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
         smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
@@ -182,8 +184,10 @@ def epsautoconfeval(epsilon):
         seconddiff[k] = numpy.diff(smoothknearest[k], 2)
         seconddiffargmax = seconddiff[k].argmax()
         diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
-        if diffrelmax > seconddiffMax[2]:
+        if sigma < seconddiffargmax < len(neighbors) - sigma and diffrelmax > seconddiffMax[2]:
             seconddiffMax = (k, seconddiffargmax, diffrelmax)
+        ksteepeststats.append((k, seconddiff[k].max(), diffrelmax))
+    print(tabulate(ksteepeststats, headers=("k", "max(f'')", "max(f'')/f")))
 
     # prepare to plot the smoothed nearest neigbor distribution and its second derivative
     k = seconddiffMax[0]
@@ -315,7 +319,7 @@ if __name__ == '__main__':
     # # retrieve manually determined epsilon value
     # pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
-    # eps = epsautoconfeval(epsilon)
+    eps = epsautoconfeval(eps)
     # #
     # # DEBUG and TESTING
 
@@ -363,6 +367,15 @@ if __name__ == '__main__':
         hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
     print()
     align_messagesTime = time.time() - align_messagesTime
+
+
+
+
+
+
+
+
+
 
 
 
