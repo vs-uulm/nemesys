@@ -11,14 +11,16 @@ class Alignment(ABC):
     SCORE_MATCH = 5  # use as factor, to multiply with the similarity matrix.
     SCORE_MISMATCH = -1
 
-    def __init__(self, similarityMatrix):
+    def __init__(self, similarityMatrix, score_gap=SCORE_GAP, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH):
         """
         :param similarityMatrix: normalized similarity matrix (0..1) of segments
             with 1 meaning identity and 0 maximum dissimilarity.
         """
-
+        self.score_gap = score_gap
+        self.score_match = score_match
+        self.score_mismatch = score_mismatch
         self._similarities = similarityMatrix \
-                             * (Alignment.SCORE_MATCH - Alignment.SCORE_MISMATCH) + Alignment.SCORE_MISMATCH
+                             * (self.score_match - self.score_mismatch) + self.score_mismatch
         """
         matrix of similarities: higher values denote closer match
 
@@ -142,14 +144,14 @@ class HirschbergOnSegmentSimilarity(Alignment):
         # # penalize gaps at beginning and end
         # score[0,0] = 0
         # for j in range(1, len(tokensY)+1):
-        #     score[0,j] = score[0,j-1] + Alignment.SCORE_GAP
+        #     score[0,j] = score[0,j-1] + self.score_gap
          
         for x in range(1, len(tokensX)+1):  # init array
-            score[1,0] = score[0,0] + Alignment.SCORE_GAP
+            score[1,0] = score[0,0] + self.score_gap
             for y in range(1, len(tokensY)+1):
                 scoreSub = score[0,y-1] + self._similarities[tokensX[x-1], tokensY[y-1]]
-                scoreDel = score[0,y] + Alignment.SCORE_GAP
-                scoreIns = score[1,y-1] + Alignment.SCORE_GAP
+                scoreDel = score[0,y] + self.score_gap
+                scoreIns = score[1,y-1] + self.score_gap
                 score[1,y] = max(scoreSub, scoreDel, scoreIns)
             # copy Score[1] to Score[0]
             score[0,] = score[1,]
@@ -209,11 +211,11 @@ class NWonSegmentSimilarity(Alignment):
                 alignmentB.append(m1v)
                 i -= 1
                 j -= 1
-            elif i > 0 and scores[i, j] == scores[i - 1, j] + Alignment.SCORE_GAP:
+            elif i > 0 and scores[i, j] == scores[i - 1, j] + self.score_gap:
                 alignmentA.append(m0v)
                 alignmentB.append(-1)
                 i -= 1
-            elif j > 0 and scores[i, j] == scores[i, j - 1] + Alignment.SCORE_GAP:
+            elif j > 0 and scores[i, j] == scores[i, j - 1] + self.score_gap:
                 alignmentA.append(-1)
                 alignmentB.append(m1v)
                 j -= 1
@@ -225,18 +227,18 @@ class NWonSegmentSimilarity(Alignment):
                 print()
                 print(tabulate(scores))
                 print()
-                raise Exception("Alignment failed at i={:.3f} and j={:.3f} (gap cost {:.3f})".format(i, j, Alignment.SCORE_GAP))
+                raise Exception("Alignment failed at i={:.3f} and j={:.3f} (gap cost {:.3f})".format(i, j, self.score_gap))
         return alignmentA[::-1], alignmentB[::-1]
 
 
     def _scoreMatrix(self, message0, message1):
         scores = numpy.empty([len(message0)+1, len(message1)+1])
-        scores[0,] = [j * Alignment.SCORE_GAP for j in range(scores.shape[1])]  # alternatively: constant 0
-        scores[:,0] = [i * Alignment.SCORE_GAP for i in range(scores.shape[0])]  # alternatively: constant 0
+        scores[0,] = [j * self.score_gap for j in range(scores.shape[1])]  # alternatively: constant 0
+        scores[:,0] = [i * self.score_gap for i in range(scores.shape[0])]  # alternatively: constant 0
         for i in range(1,scores.shape[0]):
             for j in range(1,scores.shape[1]):
                 scoreSub = scores[i-1,j-1] + self._similarities[message0[i-1], message1[j-1]]
-                scoreDel = scores[i-1,j] + Alignment.SCORE_GAP
-                scoreIns = scores[i,j-1] + Alignment.SCORE_GAP
+                scoreDel = scores[i-1,j] + self.score_gap
+                scoreIns = scores[i,j-1] + self.score_gap
                 scores[i,j] = max(scoreSub, scoreDel, scoreIns)
         return scores

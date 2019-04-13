@@ -13,6 +13,10 @@ from inference.segments import MessageSegment
 
 class SegmentedMessages(object):
     def __init__(self, dc, segmentedMessages):
+        self._score_match = None
+        self._score_mismatch = None
+        self._score_gap = None
+
         self._dc = dc
         self._segmentedMessages = segmentedMessages  # type: Sequence[Tuple[MessageSegment]]
         self._similarities = self._calcSimilarityMatrix()
@@ -46,6 +50,9 @@ class SegmentedMessages(object):
             len(self._segmentedMessages), combcount), end=' ')
         import time; timeBegin = time.time()
         hirsch = HirschbergOnSegmentSimilarity(segmentSimilarities)
+        self._score_gap = hirsch.score_gap
+        self._score_match = hirsch.score_match
+        self._score_mismatch = hirsch.score_mismatch
         nwscores = list()
         for c, (msg0, msg1) in enumerate(itertools.combinations(self._segmentedMessages, 2)):  # type: Tuple[MessageSegment], Tuple[MessageSegment]
             segseq0 = self._dc.segments2index(msg0)
@@ -87,9 +94,9 @@ class SegmentedMessages(object):
 
         # fill diagonal with max similarity per pair
         for ij in range(messageSimilarityMatrix.shape[0]):
-            # The max similarity for a pair is len(shorter) * SCORE_MATCH
+            # The max similarity for a pair is len(shorter) * self._score_match
             # see Netzob for reference
-            messageSimilarityMatrix[ij,ij] = len(self._segmentedMessages[ij]) * Alignment.SCORE_MATCH
+            messageSimilarityMatrix[ij,ij] = len(self._segmentedMessages[ij]) * self._score_match
 
         return messageSimilarityMatrix
 
@@ -115,12 +122,12 @@ class SegmentedMessages(object):
         :param similarityMatrix: Similarity matrix for messages
         :return: Distance matrix for messages
         """
-        minScore = min(Alignment.SCORE_GAP, Alignment.SCORE_MATCH, Alignment.SCORE_MISMATCH)
+        minScore = min(self._score_gap, self._score_match, self._score_mismatch)
         base = numpy.empty(similarityMatrix.shape)
         maxScore = numpy.empty(similarityMatrix.shape)
         for i in range(similarityMatrix.shape[0]):
             for j in range(similarityMatrix.shape[1]):
-                maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * SCORE_MATCH
+                maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * self._score_match
                     # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
                     similarityMatrix[i, i], similarityMatrix[j, j]
                 )
@@ -307,3 +314,81 @@ class SegmentedMessages(object):
         epsilon = smoothknearest[k][x]
         min_samples = round(sigma)
         return epsilon, min_samples
+
+
+
+
+
+
+FC_DYN = b"DYNAMIC"
+FC_GAP = "GAP"
+
+def alignFieldClasses(alignedClusters: Dict[int, List], dc, mmg = (0,-1,5)):
+    from inference.templates import Template, DistanceCalculator
+    from alignment.hirschbergAlignSegments import NWonSegmentSimilarity
+
+    alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in alignedClusters.items() if
+                     clunu > -1}
+    statDynFields = dict()
+    for clunu, alfi in alignedFields.items():
+        statDynFields[clunu] = list()
+        for fvals in alfi:
+            fvalsGapless = [val for val in fvals if val is not None]
+            # if len(fvalsGapless) < len(fvals): there are GAPs in there
+            if all([val.bytes == fvalsGapless[0].bytes for val in fvalsGapless]):
+                # This leaves only an example in the field list:
+                # The association to the original message is lost for the other segments in this field!
+                statDynFields[clunu].append(fvalsGapless[0])
+            else:
+                dynTemp = Template(list(FC_DYN), fvalsGapless)
+                dynTemp.medoid = dc.findMedoid(dynTemp.baseSegments)
+                statDynFields[clunu].append(dynTemp)
+    # generate a similarity matrix for field-classes (static-dynamic)
+    statDynValues = list(set(itertools.chain.from_iterable(statDynFields.values())))
+    statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
+    statDynIndices = {clunu: [statDynValuesMap[fc] for fc in sdf] for clunu, sdf in statDynFields.items()}
+
+    # fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
+    #               for fcL in statDynValues] for fcK in statDynValues])
+
+    # use medoid distance in fcSimMatrix instead of fixed value (0.5)
+    fcSimMatrix = numpy.array([[
+        # 1.0 if fcL.bytes == fcK.bytes else
+        max(0.8, 1.0 - dc.pairDistance(fcL.medoid, fcK.medoid))  # DYN-DYN similarity
+            if isinstance(fcL, Template) and isinstance(fcK, Template)
+        else 1.0 - dc.pairDistance(fcL.medoid, fcK)  # DYN-STA similarity, modified 0 field
+                 * (1 if {fcK.bytes} != {0} else 0.1)
+            if isinstance(fcL, Template) and isinstance(fcK, MessageSegment)
+        else 1.0 - dc.pairDistance(fcK.medoid, fcL)  # STA-DYN similarity, modified 0 field  min(0.2,
+                 * (1 if {fcK.bytes} != {0} else 0.1)
+            if isinstance(fcK, Template) and isinstance(fcL, MessageSegment)
+        else max(0.5, 1.0 - dc.pairDistance(fcK, fcL)  # STA-STA similarity, modified 0 field
+                 * 1 if {fcK.bytes} != {0} or {fcL.bytes} != {0} else 0.1)
+            if isinstance(fcK, MessageSegment) and isinstance(fcL,MessageSegment)
+        else 0.0
+        for fcL in statDynValues] for fcK in statDynValues])
+
+    # fcdc = DistanceCalculator(statDynValues)
+    # fcSimMatrix = fcdc.similarityMatrix()
+
+
+    clusterpairs = list(itertools.combinations(statDynFields.keys(), 2))
+    fclassHirsch = HirschbergOnSegmentSimilarity(fcSimMatrix, *mmg)
+    # fclassHirsch = NWonSegmentSimilarity(fcSimMatrix, *mmg)
+    alignedFCIndices = {(clunuA, clunuB): fclassHirsch.align(statDynIndices[clunuA], statDynIndices[clunuB])
+                        for clunuA, clunuB in clusterpairs}
+    alignedFieldClasses = {clupa: ([statDynValues[a] if a > -1 else FC_GAP for a in afciA],
+                                   [statDynValues[b] if b > -1 else FC_GAP for b in afciB])
+                           for clupa, (afciA, afciB) in alignedFCIndices.items()}
+    # from alignment.hirschbergAlignSegments import NWonSegmentSimilarity
+    # IPython.embed()
+    return clusterpairs, alignedFieldClasses
+
+
+
+
+
+
+
+
+

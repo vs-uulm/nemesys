@@ -13,10 +13,10 @@ from math import ceil
 from os.path import isfile, splitext, basename, exists, join
 from tabulate import tabulate
 
-from alignment.alignMessages import SegmentedMessages
+from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
 from inference.segments import AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
 from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics
 from validation.dissectorMatcher import MessageComparator
@@ -229,18 +229,38 @@ def epsautoconfeval(epsilon):
 def printClusterMergeConditions(clunuAB, diff=True):
     cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
                           fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + list(
-        zip(*matchingConditions[clunuAB]))
+                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + \
+               list(zip(*matchingConditions[clunuAB]))
+
+    # distance to medoid for DYN-STA mixes
+    # DYN-STA / STA-DYN : medoid to static distance
+    dynstamixdists = [
+        dc.pairDistance(segA.medoid, segB)
+                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
+             else dc.pairDistance(segB.medoid, segA)
+                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+    # STA-STA : static distance
+    stastamixdists = [
+        dc.pairDistance(segA, segB)
+                 if isinstance(segA, MessageSegment) and isinstance(segB, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+
+    cluTable += [tuple(["DSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in dynstamixdists])]
+    cluTable += [tuple(["SSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in stastamixdists])]
+
     fNums = []
     for fNum, (cluA, cluB) in enumerate(zip(cluTable[0], cluTable[1])):
         if not cluA == cluB:
             fNums.append(fNum)
     if diff:  # only field diff
         cluDiff = [[col for colNum, col in enumerate(line) if colNum in fNums] for line in cluTable]
-        print(tabulate(cluDiff, headers=fNums))
+        print(tabulate(cluDiff, headers=fNums, disable_numparse=True))
     else:
         # complete field table
-        print(tabulate(cluTable))
+        print(tabulate(cluTable, disable_numparse=True))
     print()
 
 
@@ -248,43 +268,7 @@ def printClusterMergeConditions(clunuAB, diff=True):
 # # # END : Evaluation helpers  # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-FC_DYN = b"DYNAMIC"
-FC_GAP = "GAP"
 
-
-def alignFieldClasses(alignedClusters):
-    # change recognition of DYN from FC_DYN to isinstance(fc, Template)
-    # use medoid distance in fcSimMatrix instead of fixed value (0.5)
-    alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in alignedClusters.items() if clunu > -1}
-
-    statDynFields = dict()
-    for clunu, alfi in alignedFields.items():
-        statDynFields[clunu] = list()
-        for fvals in alfi:
-            fvalsGapless = [val for val in fvals if val is not None]
-            # if len(fvalsGapless) < len(fvals): there are GAPs in there
-            if all([val.bytes == fvalsGapless[0].bytes for val in fvalsGapless]):
-                # This leaves only an example in the field list:
-                # The association to the original message is lost for the other segments in this field!
-                statDynFields[clunu].append(fvalsGapless[0])
-            else:
-                dynTemp = Template(list(FC_DYN), fvalsGapless)
-                # dynTemp.medoid = dc.findMedoid(dynTemp.baseSegments)
-                statDynFields[clunu].append(dynTemp)
-    # generate a similarity matrix for field-classes (static-dynamic)
-    statDynValues = list(set(itertools.chain.from_iterable(statDynFields.values())))
-    statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
-    statDynIndices = {clunu: [statDynValuesMap[fc] for fc in sdf] for clunu, sdf in statDynFields.items()}
-    fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
-                                for fcL in statDynValues] for fcK in statDynValues])
-    clusterpairs = list(itertools.combinations(statDynFields.keys(), 2))
-    fclassHirsch = HirschbergOnSegmentSimilarity(fcSimMatrix)
-    alignedFCIndices = {(clunuA, clunuB): fclassHirsch.align(statDynIndices[clunuA], statDynIndices[clunuB])
-        for clunuA, clunuB in clusterpairs}
-    alignedFieldClasses = {clupa: ([statDynValues[a] if a > -1 else FC_GAP for a in afciA],
-                                   [statDynValues[b] if b > -1 else FC_GAP for b in afciB])
-                           for clupa, (afciA, afciB) in alignedFCIndices.items()}
-    return clusterpairs, alignedFieldClasses
 
 
 
@@ -411,6 +395,7 @@ if __name__ == '__main__':
     # align cluster members
     align_messagesTime = time.time()
     alignedClusters = dict()
+    alignedClustersHex = dict()
     print("Align each cluster...")
     for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
         clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
@@ -418,7 +403,7 @@ if __name__ == '__main__':
 
         # get gaps at the corresponding positions
         # print('Cluster', clunu)
-        hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
+        alignedClustersHex[clunu] = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
     print()
     align_messagesTime = time.time() - align_messagesTime
 
@@ -441,55 +426,68 @@ if __name__ == '__main__':
     # check for cluster merge candidates
     print("Check for cluster merge candidates...")
 
-    clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters)
+    clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters, dc)
 
 
 
-
-
-
-    mergingThreshold = 0  # allow merge of clusters if at most this number of field do not match
-    # matchingClusters = [ (clunuA, clunuB) for clunuA, clunuB in clusterpairs if mergingThreshold >= len(
-    #         [ False for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
-    #           if not (afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
-    #                      or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
-    #                      or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
-    #                      or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
-    #                      or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments])
-    #           ]
-    #                     ) ]
+    #                                            0      1       2       3       4      5      6      7          8
     # noinspection PyTypeChecker
-    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB")] + [  # ,"ALL" # "AdynB0","BdynA0"
-        (afcA == FC_GAP, afcB == FC_GAP,
-         isinstance(afcA, (MessageSegment, Template)) and isinstance(afcB, (MessageSegment, Template)) and afcA.bytes == afcB.bytes,
-         isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
-         # isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
-         # isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0},
-         isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
-         isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-         # afcA == FC_GAP or afcB == FC_GAP or afcA.bytes == afcB.bytes
-         # or isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0}
-         # or isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}
-         # or isinstance(afcA, Template) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments]
-         # or isinstance(afcB, Template) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments]
-         )
-         for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
-    ] for clunuA, clunuB in clusterpairs }
-    matchingClusters = [(clunuA, clunuB) for clunuA, clunuB in clusterpairs if mergingThreshold >= len(
-        [ False for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult) ]) and
-                        len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]]) <=
-                        ceil(.1*len(matchingConditions[(clunuA, clunuB)][1:])) ]
-    # dynStaPairs may not exceed 10% of fields (ceiling) to match
+    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB","DSdist","SSdist")] + [
+            (afcA == FC_GAP, afcB == FC_GAP,
+             isinstance(afcA, (MessageSegment, Template)) and isinstance(afcB, (MessageSegment, Template)) and afcA.bytes == afcB.bytes,
+             isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
+             isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
+             isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
+             0.0 > dc.pairDistance(afcA.medoid, afcB)  # 0.2 dhcp-1000: +2merges
+                 if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
+                 else 0.0 > dc.pairDistance(afcB.medoid, afcA)
+                 if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
+                 else False,
+             0.1 > dc.pairDistance(afcA, afcB)
+                 if isinstance(afcA, MessageSegment) and isinstance(afcB, MessageSegment)
+                 else False
+             )
+             for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
+        ] for clunuA, clunuB in clusterpairs }
+    def lenAndTrue(boolist, length=2, truths=0):
+        return len(boolist) <= length and len([a for a in boolist if a]) > truths
+    matchingClusters = [
+        (clunuA, clunuB) for clunuA, clunuB in clusterpairs
+            if all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
+            # if merging is based solely on SSdist anywhere, allow only one other "if not equal"
+            or lenAndTrue(
+                [not any(condResult[:7]) and condResult[8]
+                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
+            )
+        ]
+            # if mergingThreshold >= len(
+            #     [ False for condResult in matchingConditions[(clunuA, clunuB)][1:]
+            #       if not any(condResult) ]) and
+            #                 # dynStaPairs may not exceed 10% of fields (ceiling) to match
+            #                 len([True for c in matchingConditions[(clunuA, clunuB)][1:]
+            #                      if c[5] or c[6]])
+            #                 <= ceil(.1*len(matchingConditions[(clunuA, clunuB)][1:]))
+            #     ]
+
     # [(clupair, len([a[6] for a in matchingConditions[clupair] if a[5] == True or a[6] == True]),
     #   len(matchingConditions[clupair]) - 1) for clupair in matchingClusters]
+
+    # TODO remove pairs based on mostly gaps
+    print(tabulate(
+        [(  clupair,
+            len([True for a in matchingConditions[clupair] if a[0] == True or a[1] == True]),
+            len(matchingConditions[clupair]) - 1)
+            for clupair in matchingClusters],
+        headers=("clpa", "gaps", "fields")
+    ))
 
 
     # search in filteredMatches for STATIC - DYNAMIC - STATIC with different static values and remove from matchingClusters
     # : the matches on grounds of the STA value in DYN condition, with the DYN role(s) in a set in the first element of each tuple
     dynStaPairs = list()
     for clunuPair in matchingClusters:
-        dynRole = [ clunuPair[0] if fieldCond[-2] else clunuPair[1] for fieldCond in matchingConditions[clunuPair][1:]
-            if not any(fieldCond[:-2]) and (fieldCond[-2] or fieldCond[-1]) ]
+        dynRole = [ clunuPair[0] if fieldCond[5] else clunuPair[1] for fieldCond in matchingConditions[clunuPair][1:]
+            if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6]) ]
         if dynRole:
             dynStaPairs.append((set(dynRole), clunuPair))
     dynRoles = set(itertools.chain.from_iterable([dynRole for dynRole, clunuPair in dynStaPairs]))
@@ -511,7 +509,7 @@ if __name__ == '__main__':
                 clunuPairs.append(clunuPair)
                 cluPairCond = matchingConditions[clunuPair]
                 fieldMatches = [fieldNum for fieldNum, fieldCond in enumerate(cluPairCond[1:])
-                              if not any(fieldCond[:-2]) and (fieldCond[-2] or fieldCond[-1])]
+                              if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6])]
                 curStaValues = [alignedFieldClasses[clunuPair][0][fieldMatch]
                                 if clunuPair[0] == staRole else alignedFieldClasses[clunuPair][1][fieldMatch]
                             for fieldMatch in fieldMatches]
@@ -530,6 +528,10 @@ if __name__ == '__main__':
             print(e)
             IPython.embed()
             raise e
+
+
+
+
     # if a chain of matches would merge more than .5 of all clusters, remove that chain
     from networkx import Graph
     from networkx.algorithms.components.connected import connected_components
@@ -554,7 +556,7 @@ if __name__ == '__main__':
     print("remain:", remainingClusters)
     chainedRemains = Graph()
     chainedRemains.add_edges_from(remainingClusters)
-    connectedClusters = list(connected_components(dracula))
+    connectedClusters = list(connected_components(chainedRemains))
     print("connected:", connectedClusters)
 
     print("should merge:")
@@ -653,6 +655,7 @@ if __name__ == '__main__':
     if args.interactive:
         from tabulate import tabulate
         IPython.embed()
+        # globals().update(locals())
 
 
 
