@@ -454,6 +454,9 @@ if __name__ == '__main__':
     matchingClusters = [
         (clunuA, clunuB) for clunuA, clunuB in clusterpairs
             if all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
+            # dynStaPairs may not exceed 10% of fields (ceiling) to match
+            and len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]])
+                <= ceil(.1*len(matchingConditions[(clunuA, clunuB)][1:]))
             # if merging is based solely on SSdist anywhere, allow only one other "if not equal"
             or lenAndTrue(
                 [not any(condResult[:7]) and condResult[8]
@@ -463,10 +466,7 @@ if __name__ == '__main__':
             # if mergingThreshold >= len(
             #     [ False for condResult in matchingConditions[(clunuA, clunuB)][1:]
             #       if not any(condResult) ]) and
-            #                 # dynStaPairs may not exceed 10% of fields (ceiling) to match
-            #                 len([True for c in matchingConditions[(clunuA, clunuB)][1:]
-            #                      if c[5] or c[6]])
-            #                 <= ceil(.1*len(matchingConditions[(clunuA, clunuB)][1:]))
+
             #     ]
 
     # [(clupair, len([a[6] for a in matchingConditions[clupair] if a[5] == True or a[6] == True]),
