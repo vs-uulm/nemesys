@@ -226,43 +226,6 @@ def epsautoconfeval(epsilon):
     return epsilon
 
 
-def printClusterMergeConditions(clunuAB, diff=True):
-    cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
-                          fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + \
-               list(zip(*matchingConditions[clunuAB]))
-
-    # distance to medoid for DYN-STA mixes
-    # DYN-STA / STA-DYN : medoid to static distance
-    dynstamixdists = [
-        dc.pairDistance(segA.medoid, segB)
-                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
-             else dc.pairDistance(segB.medoid, segA)
-                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
-             else None
-             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
-    # STA-STA : static distance
-    stastamixdists = [
-        dc.pairDistance(segA, segB)
-                 if isinstance(segA, MessageSegment) and isinstance(segB, MessageSegment)
-             else None
-             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
-
-    cluTable += [tuple(["DSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in dynstamixdists])]
-    cluTable += [tuple(["SSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in stastamixdists])]
-
-    fNums = []
-    for fNum, (cluA, cluB) in enumerate(zip(cluTable[0], cluTable[1])):
-        if not cluA == cluB:
-            fNums.append(fNum)
-    if diff:  # only field diff
-        cluDiff = [[col for colNum, col in enumerate(line) if colNum in fNums] for line in cluTable]
-        print(tabulate(cluDiff, headers=fNums, disable_numparse=True))
-    else:
-        # complete field table
-        print(tabulate(cluTable, disable_numparse=True))
-    print()
-
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # END : Evaluation helpers  # # # # # # # # # # # # # #
@@ -482,130 +445,15 @@ if __name__ == '__main__':
     ))
 
 
-    # search in filteredMatches for STATIC - DYNAMIC - STATIC with different static values and remove from matchingClusters
-    # : the matches on grounds of the STA value in DYN condition, with the DYN role(s) in a set in the first element of each tuple
-    dynStaPairs = list()
-    for clunuPair in matchingClusters:
-        dynRole = [ clunuPair[0] if fieldCond[5] else clunuPair[1] for fieldCond in matchingConditions[clunuPair][1:]
-            if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6]) ]
-        if dynRole:
-            dynStaPairs.append((set(dynRole), clunuPair))
-    dynRoles = set(itertools.chain.from_iterable([dynRole for dynRole, clunuPair in dynStaPairs]))
-    # List of STA roles for each DYN role
-    staRoles = {dynRole: [clunuPair[0] if clunuPair[1] in dr else clunuPair[1] for dr, clunuPair in dynStaPairs
-                 if dynRole in dr] for dynRole in dynRoles}
-    removeFromMatchingClusters = list()
-    for dynRole, staRoleList in staRoles.items():
-        try:
-            staMismatch = False
-            staValues = None
-            clunuPairs = list()
-            for staRole in staRoleList:
-                clunuPair = (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole) \
-                    if (staRole, dynRole) in matchingConditions else None
-                if clunuPair is None:
-                    print("Skipping ({}, {})".format(staRole, dynRole))
-                    continue
-                clunuPairs.append(clunuPair)
-                cluPairCond = matchingConditions[clunuPair]
-                fieldMatches = [fieldNum for fieldNum, fieldCond in enumerate(cluPairCond[1:])
-                              if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6])]
-                curStaValues = [alignedFieldClasses[clunuPair][0][fieldMatch]
-                                if clunuPair[0] == staRole else alignedFieldClasses[clunuPair][1][fieldMatch]
-                            for fieldMatch in fieldMatches]
-                if staValues is None:  # set the static values list to the currently determined STA field values for the DYN-STA pair clunuPair
-                    staValues = curStaValues
-                elif sorted([sv.bytes for sv in staValues]) != sorted([csv.bytes for csv in curStaValues]):
-                    staMismatch = True
-                    break
-            if staMismatch:
-                # mask to remove the clunuPairs of all combinations with this dynRole
-                removeFromMatchingClusters.extend([
-                    (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole)
-                    for staRole in staRoleList
-                ])
-        except KeyError as e:
-            print(e)
-            IPython.embed()
-            raise e
-
-
-
-
-    # if a chain of matches would merge more than .5 of all clusters, remove that chain
-    from networkx import Graph
-    from networkx.algorithms.components.connected import connected_components
-    dracula = Graph()
-    dracula.add_edges_from(set(matchingClusters) - set(removeFromMatchingClusters))
-    connectedDracula = list(connected_components(dracula))
-    for clusterChain in connectedDracula:
-        if len(clusterChain) > .5 * len(alignedClusters):
-            for clunu in clusterChain:
-                for remainingPair in set(matchingClusters) - set(removeFromMatchingClusters):
-                    if clunu in remainingPair:
-                        removeFromMatchingClusters.append(remainingPair)
-
-    remainingClusters = set(matchingClusters) - set(removeFromMatchingClusters)
-    if len(remainingClusters) > 0:
-        print("Clusters could be merged:")
-        for clunuAB in remainingClusters:
-            printClusterMergeConditions(clunuAB)
-
-    print("remove:", removeFromMatchingClusters)
-
-    print("remain:", remainingClusters)
-    chainedRemains = Graph()
-    chainedRemains.add_edges_from(remainingClusters)
-    connectedClusters = list(connected_components(chainedRemains))
-    print("connected:", connectedClusters)
-
-    print("should merge:")
-    # identify over-specified clusters and list which ones ideally would be merged:
-    clusterMostFreqStats = {stats[1]: [] for stats in clusterStats if stats is not None}
-    # 'cluster_label', 'most_freq_type', 'precision', 'recall', 'cluster_size'
-    for stats in clusterStats:
-        if stats is None:
-            continue
-        cluster_label, most_freq_type, precision, recall, cluster_size = stats
-        clusterMostFreqStats[most_freq_type].append((cluster_label, precision))
-    overspecificClusters = {mft: stat for mft, stat in clusterMostFreqStats.items() if len(stat) > 1}
-    superClusters = list()
-    for mft, stat in overspecificClusters.items():
-        superCluster = [str(label) if precision > 0.5 else "[{}]".format(label) for label, precision in stat]
-        superClusters.append(superCluster)
-        print("    \"{}\"  ({})".format(mft, ", ".join(superCluster)))
-
-    print("missed clusters for merge:")
-    missedmerges = [[ocel[0] for ocel in oc] for oc in overspecificClusters.values()]
-    mergeCandidates = [el for cchain in connectedClusters for el in cchain]
-    for sc in missedmerges:
-        for sidx, selement in reversed(list(enumerate(sc))):
-            if selement in mergeCandidates:
-                del sc[sidx]
-    print(missedmerges)
-    print()
-
-    missedmergepairs = [k for k in clusterpairs if any(
-        [k[0] in mc and k[1] in mc or
-         k[0] in mc and k[1] in itertools.chain.from_iterable([cc for cc in connectedClusters if k[0] in cc]) or
-         k[0] in itertools.chain.from_iterable([cc for cc in connectedClusters if k[1] in cc]) and k[1] in mc
-         for mc in missedmerges]
-    )]
-
-#     # alignedFieldClasses to look up aligned field candidates from cluster pairs
-#     # in dhcp-1000, cluster pair 0,7
-#     from inference.templates import TemplateGenerator
-#     t0019 = alignedFieldClasses[(0, 7)][0][19]
-#     t7119 = alignedFieldClasses[(0, 7)][1][19]
-#     tg0019 = TemplateGenerator.generateTemplatesForClusters(dc, [t0019.baseSegments])[0]
-#     dc.findMedoid(t0019.baseSegments)
-#     dc.pairDistance(tg0019.medoid, t7119)
-#
-#     # 1:19 should be aligned to 0:21
-#     tg021 = TemplateGenerator.generateTemplatesForClusters(dc, [alignedFieldClasses[(0, 7)][0][21].baseSegments])[0]
-#
-#     dc.pairDistance(tg021.medoid, t7119)
-#     # 0.37706280402265446
+    from alignment.alignMessages import mergeClusters
+    mergedClusters, missedmergepairs = mergeClusters(
+        messageClusters, clusterStats, alignedClusters, alignedFieldClasses,
+                  clusterpairs, matchingClusters, matchingConditions, dc)
+    mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+        mergedClusters, groundtruth,
+        "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+        comparator)
 
     # END # of # check for cluster merge candidates #
 

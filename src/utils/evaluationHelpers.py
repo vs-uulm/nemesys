@@ -287,6 +287,60 @@ def segmentInfo(comparator: MessageComparator, segment: MessageSegment):
     print(segment.bytes.hex())
 
 
+def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions, dc, diff=True):
+    from inference.templates import Template
+    from tabulate import tabulate
+
+    cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
+                          fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
+                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + \
+               list(zip(*matchingConditions[clunuAB]))
+
+    # distance to medoid for DYN-STA mixes
+    # DYN-STA / STA-DYN : medoid to static distance
+    dynstamixdists = [
+        dc.pairDistance(segA.medoid, segB)
+                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
+             else dc.pairDistance(segB.medoid, segA)
+                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+    # STA-STA : static distance
+    stastamixdists = [
+        dc.pairDistance(segA, segB)
+                 if isinstance(segA, MessageSegment) and isinstance(segB, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+
+    cluTable += [tuple(["DSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in dynstamixdists])]
+    cluTable += [tuple(["SSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in stastamixdists])]
+
+    fNums = []
+    for fNum, (cluA, cluB) in enumerate(zip(cluTable[0], cluTable[1])):
+        if not cluA == cluB:
+            fNums.append(fNum)
+    if diff:  # only field diff
+        cluDiff = [[col for colNum, col in enumerate(line) if colNum in fNums] for line in cluTable]
+        print(tabulate(cluDiff, headers=fNums, disable_numparse=True))
+    else:
+        # complete field table
+        print(tabulate(cluTable, disable_numparse=True))
+    print()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
