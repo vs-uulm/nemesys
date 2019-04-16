@@ -435,7 +435,8 @@ if __name__ == '__main__':
             or lenAndTrue(
                 [not any(condResult[:7]) and condResult[8]
                  for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
-            )
+            ) and not any([True for condResult in matchingConditions[(clunuA, clunuB)][1:]
+                           if not condResult[2] and any(condResult[5:8])])  # prevents ntp merging of (1, 6) solely on ntp.stratum STA-STA
             or all([condResult[7]                                              # !!!!! might be the key !!!!!
                  for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult[2:7])])
         ]

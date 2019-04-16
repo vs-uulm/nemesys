@@ -1293,6 +1293,14 @@ class Template(AbstractSegment):
         return distOffs
 
 
+    def maxDistToMedoid(self, dc: DistanceCalculator = None):
+        return max(self.distancesToMixedLength(dc))[0]
+
+
+    def distToNearest(self, segment: MessageSegment, dc: DistanceCalculator = None):
+        return min(dc.distancesSubset([segment], self.baseSegments))
+
+
     def __hash__(self):
         """
         :return: Hash-representation of the template based on the values of it.
