@@ -354,16 +354,16 @@ def alignFieldClasses(alignedClusters: Dict[int, List], dc, mmg = (0,-1,5)):
     # use medoid distance in fcSimMatrix instead of fixed value (0.5)
     fcSimMatrix = numpy.array([[
         # 1.0 if fcL.bytes == fcK.bytes else
-        max(0.85, 1.0 - dc.pairDistance(fcL.medoid, fcK.medoid))  # DYN-DYN similarity
+        max(0.8, 1.0 - dc.pairDistance(fcL.medoid, fcK.medoid))  # DYN-DYN similarity
             if isinstance(fcL, Template) and isinstance(fcK, Template)
-        else 1.0 - dc.pairDistance(fcL.medoid, fcK)  # DYN-STA similarity, modified 0 field
-                 * (1 if {fcK.bytes} != {0} else 0.05)
+        else 1.0 - dc.pairDistance(fcL.medoid, fcK)  # DYN-STA similarity, modified 00 field
+                 * (0.8 if set(fcK.bytes) != {0} else 0.1)
             if isinstance(fcL, Template) and isinstance(fcK, MessageSegment)
-        else 1.0 - dc.pairDistance(fcK.medoid, fcL)  # STA-DYN similarity, modified 0 field  min(0.2,
-                 * (1 if {fcK.bytes} != {0} else 0.05)
+        else 1.0 - dc.pairDistance(fcK.medoid, fcL)  # STA-DYN similarity, modified 00 field  min(0.2,
+                 * (0.8 if set(fcK.bytes) != {0} else 0.1)
             if isinstance(fcK, Template) and isinstance(fcL, MessageSegment)
-        else max(0.66, 1.0 - dc.pairDistance(fcK, fcL)  # STA-STA similarity, modified 0 field
-                 * 1 if {fcK.bytes} != {0} or {fcL.bytes} != {0} else 0.1)
+        else 1.0 - dc.pairDistance(fcK, fcL)  # STA-STA similarity, modified 00 field
+                 * (0.5 if set(fcK.bytes) != {0} or set(fcL.bytes) != {0} else 0.1)
             if isinstance(fcK, MessageSegment) and isinstance(fcL,MessageSegment)
         else 0.0
         for fcL in statDynValues] for fcK in statDynValues])

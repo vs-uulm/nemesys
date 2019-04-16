@@ -399,6 +399,7 @@ if __name__ == '__main__':
     # check for cluster merge candidates
     print("Check for cluster merge candidates...")
     from alignment.alignMessages import mergeClusters
+    from utils.evaluationHelpers import printClusterMergeConditions
     def lenAndTrue(boolist, length=2, truths=0):
         return len(boolist) <= length and len([a for a in boolist if a]) > truths
 
@@ -412,9 +413,9 @@ if __name__ == '__main__':
              isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
              isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
              isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-             0.0 > dc.pairDistance(afcA.medoid, afcB)  # 0.2 dhcp-1000: +2merges
+             0.9 > dc.pairDistance(afcA.medoid, afcB)  # 0.2 dhcp-1000: +2merges // 9,30
                  if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
-                 else 0.0 > dc.pairDistance(afcB.medoid, afcA)
+                 else 0.9 > dc.pairDistance(afcB.medoid, afcA)
                  if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
                  else False,
              0.2 > dc.pairDistance(afcA, afcB)
@@ -435,6 +436,8 @@ if __name__ == '__main__':
                 [not any(condResult[:7]) and condResult[8]
                  for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
             )
+            or all([condResult[7]                                              # !!!!! might be the key !!!!!
+                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult[2:7])])
         ]
             # if mergingThreshold >= len(
             #     [ False for condResult in matchingConditions[(clunuA, clunuB)][1:]
