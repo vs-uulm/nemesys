@@ -426,7 +426,7 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
                             for fieldMatch in fieldMatches]
                 if staValues is None:  # set the static values list to the currently determined STA field values for the DYN-STA pair clunuPair
                     staValues = curStaValues
-                elif sorted([sv.bytes for sv in staValues]) != sorted([csv.bytes for csv in curStaValues]):
+                elif sorted([stva.bytes for stva in staValues]) != sorted([custva.bytes for custva in curStaValues]):
                     staMismatch = True
                     break
             if staMismatch:

@@ -261,6 +261,7 @@ if __name__ == '__main__':
     # cache the DistanceCalculator to the filesystem
     pcapName = splitext(basename(args.pcapfilename))[0]
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'ddc')
+    smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if not exists(dccachefn):
         # dissect and label messages
@@ -305,10 +306,19 @@ if __name__ == '__main__':
         chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
         segmentationTime, dist_calc_segmentsTime = None, None
 
+    # if not exists(smcachefn):
     print("Calculate distance for {} messages...".format(len(segmentedMessages)))
     dist_calc_messagesTime = time.time()
     sm = SegmentedMessages(dc, segmentedMessages)
     dist_calc_messagesTime = time.time() - dist_calc_messagesTime
+    #     with open(smcachefn, 'wb') as f:
+    #         pickle.dump(sm, f, pickle.HIGHEST_PROTOCOL)
+    # else:
+    #     print("Load distances from cache file {}".format(smcachefn))
+    #     sm = pickle.load(open(smcachefn, 'rb'))
+    #     if not isinstance(sm, SegmentedMessages):
+    #         print('Loading of cached message distances failed.')
+    #         exit(11)
 
     cluster_params_autoconfTime = time.time()
     eps, min_samples = sm.autoconfigureDBSCAN()
@@ -388,11 +398,12 @@ if __name__ == '__main__':
 
     # check for cluster merge candidates
     print("Check for cluster merge candidates...")
+    from alignment.alignMessages import mergeClusters
+    def lenAndTrue(boolist, length=2, truths=0):
+        return len(boolist) <= length and len([a for a in boolist if a]) > truths
 
-    clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters, dc)
-
-
-
+    clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters, dc, (0,-1,5))
+    globals().update(locals())
     #                                            0      1       2       3       4      5      6      7          8
     # noinspection PyTypeChecker
     matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB","DSdist","SSdist")] + [
@@ -406,14 +417,13 @@ if __name__ == '__main__':
                  else 0.0 > dc.pairDistance(afcB.medoid, afcA)
                  if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
                  else False,
-             0.1 > dc.pairDistance(afcA, afcB)
+             0.2 > dc.pairDistance(afcA, afcB)
                  if isinstance(afcA, MessageSegment) and isinstance(afcB, MessageSegment)
                  else False
              )
              for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
         ] for clunuA, clunuB in clusterpairs }
-    def lenAndTrue(boolist, length=2, truths=0):
-        return len(boolist) <= length and len([a for a in boolist if a]) > truths
+    globals().update(locals())
     matchingClusters = [
         (clunuA, clunuB) for clunuA, clunuB in clusterpairs
             if all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
@@ -431,7 +441,7 @@ if __name__ == '__main__':
             #       if not any(condResult) ]) and
 
             #     ]
-
+    globals().update(locals())
     # [(clupair, len([a[6] for a in matchingConditions[clupair] if a[5] == True or a[6] == True]),
     #   len(matchingConditions[clupair]) - 1) for clupair in matchingClusters]
 
@@ -444,11 +454,10 @@ if __name__ == '__main__':
         headers=("clpa", "gaps", "fields")
     ))
 
-
-    from alignment.alignMessages import mergeClusters
     mergedClusters, missedmergepairs = mergeClusters(
         messageClusters, clusterStats, alignedClusters, alignedFieldClasses,
                   clusterpairs, matchingClusters, matchingConditions, dc)
+    globals().update(locals())
     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
         mergedClusters, groundtruth,
         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
