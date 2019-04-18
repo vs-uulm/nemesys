@@ -14,6 +14,7 @@ from os.path import isfile, splitext, basename, exists, join
 from tabulate import tabulate
 
 from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
+from inference.segmentHandler import segmentsFixed
 from inference.segments import AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
@@ -272,12 +273,15 @@ if __name__ == '__main__':
         # TODO select tokenizer by command line parameter
         print("Segmenting messages...", end=' ')
         segmentationTime = time.time()
-        # 1. segment messages according to true fields from the labels
-        segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-        # # 2. segment messages into fixed size chunks for testing
-        # segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
-        # # 3. segment messages by NEMESYS
-        # segmentedMessages = ...
+        if tokenizer == "tshark":
+            # 1. segment messages according to true fields from the labels
+            segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+        elif tokenizer == "4bytesfixed":
+            # 2. segment messages into fixed size chunks for testing
+            segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
+        elif tokenizer == "nemesys":
+            # 3. segment messages by NEMESYS
+            segmentedMessages = None
         segmentationTime = time.time() - segmentationTime
         print("done.")
 
@@ -413,9 +417,9 @@ if __name__ == '__main__':
              isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
              isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
              isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-             0.9 > dc.pairDistance(afcA.medoid, afcB)  # 0.2 dhcp-1000: +2merges // 9,30
+             0.7 > afcA.distToNearest(afcB, dc)  # 0.2 dhcp-1000: +2merges // 9,30
                  if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
-                 else 0.9 > dc.pairDistance(afcB.medoid, afcA)
+                 else 0.7 > afcB.distToNearest(afcA, dc)
                  if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
                  else False,
              0.2 > dc.pairDistance(afcA, afcB)
@@ -427,18 +431,23 @@ if __name__ == '__main__':
     globals().update(locals())
     matchingClusters = [
         (clunuA, clunuB) for clunuA, clunuB in clusterpairs
-            if all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
-            # dynStaPairs may not exceed 10% of fields (ceiling) to match
-            and len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]])
-                <= ceil(.1*len(matchingConditions[(clunuA, clunuB)][1:]))
-            # if merging is based solely on SSdist anywhere, allow only one other "if not equal"
-            or lenAndTrue(
-                [not any(condResult[:7]) and condResult[8]
-                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
-            ) and not any([True for condResult in matchingConditions[(clunuA, clunuB)][1:]
-                           if not condResult[2] and any(condResult[5:8])])  # prevents ntp merging of (1, 6) solely on ntp.stratum STA-STA
-            or all([condResult[7]                                              # !!!!! might be the key !!!!!
-                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult[2:7])])
+            # any of "Agap","Bgap","equal","Azero","Bzero","BinA","AinB" are true
+            if (all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
+                # dynStaPairs may not exceed 10% of fields (ceiling) to match
+                and len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]])
+                    <= ceil(.1 * len(matchingConditions[(clunuA, clunuB)][1:])))
+            # if merging is based solely on SSdist for any field, allow only one other "if not equal"
+            or (all([any(condResult) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
+                and lenAndTrue( [not any(condResult[:7]) and condResult[8]  # True if solely SSdist for field
+                    for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
+                )
+                # and not any([True for condResult in matchingConditions[(clunuA, clunuB)][1:]
+                #           if not condResult[2] and any(condResult[5:8])])  # prevents ntp merging of (1, 6) solely on ntp.stratum STA-STA
+            or all([condResult[7]                                              # ! this is the key for DHCP
+                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult[:7])])
+                # condResult[2:7] lets (ALL) queries be merged for DNS / removes a number of merges in DHCP /
+                # replaces one valid merge for NTP by two invalid ones
+                )
         ]
             # if mergingThreshold >= len(
             #     [ False for condResult in matchingConditions[(clunuA, clunuB)][1:]
@@ -448,15 +457,6 @@ if __name__ == '__main__':
     globals().update(locals())
     # [(clupair, len([a[6] for a in matchingConditions[clupair] if a[5] == True or a[6] == True]),
     #   len(matchingConditions[clupair]) - 1) for clupair in matchingClusters]
-
-    # TODO remove pairs based on mostly gaps
-    print(tabulate(
-        [(  clupair,
-            len([True for a in matchingConditions[clupair] if a[0] == True or a[1] == True]),
-            len(matchingConditions[clupair]) - 1)
-            for clupair in matchingClusters],
-        headers=("clpa", "gaps", "fields")
-    ))
 
     mergedClusters, missedmergepairs = mergeClusters(
         messageClusters, clusterStats, alignedClusters, alignedFieldClasses,

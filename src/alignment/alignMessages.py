@@ -288,7 +288,7 @@ class SegmentedMessages(object):
         :return: minpts, epsilon
         """
         from scipy.ndimage.filters import gaussian_filter1d
-        from math import log
+        from math import log, ceil
 
         neighbors = self.neighbors()
         sigma = log(len(neighbors))
@@ -298,7 +298,7 @@ class SegmentedMessages(object):
         seconddiffMax = (0, 0, 0)
         # can we omit k = 0 ?
         # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
-        for k in range(0, len(neighbors) // 10):  # first 10% of k-neigbors
+        for k in range(0, ceil(log(len(neighbors)**2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
             knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
             smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
             # max of second difference (maximum upwards curvature) as knee (this not actually the knee!)
@@ -313,6 +313,7 @@ class SegmentedMessages(object):
 
         epsilon = smoothknearest[k][x]
         min_samples = round(sigma)
+        print("eps {} autoconfigured from k {}".format(epsilon, k))
         return epsilon, min_samples
 
 
@@ -354,16 +355,16 @@ def alignFieldClasses(alignedClusters: Dict[int, List], dc, mmg = (0,-1,5)):
     # use medoid distance in fcSimMatrix instead of fixed value (0.5)
     fcSimMatrix = numpy.array([[
         # 1.0 if fcL.bytes == fcK.bytes else
-        max(0.8, 1.0 - dc.pairDistance(fcL.medoid, fcK.medoid))  # DYN-DYN similarity
+        1.0 - 0.4 * fcL.distToNearest(fcK.medoid, dc)  # DYN-DYN similarity
             if isinstance(fcL, Template) and isinstance(fcK, Template)
-        else 1.0 - dc.pairDistance(fcL.medoid, fcK)  # DYN-STA similarity, modified 00 field
-                 * (0.8 if set(fcK.bytes) != {0} else 0.1)
+        else 1.0 - fcL.distToNearest(fcK, dc)  # DYN-STA similarity, modified 00 field
+                 * (0.6 if set(fcK.bytes) != {0} else 0.1)
             if isinstance(fcL, Template) and isinstance(fcK, MessageSegment)
-        else 1.0 - dc.pairDistance(fcK.medoid, fcL)  # STA-DYN similarity, modified 00 field  min(0.2,
-                 * (0.8 if set(fcK.bytes) != {0} else 0.1)
+        else 1.0 - fcK.distToNearest(fcL, dc)  # STA-DYN similarity, modified 00 field  min(0.2,
+                 * (0.6 if set(fcK.bytes) != {0} else 0.1)
             if isinstance(fcK, Template) and isinstance(fcL, MessageSegment)
         else 1.0 - dc.pairDistance(fcK, fcL)  # STA-STA similarity, modified 00 field
-                 * (0.5 if set(fcK.bytes) != {0} or set(fcL.bytes) != {0} else 0.1)
+                 * (0.4 if set(fcK.bytes) != {0} or set(fcL.bytes) != {0} else 0.1)
             if isinstance(fcK, MessageSegment) and isinstance(fcL,MessageSegment)
         else 0.0
         for fcL in statDynValues] for fcK in statDynValues])
@@ -392,6 +393,23 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
                   clusterpairs, matchingClusters, matchingConditions, dc):
     import IPython
     from utils.evaluationHelpers import printClusterMergeConditions
+    from tabulate import tabulate
+
+
+    print(tabulate(
+        [(  clupair,
+            len([True for a in matchingConditions[clupair][1:] if a[0] == True or a[1] == True]),
+            len(matchingConditions[clupair]) - 1)
+            for clupair in matchingClusters],
+        headers=("clpa", "gaps", "fields")
+    ))
+    # remove pairs based on more then 40% gaps
+    matchingClusters = [
+        clunuAB for clunuAB in matchingClusters
+            if len([True for a in matchingConditions[clunuAB][1:] if a[0] == True or a[1] == True])
+               <= numpy.ceil(.25 * len(matchingConditions[clunuAB][1:]))
+        ]
+
 
     # search in filteredMatches for STATIC - DYNAMIC - STATIC with different static values and remove from matchingClusters
     # : the matches on grounds of the STA value in DYN condition, with the DYN role(s) in a set in the first element of each tuple

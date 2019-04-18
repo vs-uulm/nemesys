@@ -122,7 +122,7 @@ class DistanceCalculator(object):
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = None,
-                 reliefFactor=.33
+                 reliefFactor=.33 # .5 # .33
                  ):
         """
         Determine the distance between the given segments.
@@ -1298,7 +1298,7 @@ class Template(AbstractSegment):
 
 
     def distToNearest(self, segment: MessageSegment, dc: DistanceCalculator = None):
-        return min(dc.distancesSubset([segment], self.baseSegments))
+        return min(dc.distancesSubset([segment], self.baseSegments)[0])
 
 
     def __hash__(self):

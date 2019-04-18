@@ -298,10 +298,10 @@ def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions
 
     # distance to medoid for DYN-STA mixes
     # DYN-STA / STA-DYN : medoid to static distance
-    dynstamixdists = [
-        dc.pairDistance(segA.medoid, segB)
+    dynstamixdists = [ # afcB.distToNearest(afcA, dc)
+        segA.distToNearest(segB, dc)
                  if isinstance(segA, Template) and isinstance(segB, MessageSegment)
-             else dc.pairDistance(segB.medoid, segA)
+             else segB.distToNearest(segA, dc)
                  if isinstance(segB, Template) and isinstance(segA, MessageSegment)
              else None
              for segA, segB in zip(*alignedFieldClasses[clunuAB])]

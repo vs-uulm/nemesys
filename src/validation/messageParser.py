@@ -403,7 +403,7 @@ class MessageTypeIdentifiers(object):
             'filter': lambda v: True,
             'select': lambda w: (int.from_bytes(bytes.fromhex(w), "big") & 128) != 0  # first bit denotes request/response
         }],
-        'ntp'   : ['ntp.flags']
+        'ntp'   : ['ntp.flags', 'ntp.stratum']
     }
 
     NAMED_TYPES = {  # assumes hex bytes are lower-case
@@ -475,7 +475,14 @@ class MessageTypeIdentifiers(object):
             'e3': 'v4 client (unsynchronized, MAC)',
             'e4': 'v4 server (unsynchronized)',
             'e5': 'v4 broadcast (unsynchronized)',
-        }
+        },
+        # 'ntp.stratum': {
+        #     '00': '',
+        #     '03': '',
+        #     '04': '',
+        #     '05': '',
+        #     '06': '',
+        # }
     }
 
     @staticmethod
