@@ -125,7 +125,7 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
 
     def __init__(self, segments: List[MessageSegment]):
         """
-        :param segments: in offset order
+        :param segments: The segments of one message in offset order.
         """
         self.segments = segments
 
@@ -143,6 +143,7 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
                 # from inference.MessageAnalyzer import MessageAnalyzer
 
                 segc = segmentStack.pop()
+                # TODO: this is char specific only!
                 if not isPrintable(segc.bytes):
                     mangledSegments.append(segc)
                     continue
@@ -400,3 +401,78 @@ class Resplit2LeastFrequentPair(object):
         if countMin == countAfter:
             return 1
 
+
+
+
+class CropDistinct(object):
+    """
+    Split segments into smaller chunks if a given value is contained in the segment.
+    The given value is cropped to a segment on its own.
+    """
+    __debug = False
+
+    def __init__(self, segments: List[MessageSegment], mostcommon: List[bytes]):
+        """
+        :param segments: The segments of one message in offset order.
+        :param mostcommon: most common bytes sequences to be searched for and cropped
+            (sorted descending from most frequent)
+        """
+        self.segments = segments
+        self._moco = mostcommon
+
+    @staticmethod
+    def countCommonValues(segmentedMessages: List[List[MessageSegment]]):
+        from collections import Counter
+        from itertools import chain
+        segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
+        segFreq = segcnt.most_common()
+        freqThre = .2 * len(segmentedMessages)
+        thre = 0
+        while segFreq[thre][1] > freqThre:
+            thre += 1
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
+        return moco
+
+    def split(self):
+        newmsg = list()
+        for sid, seg in enumerate(self.segments):  # enum necessary to change to in place edit after debug (want to do?)
+            didReplace = False
+            for comfeat in self._moco:
+                comoff = seg.bytes.find(comfeat)
+                if comoff == -1:  # comfeat not in moco, continue with next in moco
+                    continue
+
+                featlen = len(comfeat)
+                if seg.length == featlen:  # its already the concise frequent feature
+                    newmsg.append(seg)
+                else:
+                    if CropDistinct.__debug:
+                        print("\nReplaced {} by:".format(seg.bytes.hex()), end=" ")
+
+                    absco = seg.offset + comoff
+                    if comoff > 0:
+                        segl = MessageSegment(seg.analyzer, seg.offset, comoff)
+                        newmsg.append(segl)
+                        if CropDistinct.__debug:
+                            print(segl.bytes.hex(), end=" ")
+
+                    segc = MessageSegment(seg.analyzer, absco, featlen)
+                    newmsg.append(segc)
+                    if CropDistinct.__debug:
+                        print(segc.bytes.hex(), end=" ")
+
+                    rlen = seg.length - comoff - featlen
+                    if rlen > 0:
+                        segr = MessageSegment(seg.analyzer, absco + featlen, rlen)
+                        newmsg.append(segr)
+                        if CropDistinct.__debug:
+                            print(segr.bytes.hex(), end=" ")
+
+                didReplace = True
+                break  # only most common match!? otherwise how to handle subsequent matches after split(s)?
+            if not didReplace:
+                newmsg.append(seg)
+            elif CropDistinct.__debug:
+                print()
+
+        return newmsg

@@ -66,7 +66,7 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
 
 
 def segmentsFixed(length: int, comparator,
-                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE) \
+                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, zeropadded=False) \
         -> List[Tuple[MessageSegment]]:
     """
     Segment messages into fixed size chunks.
@@ -92,7 +92,7 @@ def segmentsFixed(length: int, comparator,
             offset, length)
             for offset in range(0, lastOffset, length)
         ]
-        if len(l4msg.data) > lastOffset:  # append the overlap
+        if zeropadded and len(l4msg.data) > lastOffset:  # append the overlap
             # TODO here are nasty hacks!
             # Better define a new subclass of MessageSegment that internally padds values
             # (and bytes? what are the guarantees?) to a given length that exceeds the message length

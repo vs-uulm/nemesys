@@ -7,19 +7,23 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-import argparse, IPython, itertools, pickle, csv
+import argparse, IPython, pickle, csv
 import time
 from math import ceil
 from os.path import isfile, splitext, basename, exists, join
+from itertools import chain
+
 from tabulate import tabulate
 
 from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
-from inference.segmentHandler import segmentsFixed
+from inference.formatRefinement import CropDistinct
+from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
 from inference.segments import AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
-from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics
+from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics, \
+    sigmapertrace
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
@@ -29,7 +33,7 @@ debug = False
 
 analysis_method = 'value'
 distance_method = 'canberra'
-tokenizer = 'tshark'  # (, '4bytesfixed', 'nemesys')
+tokenizers = ('tshark', '4bytesfixed', 'nemesys')
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -180,7 +184,7 @@ def epsautoconfeval(epsilon):
     # ksteepeststats = list()
 
     # can we omit k = 0 ?
-    # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
+    #   --> No - recall and even more so precision deteriorates for dns and dhcp (1000s)
     for k in range(0, len(neighbors) // 10):  # round(2*log(len(neighbors)))
         knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
         smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
@@ -249,6 +253,9 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interactive', help='Open ipython prompt after finishing the analysis.',
                         action="store_true")
     # TODO select tokenizer by command line parameter
+    parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
+    parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
+                                                          'default: 0.6')
     # TODO toggle filtering on/off
     args = parser.parse_args()
 
@@ -259,20 +266,31 @@ if __name__ == '__main__':
     analysisArgs = None
     analysisTitle = analysis_method
 
+    if args.tokenizer in tokenizers:
+        tokenizer = args.tokenizer
+    else:
+        print("Unsupported tokenizer:", args.tokenizer, "allowed values are:", tokenizers)
+        exit(2)
+
     # cache the DistanceCalculator to the filesystem
-    pcapName = splitext(basename(args.pcapfilename))[0]
-    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'ddc')
-    smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'sm')
+    pcapbasename = basename(args.pcapfilename)
+    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
+        0.9 if not args.sigma else args.sigma
+    pcapName = splitext(pcapbasename)[0]
+    tokenparm = tokenizer if tokenizer != "nemesys" else \
+        "{}{:.1f}".format(tokenizer, sigma)
+    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
+    smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if not exists(dccachefn):
         # dissect and label messages
-        print("Load messages...")
+        print("Load messages from {}...".format(pcapName))
         specimens = SpecimenLoader(args.pcapfilename, 2, True)
         comparator = MessageComparator(specimens, 2, True, debug=debug)
 
-        # TODO select tokenizer by command line parameter
         print("Segmenting messages...", end=' ')
         segmentationTime = time.time()
+        # select tokenizer by command line parameter
         if tokenizer == "tshark":
             # 1. segment messages according to true fields from the labels
             segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
@@ -281,11 +299,22 @@ if __name__ == '__main__':
             segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
         elif tokenizer == "nemesys":
             # 3. segment messages by NEMESYS
-            segmentedMessages = None
+            segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
+            segmentedMessages = refinements(segmentsPerMsg)
+
+            moco = CropDistinct.countCommonValues(segmentedMessages)
+            newstuff = list()
+            for msg in segmentedMessages:
+                crop = CropDistinct(msg, moco)
+                newmsg = crop.split()
+                newstuff.append(newmsg)
+            segmentedMessages = newstuff
+            segments = list(chain.from_iterable(newstuff))
+
         segmentationTime = time.time() - segmentationTime
         print("done.")
 
-        chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+        chainedSegments = list(chain.from_iterable(segmentedMessages))
 
         # TODO filter segments to reduce similarity calculation load - use command line parameter to toggle filtering on/off
         # filteredSegments = filterSegments(chainedSegments)
@@ -307,7 +336,7 @@ if __name__ == '__main__':
             print('Loading of cached distances failed.')
             exit(10)
         specimens = comparator.specimens
-        chainedSegments = list(itertools.chain.from_iterable(segmentedMessages))
+        chainedSegments = list(chain.from_iterable(segmentedMessages))
         segmentationTime, dist_calc_segmentsTime = None, None
 
     # if not exists(smcachefn):
@@ -329,14 +358,14 @@ if __name__ == '__main__':
     cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
 
 
-    # # DEBUG and TESTING
-    # #
-    # # retrieve manually determined epsilon value
-    # pcapbasename = basename(args.pcapfilename)
+    # DEBUG and TESTING
+    #
+    # retrieve manually determined epsilon value
+    pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
-    # eps = epsautoconfeval(eps)
-    # #
-    # # DEBUG and TESTING
+    eps = epsautoconfeval(eps)
+    #
+    # DEBUG and TESTING
 
 
     # cluster and align messages and calculate statistics of it
@@ -351,6 +380,7 @@ if __name__ == '__main__':
     #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
 
 
+    # IPython.embed()
 
 
     # write message clustering statistics to csv
@@ -361,13 +391,13 @@ if __name__ == '__main__':
         msg.messageType = mtype
 
     # # plot distances and message clusters
-    # print("Plot distances...")
-    # from visualization.distancesPlotter import DistancesPlotter
-    # dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
-    # dp.plotManifoldDistances(
-    #     [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-    #     sm.distances, labels)  # segmentedMessages
-    # dp.writeOrShowFigure()
+    print("Plot distances...")
+    from visualization.distancesPlotter import DistancesPlotter
+    dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+    dp.plotManifoldDistances(
+        [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+        sm.distances, labels)  # segmentedMessages
+    dp.writeOrShowFigure()
 
     # align cluster members
     align_messagesTime = time.time()
@@ -407,6 +437,9 @@ if __name__ == '__main__':
     def lenAndTrue(boolist, length=2, truths=0):
         return len(boolist) <= length and len([a for a in boolist if a]) > truths
 
+    # # # # # # # # # # # # # # # # # # #
+    # Experimentation protocol for design decisions exists!
+    # # # # # # # # # # # # # # # # # # #
     clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters, dc, (0,-1,5))
     globals().update(locals())
     #                                            0      1       2       3       4      5      6      7          8
@@ -520,4 +553,33 @@ if __name__ == '__main__':
 
 
 
+
+
+
+
+
+
+
+# For future use:
+    # # TODO cluster by template generation
+    # print("Templating segments...")
+    # tg = TemplateGenerator(list(chain.from_iterable(segmentedMessages)))
+    # clusters = tg.clusterSimilarSegments()
+
+    # print("Plotting templates...")
+    # import analysis_message_segments as ams
+    # ams.plotSegmentDistances(tg)
+
+    # templates = tg.generateTemplates()
+
+# TODO More Hypotheses:
+#  small values at fieldend: int
+#  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
+#  len > 16: chars (pad if all 0)
+# For a new hypothesis: what are the longest seen ints?
+#
+
+    # TODO: Entropy rate (to identify non-inferable segments)
+
+    # TODO: Value domain per byte/nibble (for chars, flags,...)
 

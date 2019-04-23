@@ -32,6 +32,19 @@ analyses = {
     'stropy': Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
 }
 
+sigmapertrace = {
+    "dhcp_SMIA2011101X_deduped-100.pcap" : 0.6,
+    # "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8,
+    # "smb_SMIA20111010-one_deduped-100.pcap" : 1.6,
+    "dns_ictf2010_deduped-100.pcap" : 0.6,
+    "ntp_SMIA-20111010_deduped-100.pcap" : 1.2,
+    "dhcp_SMIA2011101X_deduped-1000.pcap": 0.6,
+    # "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4,
+    # "smb_SMIA20111010-one_deduped-1000.pcap": 2.2,
+    "dns_ictf2010_deduped-982-1000.pcap" : 0.6,
+    "ntp_SMIA-20111010_deduped-1000.pcap": 1.2
+}
+
 epspertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap" : 1.8,
     "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8, # or anything between 1.8 - 2.6

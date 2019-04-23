@@ -313,7 +313,7 @@ class SegmentedMessages(object):
 
         epsilon = smoothknearest[k][x]
         min_samples = round(sigma)
-        print("eps {} autoconfigured from k {}".format(epsilon, k))
+        print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
         return epsilon, min_samples
 
 
