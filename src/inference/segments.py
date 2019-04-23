@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Union, Type, Any, Tuple, Iterable
+from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence
 from abc import ABC, abstractmethod
 import numpy
 
@@ -660,13 +660,15 @@ class MessageSegment(AbstractSegment):
 
 
     def __repr__(self):
-        if self.values is not None and isinstance(self.values, list) and len(self.values) > 3:
-            printValues = str(self.values[:3])[:-1] + '...'
+        if self.values is not None and isinstance(self.values, Sequence) and len(self.values) > 3:
+            printValues = ("[{}]".format(", ".join(["{:.3f}".format(v) for v in self.values[:3]]))
+                if isinstance(self.values[0], float) else str(self.values[:3]))[:-1] + '...'
         else:
-            printValues = str(self.values)
+            printValues = "[{}]".format(", ".join(["{:.3f}".format(v) for v in self.values[:3]])) \
+                if isinstance(self.values, Iterable) and isinstance(self.values[0], float) else str(self.values)
 
         return 'MessageSegment {} bytes: {:.16}{}'.format(self.length, self.bytes.hex(),
-            '...' if self.length > 3 else '') + \
+            '...' if self.length > 8 else '') + \
             ' | values: {}'.format(printValues if printValues else 'not set')
 
 
