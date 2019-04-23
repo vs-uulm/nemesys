@@ -476,3 +476,80 @@ class CropDistinct(object):
                 print()
 
         return newmsg
+
+
+class CumulativeCharMerger(object):
+    __debug = False
+
+    def __init__(self, segments: List[MessageSegment]):
+        """
+        :param segments: in offset order
+        """
+        self.segments = segments
+
+    def merge(self):
+        """
+        Perform the merging.
+
+        00000000000002
+        613205
+
+        :return: a new set of segments after the input has been merged
+        """
+        from inference.segmentHandler import isExtendedCharSeq
+
+        minLen = 6
+
+        segmentStack = list(reversed(self.segments))
+        newmsg = list()
+        isCharCand = False
+        workingStack = list()
+        while segmentStack:
+            workingStack.append(segmentStack.pop())
+            if sum([len(ws.bytes) for ws in workingStack]) < minLen:
+                continue
+
+            # now we have 6 bytes
+            # and the merge is a new char candidate
+            joinedbytes = b"".join([ws.bytes for ws in workingStack])
+            if isExtendedCharSeq(joinedbytes) \
+                    and b"\x00\x00" not in joinedbytes:
+                isCharCand = True
+                continue
+            # the last segment ended the char candidate
+            elif isCharCand:
+                isCharCand = False
+                if len(workingStack) > 2:
+                    newlen = sum([ws.length for ws in workingStack[:-1]])
+                    newseg = MessageSegment(workingStack[0].analyzer,
+                                            workingStack[0].offset, newlen)
+                    newmsg.append(newseg)
+                else:
+                    # retain the original segment (for equality test and to save creating a new object instance)
+                    newmsg.append(workingStack[0])
+                if len(workingStack) > 1:
+                    segmentStack.append(workingStack[-1])
+                workingStack = list()
+            # there was not a char candidate
+            else:
+                newmsg.append(workingStack[0])
+                for ws in reversed(workingStack[1:]):
+                    segmentStack.append(ws)
+                workingStack = list()
+        # there are segments in the working stack left
+        if len(workingStack) > 1 and isCharCand:
+            newlen = sum([ws.length for ws in workingStack])
+            newseg = MessageSegment(workingStack[0].analyzer,
+                                    workingStack[0].offset, newlen)
+            newmsg.append(newseg)
+        # there was no char sequence and there are segments in the working stack left
+        else:
+            newmsg.extend(workingStack)
+        return newmsg
+
+
+
+
+
+
+

@@ -16,9 +16,9 @@ from itertools import chain
 from tabulate import tabulate
 
 from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
-from inference.formatRefinement import CropDistinct
+from inference.formatRefinement import CropDistinct, CumulativeCharMerger
 from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
-from inference.segments import AbstractSegment
+from inference.segments import MessageSegment, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
@@ -308,8 +308,18 @@ if __name__ == '__main__':
                 crop = CropDistinct(msg, moco)
                 newmsg = crop.split()
                 newstuff.append(newmsg)
-            segmentedMessages = newstuff
-            segments = list(chain.from_iterable(newstuff))
+            newstuff2 = list()
+            for msg in newstuff:
+                charmerge = CumulativeCharMerger(msg)
+                newmsg = charmerge.merge()
+                newstuff2.append(newmsg)
+
+            segmentedMessages = [[
+                MessageSegment(MessageAnalyzer.findExistingAnalysis(
+                    analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
+                for seg in msg] for msg in newstuff2]
+            segments = list(chain.from_iterable(segmentedMessages))
+            # print([seg for seg in segments if not isinstance(seg.values, int)])
 
         segmentationTime = time.time() - segmentationTime
         print("done.")

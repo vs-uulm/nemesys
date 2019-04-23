@@ -13,7 +13,7 @@ import IPython
 
 import inference.segmentHandler as sh
 import utils.evaluationHelpers
-from inference.formatRefinement import CropDistinct
+from inference.formatRefinement import CropDistinct, CumulativeCharMerger
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
@@ -148,10 +148,28 @@ if __name__ == '__main__':
             if newmsg != msg:
                 if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
                     print("\nINCORRECT SPLIT!\n")
-                else:
                     print(" ".join([seg.bytes.hex() for seg in msg]))
                     print(" ".join([seg.bytes.hex() for seg in newmsg]))
                     print()
+
+        newstuff2 = list()
+        for msg in newstuff:
+            charmerge = CumulativeCharMerger(msg)
+            newmsg = charmerge.merge()
+            newstuff2.append(newmsg)
+            if newmsg != msg:
+                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+                    print("\nINCORRECT SPLIT!\n")
+
+                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print()
+                # if newmsg[0].length > 2:
+                #     from inference.segmentHandler import isExtendedCharSeq
+                #     IPython.embed()
+
 
     if args.interactive:
         IPython.embed()
