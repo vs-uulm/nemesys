@@ -301,7 +301,7 @@ class SegmentedMessages(object):
         for k in range(0, ceil(log(len(neighbors)**2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
             knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
             smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
-            # max of second difference (maximum upwards curvature) as knee (this not actually the knee!)
+            # max of second difference (maximum positive gradient) as knee (this not actually the knee!)
             seconddiff[k] = numpy.diff(smoothknearest[k], 2)
             seconddiffargmax = seconddiff[k].argmax()
             diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]

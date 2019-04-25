@@ -341,21 +341,19 @@ def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 
-def searchSeqOfSeg(sequence: Sequence[Union[MessageSegment, Sequence[MessageSegment]]], pattern: bytes):
-    assert isinstance(pattern, bytes)
-
-    if isinstance(sequence[0], Sequence):
-        return [msg for msg in sequence if any(pattern in seg.bytes for seg in msg if isinstance(seg, MessageSegment))]
-    else:
-        return [seg for seg in sequence if pattern in seg.bytes]
-
-
-def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
-    from tabulate import tabulate
-    print(tabulate(((sg.bytes.hex() if sg is not None else '' for sg in msg) for msg in sequence),
-                   headers=range(len(sequence[0])), showindex="always"))
-
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
+    vallen = len(values)
+    nonzeros = [v for v in values if v > 0x00]
+    return (vallen >= minLen
+                and any(values)
+                and numpy.max(tuple(values)) < 0x7f
+                and meanCorridor[0] <= numpy.mean(nonzeros) <= meanCorridor[1]
+                and 0.66 > len(locateNonPrintable(values)) / vallen
+                # TODO re-evaluate smb results with ^ this change
+                # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
+            )
+
+def isExtendedCharSeq2(values: bytes, meanCorridor=(50, 115), minLen=6):
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen
@@ -365,7 +363,6 @@ def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
                 and 0.33 > len(locateNonPrintable(bytes(nonzeros))) / vallen
                 # TODO re-evaluate smb results with ^ this change
                 # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
-
             )
 
 def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6):

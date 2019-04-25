@@ -1,5 +1,6 @@
-from typing import Dict, Tuple, List, Iterable
+from typing import Dict, Tuple, List, Iterable, Sequence
 
+from inference.segments import MessageSegment
 from netzob.Common.Utils.MatrixList import MatrixList
 
 
@@ -48,3 +49,9 @@ def alignDescreteValues(listA: list, listB: list) -> Tuple[list, list]:
         newB.extend(rest)
 
     return newA, newB
+
+
+def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
+    from tabulate import tabulate
+    print(tabulate(((sg.bytes.hex() if sg is not None else '' for sg in msg) for msg in sequence),
+                   headers=range(len(sequence[0])), showindex="always"))

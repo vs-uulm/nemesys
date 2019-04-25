@@ -595,6 +595,14 @@ class MessageSegment(AbstractSegment):
 
 
     @property
+    def nextOffset(self):
+        """
+        :return: Offset of the subsequent segment (or pointing one position after the message end)
+        """
+        return self.offset + self.length
+
+
+    @property
     def message(self):
         return self.analyzer.message
 

@@ -2,7 +2,7 @@
 Module encapsulating evaluation parameters and helper functions to validate aspects of the
 NEMESYS and NEMETYL approaches.
 """
-from typing import Union, Tuple, List, TypeVar, Hashable
+from typing import Union, Tuple, List, TypeVar, Hashable, Sequence
 from netzob.all import RawMessage
 import os, csv
 
@@ -10,7 +10,7 @@ from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels
-from inference.segments import MessageAnalyzer, TypedSegment
+from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment
 from visualization.multiPlotter import MultiMessagePlotter
 
 
@@ -341,19 +341,10 @@ def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions
     print()
 
 
+def searchSeqOfSeg(sequence: Sequence[Union[MessageSegment, Sequence[MessageSegment]]], pattern: bytes):
+    assert isinstance(pattern, bytes)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if isinstance(sequence[0], Sequence):
+        return [msg for msg in sequence if any(pattern in seg.bytes for seg in msg if isinstance(seg, MessageSegment))]
+    else:
+        return [seg for seg in sequence if pattern in seg.bytes]

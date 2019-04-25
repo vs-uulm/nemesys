@@ -13,7 +13,7 @@ import IPython
 
 import inference.segmentHandler as sh
 import utils.evaluationHelpers
-from inference.formatRefinement import CropDistinct, CumulativeCharMerger
+from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
@@ -152,6 +152,8 @@ if __name__ == '__main__':
                     print(" ".join([seg.bytes.hex() for seg in newmsg]))
                     print()
 
+        # cumulatively merge consecutive clusters that together fulfill the char condition
+        # of inference.segmentHandler.isExtendedCharSeq
         newstuff2 = list()
         for msg in newstuff:
             charmerge = CumulativeCharMerger(msg)
@@ -170,8 +172,29 @@ if __name__ == '__main__':
                 #     from inference.segmentHandler import isExtendedCharSeq
                 #     IPython.embed()
 
+        # As a last resort, split the first segment into chunks of equal length. The assumption is, that the
+        #   message type is only dependent on the first bytes if not structural difference is prevalent enough be found.
+        # Can be applied to most protocols without negative side effects, except nbns.
+        # Mostly required a lowered eps for clustering (e.g. factor 0.8)
+        newstuff3 = list()
+        for msg in newstuff2:
+            splitfixed = SplitFixed(msg)
+            newmsg = splitfixed.split(0, 2)
+            newstuff3.append(newmsg)
+            if newmsg != msg:
+                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+                    print("\nINCORRECT SPLIT!\n")
+
+                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print()
+
 
     if args.interactive:
+        import visualization.simplePrint as sp
+        import utils.evaluationHelpers as eh
         IPython.embed()
 
     exit()

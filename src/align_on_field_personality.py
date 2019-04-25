@@ -12,11 +12,14 @@ import time
 from math import ceil
 from os.path import isfile, splitext, basename, exists, join
 from itertools import chain
-
 from tabulate import tabulate
 
+# # change drawing toolkit for matplotlib (to be set before the pyplot import)
+# import matplotlib as mpl
+# mpl.use('Agg')
+
 from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
-from inference.formatRefinement import CropDistinct, CumulativeCharMerger
+from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
 from inference.segments import MessageSegment, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC, Template
@@ -133,7 +136,7 @@ def epsautoconfeval(epsilon):
     neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
 
     mmp = MultiMessagePlotter(specimens, tokenizer + "-k-nearest-neighbor-distance-distribution", 1, 2,
-                              isInteractive=args.interactive)
+                              isInteractive=False)
     mmp.axes[0].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
     mmp.axes[1].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
 
@@ -201,6 +204,16 @@ def epsautoconfeval(epsilon):
     # prepare to plot the smoothed nearest neigbor distribution and its second derivative
     k = seconddiffMax[0]
     x = seconddiffMax[1] + 1
+
+    # # calc mean of first derivative to estimate the noisiness (closer to 1 is worse)
+    # firstdiff = numpy.diff(smoothknearest[k], 1)
+    # # alt: integral
+    # diag = numpy.empty_like(smoothknearest[k])
+    # for i in range(diag.shape[0]):
+    #     diag[i] = smoothknearest[k][0] + i*(smoothknearest[k][-1] - smoothknearest[k][0])/smoothknearest[k][-1]
+    # belowdiag = diag - smoothknearest[k]
+    # print("f' median={:.2f}".format(numpy.median(firstdiff)))
+    # print("diag-f={:.2f}".format(sum(belowdiag)))
 
     mmp.plotToSubfig(0, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=.4)
     mmp.plotToSubfig(1, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=1, color='blue')
@@ -278,11 +291,11 @@ if __name__ == '__main__':
         0.9 if not args.sigma else args.sigma
     pcapName = splitext(pcapbasename)[0]
     tokenparm = tokenizer if tokenizer != "nemesys" else \
-        "{}{:.1f}".format(tokenizer, sigma)
+        "{}{:.0f}".format(tokenizer, sigma * 10)
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
     smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn):
+    if not exists(dccachefn) or True:  # TODO currently we are manipulating distances, so caching is deactivated!
         # dissect and label messages
         print("Load messages from {}...".format(pcapName))
         specimens = SpecimenLoader(args.pcapfilename, 2, True)
@@ -313,11 +326,16 @@ if __name__ == '__main__':
                 charmerge = CumulativeCharMerger(msg)
                 newmsg = charmerge.merge()
                 newstuff2.append(newmsg)
+            newstuff3 = list()
+            for msg in newstuff2:
+                splitfixed = SplitFixed(msg)
+                newmsg = splitfixed.split(0, 1)
+                newstuff3.append(newmsg)
 
             segmentedMessages = [[
                 MessageSegment(MessageAnalyzer.findExistingAnalysis(
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in newstuff2]
+                for seg in msg] for msg in newstuff3]
             segments = list(chain.from_iterable(segmentedMessages))
             # print([seg for seg in segments if not isinstance(seg.values, int)])
 
@@ -325,11 +343,6 @@ if __name__ == '__main__':
         print("done.")
 
         chainedSegments = list(chain.from_iterable(segmentedMessages))
-
-        # TODO filter segments to reduce similarity calculation load - use command line parameter to toggle filtering on/off
-        # filteredSegments = filterSegments(chainedSegments)
-        # if length < 3:
-        #     pass  # Handle short segments
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
@@ -364,6 +377,7 @@ if __name__ == '__main__':
     #         exit(11)
 
     cluster_params_autoconfTime = time.time()
+    # TODO one to the left of the maximum positive gradient
     eps, min_samples = sm.autoconfigureDBSCAN()
     cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
 
@@ -373,7 +387,11 @@ if __name__ == '__main__':
     # retrieve manually determined epsilon value
     pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
-    eps = epsautoconfeval(eps)
+    if tokenizer == "nemesys":
+        eps = eps * .8
+    # eps = epsautoconfeval(eps)
+    # if tokenizer == "nemesys":
+    #     eps = eps * .8
     #
     # DEBUG and TESTING
 
@@ -401,13 +419,13 @@ if __name__ == '__main__':
         msg.messageType = mtype
 
     # # plot distances and message clusters
-    print("Plot distances...")
-    from visualization.distancesPlotter import DistancesPlotter
-    dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
-    dp.plotManifoldDistances(
-        [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-        sm.distances, labels)  # segmentedMessages
-    dp.writeOrShowFigure()
+    # print("Plot distances...")
+    # from visualization.distancesPlotter import DistancesPlotter
+    # dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+    # dp.plotManifoldDistances(
+    #     [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+    #     sm.distances, labels)  # segmentedMessages
+    # dp.writeOrShowFigure()
 
     # align cluster members
     align_messagesTime = time.time()
@@ -460,6 +478,7 @@ if __name__ == '__main__':
              isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
              isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
              isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
+             # TODO: test alternative dynamic threshold: dist(STA, DYN.medoid) <= DYN.maxDistToMedoid()
              0.7 > afcA.distToNearest(afcB, dc)  # 0.2 dhcp-1000: +2merges // 9,30
                  if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
                  else 0.7 > afcB.distToNearest(afcA, dc)
@@ -558,8 +577,8 @@ if __name__ == '__main__':
 
     if args.interactive:
         from tabulate import tabulate
-        IPython.embed()
         # globals().update(locals())
+        IPython.embed()
 
 
 
@@ -582,12 +601,12 @@ if __name__ == '__main__':
 
     # templates = tg.generateTemplates()
 
-# TODO More Hypotheses:
-#  small values at fieldend: int
-#  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
-#  len > 16: chars (pad if all 0)
-# For a new hypothesis: what are the longest seen ints?
-#
+    # TODO More Hypotheses:
+    #  small values at fieldend: int
+    #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
+    #  len > 16: chars (pad if all 0)
+    # For a new hypothesis: what are the longest seen ints?
+    #
 
     # TODO: Entropy rate (to identify non-inferable segments)
 

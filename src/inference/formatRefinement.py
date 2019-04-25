@@ -40,11 +40,8 @@ def locateNonPrintable(bstring: bytes) -> List[int]:
     return npr
 
 
-class Merger(ABC):
-    """
-    Base class to merge segments based on a variable condition.
-    """
-    __debug = False
+class MessageModifier(ABC):
+    _debug = False
 
     def __init__(self, segments: List[MessageSegment]):
         """
@@ -52,6 +49,12 @@ class Merger(ABC):
         """
         self.segments = segments
 
+
+
+class Merger(MessageModifier, ABC):
+    """
+    Base class to merge segments based on a variable condition.
+    """
 
     def merge(self):
         """
@@ -67,7 +70,7 @@ class Merger(ABC):
                 if segl.offset + segl.length == segr.offset and self.condition(segl, segr):
                     mergedSegments[-1] = MessageSegment(mergedSegments[-1].analyzer, mergedSegments[-1].offset,
                                                         mergedSegments[-1].length + segr.length)
-                    if self.__debug:
+                    if self._debug:
                         print("Merged segments: \n{} and \n{} into \n{}".format(segl, segr, mergedSegments[-1]))
                 else:
                     mergedSegments.append(segr)
@@ -117,17 +120,10 @@ class MergeConsecutiveChars(Merger):
         return isPrintable(segl.bytes) and isPrintable(segr.bytes)
 
 
-class RelocateSplits(ABC, metaclass=ABCMeta):
+class RelocateSplits(MessageModifier, ABC):
     """
     Relocate split locations based on properties of adjacent segments.
     """
-    __debug = False
-
-    def __init__(self, segments: List[MessageSegment]):
-        """
-        :param segments: The segments of one message in offset order.
-        """
-        self.segments = segments
 
     def split(self):
         """
@@ -160,11 +156,11 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
                             else: # segment to the left completely used up in center
                                 del mangledSegments[-1]
                             restlen = segl.length - splitpos
-                            if self.__debug:
+                            if self._debug:
                                 print("Recombined segments: \n{} and {} into ".format(segl, segc))
                             segc = MessageSegment(segc.analyzer, segc.offset - restlen,
                                                              segc.length + restlen)
-                            if self.__debug:
+                            if self._debug:
                                 print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
 
                 if segmentStack:
@@ -178,11 +174,11 @@ class RelocateSplits(ABC, metaclass=ABCMeta):
                                                                  segr.length - splitpos)
                             else: # segment to the right completely used up in center
                                 del segmentStack[-1]
-                            if self.__debug:
+                            if self._debug:
                                 print("Recombined segments: \n{} and {} into ".format(segc, segr))
                             segc = MessageSegment(segc.analyzer, segc.offset,
                                                               segc.length + splitpos)
-                            if self.__debug:
+                            if self._debug:
                                 print("{} and {}".format(segc, segmentStack[-1] if segmentStack else 'Empty'))
 
                 mangledSegments.append(segc)
@@ -242,7 +238,7 @@ class ResplitConsecutiveChars(RelocateSplits):
         return splitpos
 
 
-class Resplit2LeastFrequentPair(object):
+class Resplit2LeastFrequentPair(MessageModifier):
     """
     Search for value pairs at segment (begin|end)s; and one byte pair ahead and after.
     If the combination across the border is more common than either ahead-pair or after-pair, shift the border to
@@ -256,15 +252,8 @@ class Resplit2LeastFrequentPair(object):
      * dns:  0.012
 
     """
-    __debug = False
     __pairFrequencies = None
     __CHUNKLEN = 2
-
-    def __init__(self, segments: List[MessageSegment]):
-        """
-        :param segments: in offset order
-        """
-        self.segments = segments
 
     @staticmethod
     def countPairFrequencies(allMsgsSegs: List[List[MessageSegment]]):
@@ -324,7 +313,7 @@ class Resplit2LeastFrequentPair(object):
                        and len(before) == Resplit2LeastFrequentPair.__CHUNKLEN \
                        and len(after) == Resplit2LeastFrequentPair.__CHUNKLEN
                 Resplit2LeastFrequentPair.__pairFrequencies.update([across, before, after])
-        if Resplit2LeastFrequentPair.__debug:
+        if Resplit2LeastFrequentPair._debug:
             from tabulate import tabulate
             print('Most common byte pairs at boundaries:')
             print(tabulate([(byteval.hex(), count)
@@ -358,11 +347,11 @@ class Resplit2LeastFrequentPair(object):
                                                                  mangledSegments[-1].length + splitshift)
                         else: # segment to the left completely used up in center
                             del mangledSegments[-1]
-                        if self.__debug:
+                        if self._debug:
                             print("Recombined segments: \n{} and {} into ".format(segl, segc))
                         segc = MessageSegment(segc.analyzer, segc.offset + splitshift,
                                                          segc.length - splitshift)
-                        if self.__debug:
+                        if self._debug:
                             print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
                 mangledSegments.append(segc)
         return mangledSegments
@@ -404,20 +393,18 @@ class Resplit2LeastFrequentPair(object):
 
 
 
-class CropDistinct(object):
+class CropDistinct(MessageModifier):
     """
     Split segments into smaller chunks if a given value is contained in the segment.
     The given value is cropped to a segment on its own.
     """
-    __debug = False
-
     def __init__(self, segments: List[MessageSegment], mostcommon: List[bytes]):
         """
         :param segments: The segments of one message in offset order.
         :param mostcommon: most common bytes sequences to be searched for and cropped
             (sorted descending from most frequent)
         """
-        self.segments = segments
+        super().__init__(segments)
         self._moco = mostcommon
 
     @staticmethod
@@ -446,53 +433,49 @@ class CropDistinct(object):
                 if seg.length == featlen:  # its already the concise frequent feature
                     newmsg.append(seg)
                 else:
-                    if CropDistinct.__debug:
+                    if CropDistinct._debug:
                         print("\nReplaced {} by:".format(seg.bytes.hex()), end=" ")
 
                     absco = seg.offset + comoff
                     if comoff > 0:
                         segl = MessageSegment(seg.analyzer, seg.offset, comoff)
                         newmsg.append(segl)
-                        if CropDistinct.__debug:
+                        if CropDistinct._debug:
                             print(segl.bytes.hex(), end=" ")
 
                     segc = MessageSegment(seg.analyzer, absco, featlen)
                     newmsg.append(segc)
-                    if CropDistinct.__debug:
+                    if CropDistinct._debug:
                         print(segc.bytes.hex(), end=" ")
 
                     rlen = seg.length - comoff - featlen
                     if rlen > 0:
                         segr = MessageSegment(seg.analyzer, absco + featlen, rlen)
                         newmsg.append(segr)
-                        if CropDistinct.__debug:
+                        if CropDistinct._debug:
                             print(segr.bytes.hex(), end=" ")
 
                 didReplace = True
                 break  # only most common match!? otherwise how to handle subsequent matches after split(s)?
             if not didReplace:
                 newmsg.append(seg)
-            elif CropDistinct.__debug:
+            elif CropDistinct._debug:
                 print()
 
         return newmsg
 
 
-class CumulativeCharMerger(object):
-    __debug = False
-
-    def __init__(self, segments: List[MessageSegment]):
-        """
-        :param segments: in offset order
-        """
-        self.segments = segments
+class CumulativeCharMerger(MessageModifier):
+    """
+    Merge consecutive segments that toghether fulfill the char conditions in inference.segmentHandler.isExtendedCharSeq
+    """
 
     def merge(self):
         """
         Perform the merging.
 
-        00000000000002
-        613205
+        >>> bytes.fromhex("00000000000002")
+        >>> bytes.fromhex("613205")
 
         :return: a new set of segments after the input has been merged
         """
@@ -548,6 +531,19 @@ class CumulativeCharMerger(object):
         return newmsg
 
 
+class SplitFixed(MessageModifier):
+    """
+    Split a given segment into chunks of fixed lengths.
+    """
+
+    def split(self, segmentID: int, chunkLength: int):
+        selSeg = self.segments[segmentID]
+        newSegs = list()
+        for chunkoff in range(selSeg.offset, selSeg.nextOffset, chunkLength):
+            remainLen = selSeg.nextOffset - chunkoff
+            newSegs.append(MessageSegment(selSeg.analyzer, chunkoff, min(remainLen, chunkLength)))
+        newmsg = self.segments[:segmentID] + newSegs + self.segments[segmentID + 1:]
+        return newmsg
 
 
 

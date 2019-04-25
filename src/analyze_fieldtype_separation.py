@@ -13,11 +13,11 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 
 from inference.analyzers import *
-from inference.segmentHandler import segments2types, filterChars, searchSeqOfSeg
+from inference.segmentHandler import segments2types, filterChars
 from inference.templates import DelegatingDC
 from validation.messageParser import ParsedMessage
 from utils.baseAlgorithms import tril
-from utils.evaluationHelpers import annotateFieldTypes
+from utils.evaluationHelpers import annotateFieldTypes, searchSeqOfSeg
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.singlePlotter import SingleMessagePlotter
