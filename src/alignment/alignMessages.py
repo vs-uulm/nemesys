@@ -58,8 +58,7 @@ class SegmentedMessages(object):
             segseq0 = self._dc.segments2index(msg0)
             segseq1 = self._dc.segments2index(msg1)
 
-            # Needleman-Wunsch alignment score of the two messages:
-            # TODO validate using the max, not the last entry. Any difference?
+            # Needleman-Wunsch alignment score of the two messages: based on the last entry.
             nwscores.append((msg0, msg1, hirsch.nwScore(segseq0, segseq1)[-1]))
             if c % combcstep == 0:
                 print(" .", end="", flush=True)
@@ -135,7 +134,6 @@ class SegmentedMessages(object):
                 base[i, j] = minScore * minDim
 
         distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
-        # TODO prevent negative values for highly mismatching messages
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 
@@ -373,7 +371,7 @@ def alignFieldClasses(alignedClusters: Dict[int, List], dc, mmg = (0,-1,5)):
     # fcSimMatrix = fcdc.similarityMatrix()
 
 
-    clusterpairs = list(itertools.combinations(statDynFields.keys(), 2))
+    clusterpairs = itertools.combinations(statDynFields.keys(), 2)
     fclassHirsch = HirschbergOnSegmentSimilarity(fcSimMatrix, *mmg)
     # fclassHirsch = NWonSegmentSimilarity(fcSimMatrix, *mmg)
     alignedFCIndices = {(clunuA, clunuB): fclassHirsch.align(statDynIndices[clunuA], statDynIndices[clunuB])
@@ -383,31 +381,66 @@ def alignFieldClasses(alignedClusters: Dict[int, List], dc, mmg = (0,-1,5)):
                            for clupa, (afciA, afciB) in alignedFCIndices.items()}
     # from alignment.hirschbergAlignSegments import NWonSegmentSimilarity
     # IPython.embed()
-    return clusterpairs, alignedFieldClasses
+    return alignedFieldClasses
 
 
 
 
 
 def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldClasses,
-                  clusterpairs, matchingClusters, matchingConditions, dc):
+                  matchingClusters, matchingConditions, dc):
     import IPython
-    from utils.evaluationHelpers import printClusterMergeConditions
     from tabulate import tabulate
+    from utils.evaluationHelpers import printClusterMergeConditions
+    from inference.templates import Template
 
-
+    remDue2gaps = [
+        clunuAB for clunuAB in matchingClusters
+        if not len([True for a in matchingConditions[clunuAB][1:] if a[0] == True or a[1] == True])
+           <= numpy.ceil(.4 * len(matchingConditions[clunuAB][1:]))
+    ]
+    print("\nremove due to more than 40% gaps:")
     print(tabulate(
         [(  clupair,
             len([True for a in matchingConditions[clupair][1:] if a[0] == True or a[1] == True]),
             len(matchingConditions[clupair]) - 1)
-            for clupair in matchingClusters],
+            for clupair in remDue2gaps],
         headers=("clpa", "gaps", "fields")
     ))
-    # remove pairs based on more then 40% gaps
+    print()
+    remDue2gapsInARow = list()
+    for clunuAB in matchingClusters:
+        for flip in (0,1):
+            globals().update(locals())
+            rowOfGaps = [a[flip] for a in matchingConditions[clunuAB][1:]]
+            globals().update(locals())
+            startOfGroups = [i for i, g in enumerate(rowOfGaps) if g and i > 1 and not rowOfGaps[i - 1]]
+            endOfGroups = [i for i, g in enumerate(rowOfGaps) if g and i < len(rowOfGaps) - 1 and not rowOfGaps[i + 1]]
+            if len(startOfGroups) > 0 and startOfGroups[-1] == len(rowOfGaps) - 1:
+                endOfGroups.append(startOfGroups[-1])
+            if len(endOfGroups) > 0 and endOfGroups[0] == 0:
+                startOfGroups = [0] + startOfGroups
+            globals().update(locals())
+            # field index before and after all gap groups longer than 2
+            groupOfLonger = [(sog-1, eog+1) for sog, eog in zip(startOfGroups, endOfGroups) if sog < eog - 1]
+            for beforeGroup, afterGroup in groupOfLonger:
+                if not (beforeGroup < 0
+                            or isinstance(alignedFieldClasses[clunuAB][flip][beforeGroup], MessageSegment)) \
+                        and not (afterGroup >= len(rowOfGaps)
+                            or isinstance(alignedFieldClasses[clunuAB][flip][beforeGroup], MessageSegment)):
+                    remDue2gapsInARow.append(clunuAB)
+                    break
+            if clunuAB in remDue2gapsInARow:
+                # already removed
+                break
+
+    print("\nremove due to more than 2 gaps in a row not surounded by STAs:")
+    print(remDue2gapsInARow)
+    print()
+    # remove pairs based on more then 25% gaps
     matchingClusters = [
         clunuAB for clunuAB in matchingClusters
-            if len([True for a in matchingConditions[clunuAB][1:] if a[0] == True or a[1] == True])
-               <= numpy.ceil(.25 * len(matchingConditions[clunuAB][1:]))
+            if clunuAB not in remDue2gaps and clunuAB not in remDue2gapsInARow
         ]
 
 
@@ -415,8 +448,9 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
     # : the matches on grounds of the STA value in DYN condition, with the DYN role(s) in a set in the first element of each tuple
     dynStaPairs = list()
     for clunuPair in matchingClusters:
-        dynRole = [ clunuPair[0] if fieldCond[5] else clunuPair[1] for fieldCond in matchingConditions[clunuPair][1:]
-            if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6]) ]
+        dynRole = [ clunuPair[0] if isinstance(alignedFieldClasses[clunuPair][0][fieldNum], Template) else clunuPair[1]
+                    for fieldNum, fieldCond in enumerate(matchingConditions[clunuPair][1:])
+            if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6] or fieldCond[7]) ]
         if dynRole:
             dynStaPairs.append((set(dynRole), clunuPair))
     dynRoles = set(itertools.chain.from_iterable([dynRole for dynRole, clunuPair in dynStaPairs]))
@@ -424,40 +458,70 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
     staRoles = {dynRole: [clunuPair[0] if clunuPair[1] in dr else clunuPair[1] for dr, clunuPair in dynStaPairs
                  if dynRole in dr] for dynRole in dynRoles}
     removeFromMatchingClusters = list()
+    # for each cluster that holds at least one DYN field class...
     for dynRole, staRoleList in staRoles.items():
         try:
             staMismatch = False
-            staValues = None
-            clunuPairs = list()
+            staValues = dict()
+            clunuPairs = dict()
+            # match the STA values corresponding to the DYN fields...
             for staRole in staRoleList:
                 clunuPair = (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole) \
                     if (staRole, dynRole) in matchingConditions else None
                 if clunuPair is None:
                     print("Skipping ({}, {})".format(staRole, dynRole))
                     continue
-                clunuPairs.append(clunuPair)
                 cluPairCond = matchingConditions[clunuPair]
                 fieldMatches = [fieldNum for fieldNum, fieldCond in enumerate(cluPairCond[1:])
-                              if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6])]
-                curStaValues = [alignedFieldClasses[clunuPair][0][fieldMatch]
-                                if clunuPair[0] == staRole else alignedFieldClasses[clunuPair][1][fieldMatch]
-                            for fieldMatch in fieldMatches]
-                if staValues is None:  # set the static values list to the currently determined STA field values for the DYN-STA pair clunuPair
-                    staValues = curStaValues
-                elif sorted([stva.bytes for stva in staValues]) != sorted([custva.bytes for custva in curStaValues]):
-                    staMismatch = True
-                    break
-            if staMismatch:
-                # mask to remove the clunuPairs of all combinations with this dynRole
-                removeFromMatchingClusters.extend([
-                    (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole)
-                    for staRole in staRoleList
-                ])
+                                if not any(fieldCond[:5]) and (fieldCond[5] or fieldCond[6] or fieldCond[7]) ]
+                dynTemplates = [
+                    (alignedFieldClasses[clunuPair][0][fieldNum], alignedFieldClasses[clunuPair][1][fieldNum])
+                    if dynRole == clunuPair[0] else
+                    (alignedFieldClasses[clunuPair][1][fieldNum], alignedFieldClasses[clunuPair][0][fieldNum])
+                    for fieldNum in fieldMatches]
+                if clunuPair == (0,6):
+                    IPython.embed()
+                for dynT, custva in dynTemplates:
+                    if not isinstance(dynT, Template) or not isinstance(custva, MessageSegment):
+                        continue
+                    if dynT not in staValues:
+                        # set the current static value to the STA-field values for the DYN template
+                        staValues[dynT] = custva
+                        clunuPairs[dynT] = clunuPair
+                    elif staValues[dynT].values != custva.values and dc.pairDistance(staValues[dynT], custva) > 0.1:
+                        # staMismatch = True
+                        #
+                        # if dc.pairDistance(dynT.medoid, staValues[dynT]) > dc.pairDistance(dynT.medoid, custva):
+                        #     removeFromMatchingClusters.append(clunuPairs[dynT])
+                        # else:
+                        #     removeFromMatchingClusters.append(clunuPair)
+                        # TODO investigate!
+                        #
+                        # print("prevValue {} and {} currentValues".format(staValues[dynT], custva))
+                        if staValues[dynT].values not in [bsv.values for bsv in dynT.baseSegments]:
+                                # and dc.pairDistance(dynT.medoid, staValues[dynT]) > 0.15:
+                            print("remove", clunuPairs[dynT], "because of", staValues[dynT])
+                            removeFromMatchingClusters.append(clunuPairs[dynT])
+                        if custva.values not in [bsv.values for bsv in dynT.baseSegments]:
+                                # and dc.pairDistance(dynT.medoid, custva) > 0.15:
+                            print("remove", clunuPair, "because of", custva)
+                            removeFromMatchingClusters.append(clunuPair)
+                        # IPython.embed()
+                        # break
+                # if staMismatch:
+                #     break
+
+            # if staMismatch:
+            #     # mask to remove the clunuPairs of all combinations with this dynRole
+            #     removeFromMatchingClusters.extend([
+            #         (dynRole, staRole) if (dynRole, staRole) in matchingConditions else (staRole, dynRole)
+            #         for staRole in staRoleList
+            #     ])
         except KeyError as e:
-            print(e)
+            print("KeyError:", e)
             IPython.embed()
             raise e
-
+    print("remove for transitive STA mimatch:", removeFromMatchingClusters)
 
     # if a chain of matches would merge more than .5 of all clusters, remove that chain
     from networkx import Graph
@@ -478,7 +542,7 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
         for clunuAB in remainingClusters:
             printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions, dc)
 
-    print("remove:", removeFromMatchingClusters)
+    print("remove finally:", removeFromMatchingClusters)
 
     print("remain:", remainingClusters)
     chainedRemains = Graph()
@@ -512,7 +576,7 @@ def mergeClusters(messageClusters, clusterStats, alignedClusters, alignedFieldCl
     print(missedmerges)
     print()
 
-    missedmergepairs = [k for k in clusterpairs if any(
+    missedmergepairs = [k for k in alignedFieldClasses.keys() if any(
         [k[0] in mc and k[1] in mc or
          k[0] in mc and k[1] in itertools.chain.from_iterable([cc for cc in connectedClusters if k[0] in cc]) or
          k[0] in itertools.chain.from_iterable([cc for cc in connectedClusters if k[1] in cc]) and k[1] in mc

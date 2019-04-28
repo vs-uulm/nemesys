@@ -31,6 +31,7 @@ from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
 from visualization.multiPlotter import MultiMessagePlotter
+from visualization.simplePrint import tabuSeqOfSeg
 
 debug = False
 
@@ -265,7 +266,6 @@ if __name__ == '__main__':
     parser.add_argument('pcapfilename', help='Filename of the PCAP to load.')
     parser.add_argument('-i', '--interactive', help='Open ipython prompt after finishing the analysis.',
                         action="store_true")
-    # TODO select tokenizer by command line parameter
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.6')
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
     smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn) or True:  # TODO currently we are manipulating distances, so caching is deactivated!
+    if not exists(dccachefn):  # TODO when manipulating distances, deactivate caching!  or True
         # dissect and label messages
         print("Load messages from {}...".format(pcapName))
         specimens = SpecimenLoader(args.pcapfilename, 2, True)
@@ -377,7 +377,6 @@ if __name__ == '__main__':
     #         exit(11)
 
     cluster_params_autoconfTime = time.time()
-    # TODO one to the left of the maximum positive gradient
     eps, min_samples = sm.autoconfigureDBSCAN()
     cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
 
@@ -466,33 +465,134 @@ if __name__ == '__main__':
         return len(boolist) <= length and len([a for a in boolist if a]) > truths
 
     # # # # # # # # # # # # # # # # # # #
-    # Experimentation protocol for design decisions exists!
+    # An experimentation protocol for design decisions exists!
     # # # # # # # # # # # # # # # # # # #
-    clusterpairs, alignedFieldClasses = alignFieldClasses(alignedClusters, dc, (0,-1,5))
+    alignedFieldClasses = alignFieldClasses(alignedClusters, dc, (0,-1,5))
     globals().update(locals())
+
+    if tokenizer == "nemesys":
+        # if two fields are adjacent gap/static and static/static in any order (see nbns clusters 0,2)
+        # merge the static/static fields (to be aligned with the static one without the gap)
+        # # # DOES NOT ACTUALLY CHANGE THE SEGMENTATION # # #
+        # merging is not recursive
+        alignedFieldClassesRefined = dict()
+        for cluPair, alignedFC in alignedFieldClasses.items():
+            changes = []  # tuple: fid to remove, (+?-1, 0?1) to replace
+
+            for fid, (afcA, afcB) in enumerate(zip(*alignedFC)):
+                if afcA == FC_GAP and isinstance(afcB, MessageSegment) \
+                        or afcB == FC_GAP and isinstance(afcA, MessageSegment):
+                    # if static is left and right of gap, choose the static/static side with the lower SSdist
+                    mergeLeft = None
+                    mergeRight = None
+
+                    # check if all are statics to the left or to the right
+                    if fid > 0 and isinstance(alignedFC[0][fid - 1], MessageSegment) \
+                            and isinstance(alignedFC[1][fid - 1], MessageSegment):
+                        mergeLeft = dc.pairDistance(alignedFC[0][fid - 1], alignedFC[1][fid - 1])
+                    if fid < len(alignedFC[0]) - 1 and isinstance(alignedFC[0][fid + 1], MessageSegment) \
+                            and isinstance(alignedFC[1][fid + 1], MessageSegment):
+                        mergeRight = dc.pairDistance(alignedFC[0][fid + 1], alignedFC[1][fid + 1])
+                    if mergeLeft is None and mergeRight is None:
+                        continue
+
+                    segAtGAP = afcA if afcB == FC_GAP else afcB
+                    if mergeRight is None \
+                            or mergeLeft is not None and mergeLeft < mergeRight:
+                        segAtSTA = alignedFC[0][fid - 1] if afcB == FC_GAP else alignedFC[1][fid - 1]
+                    elif mergeLeft is None \
+                            or mergeRight is not None and mergeLeft >= mergeRight:
+                        segAtSTA = alignedFC[0][fid + 1] if afcB == FC_GAP else alignedFC[1][fid + 1]
+                    else:
+                        print("tertium non datur.")
+                        segAtSTA = None  # type: MessageSegment
+                        IPython.embed()
+                    changes.append((fid, (
+                        fid-1 if segAtGAP.offset > segAtSTA.offset else fid+1,
+                        0 if afcB == FC_GAP else 1
+                    )))
+
+            # actually perform found changes
+            if changes:
+                newFC = ([*alignedFC[0]], [*alignedFC[1]])
+
+                cid = 0
+                while cid < len(changes):
+                    rid, (mid, sab) = changes[cid]
+                    mergedValues = tuple(newFC[sab][mid].values + newFC[sab][rid].values if rid > mid \
+                        else newFC[sab][rid].values + newFC[sab][mid].values)
+                    mergedSTA = None
+                    for seg in dc.segments:
+                        if tuple(seg.values) == mergedValues:
+                            # use any segment, regardless of origin
+                            mergedSTA = seg.baseSegments[0] if isinstance(seg, Template) else seg
+                            break
+                    if mergedSTA is None:
+                        notMergedValues = (bytes(newFC[sab][mid].values).hex(), bytes(newFC[sab][rid].values).hex()) \
+                            if rid > mid else (bytes(newFC[sab][rid].values).hex(), bytes(newFC[sab][mid].values).hex())
+                        print("We will not merge {} | {}.".format(*notMergedValues))
+                        # This is not possible without recalculating dc...
+                        # ... which we probably will not want anyways:
+                        # If we assume that the segmenter is right in most cases but not all
+                        # ... its likely that the valid segment boundaries are the unmerged ones
+                        # ... and we have not found a valid boundary modification here in the first place
+                        del changes[cid]
+                    else:
+                        newFC[sab][mid] = mergedSTA
+                        cid += 1
+                        print("Will merge to", mergedSTA)
+                for rid, (mid, sab) in reversed(changes):
+                    del newFC[0][rid]
+                    del newFC[1][rid]
+                alignedFieldClassesRefined[cluPair] = newFC
+
+                if changes:
+                    print(tabulate(
+                        [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
+                                   fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
+                         for clunu, fvals in zip(cluPair, alignedFieldClasses[cluPair])]
+                    ))
+                    print(tabulate(
+                        [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
+                                   fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
+                         for clunu, fvals in zip(cluPair, newFC)]
+                    ))
+                    print()
+            else:
+                alignedFieldClassesRefined[cluPair] = alignedFieldClasses[cluPair]
+        alignedFieldClasses = alignedFieldClassesRefined
+
+    globals().update(locals())
+    mismatchGrace = .2
     #                                            0      1       2       3       4      5      6      7          8
     # noinspection PyTypeChecker
-    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB","DSdist","SSdist")] + [
+    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB","MSdist","SSdist")] + [
             (afcA == FC_GAP, afcB == FC_GAP,
              isinstance(afcA, (MessageSegment, Template)) and isinstance(afcB, (MessageSegment, Template)) and afcA.bytes == afcB.bytes,
              isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
              isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
              isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-             # TODO: test alternative dynamic threshold: dist(STA, DYN.medoid) <= DYN.maxDistToMedoid()
-             0.7 > afcA.distToNearest(afcB, dc)  # 0.2 dhcp-1000: +2merges // 9,30
+             # 0.7 > afcA.distToNearest(afcB, dc)  # 0.2 dhcp-1000: +2merges // 9,30
+             #     if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
+             #     else 0.7 > afcB.distToNearest(afcA, dc)
+             #     if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
+             #     else False,
+             #
+             # alternative dynamic threshold: dist(STA, DYN.medoid) <= DYN.maxDistToMedoid()
+             (afcA.maxDistToMedoid(dc) + (1 - afcA.maxDistToMedoid(dc)) * mismatchGrace > dc.pairDistance(afcA.medoid, afcB))
                  if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
-                 else 0.7 > afcB.distToNearest(afcA, dc)
+                 else (afcB.maxDistToMedoid(dc) + (1 - afcB.maxDistToMedoid(dc)) * mismatchGrace > dc.pairDistance(afcB.medoid, afcA))
                  if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
                  else False,
-             0.2 > dc.pairDistance(afcA, afcB)
+             mismatchGrace > dc.pairDistance(afcA, afcB)
                  if isinstance(afcA, MessageSegment) and isinstance(afcB, MessageSegment)
                  else False
              )
              for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
-        ] for clunuA, clunuB in clusterpairs }
+        ] for clunuA, clunuB in alignedFieldClasses.keys() }
     globals().update(locals())
     matchingClusters = [
-        (clunuA, clunuB) for clunuA, clunuB in clusterpairs
+        (clunuA, clunuB) for clunuA, clunuB in alignedFieldClasses.keys()
             # any of "Agap","Bgap","equal","Azero","Bzero","BinA","AinB" are true
             if (all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
                 # dynStaPairs may not exceed 10% of fields (ceiling) to match
@@ -521,8 +621,7 @@ if __name__ == '__main__':
     #   len(matchingConditions[clupair]) - 1) for clupair in matchingClusters]
 
     mergedClusters, missedmergepairs = mergeClusters(
-        messageClusters, clusterStats, alignedClusters, alignedFieldClasses,
-                  clusterpairs, matchingClusters, matchingConditions, dc)
+        messageClusters, clusterStats, alignedClusters, alignedFieldClasses, matchingClusters, matchingConditions, dc)
     globals().update(locals())
     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
         mergedClusters, groundtruth,

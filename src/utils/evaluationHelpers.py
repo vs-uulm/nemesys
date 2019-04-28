@@ -324,9 +324,39 @@ def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions
                  if isinstance(segA, MessageSegment) and isinstance(segB, MessageSegment)
              else None
              for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+    # DYN-STA / STA-DYN : medoid to static distance compared to maxDistToMedoid in DYN : good if > -.1 ?
+    medstamixdists = [
+        (segA.maxDistToMedoid(dc) + (1-segA.maxDistToMedoid(dc))*.33 - dc.pairDistance(segA.medoid, segB))
+                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
+             else (segB.maxDistToMedoid(dc) + (1-segB.maxDistToMedoid(dc))*.33 - dc.pairDistance(segB.medoid, segA))
+                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+
+    # TODO clean up test code
+    medstamixdistsblu = [
+        segA.maxDistToMedoid(dc)
+                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
+             else segB.maxDistToMedoid(dc)
+                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
+    medstamixdistsbbb = [
+        dc.pairDistance(segA.medoid, segB)
+                 if isinstance(segA, Template) and isinstance(segB, MessageSegment)
+             else dc.pairDistance(segB.medoid, segA)
+                 if isinstance(segB, Template) and isinstance(segA, MessageSegment)
+             else None
+             for segA, segB in zip(*alignedFieldClasses[clunuAB])]
 
     cluTable += [tuple(["DSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in dynstamixdists])]
     cluTable += [tuple(["SSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in stastamixdists])]
+    cluTable += [tuple(["MSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in medstamixdists])]
+    # TODO clean up test code
+    # cluTable += [
+    #     tuple(["MSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in medstamixdistsblu])]
+    # cluTable += [
+    #     tuple(["MSdist"] + ["{:.3f}".format(val) if isinstance(val, float) else val for val in medstamixdistsbbb])]
 
     fNums = []
     for fNum, (cluA, cluB) in enumerate(zip(cluTable[0], cluTable[1])):
@@ -348,3 +378,20 @@ def searchSeqOfSeg(sequence: Sequence[Union[MessageSegment, Sequence[MessageSegm
         return [msg for msg in sequence if any(pattern in seg.bytes for seg in msg if isinstance(seg, MessageSegment))]
     else:
         return [seg for seg in sequence if pattern in seg.bytes]
+
+
+def calcHexDist(hexA, hexB):
+    from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    from inference.analyzers import Value
+    from inference.segments import MessageSegment
+    from inference.templates import DistanceCalculator
+
+    bytedata = [bytes.fromhex(hexA),bytes.fromhex(hexB)]
+    messages = [RawMessage(bd) for bd in bytedata]
+    analyzers = [Value(message) for message in messages]
+    segments = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+    dc = DistanceCalculator(segments)
+    return dc.pairDistance(*segments)
+
+
+

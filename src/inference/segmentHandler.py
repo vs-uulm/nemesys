@@ -206,8 +206,6 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
 
     Used in constructor.
 
-    TODO check/assert that the diagonal is only zeros
-
     :param distances: The pairwise similarities to arrange.
         0. T: segA
         1. T: segB
@@ -229,6 +227,9 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
         col = segmentOrder.index(intseg[1])
         simtrx[row, col] = intseg[2]
         simtrx[col, row] = intseg[2]
+        # check that the diagonal is only populated by the identity value
+        if row == col and intseg[2] != identity:
+            print("Warning: Identity value at {},{} was overwritten by {}".format(row, col, intseg[2]))
     return simtrx
 
 
@@ -340,7 +341,6 @@ def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
 
     return filteredSegments
 
-
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
@@ -348,20 +348,8 @@ def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
                 and any(values)
                 and numpy.max(tuple(values)) < 0x7f
                 and meanCorridor[0] <= numpy.mean(nonzeros) <= meanCorridor[1]
-                and 0.66 > len(locateNonPrintable(values)) / vallen
-                # TODO re-evaluate smb results with ^ this change
-                # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
-            )
-
-def isExtendedCharSeq2(values: bytes, meanCorridor=(50, 115), minLen=6):
-    vallen = len(values)
-    nonzeros = [v for v in values if v > 0x00]
-    return (vallen >= minLen
-                and any(values)
-                and numpy.max(tuple(values)) < 0x7f
-                and meanCorridor[0] <= numpy.mean(nonzeros) <= meanCorridor[1]
                 and 0.33 > len(locateNonPrintable(bytes(nonzeros))) / vallen
-                # TODO re-evaluate smb results with ^ this change
+                # # above solution evaluated with only smb having a minor increase in false positives compared to below
                 # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
             )
 

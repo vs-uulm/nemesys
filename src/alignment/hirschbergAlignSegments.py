@@ -136,7 +136,6 @@ class HirschbergOnSegmentSimilarity(Alignment):
         :param tokensY: List of indices of in the similarity matrix, representing message Y
         :return: The match scores of the "last" line of the alignment matrix. The rightmost value is interpreted as
             the score of the similarity between the whole two input messages.
-            TODO is that right? should it not be the max of the line in case of mismatches at the end?
         """
         score = numpy.empty([2,len(tokensY)+1])  # 2*length(Y) array
         score[0,] = 0
