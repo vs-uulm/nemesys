@@ -18,7 +18,7 @@ from tabulate import tabulate
 # import matplotlib as mpl
 # mpl.use('Agg')
 
-from alignment.alignMessages import SegmentedMessages, alignFieldClasses, FC_GAP
+from alignment.alignMessages import SegmentedMessages
 from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
 from inference.segments import MessageSegment, MessageAnalyzer
@@ -32,8 +32,10 @@ from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.simplePrint import tabuSeqOfSeg
+from alignment.clusterMerging import ClusterMerger
 
 debug = False
+withplots = False
 
 analysis_method = 'value'
 distance_method = 'canberra'
@@ -196,7 +198,7 @@ def epsautoconfeval(epsilon):
         seconddiff[k] = numpy.diff(smoothknearest[k], 2)
         seconddiffargmax = seconddiff[k].argmax()
         diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
-        if sigma < seconddiffargmax < len(neighbors) - sigma and diffrelmax > seconddiffMax[2]:
+        if 2*sigma < seconddiffargmax < len(neighbors) - 2*sigma and diffrelmax > seconddiffMax[2]:
             seconddiffMax = (k, seconddiffargmax, diffrelmax)
 
         # ksteepeststats.append((k, seconddiff[k].max(), diffrelmax))
@@ -388,10 +390,8 @@ if __name__ == '__main__':
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
     if tokenizer == "nemesys":
         eps = eps * .8
-    # eps = epsautoconfeval(eps)
-    # if tokenizer == "nemesys":
-    #     eps = eps * .8
-    #
+    if withplots:
+        epsConfirm = epsautoconfeval(eps)
     # DEBUG and TESTING
 
 
@@ -417,14 +417,15 @@ if __name__ == '__main__':
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
 
-    # # plot distances and message clusters
-    # print("Plot distances...")
-    # from visualization.distancesPlotter import DistancesPlotter
-    # dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
-    # dp.plotManifoldDistances(
-    #     [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-    #     sm.distances, labels)  # segmentedMessages
-    # dp.writeOrShowFigure()
+    if withplots:
+        # plot distances and message clusters
+        print("Plot distances...")
+        from visualization.distancesPlotter import DistancesPlotter
+        dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+        dp.plotManifoldDistances(
+            [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+            sm.distances, labels)  # segmentedMessages
+        dp.writeOrShowFigure()
 
     # align cluster members
     align_messagesTime = time.time()
@@ -459,176 +460,28 @@ if __name__ == '__main__':
 
     # check for cluster merge candidates
     print("Check for cluster merge candidates...")
-    from alignment.alignMessages import mergeClusters
     from utils.evaluationHelpers import printClusterMergeConditions
-    def lenAndTrue(boolist, length=2, truths=0):
-        return len(boolist) <= length and len([a for a in boolist if a]) > truths
 
-    # # # # # # # # # # # # # # # # # # #
-    # An experimentation protocol for design decisions exists!
-    # # # # # # # # # # # # # # # # # # #
-    alignedFieldClasses = alignFieldClasses(alignedClusters, dc, (0,-1,5))
+    clustermerger = ClusterMerger(alignedClusters, dc)
+
+    alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
+    # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
     globals().update(locals())
-
     if tokenizer == "nemesys":
-        # if two fields are adjacent gap/static and static/static in any order (see nbns clusters 0,2)
-        # merge the static/static fields (to be aligned with the static one without the gap)
-        # # # DOES NOT ACTUALLY CHANGE THE SEGMENTATION # # #
-        # merging is not recursive
-        alignedFieldClassesRefined = dict()
-        for cluPair, alignedFC in alignedFieldClasses.items():
-            changes = []  # tuple: fid to remove, (+?-1, 0?1) to replace
-
-            for fid, (afcA, afcB) in enumerate(zip(*alignedFC)):
-                if afcA == FC_GAP and isinstance(afcB, MessageSegment) \
-                        or afcB == FC_GAP and isinstance(afcA, MessageSegment):
-                    # if static is left and right of gap, choose the static/static side with the lower SSdist
-                    mergeLeft = None
-                    mergeRight = None
-
-                    # check if all are statics to the left or to the right
-                    if fid > 0 and isinstance(alignedFC[0][fid - 1], MessageSegment) \
-                            and isinstance(alignedFC[1][fid - 1], MessageSegment):
-                        mergeLeft = dc.pairDistance(alignedFC[0][fid - 1], alignedFC[1][fid - 1])
-                    if fid < len(alignedFC[0]) - 1 and isinstance(alignedFC[0][fid + 1], MessageSegment) \
-                            and isinstance(alignedFC[1][fid + 1], MessageSegment):
-                        mergeRight = dc.pairDistance(alignedFC[0][fid + 1], alignedFC[1][fid + 1])
-                    if mergeLeft is None and mergeRight is None:
-                        continue
-
-                    segAtGAP = afcA if afcB == FC_GAP else afcB
-                    if mergeRight is None \
-                            or mergeLeft is not None and mergeLeft < mergeRight:
-                        segAtSTA = alignedFC[0][fid - 1] if afcB == FC_GAP else alignedFC[1][fid - 1]
-                    elif mergeLeft is None \
-                            or mergeRight is not None and mergeLeft >= mergeRight:
-                        segAtSTA = alignedFC[0][fid + 1] if afcB == FC_GAP else alignedFC[1][fid + 1]
-                    else:
-                        print("tertium non datur.")
-                        segAtSTA = None  # type: MessageSegment
-                        IPython.embed()
-                    changes.append((fid, (
-                        fid-1 if segAtGAP.offset > segAtSTA.offset else fid+1,
-                        0 if afcB == FC_GAP else 1
-                    )))
-
-            # actually perform found changes
-            if changes:
-                newFC = ([*alignedFC[0]], [*alignedFC[1]])
-
-                cid = 0
-                while cid < len(changes):
-                    rid, (mid, sab) = changes[cid]
-                    mergedValues = tuple(newFC[sab][mid].values + newFC[sab][rid].values if rid > mid \
-                        else newFC[sab][rid].values + newFC[sab][mid].values)
-                    mergedSTA = None
-                    for seg in dc.segments:
-                        if tuple(seg.values) == mergedValues:
-                            # use any segment, regardless of origin
-                            mergedSTA = seg.baseSegments[0] if isinstance(seg, Template) else seg
-                            break
-                    if mergedSTA is None:
-                        notMergedValues = (bytes(newFC[sab][mid].values).hex(), bytes(newFC[sab][rid].values).hex()) \
-                            if rid > mid else (bytes(newFC[sab][rid].values).hex(), bytes(newFC[sab][mid].values).hex())
-                        print("We will not merge {} | {}.".format(*notMergedValues))
-                        # This is not possible without recalculating dc...
-                        # ... which we probably will not want anyways:
-                        # If we assume that the segmenter is right in most cases but not all
-                        # ... its likely that the valid segment boundaries are the unmerged ones
-                        # ... and we have not found a valid boundary modification here in the first place
-                        del changes[cid]
-                    else:
-                        newFC[sab][mid] = mergedSTA
-                        cid += 1
-                        print("Will merge to", mergedSTA)
-                for rid, (mid, sab) in reversed(changes):
-                    del newFC[0][rid]
-                    del newFC[1][rid]
-                alignedFieldClassesRefined[cluPair] = newFC
-
-                if changes:
-                    print(tabulate(
-                        [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
-                                   fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                         for clunu, fvals in zip(cluPair, alignedFieldClasses[cluPair])]
-                    ))
-                    print(tabulate(
-                        [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
-                                   fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                         for clunu, fvals in zip(cluPair, newFC)]
-                    ))
-                    print()
-            else:
-                alignedFieldClassesRefined[cluPair] = alignedFieldClasses[cluPair]
-        alignedFieldClasses = alignedFieldClassesRefined
-
+        alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
     globals().update(locals())
-    mismatchGrace = .2
-    #                                            0      1       2       3       4      5      6      7          8
-    # noinspection PyTypeChecker
-    matchingConditions = { (clunuA, clunuB): [("Agap","Bgap","equal","Azero","Bzero","BinA","AinB","MSdist","SSdist")] + [
-            (afcA == FC_GAP, afcB == FC_GAP,
-             isinstance(afcA, (MessageSegment, Template)) and isinstance(afcB, (MessageSegment, Template)) and afcA.bytes == afcB.bytes,
-             isinstance(afcA, MessageSegment) and set(afcA.bytes) == {0}, isinstance(afcB, MessageSegment) and set(afcB.bytes) == {0},
-             isinstance(afcA, Template) and isinstance(afcB, MessageSegment) and afcB.bytes in [bs.bytes for bs in afcA.baseSegments],
-             isinstance(afcB, Template) and isinstance(afcA, MessageSegment) and afcA.bytes in [bs.bytes for bs in afcB.baseSegments],
-             # 0.7 > afcA.distToNearest(afcB, dc)  # 0.2 dhcp-1000: +2merges // 9,30
-             #     if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
-             #     else 0.7 > afcB.distToNearest(afcA, dc)
-             #     if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
-             #     else False,
-             #
-             # alternative dynamic threshold: dist(STA, DYN.medoid) <= DYN.maxDistToMedoid()
-             (afcA.maxDistToMedoid(dc) + (1 - afcA.maxDistToMedoid(dc)) * mismatchGrace > dc.pairDistance(afcA.medoid, afcB))
-                 if isinstance(afcA, Template) and isinstance(afcB, MessageSegment)
-                 else (afcB.maxDistToMedoid(dc) + (1 - afcB.maxDistToMedoid(dc)) * mismatchGrace > dc.pairDistance(afcB.medoid, afcA))
-                 if isinstance(afcB, Template) and isinstance(afcA, MessageSegment)
-                 else False,
-             mismatchGrace > dc.pairDistance(afcA, afcB)
-                 if isinstance(afcA, MessageSegment) and isinstance(afcB, MessageSegment)
-                 else False
-             )
-             for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
-        ] for clunuA, clunuB in alignedFieldClasses.keys() }
+    matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
     globals().update(locals())
-    matchingClusters = [
-        (clunuA, clunuB) for clunuA, clunuB in alignedFieldClasses.keys()
-            # any of "Agap","Bgap","equal","Azero","Bzero","BinA","AinB" are true
-            if (all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
-                # dynStaPairs may not exceed 10% of fields (ceiling) to match
-                and len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]])
-                    <= ceil(.1 * len(matchingConditions[(clunuA, clunuB)][1:])))
-            # if merging is based solely on SSdist for any field, allow only one other "if not equal"
-            or (all([any(condResult) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
-                and lenAndTrue( [not any(condResult[:7]) and condResult[8]  # True if solely SSdist for field
-                    for condResult in matchingConditions[(clunuA, clunuB)][1:] if not condResult[2]]
-                )
-                # and not any([True for condResult in matchingConditions[(clunuA, clunuB)][1:]
-                #           if not condResult[2] and any(condResult[5:8])])  # prevents ntp merging of (1, 6) solely on ntp.stratum STA-STA
-            or all([condResult[7]                                              # ! this is the key for DHCP
-                 for condResult in matchingConditions[(clunuA, clunuB)][1:] if not any(condResult[:7])])
-                # condResult[2:7] lets (ALL) queries be merged for DNS / removes a number of merges in DHCP /
-                # replaces one valid merge for NTP by two invalid ones
-                )
-        ]
-            # if mergingThreshold >= len(
-            #     [ False for condResult in matchingConditions[(clunuA, clunuB)][1:]
-            #       if not any(condResult) ]) and
-
-            #     ]
+    matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
     globals().update(locals())
-    # [(clupair, len([a[6] for a in matchingConditions[clupair] if a[5] == True or a[6] == True]),
-    #   len(matchingConditions[clupair]) - 1) for clupair in matchingClusters]
-
-    mergedClusters, missedmergepairs = mergeClusters(
-        messageClusters, clusterStats, alignedClusters, alignedFieldClasses, matchingClusters, matchingConditions, dc)
+    mergedClusters, missedmergepairs = clustermerger.mergeClusters(
+        messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
     globals().update(locals())
     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
         mergedClusters, groundtruth,
         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
         comparator)
-
     # END # of # check for cluster merge candidates #
 
 
