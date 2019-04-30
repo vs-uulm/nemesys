@@ -191,7 +191,7 @@ class ClusterMerger(object):
 
 
     def generateMatchingConditions(self, alignedFieldClasses):
-        return self.generateMatchingConditionsAlt2(alignedFieldClasses)
+        return self.generateMatchingConditionsAlt1(alignedFieldClasses)
 
 
     def generateMatchingConditionsAlt1(self, alignedFieldClasses):
@@ -284,8 +284,9 @@ class ClusterMerger(object):
             """
             condA = all([any(condResult[:7]) for condResult in matchingConditions[(clunuA, clunuB)][1:]])
             # dynStaPairs may not exceed 10% of fields (ceiling) to match
-            condB = len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]]) \
-                    <= ceil(.1 * len(matchingConditions[(clunuA, clunuB)][1:]))
+            # condB = len([True for c in matchingConditions[(clunuA, clunuB)][1:] if c[5] or c[6]]) \
+            #         <= ceil(.1 * len(matchingConditions[(clunuA, clunuB)][1:]))
+            condB = True
 
             if condA:
                 print(
@@ -339,7 +340,8 @@ class ClusterMerger(object):
 
         return [
             (clunuA, clunuB) for clunuA, clunuB in alignedFieldClasses.keys()
-            if basicMatch(clunuA, clunuB) or limitedSSdistOnlyMatch(clunuA, clunuB) or onlyMSdistMatch(clunuA, clunuB)
+            if basicMatch(clunuA, clunuB) # or limitedSSdistOnlyMatch(clunuA, clunuB)
+              # or onlyMSdistMatch(clunuA, clunuB)
         ]
 
 
