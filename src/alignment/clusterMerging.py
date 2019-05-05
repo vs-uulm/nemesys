@@ -60,7 +60,7 @@ class ClusterMerger(object):
         #               for fcL in statDynValues] for fcK in statDynValues])
 
         # use medoid distance in fcSimMatrix instead of fixed value (0.5)
-        fcSimMatrix = numpy.array([[
+        fcSimMatrix = numpy.array([[ # TODO DYN-DYN is not symmetric!!!! fix!
             # 1.0 if fcL.bytes == fcK.bytes else
             1.0 - 0.4 * fcL.distToNearest(fcK.medoid, self.dc)  # DYN-DYN similarity
             if isinstance(fcL, Template) and isinstance(fcK, Template)
@@ -384,12 +384,6 @@ class ClusterMerger(object):
                 # field index before and after all gap groups longer than 2
                 groupOfLonger = [(sog - 1, eog + 1) for sog, eog in zip(startOfGroups, endOfGroups) if sog < eog - 1]
                 for beforeGroup, afterGroup in groupOfLonger:
-                    # TODO alt1
-                    # if not (beforeGroup < 0
-                    #             or isinstance(alignedFieldClasses[clunuAB][flip][beforeGroup], MessageSegment)) \
-                    #         and not (afterGroup >= len(rowOfGaps)
-                    #             or isinstance(alignedFieldClasses[clunuAB][flip][afterGroup], MessageSegment)):
-                    # TODO alt2
                     if not ((beforeGroup < 0
                              or isinstance(alignedFieldClasses[clunuAB][flip][beforeGroup], MessageSegment))
                             or (afterGroup >= len(rowOfGaps)
@@ -490,14 +484,14 @@ class ClusterMerger(object):
         print("remove for transitive STA mimatch:", removeFromMatchingClusters)
         print()
 
-        # if a chain of matches would merge more than .5 of all clusters, remove that chain
+        # if a chain of matches would merge more than .66 of all clusters, remove that chain
         from networkx import Graph
         from networkx.algorithms.components.connected import connected_components
         dracula = Graph()
         dracula.add_edges_from(set(matchingClusters) - set(removeFromMatchingClusters))
         connectedDracula = list(connected_components(dracula))
         for clusterChain in connectedDracula:
-            if len(clusterChain) > .5 * len(self.alignedClusters):
+            if len(clusterChain) > .66 * len(self.alignedClusters):  # TODO increase to .66 (nbns tshark)
                 for clunu in clusterChain:
                     for remainingPair in set(matchingClusters) - set(removeFromMatchingClusters):
                         if clunu in remainingPair:

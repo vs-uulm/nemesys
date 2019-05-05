@@ -35,7 +35,7 @@ from visualization.simplePrint import tabuSeqOfSeg
 from alignment.clusterMerging import ClusterMerger
 
 debug = False
-withplots = False
+withplots = True
 
 analysis_method = 'value'
 distance_method = 'canberra'
