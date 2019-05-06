@@ -60,9 +60,9 @@ class ClusterMerger(object):
         #               for fcL in statDynValues] for fcK in statDynValues])
 
         # use medoid distance in fcSimMatrix instead of fixed value (0.5)
-        fcSimMatrix = numpy.array([[ # TODO DYN-DYN is not symmetric!!!! fix!
+        fcSimMatrix = numpy.array([[
             # 1.0 if fcL.bytes == fcK.bytes else
-            1.0 - 0.4 * fcL.distToNearest(fcK.medoid, self.dc)  # DYN-DYN similarity
+            1.0 - 0.4 * fcL.distToNearest(fcK.baseSegments, self.dc)  # DYN-DYN similarity
             if isinstance(fcL, Template) and isinstance(fcK, Template)
             else 1.0 - fcL.distToNearest(fcK, self.dc)  # DYN-STA similarity, modified 00 field
                  * (0.6 if set(fcK.bytes) != {0} else 0.1)

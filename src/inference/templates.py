@@ -1297,9 +1297,12 @@ class Template(AbstractSegment):
         return max(self.distancesToMixedLength(dc))[0]
 
 
-    def distToNearest(self, segment: MessageSegment, dc: DistanceCalculator = None):
-        return min(dc.distancesSubset([segment], self.baseSegments)[0])
-
+    def distToNearest(self, segment: Union[MessageSegment, Sequence[MessageSegment]], dc: DistanceCalculator = None):
+        if isinstance(segment, Sequence):
+            segments = segment
+        else:
+            segments = [segment]
+        return dc.distancesSubset(segments, self.baseSegments).min()
 
     def __hash__(self):
         """
