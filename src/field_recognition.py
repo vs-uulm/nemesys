@@ -136,8 +136,9 @@ class BIDEracker(object):
                         # remove subsequence just added in k if it is not frequent
                         del self._subsequenceLookup[k][byteValue]
                         continue  # k's sequence to be infrequent causes its support in k-1 to remain valid (and potentially frequent)
-                    if byteValue[:2] == b"\x81\x82":
-                        print(count, byteValue.hex())
+                    # if byteValue[:2] == b"\x63\x82\x53\x63":
+                    #     print(count, byteValue.hex())
+
                     # ... and for being locally frequent (prefix + extension)
                     for ext in range(1, k):
                         # print(byteValue[:-ext], ext)
@@ -238,6 +239,8 @@ if __name__ == '__main__':
 
         # subsfreq.printExtensions(2)
         print(tabulate(sorted([(cnt, bv.hex()) for bv, (cnt, occ) in subsfreq.mostFrequent(2).items()])))
+
+
 
 
     IPython.embed()
