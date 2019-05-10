@@ -32,10 +32,10 @@ from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.simplePrint import tabuSeqOfSeg
-from alignment.clusterMerging import ClusterMerger
+from alignment.clusterMerging import ClusterMerger, ClusterClusterer
 
 debug = False
-withplots = True
+withplots = False
 
 analysis_method = 'value'
 distance_method = 'canberra'
@@ -462,26 +462,59 @@ if __name__ == '__main__':
     print("Check for cluster merge candidates...")
     from utils.evaluationHelpers import printClusterMergeConditions
 
-    clustermerger = ClusterMerger(alignedClusters, dc)
 
-    alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
-    # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
-    globals().update(locals())
-    if tokenizer == "nemesys":
-        alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
-    globals().update(locals())
-    matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
-    globals().update(locals())
-    matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
-    globals().update(locals())
-    mergedClusters, missedmergepairs = clustermerger.mergeClusters(
-        messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-    globals().update(locals())
-    mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-        mergedClusters, groundtruth,
-        "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-        comparator)
+    # noinspection PyUnreachableCode
+    if True:
+        # ClusterMerger
+        clustermerger = ClusterMerger(alignedClusters, dc)
+
+        alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
+        # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
+        if tokenizer == "nemesys":
+            alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
+        matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
+        matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
+        mergedClusters = clustermerger.mergeClusters(
+            messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
+        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+    else:  # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
+        # ClusterClusterer
+        clusterclusterer = ClusterClusterer(alignedClusters, dc)
+        # clusterDists = clusterclusterer.calcClusterDistances()
+
+        mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
+
+        clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
+        clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
+        mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
+        ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
+
+        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
+            comparator)
+
+        from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        from visualization.distancesPlotter import DistancesPlotter
+        typedClusterDummys = list()
+        for clunu in clusterclusterer.clusterOrder:
+            clusta = None
+            for stats in clusterStats:
+                if stats is not None and stats[0] == clunu:
+                    clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
+                    break
+            msgdum = RawMessage(messageType=clusta)
+            typedClusterDummys.append(msgdum)
+
+        dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
+        dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
+        dp.writeOrShowFigure()
+
     # END # of # check for cluster merge candidates #
 
 

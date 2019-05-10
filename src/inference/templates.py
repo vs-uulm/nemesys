@@ -1617,7 +1617,7 @@ class AbstractClusterer(ABC):
         <BLANKLINE>
         Calculated distances for 4 segment pairs in ... seconds.
         >>> clusterer = DBSCANsegmentClusterer(dc, eps=1, min_samples=2)
-        >>> print(clusterer._distances)
+        >>> print(clusterer.distances)
         [[ 0.        0.3975    0.125   ]
          [ 0.3975    0.        0.548125]
          [ 0.125     0.548125  0.      ]]
@@ -1696,7 +1696,7 @@ class HDBSCANsegmentClusterer(AbstractClusterer):
 
         if len(kwargs) == 0:
             # from math import log
-            # lnN = round(log(self._distances.shape[0]))
+            # lnN = round(log(self.distances.shape[0]))
             self.min_cluster_size = self.steepestSlope()[0] # round(lnN * 1.5)
         elif 'min_cluster_size' in kwargs:
             self.min_cluster_size = kwargs['min_cluster_size']
@@ -1791,7 +1791,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         # get minpts-nearest-neighbor distance:
         neighdists = self._knearestdistance(round(steepslopeK + (self._distances.shape[0] - steepslopeK) * .2))
-                # round(minpts + 0.5 * (self._distances.shape[0] - minpts))
+                # round(minpts + 0.5 * (self.distances.shape[0] - minpts))
         # # lower factors resulted in only few small clusters, since the density distribution is to uneven
         # # (for DBSCAN?)
 
@@ -1845,7 +1845,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # farthest
         # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
         # axl.plot(dpnmln, alpha=.4)
-        # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self._distances.shape[0]-1)) )])
+        # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self.distances.shape[0]-1)) )])
         disttril = numpy.tril(self._distances)
         alldist = [e for e in disttril.flat if e > 0]
         axr.hist(alldist, 50)
@@ -1860,7 +1860,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
         # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
         axl.legend()
-        # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self._distances.max(), self._distances.mean()))
+        # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self.distances.max(), self.distances.mean()))
         import time
         # plt.show()
         plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
@@ -1939,7 +1939,7 @@ Methods/properties (including super's)
     * _quicksegments
     * _offsets / offsets@
     * _seg2idx
-    * distanceMatrix@ / _distances
+    * distanceMatrix@ / distances
     * similarityMatrix()
     * groupByLength()
 
