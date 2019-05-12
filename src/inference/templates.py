@@ -2021,6 +2021,13 @@ class DelegatingDC(DistanceCalculator):
             # Manipulate calculated distances for all char/char pairs.
             self._templates4chars()
 
+        # assert symmetric matrix
+        for i in range(self.distanceMatrix.shape[0]):
+            for j in range(self.distanceMatrix.shape[1]):
+                if self.distanceMatrix[i, j] != self.distanceMatrix[j, i]:
+                    print("NOK", i, j)
+                assert self.distanceMatrix[i, j] == self.distanceMatrix[j, i]
+
 
 
     @staticmethod
@@ -2105,7 +2112,9 @@ class DelegatingDC(DistanceCalculator):
         # for all combinations of pairs from charindices
         for a, b in combinations(charindices, 2):
             # decrease distance by factor
-            self._distances[a,b] = self._distances[a,b] * charMatchGain
+            self._distances[a, b] = self._distances[a, b] * charMatchGain
+            self._distances[b, a] = self._distances[b, a] * charMatchGain
+
 
 
     @staticmethod

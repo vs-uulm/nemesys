@@ -135,6 +135,10 @@ class DistancesPlotter(MessagePlotter):
             distances = numpy.delete(numpy.delete(distances, idx2rem, 0), idx2rem, 1)
         else:
             idx2rem = None
+            import IPython
+            IPython.embed()
+
+
 
         # prepare MDS
         seed = numpy.random.RandomState(seed=3)

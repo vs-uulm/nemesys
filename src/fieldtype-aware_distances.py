@@ -88,6 +88,12 @@ if __name__ == '__main__':
     print("Calculate distances...")
     dc = DelegatingDC(segments)
 
+
+    # for i in range(distances.shape[0]):
+    #     for j in range(distances.shape[1]):
+    #         if distances[i, j] != distances[j, i]:
+    #             print("NOK", i, j)
+
     print("Clustering...")
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)

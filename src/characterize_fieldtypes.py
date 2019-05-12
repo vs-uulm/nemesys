@@ -25,6 +25,11 @@ from visualization.distancesPlotter import DistancesPlotter
 
 debug = False
 
+# fix the analysis method to VALUE
+analysisTitle = 'value'
+# fix the distance method to canberra
+distance_method = 'canberra'
+
 
 def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
         -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
@@ -38,7 +43,7 @@ def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
 
     typegroups = segments2types(segments)
 
-    segmentGroups = list()  # type: List[Tuple[str, List[Tuple[str, TypedSegment]]]
+    segmentGroups = list()  # type: List[Tuple[str, List[Tuple[str, TypedSegment]]]]
     # one plot per type with clusters
     for ftype, segs in typegroups.items():  # [label, segment]
         dc = DistanceCalculator(segs)
@@ -338,7 +343,6 @@ if __name__ == '__main__':
     parser.add_argument('--isolengths', help='Cluster fields of same size isolatedly.', action="store_true")
     parser.add_argument('--iterate', help='Iterate over DBSCAN parameters to select valid eps and threshold-shift.',
                         action="store_true")
-
     parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=epsdefault)
     args = parser.parse_args()
 
@@ -352,8 +356,7 @@ if __name__ == '__main__':
         print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
         exit(2)
 
-    # fix the analysis method to VALUE
-    analysisTitle = 'value'
+
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
     # if args.analysis not in analyses:
@@ -363,8 +366,6 @@ if __name__ == '__main__':
     # analysisArgs = args.parameters
     # analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
 
-    # fix the distance method to canberra
-    distance_method = 'canberra'
 
     # dissect and label messages
     print("Load messages...")
@@ -380,8 +381,8 @@ if __name__ == '__main__':
         if args.iterate:
             iterateDBSCANParameters()
         else:
-            filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
-            # filteredSegments = chain.from_iterable(segmentedMessages)
+            # filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
+            filteredSegments = chain.from_iterable(segmentedMessages)
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)
@@ -396,6 +397,9 @@ if __name__ == '__main__':
                                                      # DistanceCalculator.sigmoidThreshold, {'shift': .6})
     else:
         evaluateFieldTypeClusteringWithIsolatedLengths()
+
+
+
 
 
     # TODO More Hypotheses to find "rules" for:
