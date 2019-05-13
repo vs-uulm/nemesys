@@ -1177,6 +1177,11 @@ class Template(AbstractSegment):
         return bytes(self._values) if isinstance(self._values, Iterable) else None
 
 
+    @property
+    def analyzer(self):
+        return self.baseSegments[0].analyzer
+
+
     def checkSegmentsAnalysis(self):
         """
         Validate that all base segments of this tempalte are configured with the same type of analysis.
@@ -1537,7 +1542,7 @@ class AbstractClusterer(ABC):
         :param dc:
         :param segments: subset of segments from dc to cluster, use all segments in dc if None
         """
-        self._dc = dc
+        self._dc = dc  # type: DistanceCalculator
         if segments is None:
             self._distances = dc.distanceMatrix
             self._segments = dc.segments
@@ -1669,6 +1674,7 @@ class AbstractClusterer(ABC):
             neibrNearest.append((minNidx, minNdst))
         return neibrNearest
 
+
     def steepestSlope(self):
         from math import log
 
@@ -1681,7 +1687,16 @@ class AbstractClusterer(ABC):
         # which is larger than the mean of those increases
         # Inspired by Fatma Ozge Ozkok, Mete Celik: "A New Approach to Determine Eps Parameter of DBSCAN Algorithm"
         npn = [self._dc.neigbors(seg) for seg in self._dc.segments]
-        dpnmln = [numpy.mean([idn[k][1] for idn in npn if idn[k][1] > 0][:2 * lnN]) for k in range(0, len(npn) - 1)]
+        # iterate all the k-th neigbors up to 2 * log(#neigbors)
+        dpnmln = list()
+        for k in range(0, len(npn) - 1):
+            kthNeigbors4is = [idn[k][1] for idn in npn if idn[k][1] > 0][:2 * lnN]
+            if len(kthNeigbors4is) > 0:
+                dpnmln.append(numpy.mean(kthNeigbors4is))
+            else:
+                dpnmln.append(numpy.nan)
+
+        # enumerate the means of deltas starting from an offset of log(#neigbors)
         deltamln = numpy.ediff1d(dpnmln)
         deltamlnmean = deltamln.mean() # + deltamln.std()
         for k, a in enumerate(deltamln[lnN:], lnN):
@@ -1791,7 +1806,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             return numpy.zeros_like(self._distances[0], int)
 
         dbscan = sklearn.cluster.DBSCAN(eps=self.eps, min_samples=self.min_samples)
-        print("DBSCAN epsilon:", self.eps, "minpts:", self.min_samples)
+        print("DBSCAN epsilon: {:0.3f}, minpts: {}".format(self.eps, self.min_samples))
         dbscan.fit(self._distances)
         return dbscan.labels_
 
@@ -1806,42 +1821,65 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         """
         Auto configure the clustering parameters epsilon and minPts regarding the input data
 
+        :return: min_samples, epsilon
+        """
+        return self._autoconfigureKneedle()
+
+
+    def _autoconfigureMPC(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+        Maximum Positive Curvature
+
+        :return: min_samples, epsilon
+        """
+        from utils.baseAlgorithms import autoconfigureDBSCAN
+        neighbors = [self.distanceCalculator.neigbors(seg) for seg in self.distanceCalculator.segments]
+        epsilon, min_samples, k = autoconfigureDBSCAN(neighbors)
+        print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
+        return min_samples, epsilon
+
+
+    def _maximumPositiveCurvature(self):
+        """
+        Use implementation of utils.baseAlgorithms to determine the maximum positive curvature
+        :return: k, min_samples
+        """
+        from utils.baseAlgorithms import autoconfigureDBSCAN
+        e, min_samples, k = autoconfigureDBSCAN(
+            [self.distanceCalculator.neigbors(seg) for seg in self.distanceCalculator.segments])
+        return k, min_samples
+
+
+    def _autoconfigureKneedle(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+
+        knee is too far right/value too small to be useful:
+            the clusters are small/zero size and few, perhaps density function too uneven in this use case?
+        So we added a margin. Here selecting
+            low factors resulted in only few small clusters. The density function seems too uneven for DBSCAN/Kneedle.
+
         :return: minpts, epsilon
         """
-
-        minpts, steepslopeK = self.steepestSlope()
-
-        # # another alternative to get min_cluster_size estimation
-        # import math
-        # min_cluster_size = round(math.log(similarities.shape[0]))
+        # min_samples, k = self.steepestSlope()
+        k, min_samples = self._maximumPositiveCurvature()
+        print("dists of", self._distances.shape[0], "neighbors, k", k, "min_samples", min_samples)
 
         # get minpts-nearest-neighbor distance:
-        neighdists = self._knearestdistance(round(steepslopeK + (self._distances.shape[0] - steepslopeK) * .2))
-                # round(minpts + 0.5 * (self.distances.shape[0] - minpts))
-        # # lower factors resulted in only few small clusters, since the density distribution is to uneven
-        # # (for DBSCAN?)
+        neighdists = self._knearestdistance(  # add a margin relative to the remaining interval to the number of neigbors
+            round(k + (self._distances.shape[0] - 1 - k) * .2))
+            # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
 
-        # # get mean of minpts-nearest-neighbors:
-        # neighdists = self._knearestmean(minpts)
-        # # it gives no significantly better results than the direct k-nearest distance,
-        # # but requires more computation.
-
-
-        # # knee calculation by rule of thumb
-        # kneeX = self._kneebyruleofthumb(neighdists)
-        # # result is far (too far) left of the actual knee
-
+        print("KneeLocator")
         # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
         from kneed import KneeLocator
         kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='increasing')
         kneeX = kneel.knee
-        # # knee is too far right/value too small to be useful: the clusters are small/zero size and few,
-        # # perhaps density distribution too uneven in this use case?
-        # kneel.plot_knee_normalized()
 
-        # steepest-drop position:
-        # kneeX = numpy.ediff1d(neighdists).argmax()
-        # # better results than "any of the" knee values
+        # import matplotlib.pyplot as plt
+        # kneel.plot_knee_normalized()
+        # plt.show()
 
         if isinstance(kneeX, int):
             epsilon = neighdists[kneeX]
@@ -1853,54 +1891,80 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             lt = self.lowertriangle()
             epsilon = numpy.nanmean(lt) + numpy.nanstd(lt)
 
+        return min_samples, epsilon
 
-        # DEBUG and TESTING
+
+    def _autoconfigureEvaluation(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+
+        :return: minpts, epsilon
+        """
+        pass
+        # # another alternative to get min_cluster_size estimation
+        # import math
+        # min_cluster_size = round(math.log(similarities.shape[0]))
+
+        # # get mean of minpts-nearest-neighbors:
+        # neighdists = self._knearestmean(minpts)
+        # # it gives no significantly better results than the direct k-nearest distance,
+        # # but requires more computation.
+
+        # # knee calculation by rule of thumb
+        # kneeX = self._kneebyruleofthumb(neighdists)
+        # # result is far (too far) left of the actual knee
+
+        # steepest-drop position:
+        # kneeX = numpy.ediff1d(neighdists).argmax()
+        # # better results than "any of the" knee values
+
+        # # DEBUG and TESTING
+        # #
+        # # plots of k-nearest-neighbor distance histogram and "knee"
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots(1, 2)
         #
-        # plots of k-nearest-neighbor distance histogram and "knee"
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1, 2)
-
-        axl, axr = ax.flat
-
-        # for k in range(0, 100, 10):
-        #     alpha = .4
-        #     if k == minpts:
-        #         alpha = 1
-        #     plt.plot(sorted([dpn[k] for nid, dpn in npn]), alpha=alpha, label=k)
-
-        # farthest
-        # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
-        # axl.plot(dpnmln, alpha=.4)
-        # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self.distances.shape[0]-1)) )])
-        disttril = numpy.tril(self._distances)
-        alldist = [e for e in disttril.flat if e > 0]
-        axr.hist(alldist, 50)
-
-        # plt.plot(smoothdists, alpha=.8)
-        # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
-        axl.axvline(steepslopeK, linestyle='dotted', color='blue', alpha=.4)
-        left = axl.get_xlim()[0]
-        bottom = axl.get_ylim()[1]
-        # axl.text(left, bottom,"mpt={}, eps={:0.3f}".format(minpts, epsilon))
-        # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
-        # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
-        # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
-        axl.legend()
-        # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self.distances.max(), self.distances.mean()))
-        import time
-        # plt.show()
-        plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
-        plt.close('all')
-        plt.clf()
-
-        # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
-        # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
-        # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
-        # import IPython; IPython.embed()
+        # axl, axr = ax.flat
         #
-        # DEBUG and TESTING
+        # # for k in range(0, 100, 10):
+        # #     alpha = .4
+        # #     if k == minpts:
+        # #         alpha = 1
+        # #     plt.plot(sorted([dpn[k] for nid, dpn in npn]), alpha=alpha, label=k)
+        #
+        # # farthest
+        # # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
+        # # axl.plot(dpnmln, alpha=.4)
+        # # plt.plot([self._knearestdistance(k) for k in range( round(0.5 * (self.distances.shape[0]-1)) )])
+        # disttril = numpy.tril(self._distances)
+        # alldist = [e for e in disttril.flat if e > 0]
+        # axr.hist(alldist, 50)
+        #
+        # # plt.plot(smoothdists, alpha=.8)
+        # # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
+        # axl.axvline(steepslopeK, linestyle='dotted', color='blue', alpha=.4)
+        # left = axl.get_xlim()[0]
+        # bottom = axl.get_ylim()[1]
+        # # axl.text(left, bottom,"mpt={}, eps={:0.3f}".format(minpts, epsilon))
+        # # plt.axhline(neighdists[int(round(kneeX))], alpha=.4)
+        # # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
+        # # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
+        # axl.legend()
+        # # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self.distances.max(), self.distances.mean()))
+        # import time
+        # # plt.show()
+        # plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
+        # plt.close('all')
+        # plt.clf()
+        #
+        # # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
+        # # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
+        # # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
+        # # import IPython; IPython.embed()
+        # #
+        # # DEBUG and TESTING
 
-        return minpts, epsilon
+        # return minpts, epsilon
 
 
     def _knearestmean(self, k: int):
@@ -1924,7 +1988,8 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         """
         if not k < self._distances.shape[0] - 1:
             raise IndexError("k={} exeeds the number of neighbors.".format(k))
-        return sorted([self._dc.neigbors(seg)[k][1] for seg in self.segments])
+        neigbordistances = [self._dc.neigbors(seg)[k][1] for seg in self.segments]
+        return sorted(neigbordistances)
 
 
     @staticmethod
@@ -1985,7 +2050,7 @@ class DelegatingDC(DistanceCalculator):
     and other segment types for which hypothesis-driven distance values are more appropriate (like textual fields).
     """
 
-    def __init__(self, segments: Iterable[MessageSegment], manipulateChars = True):
+    def __init__(self, segments: Iterable[MessageSegment], reliefFactor=.33, manipulateChars = True):
         """
         Determine the distance between the given segments using representatives
         to delegate groups of similar segments to.

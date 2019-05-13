@@ -84,14 +84,18 @@ def segments2typedClusters(segments: List[TypedSegment]) \
 
     # one plot per type with clusters
     for ftype, segs in typegroups.items():  # [label, segment]
-        dc = DistanceCalculator(segs)
+        # # raw segments
+        # dc = DistanceCalculator(segs)
+        # deduplicated segments
+        dc = DelegatingDC(segs)
         clusterer = DBSCANsegmentClusterer(dc)
+        # autoconf is working correct, but for pre-sorted field types we need higher threshold
+        clusterer.eps = clusterer.eps * 2.0  # we can add some more margin to the eps
         noise, *clusters = clusterer.clusterSimilarSegments(False)
-        print("{} clusters generated from {} segments".format(len(clusters), len(segs)))
+        print("Type {}: {} clusters generated from {} segments".format(ftype, len(clusters), len(segs)))
 
-        cid = plotGroups.appendCanvas("{}, {} bytes".format(
-            ftype,
-            clusters[0][0].length if clusters else noise[0].length)
+        cid = plotGroups.appendCanvas("{}, {} Seg.s in {} clusters".format(
+            ftype, len(segs), len(clusters))
         )
 
         if len(noise) > 0:
@@ -101,6 +105,16 @@ def segments2typedClusters(segments: List[TypedSegment]) \
             for clusternum, clustersegs in enumerate(clusters):
                 plotGroups.appendPlot(cid, 'Cluster #{}: {} Seg.s'.format(clusternum, len(clustersegs)),
                                            [('', cseg) for cseg in clustersegs])
+
+        # print("Plot distances...")
+        sdp = DistancesPlotter(specimens,
+                               'distances-' + "tft_{}_DBSCAN-eps{:0.3f}-ms{}".format(
+                                   plotGroups.canvasList[cid][0], clusterer.eps, clusterer.min_samples), False)
+        clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
+        clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
+        sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
+        sdp.writeOrShowFigure()
+        del sdp
     return plotGroups.canvasList
 
 
@@ -154,12 +168,38 @@ if __name__ == '__main__':
     else:
         groupStructure = segments2typedClusters(segments)
 
-        for pnum, (ptitle, page) in enumerate(groupStructure):
-            mmp = MultiMessagePlotter(specimens, "{}_{}_{}".format(pagetitle, pnum, ptitle),
+        for ptitle, page in groupStructure:
+            mmp = MultiMessagePlotter(specimens, "{}_fieldtype_{}".format(pagetitle, ptitle),
                                       len(page), isInteractive=False)
             mmp.plotMultiSegmentLines(page, True)
+
+            # TODO calc FieldTypeTemplates (mean, stdev)
+            #   and for each vector component plot mean, mean - stdev, mean + stdev in mmp
+            groupStats = (list(), list(), list())
+            for plotTitle, plotData in page:
+                try:
+                    pdMean = numpy.mean([pd.values for s, pd in plotData], 0)
+                    pdStdev = numpy.std([pd.values for s, pd in plotData], 0)
+                    pdUpper = pdMean + pdStdev
+                    pdLower = pdMean - pdStdev
+                    groupStats[0].append(pdMean)
+                    groupStats[1].append(pdUpper)
+                    groupStats[2].append(pdLower)
+                except Exception as e:
+                    print(e)
+                    print("Handle mixed length Segments and Templates in plotData")
+                    IPython.embed()
+            mmp.plotInEachAx(groupStats[0], {'c': 'black'})
+            mmp.plotInEachAx(groupStats[1], {'c': 'green'})
+            mmp.plotInEachAx(groupStats[2], {'c': 'red'})
+            mmp.textInEachAx([hex(hash(tuple(gs))) for gs in groupStats[0]])
+
             mmp.writeOrShowFigure()
             del mmp
+
+
+
+
 
     if args.interactive:
         IPython.embed()

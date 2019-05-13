@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence
+from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence, TypeVar
 from abc import ABC, abstractmethod
 import numpy
 
@@ -429,6 +429,21 @@ class AbstractSegment(ABC):
     @property
     def values(self):
         return self._values
+
+    T = TypeVar('T')
+    def fillCandidate(self, candidate: T) -> T:
+        """
+        If applicable, this method shall ensure that the candidate segment has a filled analyzer that is compatible to
+        the one of the current segment instance. Otherwise it should asure that the value property is set to meaningful
+        content. This base implementation just checks whether candidate has values set to not None otherwise raises an
+        exception.
+
+        :param candidate:
+        :return:
+        """
+        if self.values is None:
+            raise ValueError("Analysis value missing of", self)
+        return candidate
 
 
     def correlate(self,

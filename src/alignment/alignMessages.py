@@ -285,32 +285,10 @@ class SegmentedMessages(object):
 
         :return: minpts, epsilon
         """
-        from scipy.ndimage.filters import gaussian_filter1d
-        from math import log, ceil
-
-        neighbors = self.neighbors()
-        sigma = log(len(neighbors))
-        knearest = dict()
-        smoothknearest = dict()
-        seconddiff = dict()
-        seconddiffMax = (0, 0, 0)
+        from utils.baseAlgorithms import autoconfigureDBSCAN
         # can we omit k = 0 ?
         # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
-        for k in range(0, ceil(log(len(neighbors)**2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
-            knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
-            smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
-            # max of second difference (maximum positive curvature) as knee (this not actually the knee!)
-            seconddiff[k] = numpy.diff(smoothknearest[k], 2)
-            seconddiffargmax = seconddiff[k].argmax()
-            diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
-            if 2*sigma < seconddiffargmax < len(neighbors) - 2*sigma and diffrelmax > seconddiffMax[2]:
-                seconddiffMax = (k, seconddiffargmax, diffrelmax)
-
-        k = seconddiffMax[0]
-        x = seconddiffMax[1] + 1
-
-        epsilon = smoothknearest[k][x]
-        min_samples = round(sigma)
+        epsilon, min_samples, k = autoconfigureDBSCAN(self.neighbors())
         print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
         return epsilon, min_samples
 
