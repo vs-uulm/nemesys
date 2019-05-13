@@ -30,8 +30,11 @@ from visualization.singlePlotter import SingleMessagePlotter
 
 debug = False
 
+# fix the analysis method to VALUE
+analysisTitle = 'value'
 
-
+# fix the distance method to canberra
+distance_method = 'canberra'
 
 
 
@@ -43,9 +46,6 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interactive', help='Show interactive plot instead of writing output to file and '
                                                     'open ipython prompt after finishing the analysis.',
                         action="store_true")
-    parser.add_argument('--isolengths', help='Cluster fields of same size isolatedly.', action="store_true")
-    parser.add_argument('--iterate', help='Iterate over DBSCAN parameters to select valid eps and threshold-shift.',
-                        action="store_true")
 
     parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=epsdefault)
     args = parser.parse_args()
@@ -53,20 +53,15 @@ if __name__ == '__main__':
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
-    if args.isolengths and args.iterate:
-        print('Iterating clustering parameters over isolated-lengths fields is not implemented.')
-        exit(2)
+    # if args.isolengths and args.iterate:
+    #     print('Iterating clustering parameters over isolated-lengths fields is not implemented.')
+    #     exit(2)
     if args.epsilon != parser.get_default('epsilon') and (args.isolengths or args.iterate):
         print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
         exit(2)
 
-    # fix the analysis method to VALUE
-    analysisTitle = 'value'
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
-
-    # fix the distance method to canberra
-    distance_method = 'canberra'
 
     pcapbasename = basename(args.pcapfilename)
     print("Trace:", pcapbasename)
@@ -86,13 +81,8 @@ if __name__ == '__main__':
     segments = list(chain.from_iterable(segmentedMessages))
 
     print("Calculate distances...")
-    dc = DelegatingDC(segments)
-
-
-    # for i in range(distances.shape[0]):
-    #     for j in range(distances.shape[1]):
-    #         if distances[i, j] != distances[j, i]:
-    #             print("NOK", i, j)
+    # dc = DelegatingDC(segments)
+    dc = DistanceCalculator(segments)
 
     print("Clustering...")
     # # use HDBSCAN

@@ -13,7 +13,7 @@ from itertools import chain
 
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
     labelForSegment
-from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer
+from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer, DelegatingDC
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -31,40 +31,6 @@ analysisTitle = 'value'
 distance_method = 'canberra'
 
 
-def segments2typedClusters(segments: List[TypedSegment], analysisTitle) \
-        -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
-    """
-    Cluster segments and arrange them into groups of types.
-
-    :param segments:
-    :param analysisTitle:
-    :return:
-    """
-
-    typegroups = segments2types(segments)
-
-    segmentGroups = list()  # type: List[Tuple[str, List[Tuple[str, TypedSegment]]]]
-    # one plot per type with clusters
-    for ftype, segs in typegroups.items():  # [label, segment]
-        dc = DistanceCalculator(segs)
-        clusterer = DBSCANsegmentClusterer(dc)
-        noise, *clusters = clusterer.clusterSimilarSegments(False)
-        print("{} clusters generated from {} segments".format(len(clusters), len(segs)))
-
-        segmentClusters = ("{}: {}, {} bytes".format(
-            analysisTitle, ftype,
-            clusters[0][0].length if clusters else noise[0].length), list())
-
-        if len(noise) > 0:
-            segmentClusters[1].append(('Noise: {} Seg.s'.format(len(noise)),
-                                       [('', cseg) for cseg in noise]))
-
-        if len(clusters) > 0:
-            for clusternum, clustersegs in enumerate(clusters):
-                segmentClusters[1].append(('Cluster #{}: {} Seg.s'.format(clusternum, len(clustersegs)),
-                                           [('', cseg) for cseg in clustersegs]))
-            segmentGroups.append(segmentClusters)
-    return segmentGroups
 
 
 def evaluateFieldTypeClusteringWithIsolatedLengths():
@@ -99,7 +65,6 @@ def evaluateFieldTypeClusteringWithIsolatedLengths():
             # iterate clusterer parameters
             for mcs in range(3, 15):  # [ 0 ]: # range(3, 15):
                 print("Clustering...")
-                # typeGroups = segments2typedClusters(segments,analysisTitle)
                 clusterer = HDBSCANsegmentClusterer(dc, min_cluster_size=mcs)
                 segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
                 # re-extract cluster labels for segments
@@ -127,6 +92,7 @@ def evaluateFieldTypeClusteringWithIsolatedLengths():
 def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresholdArgs):
     print("Calculate distances...")
     dc = DistanceCalculator(filteredSegments, distance_method, thresholdFunction, thresholdArgs)
+    # dc = DelegatingDC(filteredSegments)
 
     print("Clustering...")
     # # use HDBSCAN
@@ -356,7 +322,6 @@ if __name__ == '__main__':
         print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
         exit(2)
 
-
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
     # if args.analysis not in analyses:
@@ -365,7 +330,6 @@ if __name__ == '__main__':
     # analyzerType = analyses[args.analysis]
     # analysisArgs = args.parameters
     # analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
-
 
     # dissect and label messages
     print("Load messages...")
@@ -382,7 +346,7 @@ if __name__ == '__main__':
             iterateDBSCANParameters()
         else:
             # filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
-            filteredSegments = chain.from_iterable(segmentedMessages)
+            filteredSegments = list(chain.from_iterable(segmentedMessages))
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
             # epsion should be 1.2 (default)

@@ -44,8 +44,8 @@ class ClusterAligner(object):
 
         # fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
         #               for fcL in statDynValues] for fcK in statDynValues])
-
         # use medoid distance in fcSimMatrix instead of fixed value (0.5)
+
         fcSimMatrix = numpy.array([[
             # 1.0 if fcL.bytes == fcK.bytes else
             1.0 - 0.4 * fcL.distToNearest(fcK.baseSegments, self.dc)  # DYN-DYN similarity
