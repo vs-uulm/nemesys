@@ -70,7 +70,7 @@ def types2segmentGroups(segmentGroups: Dict[str, List[TypedSegment]]) \
     return plotGroups.plotsList(0)
 
 
-def segments2typedClusters(segments: List[TypedSegment]) \
+def segments2typedClusters(segments: List[TypedSegment], withPlots=True) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments and arrange them into groups of types.
@@ -107,16 +107,16 @@ def segments2typedClusters(segments: List[TypedSegment]) \
                 plotGroups.appendPlot(cid, 'Cluster #{}: {} Seg.s'.format(clusternum, len(clustersegs)),
                                            [('', cseg) for cseg in clustersegs])
 
-        # print("Plot distances...")
-        sdp = DistancesPlotter(specimens,
-                               'distances-' + "tft_{}_DBSCAN-eps{:0.3f}-ms{}".format(
-                                   plotGroups.canvasList[cid][0], clusterer.eps, clusterer.min_samples), False)
-        clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
-        clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
-        sdp.writeOrShowFigure()
-        del sdp
-
+        if withPlots:
+            # print("Plot distances...")
+            sdp = DistancesPlotter(specimens,
+                                   'distances-' + "tft_{}_DBSCAN-eps{:0.3f}-ms{}".format(
+                                       plotGroups.canvasList[cid][0], clusterer.eps, clusterer.min_samples), False)
+            clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
+            clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
+            sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
+            sdp.writeOrShowFigure()
+            del sdp
 
     return plotGroups.canvasList
 
@@ -154,6 +154,8 @@ if __name__ == '__main__':
 
 
 
+    withPlots = False
+
 
 
     print("Prepare output...")
@@ -169,39 +171,83 @@ if __name__ == '__main__':
         mmp.writeOrShowFigure()
         del mmp
     else:
-        groupStructure = segments2typedClusters(segments)
+        groupStructure = segments2typedClusters(segments, withPlots)
 
         # FieldTypeTemplates with mean, and stdev
-        fieldtypeTemplates = list()
+        fieldtypeCandidates = list()
         for ptitle, page in groupStructure:
+            # names of iterated local vars page/plot are according to the groupStructure
             currPage = list()
             for plotTitle, plotData in page:
                 currPlot = FieldTypeTemplate([pd for s, pd in plotData])
                 currPage.append(currPlot)
-            fieldtypeTemplates.append(currPage)
+            fieldtypeCandidates.append(currPage)
+        # lookup of typeIDs
+        ftMap = {plot.typeID: plot for page in fieldtypeCandidates for plot in page}  # type: Dict[str, FieldTypeTemplate]
 
-        for (ptitle, page), ftTemplates in zip(groupStructure, fieldtypeTemplates):
-            mmp = MultiMessagePlotter(specimens, "{}_fieldtype_{}".format(pagetitle, ptitle),
-                                      len(page), isInteractive=False)
-            mmp.plotMultiSegmentLines(page, True)
+        if withPlots:
+            for (ptitle, page), ftTemplates in zip(groupStructure, fieldtypeCandidates):
+                mmp = MultiMessagePlotter(specimens, "{}_fieldtype_{}".format(pagetitle, ptitle),
+                                          len(page), isInteractive=False)
+                mmp.plotMultiSegmentLines(page, True)
 
-            groupStats = (list(), list(), list())
-            for ftTempl in ftTemplates:
-                # for each vector component plot mean, mean - stdev, mean + stdev in mmp
-                groupStats[0].append(ftTempl.mean)
-                groupStats[1].append(ftTempl.upper)
-                groupStats[2].append(ftTempl.lower)
-            mmp.plotInEachAx(groupStats[0], {'c': 'black'})
-            mmp.plotInEachAx(groupStats[1], {'c': 'green'})
-            mmp.plotInEachAx(groupStats[2], {'c': 'red'})
-            mmp.textInEachAx([ftTempl.typeID for ftTempl in ftTemplates])
+                groupStats = (list(), list(), list())
+                for ftTempl in ftTemplates:
+                    # for each vector component plot mean, mean - stdev, mean + stdev in mmp
+                    groupStats[0].append(ftTempl.mean)
+                    groupStats[1].append(ftTempl.upper)
+                    groupStats[2].append(ftTempl.lower)
+                mmp.plotInEachAx(groupStats[0], {'c': 'black'})
+                mmp.plotInEachAx(groupStats[1], {'c': 'green'})
+                mmp.plotInEachAx(groupStats[2], {'c': 'red'})
+                mmp.textInEachAx([ftTempl.typeID for ftTempl in ftTemplates])
 
-            mmp.writeOrShowFigure()
-            del mmp
+                mmp.writeOrShowFigure()
+                del mmp
 
+        if basename(specimens.pcapFileName) != "binaryprotocols_merged_500.pcap":
+            print("Run the script with input file binaryprotocols_merged_500.pcap to "
+                  "access selected field type templates.")
+        else:
+            try:
+                # select promising field type templates from binaryprotocols_merged_500.pcap
+                fieldtypeTemplates = dict()
+                # for int: directly use clusters 2 and 3
+                fieldtypeTemplates["int"] = [ ftMap[tid] for tid in [ "23f5adaa", "0df67e40" ] ]
+                # for ipv4: combine clusters 0+1+2
+                fieldtypeTemplates["ipv4"] = [ FieldTypeTemplate(chain.from_iterable(
+                    [ ftMap[tid].baseSegments for tid in [ "9d194096", "c9f10baa", "8b6908f0" ] ])) ]
+                # for macaddr: use the complete group
+                fieldtypeTemplates["macaddr"] = [ FieldTypeTemplate(
+                    [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("macaddr")
+                      for cluster in page for segs in cluster[1] ]
+                ) ]
+                # for id: test whether this works
+                fieldtypeTemplates["id"] = [ ftMap["998eb32b"] ]
+                # for float: use the complete group
+                fieldtypeTemplates["float"] = [ FieldTypeTemplate(
+                    [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("float")
+                      for cluster in page for segs in cluster[1] ]
+                ) ]
+                # for timestamp: use the complete group
+                fieldtypeTemplates["timestamp"] = [ FieldTypeTemplate(
+                    [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("timestamp")
+                      for cluster in page for segs in cluster[1] ]
+                ) ]
 
+            except KeyError as e:
+                print("There seems to have been a change since the (manual) selection of the templates. "
+                      "Templates have been selected from clustering of tshark segments from "
+                      "binaryprotocols_merged_500.pcap at commit 4b69075. "
+                      "You most probably need to select new cluster IDs that are suitable as templates for types from "
+                      "the plots and replace the invalid IDs in this script with your new ones.")
 
+    # TODO find a way to persist the fieldtypeTemplates
 
 
     if args.interactive:
         IPython.embed()
+
+
+
+

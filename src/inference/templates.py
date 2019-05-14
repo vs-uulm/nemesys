@@ -1151,7 +1151,7 @@ class Template(AbstractSegment):
     """
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
-                 baseSegments: List[MessageSegment],
+                 baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         """
         :param values: The values of the template (e. g. medoid or mean)
@@ -1165,7 +1165,7 @@ class Template(AbstractSegment):
         else:
             self._values = values
             self.medoid = None
-        self.baseSegments = baseSegments  # list/cluster of MessageSegments this template was generated from.
+        self.baseSegments = list(baseSegments)  # list/cluster of MessageSegments this template was generated from.
         self.checkSegmentsAnalysis()
         self._method = method
         self.length = len(self._values)
@@ -1367,7 +1367,7 @@ class Template(AbstractSegment):
 class TypedTemplate(Template):
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
-                 baseSegments: List[MessageSegment],
+                 baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         from inference.segments import TypedSegment
 
@@ -1401,12 +1401,12 @@ class TypedTemplate(Template):
 class FieldTypeTemplate(TypedTemplate):
 
     def __init__(self, baseSegments: Iterable[AbstractSegment], method='canberra'):
-        self.baseSegments = baseSegments
+        self.baseSegments = list(baseSegments)
         self._baseOffsets = dict()
-        segLens = {seg.length for seg in baseSegments}
+        segLens = {seg.length for seg in self.baseSegments}
 
         if len(segLens) == 1:
-            segV = numpy.array([seg.values for seg in baseSegments])
+            segV = numpy.array([seg.values for seg in self.baseSegments])
         else:
             from collections import Counter
             # find the optimal shift/offset of each shorter segment to match the longest ones
@@ -1414,7 +1414,7 @@ class FieldTypeTemplate(TypedTemplate):
             self._maxLen = max(segLens)
             # Better than the longest would be the most common length, but that would increase complexity a lot and
             #   we assume that for most use cases the longest segments will be the most frequent length.
-            maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(baseSegments, 1)
+            maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(self.baseSegments, 1)
                           if seg.length == self._maxLen]
             segE = list()
             for seg in baseSegments:
@@ -1431,7 +1431,7 @@ class FieldTypeTemplate(TypedTemplate):
         self._mean = numpy.nanmean(segV, 0)
         self._stdev = numpy.nanstd(segV, 0)
 
-        super().__init__(self._mean, baseSegments, method)
+        super().__init__(self._mean, self.baseSegments, method)
 
     def paddedValues(self, segment: AbstractSegment):
         """
