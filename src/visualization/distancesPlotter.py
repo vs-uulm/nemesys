@@ -13,7 +13,7 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 from visualization.plotter import MessagePlotter
 from utils.loader import SpecimenLoader
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import Template, DistanceCalculator
+from inference.templates import Template, TypedTemplate, DistanceCalculator
 
 
 
@@ -40,7 +40,7 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, RawMessage, Any]],
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
                               distances: numpy.ndarray,
                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
@@ -83,7 +83,7 @@ class DistancesPlotter(MessagePlotter):
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
         >>> dp.writeOrShowFigure()
 
-        :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
+        :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
             segments
         :param distances: The precomputed similarity matrix:
@@ -157,7 +157,7 @@ class DistancesPlotter(MessagePlotter):
             axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
 
         # omit noise in cluster labels if types are plotted anyway.
-        if isinstance(segments[0], TypedSegment):
+        if isinstance(segments[0], (TypedSegment, TypedTemplate)):
             for l in ulab:
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)
@@ -196,8 +196,8 @@ class DistancesPlotter(MessagePlotter):
 
 
         # include field type labels for TypedSegments input
-        if isinstance(segments[0], (TypedSegment, RawMessage)):
-            if isinstance(segments[0], TypedSegment):
+        if isinstance(segments[0], (TypedSegment, TypedTemplate, RawMessage)):
+            if isinstance(segments[0], (TypedSegment, TypedTemplate)):
                 ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
             elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
                 ftypes = numpy.array([msg.messageType for msg in segments])  # PP
@@ -215,7 +215,7 @@ class DistancesPlotter(MessagePlotter):
                           s=typsize,
                           lw=0, label=str(ft))
 
-                if isinstance(segments[0], TypedSegment):
+                if isinstance(segments[0], (TypedSegment, TypedTemplate)):
                     # TODO is it desired to have colors of clusters or types here?
                     for seg in compress(segments, type_member_mask):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
@@ -258,12 +258,14 @@ class DistancesPlotter(MessagePlotter):
             # Count markers at identical positions and plot text with information about the markers at this position
             from collections import Counter
             import math
-            if isinstance(segments[0], TypedSegment):
+            if isinstance(segments[0], (TypedSegment, TypedTemplate)):
+                # TODO for TypedTemplates we rather need to count the number of base segments, so for now this is not accurate
                 coordCounter = Counter(
                     [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
                         segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
                 )
             else:
+                # TODO for Templates we rather need to count the number of base segments, so for now this is not accurate
                 coordCounter = Counter(
                     [(posX, posY, lab) for lab, posX, posY in zip(
                         labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
