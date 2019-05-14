@@ -12,8 +12,7 @@ from itertools import chain
 
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
     labelForSegment
-from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer, \
-    DelegatingDC
+from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -76,6 +75,8 @@ def segments2typedClusters(segments: List[TypedSegment]) \
     """
     Cluster segments and arrange them into groups of types.
 
+    On the way, plot distances of segments and clusters in a 2-dimensional projection.
+
     :param segments:
     :return:
     """
@@ -115,6 +116,8 @@ def segments2typedClusters(segments: List[TypedSegment]) \
         sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
         sdp.writeOrShowFigure()
         del sdp
+
+
     return plotGroups.canvasList
 
 
@@ -168,7 +171,15 @@ if __name__ == '__main__':
     else:
         groupStructure = segments2typedClusters(segments)
 
+        fieldtypeTemplates = list()
         for ptitle, page in groupStructure:
+            currPage = list()
+            for plotTitle, plotData in page:
+                currPlot = FieldTypeTemplate([pd for s, pd in plotData])
+                currPage.append(currPlot)
+            fieldtypeTemplates.append(currPage)
+
+        for (ptitle, page), ftTemplates in zip(groupStructure, fieldtypeTemplates):
             mmp = MultiMessagePlotter(specimens, "{}_fieldtype_{}".format(pagetitle, ptitle),
                                       len(page), isInteractive=False)
             mmp.plotMultiSegmentLines(page, True)
@@ -176,15 +187,11 @@ if __name__ == '__main__':
             # TODO calc FieldTypeTemplates (mean, stdev)
             #   and for each vector component plot mean, mean - stdev, mean + stdev in mmp
             groupStats = (list(), list(), list())
-            for plotTitle, plotData in page:
+            for ftTempl in ftTemplates:
                 try:
-                    pdMean = numpy.mean([pd.values for s, pd in plotData], 0)
-                    pdStdev = numpy.std([pd.values for s, pd in plotData], 0)
-                    pdUpper = pdMean + pdStdev
-                    pdLower = pdMean - pdStdev
-                    groupStats[0].append(pdMean)
-                    groupStats[1].append(pdUpper)
-                    groupStats[2].append(pdLower)
+                    groupStats[0].append(ftTempl.mean)
+                    groupStats[1].append(ftTempl.upper)
+                    groupStats[2].append(ftTempl.lower)
                 except Exception as e:
                     print(e)
                     print("Handle mixed length Segments and Templates in plotData")
@@ -192,7 +199,8 @@ if __name__ == '__main__':
             mmp.plotInEachAx(groupStats[0], {'c': 'black'})
             mmp.plotInEachAx(groupStats[1], {'c': 'green'})
             mmp.plotInEachAx(groupStats[2], {'c': 'red'})
-            mmp.textInEachAx([hex(hash(tuple(gs))) for gs in groupStats[0]])
+            # as an identifier use the hash of the mean values
+            mmp.textInEachAx([ftTempl.typeID for ftTempl in ftTemplates])
 
             mmp.writeOrShowFigure()
             del mmp

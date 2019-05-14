@@ -1397,10 +1397,69 @@ class TypedTemplate(Template):
         self._fieldtype = value
 
 
+class FieldTypeTemplate(TypedTemplate):
 
+    def __init__(self, baseSegments: Iterable[AbstractSegment], method='canberra'):
+        self.baseSegments = baseSegments
+        self._baseOffsets = dict()
+        segLens = {seg.length for seg in baseSegments}
 
+        if len(segLens) == 1:
+            segV = numpy.array([seg.values for seg in baseSegments])
+        else:
+            from collections import Counter
+            # find the optimal shift/offset of each shorter segment to match the longest ones
+            #   with shortest distance according to the method
+            self._maxLen = max(segLens)
+            # Better than the longest would be the most common length, but that would increase complexity a lot and
+            #   we assume that for most use cases the longest segments will be the most frequent length.
+            maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(baseSegments, 1)
+                          if seg.length == self._maxLen]
+            segE = list()
+            for seg in baseSegments:
+                if seg.length < self._maxLen:
+                    shortSeg = (0, seg.length, tuple(seg.values))
+                    offsets = [DistanceCalculator.embedSegment(shortSeg, longSeg, method)[1] for longSeg in maxLenSegs]
+                    offCount = Counter(offsets)
+                    self._baseOffsets[seg] = offCount.most_common(1)[0][0]
+                    segE.append(self.paddedValues(seg))
+                else:
+                    segE.append(seg.values)
+            segV = numpy.array(segE)
 
+        self._mean = numpy.nanmean(segV, 0)
+        self._stdev = numpy.nanstd(segV, 0)
 
+        super().__init__(self._mean, baseSegments, method)
+
+    def paddedValues(self, segment: AbstractSegment):
+        """
+        :param segment: The base segment to get the padded values for
+        :return: The values of the given base segment padded with nans to the length of the
+            longest segment represented by this template.
+        """
+        shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
+        vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
+        from tabulate import tabulate
+        print(tabulate((segment.values, vals)))
+        return vals
+
+    @property
+    def mean(self):
+        return self._mean
+
+    @property
+    def upper(self):
+        return self._mean + self._stdev
+
+    @property
+    def lower(self):
+        return self._mean - self._stdev
+
+    @property
+    def typeID(self, short=True):
+        tid = "{:02x}".format(hash(tuple(self.mean)))
+        return tid[-8:] if short else tid
 
 
 class TemplateGenerator(object):

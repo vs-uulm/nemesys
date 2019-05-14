@@ -453,6 +453,8 @@ class AbstractSegment(ABC):
         """
         The correlation of this object to each entry in haystack is calculated.
 
+        Depreciated: For all relevant use cases this is replaced by inference.templates.DistanceCalculator#embedSegment
+
         :param haystack: a list of MessageSegments
         :param method: The method to correlate with (see class constants prefixed with CORR_ for available options)
         :return:
