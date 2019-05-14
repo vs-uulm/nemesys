@@ -171,6 +171,7 @@ if __name__ == '__main__':
     else:
         groupStructure = segments2typedClusters(segments)
 
+        # FieldTypeTemplates with mean, and stdev
         fieldtypeTemplates = list()
         for ptitle, page in groupStructure:
             currPage = list()
@@ -184,22 +185,15 @@ if __name__ == '__main__':
                                       len(page), isInteractive=False)
             mmp.plotMultiSegmentLines(page, True)
 
-            # TODO calc FieldTypeTemplates (mean, stdev)
-            #   and for each vector component plot mean, mean - stdev, mean + stdev in mmp
             groupStats = (list(), list(), list())
             for ftTempl in ftTemplates:
-                try:
-                    groupStats[0].append(ftTempl.mean)
-                    groupStats[1].append(ftTempl.upper)
-                    groupStats[2].append(ftTempl.lower)
-                except Exception as e:
-                    print(e)
-                    print("Handle mixed length Segments and Templates in plotData")
-                    IPython.embed()
+                # for each vector component plot mean, mean - stdev, mean + stdev in mmp
+                groupStats[0].append(ftTempl.mean)
+                groupStats[1].append(ftTempl.upper)
+                groupStats[2].append(ftTempl.lower)
             mmp.plotInEachAx(groupStats[0], {'c': 'black'})
             mmp.plotInEachAx(groupStats[1], {'c': 'green'})
             mmp.plotInEachAx(groupStats[2], {'c': 'red'})
-            # as an identifier use the hash of the mean values
             mmp.textInEachAx([ftTempl.typeID for ftTempl in ftTemplates])
 
             mmp.writeOrShowFigure()

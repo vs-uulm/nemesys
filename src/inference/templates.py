@@ -176,7 +176,6 @@ class DistanceCalculator(object):
 
         # prepare lookup for matrix indices
         self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
-        # TODO replace _(quick)segments.index() lookups by queries to this lookup-dict
 
         if manipulateChars:
             # Manipulate calculated distances for all char/char pairs.
@@ -1345,6 +1344,8 @@ class Template(AbstractSegment):
 
     def toColor(self):
         """
+        The colors are not collision resistant.
+
         :return: A fixed-length color-coded visual representation of this template,
             NOT representing the template value itself!
         """
@@ -1352,7 +1353,7 @@ class Template(AbstractSegment):
         # return '{:02x}'.format(oid % 0xffff)
         import visualization.bcolors as bcolors
         # Template
-        return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
+        return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)
 
     def __repr__(self):
         if self.values is not None and isinstance(self.values, (list, tuple)) and len(self.values) > 3:
@@ -1458,6 +1459,10 @@ class FieldTypeTemplate(TypedTemplate):
 
     @property
     def typeID(self, short=True):
+        """
+        :param short: Use only the last half (4 bytes) of the hash
+        :return: As an identifier use the hash of the mean values
+        """
         tid = "{:02x}".format(hash(tuple(self.mean)))
         return tid[-8:] if short else tid
 
@@ -1824,7 +1829,6 @@ class HDBSCANsegmentClusterer(AbstractClusterer):
                          )
         print("HDBSCAN min cluster size:", self.min_cluster_size, "min samples:", self.min_samples)
         dbscan.fit(self._distances)
-        # TODO import IPython; IPython.embed()
         return dbscan.labels_
 
 

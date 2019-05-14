@@ -238,7 +238,7 @@ if __name__ == '__main__':
     # labels = ['Noise'] * len(dc.segments)  # TODO check: list of segment indices (from raw segment list) per message
     # #                                           ^ here the question is, whether we like to print resolved segements or representatives
     # for l, t in zip(typelabels, templates):
-    #     labels[dc.segments.index(t.medoid)] = l
+    #     labels[dc.segments2index([t.medoid])[0]] = l
     #
     # sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
     # sdp.plotSegmentDistances(dc, numpy.array(labels))
