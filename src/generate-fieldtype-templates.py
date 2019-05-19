@@ -12,7 +12,8 @@ from itertools import chain
 
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
     labelForSegment
-from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
+from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate, \
+    FieldTypeMemento
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -37,7 +38,6 @@ def types2segmentGroups(segmentGroups: Dict[str, List[TypedSegment]]) \
         -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
     """
 
-    :param analysisTitle: label for the outermost structure label
     :param segmentGroups: A dict of
         fieldtype (str) : segments of this type (list)
 
@@ -77,8 +77,10 @@ def segments2typedClusters(segments: List[TypedSegment], withPlots=True) \
 
     On the way, plot distances of segments and clusters in a 2-dimensional projection.
 
-    :param segments:
-    :return:
+    :param withPlots: Generate distance plots for the clusters while creating them.
+    :param segments: The segments to determine true types for and cluster these.
+    :return: A group structure of types, clusters, and segments for plotting with
+        MultiMessagePlotter#plotMultiSegmentLines
     """
     typegroups = segments2types(segments)
     plotGroups = PlotGroups()
@@ -235,6 +237,16 @@ if __name__ == '__main__':
                       for cluster in page for segs in cluster[1] ]
                 ) ]
 
+                # Python code representation to persist the fieldtypeTemplates
+                fieldtypeMementos = list()
+                for ftype, templateList in fieldtypeTemplates.items():
+                    print("#", ftype, "\n[")
+                    for ftt in templateList:
+                        ftm = FieldTypeMemento.fromTemplate(ftt)
+                        print(ftm.codePersist, ",")
+                        fieldtypeMementos.append(ftm)
+                    print("]")
+
             except KeyError as e:
                 print("There seems to have been a change since the (manual) selection of the templates. "
                       "Templates have been selected from clustering of tshark segments from "
@@ -242,7 +254,7 @@ if __name__ == '__main__':
                       "You most probably need to select new cluster IDs that are suitable as templates for types from "
                       "the plots and replace the invalid IDs in this script with your new ones.")
 
-    # TODO find a way to persist the fieldtypeTemplates
+
 
 
     if args.interactive:

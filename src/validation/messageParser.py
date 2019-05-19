@@ -4,7 +4,7 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Union, Dict, Set, Iterable
+from typing import List, Tuple, Union, Dict, Set, Iterable, Any, Callable
 
 import IPython
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
@@ -510,6 +510,7 @@ class MessageTypeIdentifiers(object):
                 else:  # simple identifier
                     selectedid = message.getValuesByName(ifield)
                     for ifv in selectedid:
+                        # noinspection PyTypeChecker
                         resolvedTypeName.append(MessageTypeIdentifiers.__resolveTypeName(ifield, ifv))
             if len(resolvedTypeName) > 0:
                 return ":".join(resolvedTypeName)

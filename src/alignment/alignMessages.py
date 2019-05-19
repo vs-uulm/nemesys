@@ -129,11 +129,13 @@ class SegmentedMessages(object):
                 maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * self._score_match
                     # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
                     similarityMatrix[i, i], similarityMatrix[j, j]
-                )
+                )  # == nu in paper
                 minDim = min(len(self._segmentedMessages[i]), len(self._segmentedMessages[j]))
-                base[i, j] = minScore * minDim
+                base[i, j] = minScore * minDim  # == mu in paper
 
         distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
+        # # TODO verify mu and nu
+        # distanceMatrix = 100 - 100 * ((similarityMatrix + base) / (maxScore - base))
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 

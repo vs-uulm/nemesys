@@ -285,8 +285,6 @@ def bcDeltaPlot():
 
     :return: MultiMessagePlotter
     """
-    from tabulate import tabulate
-
     # obtain data
     axzeros = list()
     fieldEnds = list()
@@ -520,26 +518,26 @@ def bcBetweenNgramsPlot(n=3):
     return mmp
 
 
-def bcNgramsStdPlot(n=3) -> MultiMessagePlotter:
-    """
-    Standard deviation of bit congruence for each ngram of the message.
-
-    Some field borders are at local minima (or the end of a minimum area), but not very conclusive.
-    TODO Needs more work.
-
-    :return: Plot of the first messages.
-    """
-    # obtain data
-    analysisResults, noiseReduced, fieldEnds = obtainData(
-        comparator, BitCongruenceNgramStd,
-        n, noiseRadius=radius)
-
-    # visualize data
-    cols = 8 if specimens.maximumMessageLength <= 80 else 4  # set to 4 figures per row for traces with longer messages
-    smp = MultiMessagePlotter(specimens, 'bitcongruences{}gramVars'.format(n), 4, cols, args.interactive)
-    smp.plotSubfigs(analysisResults, compareValue=noiseReduced, fieldEnds=fieldEnds,
-                    subfigName=["{:.3f}".format(np.std(ar)) for ar in analysisResults])
-    return smp
+# def bcNgramsStdPlot(n=3) -> MultiMessagePlotter:
+#     """
+#     Standard deviation of bit congruence for each ngram of the message.
+#
+#     Some field borders are at local minima (or the end of a minimum area), but not very conclusive.
+#     TODO Needs more work.
+#
+#     :return: Plot of the first messages.
+#     """
+#     # obtain data
+#     analysisResults, noiseReduced, fieldEnds = obtainData(
+#         comparator, BitCongruenceNgramStd,
+#         n, noiseRadius=radius)
+#
+#     # visualize data
+#     cols = 8 if specimens.maximumMessageLength <= 80 else 4  # set to 4 figures per row for traces with longer messages
+#     smp = MultiMessagePlotter(specimens, 'bitcongruences{}gramVars'.format(n), 4, cols, args.interactive)
+#     smp.plotSubfigs(analysisResults, compareValue=noiseReduced, fieldEnds=fieldEnds,
+#                     subfigName=["{:.3f}".format(np.std(ar)) for ar in analysisResults])
+#     return smp
 
 
 def bcNgramMeansPlot(n=3) -> MultiMessagePlotter:
@@ -643,6 +641,7 @@ def valueVarianceAmplitude():
     return mmp
 
 
+
 def leftHorizonBcPlot():
     """
     very nice first results: reports/
@@ -675,7 +674,9 @@ def leftHorizonBcPlot():
         horizon, 'NR{}'.format(radius) if radius else ''), 5, cols, args.interactive)
     if radius:
         mmp.plotSubfigs(noiseReduced, compareValue=analysisResults, fieldEnds=fieldEnds)
+        # noinspection PyUnboundLocalVariable
         mmp.plotInEachAx(north, linestyle=MessagePlotter.STYLE_COMPARELINE)
+        # noinspection PyUnboundLocalVariable
         mmp.plotInEachAx(south, linestyle=MessagePlotter.STYLE_COMPARELINE)
         mmp.plotCompareFill(north, south)
     else:
@@ -884,7 +885,7 @@ def slidingMeansBcDeltaGauss():
     for l4msg, rmsg in specimens.messagePool.items():
         try:
             analyzer = MessageAnalyzer.findExistingAnalysis(SlidingNbcDeltaGauss, MessageAnalyzer.U_BYTE, l4msg,
-                                                            (horizon, radius))
+                                                            (horizon, radius))  # type: SlidingNbcDeltaGauss
             bvanalyzer = MessageAnalyzer.findExistingAnalysis(BitCongruenceDelta, MessageAnalyzer.U_BYTE, l4msg)
         except NothingToCompareError as e:  # non-critical error that occurs if a message is too short to do any analyses
             print('Non-critical:', e)
@@ -978,7 +979,7 @@ if __name__ == '__main__':
         'bcColormesh':      bcColormesh,
         'bcp3g':            bcBetweenNgramsPlot,
         'bcp3gColormesh':   bcBetweenNgramsColormesh,
-        'bc3gstd':          bcNgramsStdPlot,
+        # 'bc3gstd':          bcNgramsStdPlot,
         'bc3gmean':         bcNgramMeansPlot,
 
         'bcDelta':          bcDeltaPlot,

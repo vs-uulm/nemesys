@@ -17,8 +17,9 @@ import matplotlib.pyplot as plt
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
+from inference.analyzers import *
 from utils.loader import SpecimenLoader
-
+from inference.templates import DBSCANsegmentClusterer, DelegatingDC, FieldTypeMemento
 
 class BIDEracker(object):
     """
@@ -240,10 +241,36 @@ if __name__ == '__main__':
         # subsfreq.printExtensions(2)
         print(tabulate(sorted([(cnt, bv.hex()) for bv, (cnt, occ) in subsfreq.mostFrequent(2).items()])))
 
+    # TODO search for persisted fieldtypeTemplates in specimens
+    fieldtypeTemplates = [
+        FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), 'int',
+                         Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]),
+                         numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), 'int', Value, (),
+                         MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array(
+            [204.86521739130436, 63.56086956521739, 24.269565217391303, 122.07826086956521, 133.07792207792207,
+             133.67965367965368, 146.88311688311688, 119.74891774891775]), numpy.array(
+            [28.9997617485814, 19.980278083333324, 53.41011494157094, 67.32576841468352, 72.22609394647127,
+             73.30645791589188, 73.21296233242103, 76.760645502516]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]),
+                         numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), 'float', Value,
+                         (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([172.0, 18.928571428571427, 2.3095238095238093, 26.071428571428573]),
+                         numpy.array([0.0, 1.4374722712498649, 0.6721711530234811, 24.562256039881753]), 'ipv4', Value,
+                         (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([122.91489361702128, 122.76595744680851, 136.2340425531915, 116.25531914893617]),
+                         numpy.array([69.99721264579163, 69.05662578282282, 74.7862806755008, 81.35382873860368]), 'id',
+                         Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array(
+            [0.0, 11.586206896551724, 39.58620689655172, 132.55172413793105, 118.93103448275862, 120.51724137931035]),
+                         numpy.array([0.0, 2.1895872919155233, 7.481089914044711, 72.63398378497232, 79.721468157183,
+                                      70.24176019398028]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE),
+    ]
 
 
-
-    IPython.embed()
+    if args.interactive:
+        IPython.embed()
 
 
 

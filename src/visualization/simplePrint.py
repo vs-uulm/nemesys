@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List, Iterable, Sequence
+from typing import Tuple, Iterable, Sequence
 
 from inference.segments import MessageSegment
 from netzob.Common.Utils.MatrixList import MatrixList

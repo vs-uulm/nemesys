@@ -10,7 +10,7 @@ from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels
-from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment
+from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from visualization.multiPlotter import MultiMessagePlotter
 
 
@@ -238,11 +238,11 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
 
 
 def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
-                    seg: MessageSegment) -> Union[str, bool]:
+                    seg: AbstractSegment) -> Union[str, bool]:
     """
     Determine group label of an segment from deep hierarchy of segment clusters/groups.
 
-    see segments2clusteredTypes()
+    see #segments2clusteredTypes()
 
     :param segGrpHier:
     :param seg:
@@ -306,8 +306,8 @@ def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions
 
     cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
                           fv.bytes.decode() if isinstance(fv, Template) else fv for fv in fvals])
-                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])] + \
-               list(zip(*matchingConditions[clunuAB]))
+                for clunu, fvals in zip(clunuAB, alignedFieldClasses[clunuAB])]
+    cluTable.extend(zip(*matchingConditions[clunuAB]))
 
     # distance to medoid for DYN-STA mixes
     # DYN-STA / STA-DYN : medoid to static distance

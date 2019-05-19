@@ -43,6 +43,7 @@ def plotLinesSegmentValues(segments: List[Tuple[str, MessageSegment]]):
 
     for lab, seg in segments:
         color = hash(lab) % 8  # TODO make more collision resistant
+        # noinspection PyUnresolvedReferences
         plt.plot(seg.values, c=matplotlib.cm.Set1(color + 1), alpha=0.4, label=lab)
 
     removeIdenticalLabels(plt)

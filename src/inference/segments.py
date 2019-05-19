@@ -425,7 +425,6 @@ class AbstractSegment(ABC):
         self._values = None  # type: Union[List, numpy.ndarray]
         self.length = None
 
-
     @property
     def values(self):
         return self._values
@@ -445,6 +444,15 @@ class AbstractSegment(ABC):
             raise ValueError("Analysis value missing of", self)
         return candidate
 
+    @property
+    @abstractmethod
+    def analyzer(self) -> MessageAnalyzer:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def bytes(self) -> bytes:
+        raise NotImplementedError()
 
     def correlate(self,
                   haystack: Iterable['MessageSegment'],
@@ -553,6 +561,18 @@ class CorrelatedSegment(AbstractSegment):
         # and multiple segments/field candidates of the same type, therefore matching the same feature
         return MessageSegment(NoneAnalysis(self.haystack.message), self.bestMatch(), len(self.feature.values))
 
+    @property
+    def analyzer(self):
+        raise NotImplementedError("Analyzer not available for CorrelatedSegment.")
+
+    @property
+    def bytes(self) -> bytes:
+        """
+        Byte values are undefined for CorrelatedSegment.
+        """
+        raise RuntimeError("Byte values are undefined for CorrelatedSegment.")
+
+
 
 class MessageSegment(AbstractSegment):
     """
@@ -572,10 +592,10 @@ class MessageSegment(AbstractSegment):
 
         # calculate values by the given analysis method, if not provided
         if analyzer.values is None:
-            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
+            self._analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
                                                                  analyzer.message, analyzer.analysisParams)
         else:
-            self.analyzer = analyzer  # type: MessageAnalyzer
+            self._analyzer = analyzer  # type: MessageAnalyzer
             """kind of the generation method for the contained analysis values"""
 
         if not isinstance(offset, int):
@@ -595,11 +615,21 @@ class MessageSegment(AbstractSegment):
 
 
     @property
+    def analyzer(self):
+        return self._analyzer
+
+
+    @analyzer.setter
+    def analyzer(self, analyzer):
+        self._analyzer = analyzer
+
+
+    @property
     def values(self):
         if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
-            return self.analyzer.value(self.offset, self.offset+self.length)
+            return self.analyzer.values(self.offset, self.offset+self.length)
         return self.analyzer.values[self.offset:self.offset+self.length]
 
 

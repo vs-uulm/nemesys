@@ -393,6 +393,7 @@ class PlotGroups:
         :param pid: Plot ID
         :return:
         """
+        # noinspection PyTypeChecker
         return self.plotGroups[cid][1][pid][1]
 
     def appendCanvas(self, title: str,

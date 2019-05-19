@@ -72,10 +72,11 @@ if __name__ == '__main__':
         print("Segmenting messages...")
         segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
         # chainedSegments = list(chain.from_iterable(segmentedMessages))
-        chainedSegments = filterSegments(chain.from_iterable(segmentedMessages))
+        chainedSegments = filterSegments(chain.from_iterable(segmentedMessages))  # type: List[TypedSegment]
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         DistanceCalculator.offsetCutoff = None
         dc = DistanceCalculator(chainedSegments)
+        # noinspection PyUnboundLocalVariable
         if doCacheDC:
             try:
                 dc.saveCached(analysisTitle, tokenizer, comparator, segmentedMessages)
@@ -83,6 +84,7 @@ if __name__ == '__main__':
             except FileExistsError as e:
                 print(e)
 
+    # noinspection PyUnboundLocalVariable
     typegroups = segments2types(chainedSegments)
     typelabels = list(typegroups.keys())
 

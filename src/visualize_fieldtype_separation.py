@@ -6,21 +6,20 @@ These segments get analyzed by the "value" analysis method which is used as feat
 Real field types are separated using ground truth and the quality of this separation is visualized.
 """
 
-import argparse, IPython
-from os.path import isfile
+import IPython
+import argparse
 from itertools import chain
+from os.path import isfile
 
-from inference.templates import DistanceCalculator, Template, TemplateGenerator
-from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
-    filterSegments
+from inference.segmentHandler import segments2types, filterSegments
+from inference.segments import TypedSegment
+from inference.templates import DistanceCalculator, Template, TemplateGenerator
 from utils.evaluationHelpers import annotateFieldTypes
-from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from visualization.multiPlotter import MultiMessagePlotter
+from validation.dissectorMatcher import MessageComparator
 from visualization.distancesPlotter import DistancesPlotter
-
+from visualization.multiPlotter import MultiMessagePlotter
 
 debug = False
 
@@ -55,7 +54,7 @@ if __name__ == '__main__':
     # segment messages according to true fields from the labels
     print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))
+    filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))  # type: List[TypedSegment]
     # filteredSegments = list(chain.from_iterable(segmentedMessages))
     dc = DistanceCalculator(filteredSegments)
 

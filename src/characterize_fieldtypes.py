@@ -37,7 +37,7 @@ def evaluateFieldTypeClusteringWithIsolatedLengths():
     segsByLen = groupByLength(segmentedMessages)
     print("done.")
     for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
-        filteredSegments = filterSegments(segments)
+        filteredSegments = filterSegments(segments)  # type: List[TypedSegment]
 
         # if length == 4: # > 8:  # != 4:
         #     continue

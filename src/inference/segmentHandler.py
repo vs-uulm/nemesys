@@ -6,7 +6,7 @@ import numpy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from inference.formatRefinement import locateNonPrintable
-from inference.segments import MessageSegment, HelperSegment, TypedSegment
+from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from inference.analyzers import MessageAnalyzer
 from inference.templates import AbstractClusterer, TypedTemplate
 
@@ -87,9 +87,8 @@ def segmentsFixed(length: int, comparator,
             lastOffset = (len(l4msg.data) // length) * length
         sequence = [
             MessageSegment(
-            MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
-                                                 l4msg, analysisArgs),
-            offset, length)
+                MessageAnalyzer.findExistingAnalysis(analyzerType, unit, l4msg, analysisArgs),
+                offset, length)
             for offset in range(0, lastOffset, length)
         ]
         if zeropadded and len(l4msg.data) > lastOffset:  # append the overlap
@@ -131,7 +130,7 @@ def groupByLength(segmentedMessages: Iterable) -> Dict[int, List[MessageSegment]
     return segsByLen
 
 
-def segments2types(segments: List[TypedSegment]) -> Dict[str, List[TypedSegment]]:
+def segments2types(segments: Iterable[TypedSegment]) -> Dict[str, List[TypedSegment]]:
     """
     Rearrange a list of typed segments into a dict of type: list(segments of that type)
 
@@ -241,7 +240,6 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
 
     :param clusterer: Clusterer object that contains all the segments to be clustered
     :param analysisTitle: the string to be used as label for the result
-    :param kwargs: arguments for the clusterer
     :return: List/Tuple structure of annotated analyses, clusters, and segments.
         List [ of
             Tuples (
@@ -280,6 +278,7 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
                                        [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
                                         for cseg in noise] )) # ''
         except:
+            # TODO debugging
             import IPython
             IPython.embed()
     for cnum, segs in enumerate(clusters):
@@ -307,7 +306,7 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
     return segmentClusters
 
 
-def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
+def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     """
     Filter input segment for only those segments that are adding relevant information for further analysis.
 
@@ -353,7 +352,7 @@ def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
                 # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
             )
 
-def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6):
+def filterChars(segments: Iterable[MessageSegment], meanCorridor=(50, 115), minLen=6):
     """
     Filter segments by some hypotheses about what might be a char sequence:
         1. Segment is larger than minLen
