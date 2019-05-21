@@ -1449,6 +1449,14 @@ class FieldTypeMemento(object):
         return self._mean - self._stdev
 
     @property
+    def analyzer(self):
+        return self._analyzerClass
+
+    @property
+    def fieldtype(self):
+        return self._fieldtype
+
+    @property
     def typeID(self, short=True):
         """
         :param short: Use only the last half (4 bytes) of the hash
@@ -1459,7 +1467,7 @@ class FieldTypeMemento(object):
 
     @property
     def codePersist(self):
-        """Python code to persist this Memento"""
+        """:return: Python code to persist this Memento"""
         return "{}(numpy.array({}), numpy.array({}), '{}', {}, {}, {})".format(
             type(self).__name__, self.mean.tolist(), self.stdev.tolist(), self._fieldtype,
             self._analyzerClass.__name__, self._analysisParams,

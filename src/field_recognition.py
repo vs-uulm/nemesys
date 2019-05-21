@@ -17,9 +17,21 @@ import matplotlib.pyplot as plt
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.analyzers import *
+from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
+from inference.analyzers import *
+from inference.segments import TypedSegment
 from inference.templates import DBSCANsegmentClusterer, DelegatingDC, FieldTypeMemento
+from utils.evaluationHelpers import analyses, annotateFieldTypes
+
+
+# fix the analysis method to VALUE
+analysisTitle = 'value'
+analyzerType = analyses[analysisTitle]
+analysisArgs = None
+
+
+
 
 class BIDEracker(object):
     """
@@ -211,6 +223,91 @@ class BIDEracker(object):
         return retVal
 
 
+class FieldTypeRecognizer(object):
+    fieldtypeTemplates = [
+        FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), 'int',
+                         Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]),
+                         numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), 'int', Value, (),
+                         MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array(
+            [204.86521739130436, 63.56086956521739, 24.269565217391303, 122.07826086956521, 133.07792207792207,
+             133.67965367965368, 146.88311688311688, 119.74891774891775]), numpy.array(
+            [28.9997617485814, 19.980278083333324, 53.41011494157094, 67.32576841468352, 72.22609394647127,
+             73.30645791589188, 73.21296233242103, 76.760645502516]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]),
+                         numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), 'float', Value,
+                         (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([172.0, 18.928571428571427, 2.3095238095238093, 26.071428571428573]),
+                         numpy.array([0.0, 1.4374722712498649, 0.6721711530234811, 24.562256039881753]), 'ipv4', Value,
+                         (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([122.91489361702128, 122.76595744680851, 136.2340425531915, 116.25531914893617]),
+                         numpy.array([69.99721264579163, 69.05662578282282, 74.7862806755008, 81.35382873860368]), 'id',
+                         Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array(
+            [0.0, 11.586206896551724, 39.58620689655172, 132.55172413793105, 118.93103448275862, 120.51724137931035]),
+                         numpy.array([0.0, 2.1895872919155233, 7.481089914044711, 72.63398378497232, 79.721468157183,
+                                      70.24176019398028]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE),
+    ]
+
+
+    def __init__(self, analyzer: MessageAnalyzer):
+        self._analyzer = analyzer
+
+
+    @property
+    def message(self):
+        return self._analyzer.message
+
+
+    def findInMessage(self, fieldtypeTemplate: FieldTypeMemento):
+        """
+
+        :param fieldtypeTemplate:
+        :return: list of (position, confidence) for all offsets.
+        """
+        from scipy import stats
+        # msgNgrams = ngrams(list(self._message.data), fieldtypeTemplate.length)  # type: List[List[int]]
+        # position, confidence
+
+        assert fieldtypeTemplate.analyzer == type(self._analyzer)
+
+        ftnormdist = stats.multivariate_normal(mean=fieldtypeTemplate.mean, cov=fieldtypeTemplate.stdev, allow_singular=True)
+
+        posCon = list()
+        ftlen = len(fieldtypeTemplate.mean)
+        for offset in range(len(self._analyzer.values) - ftlen):
+            ngram = self._analyzer.values[offset:offset+ftlen]
+            confidence = ftnormdist.pdf(list(ngram))
+            posCon.append(confidence)
+
+        return posCon
+
+
+    def recognizedFields(self):
+        """
+        Most probable inferred field structure: The field template positions with the highest confidence for a match.
+        TODO How to decide which of any overlapping fields should be the recognized one?
+        TODO How to decide which confidence value is high enough to assume a match if no concurring comparison values
+            ("no relevant matches") are in this message?
+        :return:
+        """
+        pass
+
+
+
+def calConfidence(ftMemento: FieldTypeMemento, ftRecognizer: FieldTypeRecognizer):
+    msgsegs = segmentedMessages[ftRecognizer.message]  # type: Tuple[TypedSegment]
+    offsets = [msgseg.offset for msgseg in msgsegs if msgseg.fieldtype == ftMemento.fieldtype]
+    confidences = ftRecognizer.findInMessage(ftMemento)
+    mostConfident = int(numpy.argmax(confidences))
+
+    if confidences[mostConfident] > .01:
+        print(ftRecognizer.message.data.hex())
+        print(" "*((2*mostConfident)-1), bytes(ftMemento.mean.round().astype(int).tolist()).hex())
+        print(offsets)
+        print(mostConfident, "{:.3e}".format(confidences[mostConfident]))
+    return confidences
 
 
 
@@ -240,33 +337,25 @@ if __name__ == '__main__':
 
         # subsfreq.printExtensions(2)
         print(tabulate(sorted([(cnt, bv.hex()) for bv, (cnt, occ) in subsfreq.mostFrequent(2).items()])))
+    else:
+        # fetch ground truth
+        comparator = MessageComparator(specimens, 2, True, debug=False)
+        segmentedMessages = {msgseg[0].message: msgseg
+                             for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
+                             }
+        # get analysis values
+        analyzers = [MessageAnalyzer.findExistingAnalysis(analyzerType, MessageAnalyzer.U_BYTE, l4msg, analysisArgs)
+                     for l4msg in specimens.messagePool.keys()]
 
-    # TODO search for persisted fieldtypeTemplates in specimens
-    fieldtypeTemplates = [
-        FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), 'int',
-                         Value, (), MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]),
-                         numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), 'int', Value, (),
-                         MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array(
-            [204.86521739130436, 63.56086956521739, 24.269565217391303, 122.07826086956521, 133.07792207792207,
-             133.67965367965368, 146.88311688311688, 119.74891774891775]), numpy.array(
-            [28.9997617485814, 19.980278083333324, 53.41011494157094, 67.32576841468352, 72.22609394647127,
-             73.30645791589188, 73.21296233242103, 76.760645502516]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]),
-                         numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), 'float', Value,
-                         (), MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array([172.0, 18.928571428571427, 2.3095238095238093, 26.071428571428573]),
-                         numpy.array([0.0, 1.4374722712498649, 0.6721711530234811, 24.562256039881753]), 'ipv4', Value,
-                         (), MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array([122.91489361702128, 122.76595744680851, 136.2340425531915, 116.25531914893617]),
-                         numpy.array([69.99721264579163, 69.05662578282282, 74.7862806755008, 81.35382873860368]), 'id',
-                         Value, (), MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array(
-            [0.0, 11.586206896551724, 39.58620689655172, 132.55172413793105, 118.93103448275862, 120.51724137931035]),
-                         numpy.array([0.0, 2.1895872919155233, 7.481089914044711, 72.63398378497232, 79.721468157183,
-                                      70.24176019398028]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE),
-    ]
+        # TODO search for persisted fieldtypeTemplates in specimens
+        ftRecognizer = list()
+        for analyzer in analyzers:
+            ftRecognizer.append(FieldTypeRecognizer(analyzer))
+
+        for ftm in FieldTypeRecognizer.fieldtypeTemplates:
+            print(ftm.fieldtype)
+            for ftr in ftRecognizer[:100]:  # TODO for testing: only the first   specimens.messagePool[
+                calConfidence(ftm, ftr)
 
 
     if args.interactive:
