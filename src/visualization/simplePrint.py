@@ -54,4 +54,4 @@ def alignDescreteValues(listA: list, listB: list) -> Tuple[list, list]:
 def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
     from tabulate import tabulate
     print(tabulate(((sg.bytes.hex() if sg is not None else '' for sg in msg) for msg in sequence),
-                   headers=range(len(sequence[0])), showindex="always"))
+                   headers=range(len(sequence[0])), showindex="always", disable_numparse=True))

@@ -239,13 +239,47 @@ if __name__ == '__main__':
 
                 # Python code representation to persist the fieldtypeTemplates
                 fieldtypeMementos = list()
+                print("[")
                 for ftype, templateList in fieldtypeTemplates.items():
-                    print("#", ftype, "\n[")
+                    print("#", ftype)
                     for ftt in templateList:
                         ftm = FieldTypeMemento.fromTemplate(ftt)
                         print(ftm.codePersist, ",")
                         fieldtypeMementos.append(ftm)
-                    print("]")
+                print("]")
+
+
+                # extract some suitable example messages for testing (nearest, farthest for template)
+
+                def nf4ftt(ftt: FieldTypeTemplate):
+                    maha = [ftt.mahalanobis(bs.values) for bs in ftt.baseSegments]
+                    nea = ftt.baseSegments[numpy.argmin(maha)]
+                    far = ftt.baseSegments[numpy.argmax(maha)]
+                    return nea.analyzer.message, far.analyzer.message
+
+
+                for ftt in [fieldtypeTemplates["int"][1], fieldtypeTemplates["ipv4"][0]]:
+                    near, far = nf4ftt(ftt)
+                    nid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == near][0]
+                    fid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == far][0]
+
+                    print("near and far messages for", ftt.fieldtype, nid, fid)
+
+
+
+
+
+
+
+
+
+
+
+                # for ftype, templateList in fieldtypeTemplates.items():
+                #     print("#", ftype, "\n[")
+                #     for ftt in templateList:
+                #         print("std: ", ftt.stdev)
+                #         print("cov: ", numpy.sqrt(ftt.cov.diagonal()) )
 
             except KeyError as e:
                 print("There seems to have been a change since the (manual) selection of the templates. "
@@ -253,7 +287,6 @@ if __name__ == '__main__':
                       "binaryprotocols_merged_500.pcap at commit 4b69075. "
                       "You most probably need to select new cluster IDs that are suitable as templates for types from "
                       "the plots and replace the invalid IDs in this script with your new ones.")
-
 
 
 

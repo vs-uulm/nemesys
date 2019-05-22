@@ -1,5 +1,7 @@
 from typing import List, Dict, Union, Iterable, Sequence, Tuple, Any, Type
 import numpy, scipy.spatial, itertools
+from pandas import DataFrame
+from collections import Counter
 from abc import ABC, abstractmethod
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -1414,9 +1416,10 @@ class TypedTemplate(Template):
 
 
 class FieldTypeMemento(object):
-    def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, fieldtype: str,
+    def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, cov: numpy.ndarray, fieldtype: str,
                  analyzerClass: Type[MessageAnalyzer]=Value, analysisParams: Union[Any, Tuple]=None, unit=MessageAnalyzer.U_BYTE):
         self._mean = mean
+        self._cov = cov
         self._stdev = stdev
         # data type this field represents
         self._fieldtype = fieldtype
@@ -1424,10 +1427,11 @@ class FieldTypeMemento(object):
         self._analyzerClass = analyzerClass
         self._analysisParams = analysisParams
         self._unit = unit
+        self._picov = None
 
     @staticmethod
     def fromTemplate(ftt: "FieldTypeTemplate"):
-        ftm = FieldTypeMemento(ftt.mean, ftt.stdev, ftt.fieldtype,
+        ftm = FieldTypeMemento(ftt.mean, ftt.stdev, ftt.cov, ftt.fieldtype,
                                type(ftt.baseSegments[0].analyzer), ftt.baseSegments[0].analyzer.analysisParams,
                                ftt.baseSegments[0].analyzer.unit)
         return ftm
@@ -1441,12 +1445,26 @@ class FieldTypeMemento(object):
         return self._stdev
 
     @property
+    def cov(self):
+        return self._cov
+
+    @property
+    def picov(self):
+        """
+        Often cov is a singluar matrix in our use case, so we use the approximate pinv.
+        :return:
+        """
+        if self._picov is None:
+            self._picov = numpy.linalg.pinv(self.cov)
+        return self._picov
+
+    @property
     def upper(self):
-        return self._mean + self._stdev
+        return self._mean + self.stdev
 
     @property
     def lower(self):
-        return self._mean - self._stdev
+        return self._mean - self.stdev
 
     @property
     def analyzer(self):
@@ -1468,45 +1486,106 @@ class FieldTypeMemento(object):
     @property
     def codePersist(self):
         """:return: Python code to persist this Memento"""
-        return "{}(numpy.array({}), numpy.array({}), '{}', {}, {}, {})".format(
-            type(self).__name__, self.mean.tolist(), self.stdev.tolist(), self._fieldtype,
+        return "{}(numpy.array({}), numpy.array({}), numpy.array({}), '{}', {}, {}, {})".format(
+            type(self).__name__, self.mean.tolist(), self.stdev.tolist(), self.cov.tolist(), self._fieldtype,
             self._analyzerClass.__name__, self._analysisParams,
             "MessageAnalyzer.U_BYTE" if self._unit == MessageAnalyzer.U_BYTE else "MessageAnalyzer.U_NIBBLE")
+
+    def mahalanobis(self, vector: Iterable[float]):
+        from scipy.spatial import distance
+        return distance.mahalanobis(self.mean, vector, self.picov)
+
+    def __repr__(self):
+        return "FieldTypeMemento " + self.typeID + " for " + self.fieldtype
+
 
 class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
 
     def __init__(self, baseSegments: Iterable[AbstractSegment], method='canberra'):
+        """
+        A new FieldTypeTemplate for the collection of base segments given.
+
+        Per vector component, the mean, stdev, and the covariance matrix is calculated. Therefore the collection needs
+        to be represented by a vector of one common vector space and thus a fixed number of dimensions.
+        Thus for the calculation:
+            * zero-only segments are ignored
+            *
+
+
+        :param baseSegments:
+        :param method:
+        """
         self.baseSegments = list(baseSegments)
         self._baseOffsets = dict()
-        segLens = {seg.length for seg in self.baseSegments}
+        relevantSegs = [seg for seg in self.baseSegments if set(seg.values) != {0}]
+        segLens = {seg.length for seg in relevantSegs}
 
         if len(segLens) == 1:
-            segV = numpy.array([seg.values for seg in self.baseSegments])
-        else:
-            from collections import Counter
+            # all segments have equal length, so we simply can create an array from all of them
+            segV = numpy.array([seg.values for seg in relevantSegs])
+        elif len(segLens) > 1:
             # find the optimal shift/offset of each shorter segment to match the longest ones
             #   with shortest distance according to the method
             self._maxLen = max(segLens)
             # Better than the longest would be the most common length, but that would increase complexity a lot and
             #   we assume that for most use cases the longest segments will be the most frequent length.
-            maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(self.baseSegments, 1)
+            maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(relevantSegs, 1)
                           if seg.length == self._maxLen]
             segE = list()
             for seg in baseSegments:
+                if set(seg.values) == {0}:
+                    continue
                 if seg.length < self._maxLen:
                     shortSeg = (0, seg.length, tuple(seg.values))
                     offsets = [DistanceCalculator.embedSegment(shortSeg, longSeg, method)[1] for longSeg in maxLenSegs]
                     offCount = Counter(offsets)
                     self._baseOffsets[seg] = offCount.most_common(1)[0][0]
-                    segE.append(self.paddedValues(seg))
+                    paddedVals = self.paddedValues(seg)
+                    if debug:
+                        from tabulate import tabulate
+                        print(tabulate((maxLenSegs[0][2], paddedVals)))
+                    segE.append(paddedVals)
                 else:
-                    segE.append(seg.values)
+                    segE.append(list(seg.values))
             segV = numpy.array(segE)
+        else:
+            # handle situation when no base segment is relevant (all are zeros)
+            self._maxLen = max({seg.length for seg in self.baseSegments})
+            for bs in self.baseSegments:
+                if bs.length == self._maxLen:
+                    self._mean = numpy.array(bs.values)
+                    self._stdev = numpy.zeros(self._mean.shape)
+                    self._cov = numpy.zeros((self._mean.shape[0], self._mean.shape[0]))
+                    break
+            if not (isinstance(self._mean, numpy.ndarray) and isinstance(self._stdev, numpy.ndarray)
+                    and isinstance(self._cov, numpy.ndarray)):
+                raise RuntimeError("This collection of base segments is not suited to generate a FieldTypeTemplate.")
+            super().__init__(self._mean, self.baseSegments, method)
+            return
 
         self._mean = numpy.nanmean(segV, 0)
         self._stdev = numpy.nanstd(segV, 0)
 
+        # for all components that have a stdev of 0 we need to wobble the values (randomly) to derive a
+        #   covariance matrix that shows no linear dependent entries ("don't care positions")
+        assert segV.shape == (len(relevantSegs), len(self._stdev))
+        if any(self._stdev == 0):
+            segV = segV.astype(float)
+        for compidx, compstdev in enumerate(self._stdev):
+            if compstdev == 0:
+                segV[:,compidx] = numpy.random.random_sample((len(relevantSegs),)) * .5
+
+        print(segV)
+
+        # self._cov = numpy.cov(segV, rowvar=False)
+        # pandas allows for nans, numpy not
+        pd = DataFrame(segV)
+        self._cov = pd.cov().values
+        self._picov = None  # fill on demand
+
+        assert len(self._mean) == len(self._stdev) == len(self._cov.diagonal())
         super().__init__(self._mean, self.baseSegments, method)
+
 
     def paddedValues(self, segment: AbstractSegment):
         """
@@ -1516,12 +1595,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         """
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
-        if debug:
-            from tabulate import tabulate
-            print(tabulate((segment.values, vals)))
         return vals
-
-
 
 
 class TemplateGenerator(object):
