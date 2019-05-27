@@ -12,8 +12,8 @@ from itertools import chain
 
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
     labelForSegment
-from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate, \
-    FieldTypeMemento
+from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
+from inference.fieldTypes import FieldTypeMemento
 from inference.segments import TypedSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
@@ -212,6 +212,8 @@ if __name__ == '__main__':
                   "access selected field type templates.")
         else:
             try:
+                # TODO refine selection for int(4) and float(4)
+
                 # select promising field type templates from binaryprotocols_merged_500.pcap
                 fieldtypeTemplates = dict()
                 # for int: directly use clusters 2 and 3

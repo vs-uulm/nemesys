@@ -1,9 +1,10 @@
-from typing import List, Dict, Union, Iterable, Sequence, Tuple, Any, Type
+from typing import List, Dict, Union, Iterable, Sequence, Tuple
 import numpy, scipy.spatial, itertools
 from pandas import DataFrame
 from collections import Counter
 from abc import ABC, abstractmethod
 
+from inference.fieldTypes import FieldTypeMemento
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from inference.analyzers import MessageAnalyzer, Value
@@ -1413,90 +1414,6 @@ class TypedTemplate(Template):
         :param value: One of the types defined in ParsedMessage.ParsingConstants.TYPELOOKUP
         """
         self._fieldtype = value
-
-
-class FieldTypeMemento(object):
-    def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, cov: numpy.ndarray, fieldtype: str,
-                 analyzerClass: Type[MessageAnalyzer]=Value, analysisParams: Union[Any, Tuple]=None, unit=MessageAnalyzer.U_BYTE):
-        self._mean = mean
-        self._cov = cov
-        self._stdev = stdev
-        # data type this field represents
-        self._fieldtype = fieldtype
-        # for reference:
-        self._analyzerClass = analyzerClass
-        self._analysisParams = analysisParams
-        self._unit = unit
-        self._picov = None
-
-    @staticmethod
-    def fromTemplate(ftt: "FieldTypeTemplate"):
-        ftm = FieldTypeMemento(ftt.mean, ftt.stdev, ftt.cov, ftt.fieldtype,
-                               type(ftt.baseSegments[0].analyzer), ftt.baseSegments[0].analyzer.analysisParams,
-                               ftt.baseSegments[0].analyzer.unit)
-        return ftm
-
-    @property
-    def mean(self):
-        return self._mean
-
-    @property
-    def stdev(self):
-        return self._stdev
-
-    @property
-    def cov(self):
-        return self._cov
-
-    @property
-    def picov(self):
-        """
-        Often cov is a singluar matrix in our use case, so we use the approximate pinv.
-        :return:
-        """
-        if self._picov is None:
-            self._picov = numpy.linalg.pinv(self.cov)
-        return self._picov
-
-    @property
-    def upper(self):
-        return self._mean + self.stdev
-
-    @property
-    def lower(self):
-        return self._mean - self.stdev
-
-    @property
-    def analyzer(self):
-        return self._analyzerClass
-
-    @property
-    def fieldtype(self):
-        return self._fieldtype
-
-    @property
-    def typeID(self, short=True):
-        """
-        :param short: Use only the last half (4 bytes) of the hash
-        :return: As an identifier use the hash of the mean values
-        """
-        tid = "{:02x}".format(hash(tuple(self.mean)))
-        return tid[-8:] if short else tid
-
-    @property
-    def codePersist(self):
-        """:return: Python code to persist this Memento"""
-        return "{}(numpy.array({}), numpy.array({}), numpy.array({}), '{}', {}, {}, {})".format(
-            type(self).__name__, self.mean.tolist(), self.stdev.tolist(), self.cov.tolist(), self._fieldtype,
-            self._analyzerClass.__name__, self._analysisParams,
-            "MessageAnalyzer.U_BYTE" if self._unit == MessageAnalyzer.U_BYTE else "MessageAnalyzer.U_NIBBLE")
-
-    def mahalanobis(self, vector: Iterable[float]):
-        from scipy.spatial import distance
-        return distance.mahalanobis(self.mean, vector, self.picov)
-
-    def __repr__(self):
-        return "FieldTypeMemento " + self.typeID + " for " + self.fieldtype
 
 
 class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
