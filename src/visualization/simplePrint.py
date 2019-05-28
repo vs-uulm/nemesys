@@ -107,7 +107,7 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
         (
             ["tft"] + [sg.fieldtype if sg is not None else '' for sg in sequence],
             ["bytes"] + ['' if sg is None else
-                         "00..00" if set(sg.bytes) == {"\x00"} else sg.bytes.hex() for sg in sequence],
+                         "00..00" if set(sg.bytes) == {b"\x00"} else sg.bytes.hex() for sg in sequence],
             *ftmlines
         ),
         headers=[""] + list(range(len(sequence))), disable_numparse=True)

@@ -149,7 +149,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['bootp.hw.addr_padding'] = 'bytes'
     TYPELOOKUP['bootp.server'] = 'chars'
     TYPELOOKUP['bootp.file'] = 'chars'
-    TYPELOOKUP['bootp.cookie'] = 'bytes'
+    TYPELOOKUP['bootp.cookie'] = 'id'  # changed from 'bytes'
     TYPELOOKUP['bootp.option.type'] = 'chars'  # contains the whole option! bootp.option.type_tree should be walked!
     TYPELOOKUP['bootp.option.padding'] = 'pad'
 

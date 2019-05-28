@@ -16,6 +16,7 @@ from inference.segments import TypedSegment
 from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
 from utils.evaluationHelpers import analyses, annotateFieldTypes
 from visualization.simplePrint import segmentFieldTypes
+import visualization.bcolors as bcolors
 
 # fix the analysis method to VALUE
 analysisTitle = 'value'
@@ -231,6 +232,74 @@ def calConfidence(ftMemento: FieldTypeMemento, ftRecognizer: FieldTypeRecognizer
     return confidences
 
 
+def evaluateCharIDOverlaps(ftQueries: [FieldTypeQuery]):
+    """
+    Recognized ID fields often overlap chars and themselves. Therefore, existing IDs at (most of) a char sequence
+    could be used as heuristic to improve confidence for chars.
+    This needs more effort to evaluate and utilizer, thus, currently its not used.
+
+    :param ftQueries:
+    :return:
+    """
+    # # find all RecognizedFields that overlap with any chars. per offset
+    # [(recogf.message,
+    #   [ftq.retrieve4position(o) for o in range(recogf.position, recogf.end) if ftq.retrieve4position(o) != recogf])
+    #  for ftq in ftQueries for recogf in ftq.resolveConflicting() if recogf.template == "chars"]
+
+    # find all RecognizedFields that overlap with any chars. per message
+    charOverlaps = list()
+    for enf, ftq in enumerate(ftQueries):
+        for recogf in ftq.resolveConflicting():
+            if recogf.template.fieldtype == "chars":
+                msgEntry = (enf, recogf, set())  # (ftq.message, recogf, list())
+                for o in range(recogf.position, recogf.end):
+                    recogsAtPos = ftq.retrieve4position(o)
+                    for rap in recogsAtPos:
+                        if rap != recogf:
+                            msgEntry[2].add(rap)
+                charOverlaps.append(msgEntry)
+
+    # filter all the ids from the RecognizedFields that overlap with any chars
+    charOverlappingIds = [(mid, rcgchr, [rf for rf in rcgflst if
+                                         isinstance(rf.template, FieldTypeMemento) and rf.template.fieldtype == "id"])
+                          for mid, rcgchr, rcgflst in charOverlaps]
+
+    # positions in char sequences not overlapping with a recognized id field
+    nococharpos = [(mid, rcgchr, [o for o in range(rcgchr.position, rcgchr.end) if
+                                  o not in {offs for rf in rcgflst for offs in range(rf.position, rf.end)}]) for
+                   mid, rcgchr, rcgflst in charOverlappingIds]
+
+    print(charOverlappingIds)
+    print("=================")
+    print(nococharpos)
+
+
+def printMarkedBytesInMessage(message: AbstractMessage, markStart, markEnd, subStart=0, subEnd=None):
+    if subEnd is None:
+        subEnd = len(message.data)
+    assert markStart >= subStart
+    assert markEnd <= subEnd
+    sub = message.data[subStart:subEnd]
+    relMarkStart = markStart-subStart
+    relMarkEnd = markEnd-subStart
+    colored = \
+        sub[:relMarkStart].hex() + \
+        bcolors.colorizeStr(
+            sub[relMarkStart:relMarkEnd].hex(),
+            10
+        ) + \
+        sub[relMarkEnd:].hex()
+    print(colored)
+
+
+def printRecogInSeg(recSegTup: Tuple[RecognizedField, TypedSegment]):
+    printMarkedBytesInMessage(recSegTup[0].message,
+                              recSegTup[0].position, recSegTup[0].end,
+                              min(recSegTup[1].offset, recSegTup[0].position),
+                              max(recSegTup[1].nextOffset, recSegTup[0].end))
+    print(recSegTup[1].fieldtype)
+
+
 # # test messages
 # near and far messages for int 189 243
 # near and far messages for ipv4 333 262
@@ -264,6 +333,7 @@ if __name__ == '__main__':
         print(tabulate(sorted([(cnt, bv.hex()) for bv, (cnt, occ) in subsfreq.mostFrequent(2).items()])))
     else:
         # fetch ground truth
+        print("Fetch ground truth...")
         comparator = MessageComparator(specimens, 2, True, debug=False)
         segmentedMessages = {msgseg[0].message: msgseg
                              for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
@@ -280,6 +350,7 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         # recognize fieldtypeTemplates per message with all known FieldTypeRecognizers
+        print("Recognize fields...")
         recognized = list()
         # for msgids in testMessages:
         for msgids in range(len(ftRecognizer)):
@@ -371,15 +442,46 @@ if __name__ == '__main__':
                             print("  ", overlapSegs)
                         print()
 
+
+        # TODO mark bytes with only single (2-3?) bits set => flags?  (confidence?)
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # #
         # # Print recognized field type templates per message
         for msg, ftmposcon in recognized:
-            # TODO mark recognized char sequences  (confidence?)
-            # TODO mark bytes with only single (2-3?) bits set => flags?  (confidence?)
-
             segmentFieldTypes(segmentedMessages[msg], ftmposcon)
             print()
 
+        # one specific
+        # a = 92; segmentFieldTypes(segmentedMessages[recognized[a][0]], recognized[a][1])
+
+        # one test message to query
+        # ftq = FieldTypeQuery(ftRecognizer[-1])
+
+        ftQueries = [FieldTypeQuery(ftr) for ftr in ftRecognizer]
+
+
+        # sum of true and false posititves count across all messages for each type
+        matchStatistics = dict()
+        for query in ftQueries:
+            for ftName, ftStats in query.matchStatistics(segmentedMessages[query.message]).items():
+                if not ftName in matchStatistics:
+                    matchStatistics[ftName] = ([], [], [])
+                # (truePos, falsePos, falseNeg)
+                matchStatistics[ftName][0].extend(ftStats[0])
+                matchStatistics[ftName][1].extend(ftStats[1])
+                matchStatistics[ftName][2].extend(ftStats[2])
+
+        mstattab = [(ftName, len(ftStats[0]), len(ftStats[1]), len(ftStats[2]))
+                    for ftName, ftStats in matchStatistics.items()]
+        print()
+        print(tabulate(mstattab, headers=("ftName", "truePos", "falsePos", "falseNeg")))
+        print()
+
+        # compare true and recognized fieldtypes of false positives.
+        [(a.template.fieldtype, b.fieldtype, a.position, b.offset) for a, b in matchStatistics["id"][1]]
+        [(b.fieldtype, a.position, b.offset, b.bytes.hex()) for a, b in matchStatistics["id"][1]]
+
+        # evaluateCharIDOverlaps(ftQueries)
 
         # TODO statistics of how well mahalanobis separates fieldtypes (select a threshold) per ftm:
         #   for all fieldtpye memento:
@@ -392,9 +494,6 @@ if __name__ == '__main__':
         #           determine mahalanobis distance to memento
         #       collect and sort all dists for this fieldtype
         #       overlay plot from before as histogram/function (see the one for segment type distance distributions)
-
-
-
 
 
 

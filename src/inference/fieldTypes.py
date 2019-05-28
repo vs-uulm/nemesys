@@ -8,14 +8,45 @@ from inference.segments import MessageAnalyzer
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 
-class FieldTypeMemento(object):
+
+
+class BaseTypeMemento(object):
+    def __init__(self, fieldtype: str, length = None):
+        # data type this field represents
+        self._fieldtype = fieldtype
+        self.__length = length
+
+    @property
+    def fieldtype(self):
+        return self._fieldtype
+
+    def __len__(self):
+        if self.__length is None:
+            raise ValueError("Call of len() on a BaseTypeMemento without this property.")
+        return self.__length
+
+    @property
+    def typeID(self, short=True):
+        """
+        :param short: Use only the last half (4 bytes) of the hash
+        :return: As an identifier use the hash of the fieldtype value
+        """
+        tid = "{:02x}".format(hash(self.fieldtype))
+        return tid[-8:] if short else tid
+
+    def __repr__(self):
+        return "FieldTypeMemento " + self.typeID + " for " + self.fieldtype
+
+
+
+class FieldTypeMemento(BaseTypeMemento):
     def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, cov: numpy.ndarray, fieldtype: str,
-                 analyzerClass: Type[MessageAnalyzer]=Value, analysisParams: Union[Any, Tuple]=None, unit=MessageAnalyzer.U_BYTE):
+                 analyzerClass: Type[MessageAnalyzer] = Value, analysisParams: Union[Any, Tuple] = None,
+                 unit=MessageAnalyzer.U_BYTE):
+        super().__init__(fieldtype)
         self._mean = mean
         self._cov = cov
         self._stdev = stdev
-        # data type this field represents
-        self._fieldtype = fieldtype
         # for reference:
         self._analyzerClass = analyzerClass
         self._analysisParams = analysisParams
@@ -44,8 +75,11 @@ class FieldTypeMemento(object):
     @property
     def picov(self):
         """
-        Often cov is a singluar matrix in our use case, so we use the approximate pinv.
-        :return:
+        Often cov is a singluar matrix in our use case, so we use the approximate Moore-Penrose pseudo-inverse
+        from numpy.
+        (G. Strang, Linear Algebra and Its Applications, 2nd Ed., Orlando, FL, Academic Press, Inc., 1980, pp. 139-142.)
+
+        :return: pseudo-inverse of the covariance matrix.
         """
         if self._picov is None:
             self._picov = numpy.linalg.pinv(self.cov)
@@ -62,10 +96,6 @@ class FieldTypeMemento(object):
     @property
     def analyzer(self):
         return self._analyzerClass
-
-    @property
-    def fieldtype(self):
-        return self._fieldtype
 
     def __len__(self):
         return len(self._mean)
@@ -88,33 +118,44 @@ class FieldTypeMemento(object):
             "MessageAnalyzer.U_BYTE" if self._unit == MessageAnalyzer.U_BYTE else "MessageAnalyzer.U_NIBBLE")
 
     def mahalanobis(self, vector: Iterable[float]):
+        """
+        Compute the Mahalanobis distance between this fieldtype's mean and the given vector using the
+        covariance matrix contained in this object.
+
+        :param vector:
+        :return:
+        """
         return scipy.spatial.distance.mahalanobis(self.mean, vector, self.picov)
 
     def confidence(self, vector: Iterable[float]):
         return self.mahalanobis(vector)
 
-    def __repr__(self):
-        return "FieldTypeMemento " + self.typeID + " for " + self.fieldtype
-
 
 class RecognizedField(object):
-    HEURISTIC_FIELDTYPES = ["chars"]
-
-    def __init__(self, message: AbstractMessage, template: Union[FieldTypeMemento, Tuple[str, int]],
+    def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
                  position: int, confidence: float):
         self.message = message
         self.position = position
         self.confidence = confidence
-        if isinstance(template, FieldTypeMemento):
+        if isinstance(template, BaseTypeMemento):
             self.template = template
             self.end = position + len(template)
-        elif isinstance(template, tuple):
-            assert template[0] in RecognizedField.HEURISTIC_FIELDTYPES
-            assert isinstance(template[1], int), "length {} is no int".format(template[1])
-            self.template = template[0]
-            self.end = position + template[1]
         else:
-            raise TypeError("Template needs to be a FieldTypeMemento or a tuple of a type-name and length")
+            raise TypeError("Template needs to be a BaseTypeMemento")
+
+
+    def __repr__(self):
+        return "RecognizedField of {} at ({}, {}) (c {:.2f})".format(
+            self.template.fieldtype, self.position, self.end, self.confidence)
+
+
+    def isOverlapping(self, otherField: 'RecognizedField'):
+        if self.message == otherField.message \
+                and (self.position <= otherField.position < self.end
+                or otherField.position < self.end <= otherField.end):
+            return True
+        else:
+            return False
 
 
 class FieldTypeRecognizer(object):
@@ -125,18 +166,18 @@ class FieldTypeRecognizer(object):
         FieldTypeMemento(numpy.array([205.75982532751092, 63.838427947598255, 24.375545851528383, 122.61135371179039, 133.65652173913043, 134.2608695652174, 147.52173913043478, 120.2695652173913]), numpy.array([25.70183334947299, 19.57641190835309, 53.50246711271789, 66.9864879316446, 71.84675313281585, 72.93261773499316, 72.72710729917598, 76.51925835899723]), numpy.array([[663.4815368114683, -472.49073010036244, -423.75589902704553, 139.7702826936337, 9.80247835746574, 3.6199532674480817, -242.52683291197417, 505.4362598636329], [-472.49073010036244, 384.91676243009425, 296.96445261625695, -111.35254347659536, 75.25739293648974, -4.666034628054849, 166.73218800275805, -345.0736612273047], [-423.75589902704553, 296.96445261625695, 2875.068873056001, 318.1860683367806, 261.37767179958604, 84.96889603922475, 157.02409407798976, -593.1297594422736], [139.7702826936337, -111.35254347659536, 318.1860683367806, 4506.870221405036, 442.0494330805179, -212.5338044893896, -498.76463265149766, 382.4062667585993], [9.80247835746574, 75.25739293648974, 261.37767179958604, 442.0494330805179, 5184.497228023539, -456.02790962597265, -181.6759065881906, 370.75238276058485], [3.6199532674480817, -4.666034628054849, 84.96889603922475, -212.5338044893896, -456.02790962597265, 5342.394531991645, -240.0144294664894, 118.43155496487557], [-242.52683291197417, 166.73218800275805, 157.02409407798976, -498.76463265149766, -181.6759065881906, -240.0144294664894, 5312.329219669637, -311.37269793051064], [505.4362598636329, -345.0736612273047, -593.1297594422736, 382.4062667585993, 370.75238276058485, 118.43155496487557, -311.37269793051064, 5880.76544522499]]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE) ,
         # id
         FieldTypeMemento(numpy.array([122.91489361702128, 122.76595744680851, 136.2340425531915, 116.25531914893617]), numpy.array([69.99721264579163, 69.05662578282282, 74.7862806755008, 81.35382873860368]), numpy.array([[5006.123034227568, 1258.0448658649402, -284.06660499537475, 412.17437557816834], [1258.0448658649402, 4872.487511563368, -406.5527289546716, 674.6262719703982], [-284.06660499537475, -406.5527289546716, 5714.574468085107, 456.6345975948195], [412.17437557816834, 674.6262719703982, 456.6345975948195, 6762.324699352451]]), 'id', Value, (), MessageAnalyzer.U_BYTE) ,
-        # float
-        FieldTypeMemento(numpy.array([0.0, 2., 24., 113.]),
-                         numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array(
-                [[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784],
-                 [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698],
-                 [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628],
-                 [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (),
-                         MessageAnalyzer.U_BYTE),
-        FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]), numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array([[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784], [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698], [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628], [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (), MessageAnalyzer.U_BYTE) ,
-        # int
-        # FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), numpy.array([[0.027493310152260777, -0.005639908063087656, -0.07922934857447499], [-0.005639908063087656, 0.018914313768380903, -2.358032476778992], [-0.07922934857447499, -2.358032476778992, 2382.215579710145]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
-        FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]), numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), numpy.array([[0.021960602414756426, 0.0007935582831639521, -0.22956507460690648, 0.6994209166124543], [0.0007935582831639521, 0.017292996674435825, -0.06886282798507015, 1.917984540011557], [-0.22956507460690648, -0.06886282798507015, 23.225806451612904, -30.427419354838708], [0.6994209166124543, 1.917984540011557, -30.427419354838708, 1591.039314516129]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
+        # # float
+        # FieldTypeMemento(numpy.array([0.0, 2., 24., 113.]),
+        #                  numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array(
+        #         [[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784],
+        #          [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698],
+        #          [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628],
+        #          [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (),
+        #                  MessageAnalyzer.U_BYTE),
+        # FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]), numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array([[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784], [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698], [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628], [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (), MessageAnalyzer.U_BYTE) ,
+        # # int
+        # # FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), numpy.array([[0.027493310152260777, -0.005639908063087656, -0.07922934857447499], [-0.005639908063087656, 0.018914313768380903, -2.358032476778992], [-0.07922934857447499, -2.358032476778992, 2382.215579710145]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
+        # FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]), numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), numpy.array([[0.021960602414756426, 0.0007935582831639521, -0.22956507460690648, 0.6994209166124543], [0.0007935582831639521, 0.017292996674435825, -0.06886282798507015, 1.917984540011557], [-0.22956507460690648, -0.06886282798507015, 23.225806451612904, -30.427419354838708], [0.6994209166124543, 1.917984540011557, -30.427419354838708, 1591.039314516129]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
         # ipv4
         FieldTypeMemento(numpy.array([172.0, 18.928571428571427, 2.3095238095238093, 26.071428571428573]), numpy.array([0.0, 1.4374722712498649, 0.6721711530234811, 24.562256039881753]), numpy.array([[0.022912984623871414, 0.03544250639873077, -0.0004582497404991295, -0.4596803115368301], [0.03544250639873077, 2.1167247386759582, 0.022648083623693426, 2.2491289198606266], [-0.0004582497404991295, 0.022648083623693426, 0.4628339140534262, 10.19686411149826], [-0.4596803115368301, 2.2491289198606266, 10.19686411149826, 618.0191637630664]]), 'ipv4', Value, (), MessageAnalyzer.U_BYTE) ,
     ]
@@ -166,15 +207,19 @@ class FieldTypeRecognizer(object):
             if set(ngram) == {0}:  # zero values do not give any information
                 posCon.append(99)
             else:
-                posCon.append(fieldtypeTemplate.confidence(ngram))
+                posCon.append(fieldtypeTemplate.confidence(ngram))  # / (ftlen**2 / 4)
 
         return posCon
 
 
     def charsInMessage(self) -> List[RecognizedField]:
+        """
+        # mark recognized char sequences  (TODO confidence?)
+        :return:
+        """
         from inference.segmentHandler import isExtendedCharSeq
 
-        confidence = 0.0
+        confidence = 0.2
         offset = 0
         minLen = 6
         recognizedChars = list()
@@ -204,13 +249,32 @@ class FieldTypeRecognizer(object):
                 chunk = self.message.data[offset:offset + chunkLen]
                 if isExtendedCharSeq(chunk, minLen=6):
                     recognizedChars.append(
-                        RecognizedField(self.message, ("chars", chunkLen), offset, confidence))
+                        RecognizedField(self.message, BaseTypeMemento("chars", chunkLen), offset, confidence))
                     offset += minLen + add2len
                 else:
                     offset += 1
             else:
                 offset += 1
         return recognizedChars
+
+
+
+    def flagsInMessage(self) -> List[RecognizedField]:
+        confidence = 0.2
+        offset = 0
+        minLen = 2
+        bitset = 3
+
+        recognizedFlags = list()
+        while offset < len(self.message.data) - minLen:
+            for bVal in self.message.data[offset:offset + minLen]:
+                if bin(bVal).count("1") > bitset:
+                    offset += 1
+                    continue
+            recognizedFlags.append(
+                RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
+            offset += 1
+
 
 
     def recognizedFields(self, confidenceThreshold = 2) -> Dict[FieldTypeMemento, List[RecognizedField]]:
@@ -226,19 +290,18 @@ class FieldTypeRecognizer(object):
             confidences = self.findInMessage(ftMemento)
             mostConfident[ftMemento] = [RecognizedField(self.message, ftMemento, pos, con)
                                         for pos, con in enumerate(confidences) if con < confidenceThreshold]
-        mostConfident["chars"] = self.charsInMessage()
+        mostConfident[BaseTypeMemento("chars")] = self.charsInMessage()
+        mostConfident[BaseTypeMemento("flags")] = self.flagsInMessage()
         return mostConfident
 
 
 class FieldTypeQuery(object):
 
-    RECOGNIZABLE = FieldTypeRecognizer.fieldtypeTemplates + RecognizedField.HEURISTIC_FIELDTYPES  # type: List[Union[FieldTypeMemento, str]]
-
     def __init__(self, ftRecognizer: FieldTypeRecognizer):
+        self.message = ftRecognizer.message
         self._recognizedTemplates = ftRecognizer.recognizedFields()
-        # self._recognizedTemplates["chars"] = ftRecognizer.charsInMessage()
 
-        # mapping from byte offsets to list of recognitions that are (ftm, idx), to retrieve by self._recognizedTemplates[ftm][idx]
+        # mapping from byte offsets to list of recognitions (RecognizedField)
         self._posTemplMap = dict()  # type: Dict[int, List[RecognizedField]]
         for ftm, poscon in self._recognizedTemplates.items():
             for recognized in poscon:
@@ -246,9 +309,6 @@ class FieldTypeQuery(object):
                     if o not in self._posTemplMap:
                         self._posTemplMap[o] = list()
                     self._posTemplMap[o].append(recognized)
-        # self._charMap = {o: recogChars
-        #                  for recogChars in self._recognizedChars
-        #                  for o in range(recogChars.position, recogChars.end)}
 
 
     def retrieve4position(self, offset: int) -> List:
@@ -263,4 +323,82 @@ class FieldTypeQuery(object):
             key=lambda x: x.confidence
         )
         return allRecogFields
+
+
+    def resolveConflicting(self):
+        nonConflicting = list()
+        mostConfident = self.mostConfident()
+        while len(mostConfident) > 0:
+            mc = mostConfident.pop(0)
+            nonConflicting.append(mc)
+            # in scope of the current field recognition...
+            for position in range(mc.position, mc.end):
+                # ... get all the templates at any position...
+                for recog in self._posTemplMap[position]:
+                    # .. and remove all (less confident) recognitions there
+                    if recog in mostConfident:
+                        # this is not very efficient using a list!
+                        mostConfident.remove(recog)
+
+        return nonConflicting
+
+
+    @staticmethod
+    def isOverlapping(aStart: int, aEnd: int, bStart: int, bEnd: int):
+        return aStart <= bStart < aEnd or bStart < aEnd <= bEnd
+
+
+    from inference.segments import TypedSegment
+    def matchStatistics(self, segmentedMessage: List[TypedSegment]):
+        """
+        in the falseNeg, we omit those segments that are just zeros.
+
+        :param segmentedMessage:
+        :return: dict, mapping fieldtype-names to (truePos, falsePos, falseNeg)
+        """
+        assert segmentedMessage[0].message == self.message
+
+        from inference.segmentHandler import segments2types
+        typedSegments = segments2types(segmentedMessage)
+        nonConflicting = self.resolveConflicting()
+
+        dictOfFieldTypesMappedToTheirTrueAndFalsePositivesAndFalseNegatives = dict()
+        for ftype, segments in typedSegments.items():
+            truePos = list()
+            falsePos = list()
+            nc4type = [nc for nc in nonConflicting if nc.template.fieldtype == ftype]
+            for recognizedField in nc4type:
+                for seg in segments:
+                    if FieldTypeQuery.isOverlapping(
+                            recognizedField.position, recognizedField.end, seg.offset, seg.nextOffset):
+                        truePos.append((recognizedField, seg))
+                if recognizedField not in (inftseg[0] for inftseg in truePos):
+                    # for reference add the true segment which the closest offset to the false positive recognizedField
+                    offsetDiffSorted = sorted(segmentedMessage, key=lambda s: abs(s.offset - recognizedField.position))
+                    falsePos.append((recognizedField, offsetDiffSorted[0]))
+            # omit those segments that are just zeros
+            #                                                  recognizedSegments
+            falseNeg = [seg for seg in segments
+                        if set(seg.bytes) != {0} and seg not in (inftseg[1] for inftseg in truePos)]
+
+            dictOfFieldTypesMappedToTheirTrueAndFalsePositivesAndFalseNegatives[ftype] = (truePos, falsePos, falseNeg)
+
+        return dictOfFieldTypesMappedToTheirTrueAndFalsePositivesAndFalseNegatives
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

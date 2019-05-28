@@ -722,7 +722,8 @@ class MessageSegment(AbstractSegment):
             printValues = "[{}]".format(", ".join(["{:.3f}".format(v) for v in self.values[:3]])) \
                 if isinstance(self.values, Iterable) and isinstance(self.values[0], float) else str(self.values)
 
-        return 'MessageSegment {} bytes: {:.16}{}'.format(self.length, self.bytes.hex(),
+        return 'MessageSegment {} bytes at ({}, {}): {:.16}{}'.format(
+            self.length, self.offset, self.nextOffset, self.bytes.hex(),
             '...' if self.length > 8 else '') + \
             ' | values: {}'.format(printValues if printValues else 'not set')
 
