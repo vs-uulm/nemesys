@@ -258,26 +258,31 @@ class FieldTypeRecognizer(object):
         return recognizedChars
 
 
-
     def flagsInMessage(self) -> List[RecognizedField]:
-        confidence = 0.2
+        # confidence = 0.2
         offset = 0
         minLen = 2
         bitset = 3
 
         recognizedFlags = list()
         while offset < len(self.message.data) - minLen:
+            belowBitset = True
+            bitSum = 0
             for bVal in self.message.data[offset:offset + minLen]:
-                if bin(bVal).count("1") > bitset:
-                    offset += 1
-                    continue
-            recognizedFlags.append(
-                RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
+                bitCount = bin(bVal).count("1")
+                bitSum += bitCount
+                if bitCount > bitset:
+                    belowBitset = False
+                    break
+            if belowBitset and bitSum > 0:
+                confidence = 2 * bitSum / bitset # * minLen
+                recognizedFlags.append(
+                    RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
             offset += 1
+        return recognizedFlags
 
-
-
-    def recognizedFields(self, confidenceThreshold = 2) -> Dict[FieldTypeMemento, List[RecognizedField]]:
+    # = 2
+    def recognizedFields(self, confidenceThreshold = None) -> Dict[FieldTypeMemento, List[RecognizedField]]:
         """
         Most probable inferred field structure: The field template positions with the highest confidence for a match.
         TODO How to decide which of any overlapping fields should be the recognized one?
@@ -285,11 +290,14 @@ class FieldTypeRecognizer(object):
             ("no relevant matches") are in this message?
         :return:
         """
+        applConfThre = confidenceThreshold
         mostConfident = dict()
         for ftMemento in FieldTypeRecognizer.fieldtypeTemplates:
+            if confidenceThreshold is None:
+                applConfThre = 10/numpy.log(ftMemento.stdev.mean())
             confidences = self.findInMessage(ftMemento)
             mostConfident[ftMemento] = [RecognizedField(self.message, ftMemento, pos, con)
-                                        for pos, con in enumerate(confidences) if con < confidenceThreshold]
+                                        for pos, con in enumerate(confidences) if con < applConfThre]
         mostConfident[BaseTypeMemento("chars")] = self.charsInMessage()
         mostConfident[BaseTypeMemento("flags")] = self.flagsInMessage()
         return mostConfident
@@ -341,6 +349,11 @@ class FieldTypeQuery(object):
                         mostConfident.remove(recog)
 
         return nonConflicting
+
+
+    # def mostConfident4Type(self, ftMemento: FieldTypeMemento):
+    #     confidences = self.findInMessage(ftMemento)
+    #     pass
 
 
     @staticmethod

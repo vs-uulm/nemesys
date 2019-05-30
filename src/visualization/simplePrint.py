@@ -4,7 +4,7 @@ from tabulate import tabulate
 from netzob.Common.Utils.MatrixList import MatrixList
 
 from inference.segments import MessageSegment, TypedSegment
-from inference.fieldTypes import FieldTypeMemento, RecognizedField
+from inference.fieldTypes import BaseTypeMemento, RecognizedField
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):
@@ -60,7 +60,7 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
 
 
 def segmentFieldTypes(sequence: Sequence[TypedSegment],
-                      recognizedFields: Dict[Union[FieldTypeMemento, str], List[RecognizedField]]):
+                      recognizedFields: Dict[Union[BaseTypeMemento, str], List[RecognizedField]]):
     """
     Visualization for recognized field type templates in message.
     Abbreviate long zero sequences
@@ -69,9 +69,13 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
     :param recognizedFields:
     :return:
     """
+    sortedRecognizedFieldKeys = sorted(recognizedFields.keys(),
+                                       key=lambda x: x.fieldtype if isinstance(x, BaseTypeMemento) else x)
     ftmlines = list()
-    for ftm, poscon in recognizedFields.items():
-        ftmline = [ftm.fieldtype if isinstance(ftm, FieldTypeMemento) else ftm]
+    for ftm in sortedRecognizedFieldKeys:
+        poscon = recognizedFields[ftm]
+    # for ftm, poscon in recognizedFields.items():
+        ftmline = [ftm.fieldtype if isinstance(ftm, BaseTypeMemento) else ftm]
         conline = [" ^ conf."]
         posconMap = {o: recognized
                      for recognized in poscon
