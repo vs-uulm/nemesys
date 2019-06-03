@@ -348,8 +348,6 @@ if __name__ == '__main__':
         for analyzer in analyzers:
             ftRecognizer.append(FieldTypeRecognizer(analyzer))
 
-        # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
         # recognize fieldtypeTemplates per message with all known FieldTypeRecognizers
         print("Recognize fields...")
         recognized = OrderedDict()
@@ -357,6 +355,7 @@ if __name__ == '__main__':
         for msgids in range(len(ftRecognizer)):
             ftr = ftRecognizer[msgids]
             recognized[ftr.message] = ftr.recognizedFields()
+
 
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -442,29 +441,31 @@ if __name__ == '__main__':
                             print("  ", off, msg.data[off:off+ftmlen].hex(), "{:.3f}".format(con4off))
                             print("  ", overlapSegs)
                         print()
-
-
+        # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         # # # Print recognized field type templates per message
         # for msg, ftmposcon in recognized.items():
         #     segmentFieldTypes(segmentedMessages[msg], ftmposcon)
         #     print()
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         # one specific
         # a = 92; segmentFieldTypes(segmentedMessages[recognized[a][0]], recognized[a][1])
         # one test message to query
         # ftq = FieldTypeQuery(ftRecognizer[-1])
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
         # # # # # # # # # # # # # # # # # # # # # # # #
-
-
         ftQueries = [FieldTypeQuery(ftr) for ftr in ftRecognizer]
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
         # evaluateCharIDOverlaps(ftQueries)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
-
+        # # # # # # # # # # # # # # # # # # # # # # # #
         # sum of true and false posititves count across all messages for each type
         matchStatistics = dict()
         for query in ftQueries:
@@ -475,33 +476,57 @@ if __name__ == '__main__':
                 matchStatistics[ftName][0].extend(ftStats[0])
                 matchStatistics[ftName][1].extend(ftStats[1])
                 matchStatistics[ftName][2].extend(ftStats[2])
-
         mstattab = [(ftName, len(matchStatistics[ftName][0]),
                      len(matchStatistics[ftName][1]), len(matchStatistics[ftName][2]))
                     for ftName in sorted(matchStatistics.keys())]
         print()
         print(tabulate(mstattab, headers=("ftName", "truePos", "falsePos", "falseNeg")))
         print()
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
         # # compare true and recognized fieldtypes of false positives.
         # [(a.template.fieldtype, b.fieldtype, a.position, b.offset) for a, b in matchStatistics["id"][1]]
         # [(b.fieldtype, a.position, b.offset, b.bytes.hex()) for a, b in matchStatistics["id"][1]]
         # # # # # # # # # # # # # # # # # # # # # # # #
 
-        falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
-        for fpid, seg in falsePositiveIDs:
-            printFieldContext(segmentedMessages, fpid)
+
+
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
+        # for fpid, seg in falsePositiveIDs:
+        #     printFieldContext(segmentedMessages, fpid)
+        #
+        # # the confidence of
+        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[1]
+        # # at position
+        # offsAtFpO = falsePositiveIDs[0][1].offset
+        # # that overlaps with
+        # recogAtFpO = falsePositiveIDs[0][0]
+        # # which became the recognized field type with confidence 0.98
+        # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+        # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+        # # is 1.48
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
+        for fpFlags, seg in falsePositiveFlags[:20]:
+            printFieldContext(segmentedMessages, fpFlags)
 
         # the confidence of
         timestamp = FieldTypeRecognizer.fieldtypeTemplates[1]
         # at position
-        offsAtFpO = falsePositiveIDs[0][1].offset
+        offsAtFpO = falsePositiveFlags[0][1].offset
         # that overlaps with
-        recogAtFpO = falsePositiveIDs[0][0]
+        recogAtFpO = falsePositiveFlags[0][0]
         # which became the recognized field type with confidence 0.98
         msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
         confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+        # is 1.48
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
 
 
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -516,12 +541,14 @@ if __name__ == '__main__':
             # # # # # # # # # # # # # # # # # # # # # # # #
             # Isolated, individual evaluation of field type recognition
             #   see FieldTypes.ods
-            ftString = "timestamp"
-            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
-            # ftString = "ipv4"
-            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[3]
             # ftString = "macaddr"
             # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[0]
+            # ftString = "timestamp"
+            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
+            ftString = "id"
+            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[2]
+            # ftString = "ipv4"
+            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[3]
             assert ftString == ftMemento.fieldtype
             # for all messages
             truePos = dict()

@@ -60,7 +60,8 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
 
 
 def segmentFieldTypes(sequence: Sequence[TypedSegment],
-                      recognizedFields: Dict[Union[BaseTypeMemento, str], List[RecognizedField]]):
+                      recognizedFields: Dict[Union[BaseTypeMemento, str], List[RecognizedField]],
+                      fieldNumStart=0):
     """
     Visualization for recognized field type templates in message.
     Abbreviate long zero sequences
@@ -114,9 +115,26 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
                          "00..00" if set(sg.bytes) == {b"\x00"} else sg.bytes.hex() for sg in sequence],
             *ftmlines
         ),
-        headers=[""] + list(range(len(sequence))), disable_numparse=True)
+        headers=[""] + list(range(fieldNumStart, fieldNumStart+len(sequence))), disable_numparse=True)
     )
     tabmod.PRESERVE_WHITESPACE = False
 
 
-
+def printFieldContext(segmentedMessages, recog: RecognizedField):
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # get and print segment context around a selected recognition (here: recog)
+    posSegMatch = None  # first segment that starts at or after the recognized field
+    for sid, seg in enumerate(segmentedMessages[recog.message]):
+        if seg.offset > recog.position:
+            posSegMatch = sid
+            break
+    posSegEnd = None  # last segment that ends after the recognized field
+    for sid, seg in enumerate(segmentedMessages[recog.message]):
+        if seg.nextOffset > recog.end:
+            posSegEnd = sid
+            break
+    if posSegMatch is not None:
+        if posSegEnd is None:
+            posSegEnd = posSegMatch
+        segmentFieldTypes(segmentedMessages[recog.message][posSegMatch - 2:posSegEnd + 1],
+                          {recog.template: [recog]}, posSegMatch - 2)
