@@ -128,7 +128,12 @@ class FieldTypeMemento(BaseTypeMemento):
         return scipy.spatial.distance.mahalanobis(self.mean, vector, self.picov)
 
     def confidence(self, vector: Iterable[float]):
-        return self.mahalanobis(vector)
+        conf = self.mahalanobis(vector)
+        # TODO move to be a parameterizable property of the FieldTypeMemento class
+        # make ids twice as unconfident
+        if self.fieldtype == "id":
+            conf *= 2
+        return conf
 
 
 class RecognizedField(object):
@@ -202,7 +207,7 @@ class FieldTypeRecognizer(object):
         # position, confidence
         posCon = list()
         ftlen = len(fieldtypeTemplate)
-        for offset in range(len(self._analyzer.values) - ftlen):
+        for offset in range(len(self._analyzer.values) - ftlen + 1):
             ngram = self._analyzer.values[offset:offset+ftlen]
             if set(ngram) == {0}:  # zero values do not give any information
                 posCon.append(99)
@@ -262,20 +267,23 @@ class FieldTypeRecognizer(object):
         # confidence = 0.2
         offset = 0
         minLen = 2
-        bitset = 3
+        bitset = 2
 
         recognizedFlags = list()
         while offset < len(self.message.data) - minLen:
             belowBitset = True
             bitSum = 0
+            bitCountSeq = list()
             for bVal in self.message.data[offset:offset + minLen]:
                 bitCount = bin(bVal).count("1")
+                bitCountSeq.append(bitCount)
                 bitSum += bitCount
                 if bitCount > bitset:
                     belowBitset = False
                     break
             if belowBitset and bitSum > 0:
-                confidence = 2 * bitSum / bitset # * minLen
+                # TODO find a valid dynamic generation by observing groundtruth
+                confidence = 4.0  # 4 * bitSum / bitset  # * minLen
                 recognizedFlags.append(
                     RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
             offset += 1
@@ -294,7 +302,7 @@ class FieldTypeRecognizer(object):
         mostConfident = dict()
         for ftMemento in FieldTypeRecognizer.fieldtypeTemplates:
             if confidenceThreshold is None:
-                applConfThre = 10/numpy.log(ftMemento.stdev.mean())
+                applConfThre = 20/numpy.log(ftMemento.stdev.mean())
             confidences = self.findInMessage(ftMemento)
             mostConfident[ftMemento] = [RecognizedField(self.message, ftMemento, pos, con)
                                         for pos, con in enumerate(confidences) if con < applConfThre]
@@ -348,7 +356,7 @@ class FieldTypeQuery(object):
                         # this is not very efficient using a list!
                         mostConfident.remove(recog)
 
-        return nonConflicting
+        return sorted(nonConflicting, key=lambda n: n.position)
 
 
     # def mostConfident4Type(self, ftMemento: FieldTypeMemento):
