@@ -14,7 +14,7 @@ from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateF
     labelForSegment
 from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
 from inference.fieldTypes import FieldTypeMemento
-from inference.segments import TypedSegment
+from inference.segments import TypedSegment, HelperSegment
 from inference.analyzers import *
 from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
     filterSegments
@@ -135,6 +135,9 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--clusters-per-type',
                         help='Cluster each true field type and plot one page for each type.',
                         action="store_true")
+    parser.add_argument('-p', '--with-plots',
+                        help='Generate plots of true field types and their distances.',
+                        action="store_true")
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
@@ -154,9 +157,7 @@ if __name__ == '__main__':
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
     segments = list(chain.from_iterable(segmentedMessages))
 
-
-
-    withPlots = False
+    withPlots = args.with_plots
 
 
 
@@ -216,23 +217,31 @@ if __name__ == '__main__':
 
                 # select promising field type templates from binaryprotocols_merged_500.pcap
                 fieldtypeTemplates = dict()
-                # for int: directly use clusters 2 and 3
-                fieldtypeTemplates["int"] = [ ftMap[tid] for tid in [ "23f5adaa", "0df67e40" ] ]
-                # for ipv4: combine clusters 0+1+2
+                # for ipv4: combine clusters 0 to 5
                 fieldtypeTemplates["ipv4"] = [ FieldTypeTemplate(chain.from_iterable(
-                    [ ftMap[tid].baseSegments for tid in [ "9d194096", "c9f10baa", "8b6908f0" ] ])) ]
+                    [ ftMap[tid].baseSegments for tid in [
+                        "8b6908f0", "d678d05b", "93f2a49e", "c9f10baa", "f4891db9" ] ])) ]
                 # for macaddr: use the complete group
                 fieldtypeTemplates["macaddr"] = [ FieldTypeTemplate(
                     [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("macaddr")
                       for cluster in page for segs in cluster[1] ]
                 ) ]
                 # for id: test whether this works
-                fieldtypeTemplates["id"] = [ ftMap["998eb32b"] ]
+                fieldtypeTemplates["id"] = [ ftMap["571bd5d4"] ]
+
                 # for float: use the complete group
-                fieldtypeTemplates["float"] = [ FieldTypeTemplate(
-                    [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("float")
-                      for cluster in page for segs in cluster[1] ]
-                ) ]
+                floatHelpers = list()
+                # modify values to raise the first bytes from zero to get something like floatMean = [1, 4, 22, 117]
+                float_rand_lower = numpy.array([0, 0, 0, 0]) # , 14, 44]   # [1, 4, 0, 0]
+                float_rand_upper = numpy.array([2, 6, 0, 0]) # , 31, 190]
+                for tid in ["84f0fc52", "98b5b680"]:
+                    for bs in ftMap[tid].baseSegments:
+                        fh = HelperSegment(bs.analyzer, 0, bs.length)
+                        fh.values = bs.values + \
+                                    (float_rand_upper - float_rand_lower) * numpy.random.rand(4) + float_rand_lower
+                        floatHelpers.append(fh)
+                fieldtypeTemplates["float"] = [ FieldTypeTemplate(floatHelpers) ]
+
                 # for timestamp: use the complete group
                 fieldtypeTemplates["timestamp"] = [ FieldTypeTemplate(
                     [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("timestamp")
@@ -260,7 +269,7 @@ if __name__ == '__main__':
                     return nea.analyzer.message, far.analyzer.message
 
 
-                for ftt in [fieldtypeTemplates["int"][1], fieldtypeTemplates["ipv4"][0]]:
+                for ftt in [fieldtypeTemplates["float"][0], fieldtypeTemplates["ipv4"][0]]:
                     near, far = nf4ftt(ftt)
                     nid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == near][0]
                     fid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == far][0]

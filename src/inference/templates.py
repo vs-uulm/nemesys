@@ -1492,7 +1492,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             if compstdev == 0:
                 segV[:,compidx] = numpy.random.random_sample((len(relevantSegs),)) * .5
 
-        print(segV)
+        # print(segV)
 
         # self._cov = numpy.cov(segV, rowvar=False)
         # pandas allows for nans, numpy not

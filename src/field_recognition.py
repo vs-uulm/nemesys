@@ -482,6 +482,8 @@ if __name__ == '__main__':
         print()
         print(tabulate(mstattab, headers=("ftName", "truePos", "falsePos", "falseNeg")))
         print()
+        # TODO for reference remove from the false positives/negatives of id and flags all those
+        #  that match a true segment of type int (and id?) of one or two bytes length
         # # compare true and recognized fieldtypes of false positives.
         # [(a.template.fieldtype, b.fieldtype, a.position, b.offset) for a, b in matchStatistics["id"][1]]
         # [(b.fieldtype, a.position, b.offset, b.bytes.hex()) for a, b in matchStatistics["id"][1]]
@@ -497,7 +499,7 @@ if __name__ == '__main__':
         #     printFieldContext(segmentedMessages, fpid)
         #
         # # the confidence of
-        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[1]
+        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
         # # at position
         # offsAtFpO = falsePositiveIDs[0][1].offset
         # # that overlaps with
@@ -509,20 +511,20 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
 
         # # # # # # # # # # # # # # # # # # # # # # # #
-        falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
-        for fpFlags, seg in falsePositiveFlags[:20]:
-            printFieldContext(segmentedMessages, fpFlags)
-
-        # the confidence of
-        timestamp = FieldTypeRecognizer.fieldtypeTemplates[1]
-        # at position
-        offsAtFpO = falsePositiveFlags[0][1].offset
-        # that overlaps with
-        recogAtFpO = falsePositiveFlags[0][0]
-        # which became the recognized field type with confidence 0.98
-        msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
-        confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
-        # is 1.48
+        # falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
+        # for fpFlags, seg in falsePositiveFlags[:20]:
+        #     printFieldContext(segmentedMessages, fpFlags)
+        #
+        # # the confidence of
+        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
+        # # at position
+        # offsAtFpO = falsePositiveFlags[0][1].offset
+        # # that overlaps with
+        # recogAtFpO = falsePositiveFlags[0][0]
+        # # which became the recognized field type with confidence 0.98
+        # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+        # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+        # # is 1.48
         # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -537,16 +539,16 @@ if __name__ == '__main__':
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # noinspection PyUnreachableCode
-        if False:
+        if True:
             # # # # # # # # # # # # # # # # # # # # # # # #
             # Isolated, individual evaluation of field type recognition
             #   see FieldTypes.ods
             # ftString = "macaddr"
             # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[0]
-            # ftString = "timestamp"
-            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
-            ftString = "id"
-            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[2]
+            ftString = "float"
+            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
+            # ftString = "id"
+            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[2]
             # ftString = "ipv4"
             # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[3]
             assert ftString == ftMemento.fieldtype
