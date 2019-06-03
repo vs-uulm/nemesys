@@ -117,12 +117,12 @@ class ParsingConstants226(ParsingConstants):
 
     # ntp
     TYPELOOKUP['ntp.flags'] = 'flags'  # bit field
-    TYPELOOKUP['ntp.stratum'] = 'int'  # 1 byte integer: byte
+    TYPELOOKUP['ntp.stratum'] = 'flags'  # or 'int'  # 1 byte integer: byte
     TYPELOOKUP['ntp.ppoll'] = 'int'
     TYPELOOKUP['ntp.precision'] = 'int'  # signed 1 byte integer: sbyte
-    TYPELOOKUP['ntp.rootdelay'] = 'int'  # 4 byte integer: int
+    TYPELOOKUP['ntp.rootdelay'] = 'float'  # 4 byte integer: int
     TYPELOOKUP['ntp.rootdispersion'] = 'float'
-    TYPELOOKUP['ntp.refid'] = 'id'  # some id, cookie, ...
+    TYPELOOKUP['ntp.refid'] = 'ipv4'  # 'id'  # some id, effectively often an ipv4 is used
     TYPELOOKUP['ntp.reftime'] = 'timestamp'  #
     TYPELOOKUP['ntp.org'] = 'timestamp'
     TYPELOOKUP['ntp.rec'] = 'timestamp'
@@ -134,8 +134,8 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['ntp.priv.reqcode'] = 'int'  # has value: 00
 
     # dhcp
-    TYPELOOKUP['bootp.type'] = 'int'
-    TYPELOOKUP['bootp.hw.type'] = 'int'
+    TYPELOOKUP['bootp.type'] = 'flags'  # or enum
+    TYPELOOKUP['bootp.hw.type'] = 'flags'  # or enum
     TYPELOOKUP['bootp.hw.len'] = 'int'
     TYPELOOKUP['bootp.hops'] = 'int'
     TYPELOOKUP['bootp.id'] = 'id'
@@ -161,11 +161,11 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.count.auth_rr'] = 'int'
     TYPELOOKUP['dns.count.add_rr'] = 'int'
     TYPELOOKUP['dns.qry.name'] = 'chars'
-    TYPELOOKUP['dns.qry.type'] = 'int'
-    TYPELOOKUP['dns.qry.class'] = 'int'
+    TYPELOOKUP['dns.qry.type'] = 'flags'  # or enum
+    TYPELOOKUP['dns.qry.class'] = 'flags'  # or enum
     TYPELOOKUP['dns.resp.name'] = 'chars'  # has value: 0a6c697479616c65616b7300
-    TYPELOOKUP['dns.resp.type'] = 'int'  # has value: 0001
-    TYPELOOKUP['dns.resp.class'] = 'int'  # has value: 0001
+    TYPELOOKUP['dns.resp.type'] = 'flags'  # or enum  # has value: 0001
+    TYPELOOKUP['dns.resp.class'] = 'flags'  # or enum  # has value: 0001
     TYPELOOKUP['dns.resp.ttl'] = 'int'  # has value: 0000003c: unsigned
     TYPELOOKUP['dns.resp.len'] = 'int'  # has value: 0004
     TYPELOOKUP['dns.a'] = 'ipv4'  # has value: 0a10000a
@@ -196,10 +196,10 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.pid.high'] = 'int'  # has value: 0000
     TYPELOOKUP['smb.signature'] = 'checksum'  # has value: 4253525350594c20
     TYPELOOKUP['smb.reserved'] = 'int'  # has value: 0000
-    TYPELOOKUP['smb.tid'] = 'int'  # has value: 0000
-    TYPELOOKUP['smb.pid'] = 'int'  # has value: fffe
-    TYPELOOKUP['smb.uid'] = 'int'  # has value: 0000
-    TYPELOOKUP['smb.mid'] = 'int'  # has value: 4000
+    TYPELOOKUP['smb.tid'] = 'id'  # has value: 0000
+    TYPELOOKUP['smb.pid'] = 'id'  # has value: fffe
+    TYPELOOKUP['smb.uid'] = 'id'  # has value: 0000
+    TYPELOOKUP['smb.mid'] = 'id'  # has value: 4000
 
     # nbns
     TYPELOOKUP['nbns.id'] = 'int'
@@ -209,15 +209,15 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['nbns.count.auth_rr'] = 'int'  # has value: 0000
     TYPELOOKUP['nbns.count.add_rr'] = 'int'  # has value: 0000
     TYPELOOKUP['nbns.name'] = 'chars'  # has value: 204648464145424545434f4543454d464645464445434f4546464943414341414100
-    TYPELOOKUP['nbns.type'] = 'int'  # has value: 0020
-    TYPELOOKUP['nbns.class'] = 'int'  # has value: 0001
+    TYPELOOKUP['nbns.type'] = 'flags'  # or enum  # has value: 0020
+    TYPELOOKUP['nbns.class'] = 'flags'  # or enum  # has value: 0001
     TYPELOOKUP['nbns.ttl'] = 'int'  # has value: 000493e0
     TYPELOOKUP['nbns.data_length'] = 'int'  # has value: 0006
     TYPELOOKUP['nbns.nb_flags'] = 'flags'  # has value: 0000
     TYPELOOKUP['nbns.addr'] = 'ipv4'  # has value: ac140205
 
     # smb
-    TYPELOOKUP['nbss.type'] = 'int'  # has value: 00
+    TYPELOOKUP['nbss.type'] = 'id'  # has value: 00
     TYPELOOKUP['nbss.length'] = 'int'  # has value: 000038
     TYPELOOKUP['smb.wct'] = 'int'  # has value: 07
     TYPELOOKUP['smb.andxoffset'] = 'int'  # has value: 3800

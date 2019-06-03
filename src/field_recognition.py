@@ -16,7 +16,7 @@ from inference.analyzers import *
 from inference.segments import TypedSegment
 from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
 from utils.evaluationHelpers import analyses, annotateFieldTypes
-from visualization.simplePrint import segmentFieldTypes, tabuSeqOfSeg
+from visualization.simplePrint import segmentFieldTypes, tabuSeqOfSeg, printFieldContext
 import visualization.bcolors as bcolors
 
 # fix the analysis method to VALUE
@@ -444,23 +444,25 @@ if __name__ == '__main__':
                         print()
 
 
-        # TODO mark bytes with only single (2-3?) bits set => flags?  (confidence?)
 
-        # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # # Print recognized field type templates per message
-        for msg, ftmposcon in recognized.items():
-            segmentFieldTypes(segmentedMessages[msg], ftmposcon)
-            print()
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # # Print recognized field type templates per message
+        # for msg, ftmposcon in recognized.items():
+        #     segmentFieldTypes(segmentedMessages[msg], ftmposcon)
+        #     print()
 
         # one specific
         # a = 92; segmentFieldTypes(segmentedMessages[recognized[a][0]], recognized[a][1])
-
         # one test message to query
         # ftq = FieldTypeQuery(ftRecognizer[-1])
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
 
         ftQueries = [FieldTypeQuery(ftr) for ftr in ftRecognizer]
 
+        # # # # # # # # # # # # # # # # # # # # # # # #
         # evaluateCharIDOverlaps(ftQueries)
+        # # # # # # # # # # # # # # # # # # # # # # # #
 
 
         # sum of true and false posititves count across all messages for each type
@@ -474,67 +476,125 @@ if __name__ == '__main__':
                 matchStatistics[ftName][1].extend(ftStats[1])
                 matchStatistics[ftName][2].extend(ftStats[2])
 
-        mstattab = [(ftName, len(ftStats[0]), len(ftStats[1]), len(ftStats[2]))
-                    for ftName, ftStats in matchStatistics.items()]
+        mstattab = [(ftName, len(matchStatistics[ftName][0]),
+                     len(matchStatistics[ftName][1]), len(matchStatistics[ftName][2]))
+                    for ftName in sorted(matchStatistics.keys())]
         print()
         print(tabulate(mstattab, headers=("ftName", "truePos", "falsePos", "falseNeg")))
         print()
 
+        # # # # # # # # # # # # # # # # # # # # # # # #
         # # compare true and recognized fieldtypes of false positives.
         # [(a.template.fieldtype, b.fieldtype, a.position, b.offset) for a, b in matchStatistics["id"][1]]
         # [(b.fieldtype, a.position, b.offset, b.bytes.hex()) for a, b in matchStatistics["id"][1]]
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+        falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
+        for fpid, seg in falsePositiveIDs:
+            printFieldContext(segmentedMessages, fpid)
+
+        # the confidence of
+        timestamp = FieldTypeRecognizer.fieldtypeTemplates[1]
+        # at position
+        offsAtFpO = falsePositiveIDs[0][1].offset
+        # that overlaps with
+        recogAtFpO = falsePositiveIDs[0][0]
+        # which became the recognized field type with confidence 0.98
+        msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+        confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # TODO evaluate bytes with only single (2-3?) bits set => flags?  (confidence?)
 
 
 
         # # # # # # # # # # # # # # # # # # # # # # # #
-        # macaddr
-        ftMemento = FieldTypeRecognizer.fieldtypeTemplates[0]
-        assert "macaddr" == ftMemento.fieldtype
-        ftr = ftRecognizer[0]
-        msg = ftr.message
-        msgsegs = segmentedMessages[msg]
+        # noinspection PyUnreachableCode
+        if False:
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # Isolated, individual evaluation of field type recognition
+            #   see FieldTypes.ods
+            ftString = "timestamp"
+            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
+            # ftString = "ipv4"
+            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[3]
+            # ftString = "macaddr"
+            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[0]
+            assert ftString == ftMemento.fieldtype
+            # for all messages
+            truePos = dict()
+            falsePos = dict()
+            falseNeg = dict()
+            for ftr in ftRecognizer:
+                msg = ftr.message
+                msgsegs = segmentedMessages[msg]
 
-        confidences = ftr.findInMessage(ftMemento)
-        sortRecogMacs = sorted([RecognizedField(msg, ftMemento, pos, con) for pos, con in enumerate(confidences)],
-               key=lambda x: x.confidence)
+                confidences = ftr.findInMessage(ftMemento)
+                sortRecogMacs = sorted([RecognizedField(msg, ftMemento, pos, con) for pos, con in enumerate(confidences)],
+                       key=lambda x: x.confidence)
 
-        # get true and false positives and false negatives and their recognized fields
-        truePos = dict()
-        falsePos = dict()
-        falseNeg = dict()
-        fieldOffsets = {msgseg.offset for msgseg in msgsegs if msgseg.fieldtype == ftMemento.fieldtype}
-        recogOffsets = {recogMacs.position: recogMacs for recogMacs in sortRecogMacs}
-        truePos[ftMemento] = [recogOffsets[tpfo] for tpfo in fieldOffsets.intersection(set(recogOffsets.keys()))]
-        falsePos[ftMemento] = [recogOffsets[fpfo] for fpfo in set(recogOffsets.keys()).difference(fieldOffsets)]
-        falseNeg[ftMemento] = [recogOffsets[fnfo] for fnfo in fieldOffsets.difference(set(recogOffsets.keys()))]
+                # get true and false positives and false negatives and their recognized fields
+                fieldOffsets = {msgseg.offset for msgseg in msgsegs if msgseg.fieldtype == ftMemento.fieldtype
+                                and msgseg.offset <= msgsegs[-1].nextOffset - len(ftMemento)}
+                recogOffsets = {recogFtm.position: recogFtm for recogFtm in sortRecogMacs}
+                # globals().update(locals())
+                truePos[msg] = [recogOffsets[tpfo] for tpfo in fieldOffsets.intersection(set(recogOffsets.keys()))]
+                falsePos[msg] = [recogOffsets[fpfo] for fpfo in set(recogOffsets.keys()).difference(fieldOffsets)]
+                falseNeg[msg] = [recogOffsets[fnfo] for fnfo in fieldOffsets.difference(set(recogOffsets.keys()))]
 
-        # get confidence values for true and false positives
-        tpmaxconf = max([recog.confidence for recog in truePos[ftMemento]])
-        fpminconf = min([recog.confidence for recog in falsePos[ftMemento]])
-        fpsortconf = sorted([(recog.confidence, recog) for recog in falsePos[ftMemento]], key=lambda x: x[0])
-        # numpy.argmin([recog.confidence for recog in falsePos[ftMemento]])
-        # fpminrecog = fpsortconf[0][1]
+                # TODO filter interesting stuff:  see FieldTypes.ods
+                #   low (actually high) confidence - false positives  <-- what do they represent that looks like the template?
+                #   high confidence - false negatives  <-- why do they not resemble the template?
 
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # get and print segment context around a selected recognition (here: fpminrecog)
-        posSegMatch = None  # first segment that starts at or after the recognized field
-        for sid, seg in enumerate(segmentedMessages[fpminrecog.message]):
-            if seg.offset >= fpminrecog.position:
-                posSegMatch = sid
-                break
-        posSegEnd = None  # last segment that ends after the recognized field
-        for sid, seg in enumerate(segmentedMessages[fpminrecog.message]):
-            if seg.nextOffset > fpminrecog.end:
-                posSegEnd = sid
-                break
-        if posSegMatch is not None:
-            if posSegEnd is None:
-                posSegEnd = posSegMatch
-            segmentFieldTypes(segmentedMessages[fpminrecog.message][posSegMatch-2:posSegEnd+1],
-                              {fpminrecog.template: [fpminrecog]})
+            # get confidence values for true and false positives
+            tphistoconf = numpy.histogram([recog.confidence for msgtp in truePos.values() for recog in msgtp])
+            # # median fails as a heuristic for a good confidence threshold
+            # tpmedianconf = numpy.median([recog.confidence for msgtp in truePos.values() for recog in msgtp])
+            tpsortconf = sorted([(recog.confidence, recog) for msgtp in truePos.values() for recog in msgtp], key = lambda x: x[0])
+            # minimum bin size to find reasonable confidence threshold to work with
+            tpminbin = tphistoconf[1][tphistoconf[0].argmin()]
+            tpthresh = max(recog.confidence for msgtp in truePos.values() for recog in msgtp if recog.confidence < tpminbin) + 0.0001
 
-        # TODO get macaddr, ipv4, ... statistics and print/analyze confidence outliers, ... and false positives
-        #   solve to note below by it.
+            # histogram of fp confidences with skewed bins. Interesting but not generally helpful
+            fpconf = [recog.confidence for msgfp in falsePos.values() for recog in msgfp]
+            fpbins = [0, tpthresh, tpthresh * 2, tpthresh * 4, tpthresh * 8]
+            if fpbins[-1] < max(fpconf) / 2:
+                fpbins.append(max(fpconf) / 2)
+            if fpbins[-1] < max(fpconf):
+                fpbins.append(max(fpconf))
+            fphistoconf = numpy.histogram(fpconf, bins=fpbins)
+
+            ntimesthresh = 4
+            # best confidences (lower ntimesthresh times the first block if filled tp bins) sorted and with instance
+            fpsortconf = sorted([(recog.confidence, recog) for msgfp in falsePos.values()
+                                 for recog in msgfp if recog.confidence < ntimesthresh*tpthresh], key=lambda x: x[0])
+            # # no false negatives since every position is a positive (with varying confidence)
+            # fnconf = [recog.confidence for msgfn in falseNeg.values() for recog in msgfn]
+            fpminbin = fphistoconf[1][fphistoconf[0].argmin()]
+            likelyGTerrors = [recog.confidence for msgfp in falsePos.values() for recog in msgfp if recog.confidence < fpminbin]
+            fpthresh = max(likelyGTerrors) if len(likelyGTerrors) > 0 else fpsortconf[0][1]
+
+            # numpy.argmin([recog.confidence for recog in falsePos[ftMemento]])
+            # fpminrecog = fpsortconf[0][1]
+
+
+            for conf, recog in fpsortconf[:100]:
+                printFieldContext(segmentedMessages, recog)
+
+                # TODO get macaddr, ipv4, ... statistics and print/analyze confidence outliers, ... and false positives
+                #   solve to note below by it.
+
+            print("Evaluating", ftString)
+            print("Histogram of true positive confidences (auto bins)")
+            print(tabulate(tphistoconf))
+            # print("Median:", tpmedianconf)
+            print("Low tp threshold:", tpthresh)
+            print("Max fp conf below", ntimesthresh, "times threshold", max(conf for conf, recog in fpsortconf))
+            print("Histogram of false positive confidences (manual bins)")
+            print(tabulate(fphistoconf))
+            print("Max fp conf below the bin separating likely gt errors from actual fps", fpthresh)
 
         # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -550,7 +610,7 @@ if __name__ == '__main__':
         #       collect and sort all dists for this fieldtype
         #       overlay plot from before as histogram/function (see the one for segment type distance distributions)
 
-
+        # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
