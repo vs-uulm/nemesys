@@ -188,7 +188,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smtp.rsp.parameter'] = 'chars'
 
     # smb
-    TYPELOOKUP['smb.server_component'] = 'int'  # has value: ff534d42
+    TYPELOOKUP['smb.server_component'] = 'id'  # has value: ff534d42 = ".SMB"
     TYPELOOKUP['smb.cmd'] = 'int'  # has value: 73
     TYPELOOKUP['smb.nt_status'] = 'int'  # has value: 00000000
     TYPELOOKUP['smb.flags'] = 'flags'  # has value: 18
@@ -196,10 +196,10 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.pid.high'] = 'int'  # has value: 0000
     TYPELOOKUP['smb.signature'] = 'checksum'  # has value: 4253525350594c20
     TYPELOOKUP['smb.reserved'] = 'int'  # has value: 0000
-    TYPELOOKUP['smb.tid'] = 'id'  # has value: 0000
-    TYPELOOKUP['smb.pid'] = 'id'  # has value: fffe
-    TYPELOOKUP['smb.uid'] = 'id'  # has value: 0000
-    TYPELOOKUP['smb.mid'] = 'id'  # has value: 4000
+    TYPELOOKUP['smb.tid'] = 'flags'  # originally was 'id' but behaves like flags  # has value: 0000
+    TYPELOOKUP['smb.pid'] = 'flags'  # originally was 'id' but behaves like flags  # has value: fffe
+    TYPELOOKUP['smb.uid'] = 'flags'  # originally was 'id' but behaves like flags  # has value: 0000
+    TYPELOOKUP['smb.mid'] = 'flags'  # originally was 'id' but behaves like flags  # has value: 4000
 
     # nbns
     TYPELOOKUP['nbns.id'] = 'int'
@@ -216,14 +216,14 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['nbns.nb_flags'] = 'flags'  # has value: 0000
     TYPELOOKUP['nbns.addr'] = 'ipv4'  # has value: ac140205
 
-    # smb
+    # smb - mostly little endian numbers
     TYPELOOKUP['nbss.type'] = 'id'  # has value: 00
     TYPELOOKUP['nbss.length'] = 'int'  # has value: 000038
     TYPELOOKUP['smb.wct'] = 'int'  # has value: 07
-    TYPELOOKUP['smb.andxoffset'] = 'int'  # has value: 3800
+    TYPELOOKUP['smb.andxoffset'] = 'int'  # has value: 3800 - little endian
     TYPELOOKUP['smb.connect.support'] = 'int'  # has value: 0100
     TYPELOOKUP['smb.bcc'] = 'int'  # has value: 0700 (Byte count)
-    TYPELOOKUP['smb.service'] = 'chars'  # has value: 49504300
+    TYPELOOKUP['smb.service'] = 'enum'  # its coded as 8 bit ASCII 'chars', e.g: 49504300 - http://ubiqx.org/cifs/Book.html p. 311
     TYPELOOKUP['smb.native_fs'] = 'chars'  # has value: 0000
     TYPELOOKUP['smb.tpc'] = 'int'  # has value: 1a00
     TYPELOOKUP['smb.tdc'] = 'int'  # has value: 0000
@@ -263,12 +263,9 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.session_key'] = 'bytes'  # has value: 00000000
     TYPELOOKUP['smb.security_blob_len'] = 'int'  # has value: 6b00
     TYPELOOKUP['smb.server_cap'] = 'flags'  # has value: d4000080
-    TYPELOOKUP[
-        'smb.security_blob'] = 'bytes'  # has value: 4e544c4d5353500003000000010001005a000000000000005b000000000000004800000000000000480000001200120048000000100010005b000000158a88e2050093080000000f68006900730074006f007200690061006e00009b4f2563aaa13abaa4c1cf158a8bbbc1
-    TYPELOOKUP[
-        'smb.native_os'] = 'chars'  # has value: 570069006e0064006f007700730020003200300030003000200032003100390035000000
-    TYPELOOKUP[
-        'smb.native_lanman'] = 'chars'  # has value: 570069006e0064006f007700730020003200300030003000200035002e0030000000
+    TYPELOOKUP['smb.security_blob'] = 'bytes'
+    TYPELOOKUP['smb.native_os'] = 'chars'
+    TYPELOOKUP['smb.native_lanman'] = 'chars'
     TYPELOOKUP['smb.primary_domain'] = 'chars'  # has value: 0000
     TYPELOOKUP['smb.trans2.cmd'] = 'id'  # has value: 1000
     TYPELOOKUP['smb.max_referral_level'] = 'int'  # has value: 0300
@@ -961,7 +958,7 @@ class ParsedMessage(object):
                             print(expertMessage)
                         else:
                             print('Malformed packet with unknown error.')
-            if fieldkey in ParsedMessage._posthooks:  # apply post-hook, if any, for these field name
+            if fieldkey in ParsedMessage._posthooks:  # apply post-hook, if any, for this field name
                 try:
                     ranPostHook = ParsedMessage._posthooks[fieldkey](subnode, subfields)
                 except NotImplementedError as e:
