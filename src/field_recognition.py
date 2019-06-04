@@ -377,8 +377,6 @@ def inspectFieldtypeIsolated(ftString: str):
     print("Contexts of first", contextPrintLimit, "false positives, sorted by confidence:\n")
     for conf, recog in fpsortconf[:contextPrintLimit]:
         printFieldContext(segmentedMessages, recog)
-        # TODO get macaddr, ipv4, ... statistics and print/analyze confidence outliers, ... and false positives
-        #   solve to note below by it.
 
     print("\n\nEvaluating", ftString, "\n")
     print("Histogram of true positive confidences (auto bins)")
@@ -462,80 +460,7 @@ if __name__ == '__main__':
         #     for msgids in (189,243,333,262):
         #         ftr = ftRecognizer[msgids]
         #         calConfidence(ftm, ftr)
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # # Determine and print true and false positive matches
-        # noinspection PyUnreachableCode
-        if False:
-            truePos = dict()
-            falsePos = dict()
-            for msg, ftmposcon in recognized:
-                truePos[msg] = dict()
-                falsePos[msg] = dict()
-                for ftm, poscon in ftmposcon.items():
-                    ftyOffsets = {msgseg.offset for msgseg in segmentedMessages[msg] if msgseg.fieldtype == ftm.fieldtype}
-                    recOffsets = {pos for pos, con in poscon}
-
-                    # TODO take field length == ftm length into account
-                    truePos[msg][ftm] = ftyOffsets.intersection(recOffsets)
-                    falsePos[msg][ftm] = recOffsets.difference(ftyOffsets)
-
-            for msg, ftmposcon in recognized:
-                fpftmoff = falsePos[msg]
-                tpftmoff = truePos[msg]
-
-                if all([len(fpoff) == 0 for fpoff in fpftmoff.values()]) \
-                        and all([len(fpoff) == 0 for fpoff in tpftmoff.values()]):
-                    continue
-
-                print("\n=========================")
-                tabuSeqOfSeg([segmentedMessages[msg]])
-
-                for ftm, offs in fpftmoff.items():
-                    ftmlen = len(ftm.mean)
-                    poscon4ftm = ftmposcon[ftm]
-
-                    print("=========================")
-                    print("true  ft:", ftm.fieldtype)
-                    print("ftm mean:", bytes(ftm.mean.astype(int).tolist()).hex())
-                    if len(offs) == 0:
-                        print("no false positives")
-                        continue
-                    else:
-                        print("false positives:")
-
-                    for off in offs:
-                        overlapSegs = [(msgseg.offset, msgseg.fieldtype) for msgseg in segmentedMessages[msg]
-                                       if off <= msgseg.offset < off+ftmlen]
-                        con4off = [con for pos,con in poscon4ftm if pos == off][0]
-                        print("  ", off, msg.data[off:off+ftmlen].hex(), "{:.3f}".format(con4off))
-                        print("  ", overlapSegs)
-                        print()
-
-
-                # pprint(segmentedMessages[msg])
-                for ftm, offs in tpftmoff.items():
-                    ftmlen = len(ftm.mean)
-                    poscon4ftm = ftmposcon[ftm]
-
-                    print("=========================")
-                    print("true  ft:", ftm.fieldtype)
-                    print("ftm mean:", bytes(ftm.mean.astype(int).tolist()).hex())
-                    if len(offs) == 0:
-                        print("no true positives")
-                        continue
-                    else:
-                        print("true positives:")
-
-                    for off in offs:
-                        overlapSegs = [(msgseg.offset, msgseg.fieldtype) for msgseg in segmentedMessages[msg]
-                                       if off <= msgseg.offset < off+ftmlen]
-                        if overlapSegs:
-                            con4off = [con for pos,con in poscon4ftm if pos == off][0]
-                            print("  ", off, msg.data[off:off+ftmlen].hex(), "{:.3f}".format(con4off))
-                            print("  ", overlapSegs)
-                        print()
-        # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         # # # Print recognized field type templates per message
@@ -639,17 +564,22 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
         # Hunting false positives
         # # values per field name
-        val4fn = comparator.lookupValues4FieldName('bootp.option.type')
+        # val4fn = comparator.lookupValues4FieldName('bootp.option.dhcp_auto_configuration'); print(val4fn)
 
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # Hunting false positives
+        # # # field contexts of false positives
+        fpsortconf = sorted((recog for recog, seg in matchStatistics["flags"][1]), key=lambda r: r.confidence)
+        print("\nContexts of first 20 false positives, sorted by confidence:\n")
+        for recog in fpsortconf[:50]:
+            printFieldContext(segmentedMessages, recog)
 
         # # # # # # # # # # # # # # # # # # # # # # # #
-        # noinspection PyUnreachableCode
-        if False:
-            inspectFieldtypeIsolated("float")
+        # inspectFieldtypeIsolated("float")
         # TODO filter interesting stuff:  see FieldTypes.ods
         #   low confidence  - false positives  <-- what do they represent that looks like the template?
         #   high confidence - false negatives  <-- why do they not resemble the template?
-        #   (confidence meaning inverse to number)
+        #   (confidence grade has inverse meaning to number)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
         # TODO statistics of how well mahalanobis separates fieldtypes (select a threshold) per ftm:

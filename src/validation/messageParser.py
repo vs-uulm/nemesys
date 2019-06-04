@@ -4,9 +4,10 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Union, Dict, Set, Iterable, Any, Callable
-
+from typing import List, Tuple, Union, Dict, Set, Union, Any, Callable
+from pprint import pprint
 import IPython
+
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
 
 from validation.tsharkConnector import TsharkConnector
@@ -44,9 +45,23 @@ class ParsingConstants226(ParsingConstants):
 
     COMPATIBLE_TO = b'2.2.6'
 
+    # names of field nodes in the json which should be ignored.
+    IGNORE_FIELDS = [
+        'bootp.option.type_raw', 'bootp.option.value_raw', 'bootp.option.end_raw',
+
+        'dns.qry.name.len_raw', 'dns.count.labels_raw',
+        'irc.response_raw', 'irc.request_raw', 'irc.response.num_command_raw', 'irc.ctcp_raw',
+        'smtp.command_line_raw', 'smtp.response_raw', 'smb.max_raw',
+        'lanman.server_raw', 'dcerpc.cn_ctx_item_raw', 'dcerpc.cn_bind_abstract_syntax_raw', 'dcerpc.cn_bind_trans_raw',
+        'nbdgm.first_raw', 'nbdgm.node_type_raw',
+        'smb.security_blob_raw', 'gss-api_raw', 'spnego_raw', 'spnego.negTokenInit_element_raw',
+        'spnego.mechTypes_raw', 'ntlmssp_raw', 'ntlmssp.version_raw', 'ntlmssp.challenge.target_name_raw',
+        'ntlmssp.challenge.target_info_raw'
+    ]
+
     EXCLUDE_SUB_FIELDS = [  # a convenience list for debugging: names of fields that need not give a warning if ignored.
         'dns.flags_tree', 'ntp.flags_tree',
-        'bootp.flags_tree', 'bootp.option.type_tree', 'bootp.secs_tree',
+        'bootp.flags_tree', 'bootp.fqdn.flags_tree', 'bootp.secs_tree',
         'smb.flags_tree', 'smb.flags2_tree', 'smb.sm_tree', 'smb.server_cap_tree',
         'nbns.flags_tree', 'nbns.nb_flags_tree',
         'smb.setup.action_tree', 'smb.connect.flags_tree', 'smb.tid_tree', 'smb.connect.support_tree',
@@ -61,21 +76,10 @@ class ParsingConstants226(ParsingConstants):
         'smb.nt.ioctl.completion_filter_tree', 'smb.lock.type_tree'
     ]
 
-    # names of field nodes in the json which should be ignored.
-    IGNORE_FIELDS = [
-        'dns.qry.name.len_raw', 'dns.count.labels_raw',
-        'irc.response_raw', 'irc.request_raw', 'irc.response.num_command_raw', 'irc.ctcp_raw',
-        'smtp.command_line_raw', 'smtp.response_raw', 'smb.max_raw',
-        'lanman.server_raw', 'dcerpc.cn_ctx_item_raw', 'dcerpc.cn_bind_abstract_syntax_raw', 'dcerpc.cn_bind_trans_raw',
-        'nbdgm.first_raw', 'nbdgm.node_type_raw',
-        'smb.security_blob_raw', 'gss-api_raw', 'spnego_raw', 'spnego.negTokenInit_element_raw',
-        'spnego.mechTypes_raw', 'ntlmssp_raw', 'ntlmssp.version_raw', 'ntlmssp.challenge.target_name_raw',
-        'ntlmssp.challenge.target_info_raw'
-    ]
-
-
     # names of field nodes in the json which should be descended into.
     INCLUDE_SUBFIELDS = [
+        'bootp.option.type_tree',
+
         'Queries', 'Answers', 'Additional records',
 
         'irc.request_tree', 'irc.response_tree', 'Command parameters', 'irc',
@@ -150,8 +154,39 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['bootp.server'] = 'chars'
     TYPELOOKUP['bootp.file'] = 'chars'
     TYPELOOKUP['bootp.cookie'] = 'id'  # changed from 'bytes'
-    TYPELOOKUP['bootp.option.type'] = 'chars'  # contains the whole option! bootp.option.type_tree should be walked!
     TYPELOOKUP['bootp.option.padding'] = 'pad'
+    TYPELOOKUP['bootp.option.type'] = 'enum'  # special prehook since the dissector returns the whole option!
+                                              # bootp.option.type_tree is walked from there!
+    TYPELOOKUP['bootp.option.length'] = 'int'  # has value: 01
+    TYPELOOKUP['bootp.option.dhcp'] = 'enum'  # has value: 03
+    TYPELOOKUP['bootp.option.hostname'] = 'chars'  # has value: 4f66666963653131
+    TYPELOOKUP['bootp.fqdn.flags'] = 'flags'  # uint; has value: 00
+    TYPELOOKUP['bootp.fqdn.rcode1'] = 'enum'  # uint; has value: 00
+    TYPELOOKUP['bootp.fqdn.rcode2'] = 'enum'  # uint; has value: 00
+    TYPELOOKUP['bootp.fqdn.name'] = 'chars'  # has value: 4f666669636531312e626c7565322e6578
+    TYPELOOKUP['bootp.option.vendor_class_id'] = 'chars'  # has value: 4d53465420352e30
+    TYPELOOKUP['bootp.option.vendor.value'] = 'bytes'  # has value: 5e00
+    TYPELOOKUP['bootp.option.request_list_item'] = 'enum'  # uint; has value: 01
+    TYPELOOKUP['bootp.option.broadcast_address'] = 'ipv4'  # has value: ac1203ff
+    TYPELOOKUP['bootp.option.dhcp_server_id'] = 'ipv4'  # has value: ac120301
+    TYPELOOKUP['bootp.option.ip_address_lease_time'] = 'int'  # uint; has value: 00000e10
+    TYPELOOKUP['bootp.option.renewal_time_value'] = 'int'  # uint; has value: 00000696
+    TYPELOOKUP['bootp.option.rebinding_time_value'] = 'int'  # uint; has value: 00000bdc
+    TYPELOOKUP['bootp.option.subnet_mask'] = 'ipv4'  # has value: ffffff00
+    TYPELOOKUP['bootp.option.broadcast_address'] = 'ipv4'  # has value: ac1203ff
+    TYPELOOKUP['bootp.option.router'] = 'ipv4'  # has value: ac120301
+    TYPELOOKUP['bootp.option.domain_name_server'] = 'ipv4'  # has value: ac120301
+    TYPELOOKUP['bootp.option.domain_name'] = 'chars'  # has value: 626c7565332e6578
+    TYPELOOKUP['bootp.option.requested_ip_address'] = 'ipv4'  # has value: 0a6e30d8
+    TYPELOOKUP['bootp.option.dhcp_max_message_size'] = 'int'  # uint; has value: 04ec
+    TYPELOOKUP['bootp.client_id.uuid'] = 'id'  # has value: 00000000000000000000000000000000
+    TYPELOOKUP['bootp.option.ntp_server'] = 'ipv4'  # has value: c0a800c8
+    # these may be behaving like flags
+    TYPELOOKUP['bootp.option.client_system_architecture'] = 'enum'  # has value: 0000
+    TYPELOOKUP['bootp.client_network_id_major'] = 'int'  # version number; has value: 02
+    TYPELOOKUP['bootp.client_network_id_minor'] = 'int'  # version number; has value: 01
+    TYPELOOKUP['bootp.option.dhcp_auto_configuration'] = 'enum'  # has value: 01
+
 
     # dns
     TYPELOOKUP['dns.id'] = 'id'  # transaction id/"cookie"
@@ -384,11 +419,7 @@ class ParsingConstants263(ParsingConstants226):
 class MessageTypeIdentifiers(object):
     # fields or combinations of field that identify a message type for a specific protocol
     FOR_PROTCOL = {
-        'bootp' : [ {  # careful: values are hex-strings (so one byte is two positions long)
-            'field': 'bootp.option.type',
-            'filter': lambda v: v[:4] == '3501',  # "bootp option" dhcp
-            'select': lambda w: w[-2:]            # dhcp message type
-        } ],
+        'bootp' : ['bootp.option.dhcp'],
         'dns'   : ['dns.flags', 'dns.qry.type'],
         'nbns'  : ['nbns.flags'],
         'nbss'  : ['nbss.type', {
@@ -404,7 +435,7 @@ class MessageTypeIdentifiers(object):
     }
 
     NAMED_TYPES = {  # assumes hex bytes are lower-case
-        'bootp.option.type' : {
+        'bootp.option.dhcp' : {
             '01': 'Discover',
             '02': 'Offer',
             '03': 'Request',
@@ -874,10 +905,18 @@ class ParsedMessage(object):
         toInsert = list()
         # iterate all fields and search their value at the next position in the raw message
         for index, raw in enumerate(self.getFieldValues()):
+            if not isinstance(raw, str):
+                # print("\n_fieldsflat")
+                # pprint(self._fieldsflat)
+                print("\nThe offending value:")
+                pprint(raw)
+                raise RuntimeError(
+                    "_fieldsflat should only contain strings at the second tuple position, "
+                    "something else was there.")
+
             offset = rest.find(raw)
             if offset > 0:  # remember position and value of delimiters
                 if offset > 4:  # a two byte delimiter is probably still reasonable
-                    from pprint import pprint
                     print("Packet:", self.protocolbytes)
                     print("Field sequence:")
                     pprint(self.getFieldSequence())
@@ -916,6 +955,30 @@ class ParsedMessage(object):
                 raise DissectionIncomplete("Unparsed trailing field found. Value: {:s}".format(rest), rest=rest)
 
 
+    @staticmethod
+    def _nodeValue(node) -> Tuple[int, Union[str, List]]:
+        """
+        Discern between old and new tshark leaf node format and return value as hex-string
+        The return tuple indicates the type of the node:
+            * 0: not a leaf node (contains and returns a list not like the tshark 2.6.3 leaf format)
+            * 1: old style leaf node (str)
+            * 2: new style leaf node (list, but returns the value string)
+
+        :param node:
+        :return: Tuple[int, Any]
+        """
+        # tshark 2.2.6
+        if isinstance(node, str):
+            return 1, node
+        # tshark 2.6.3
+        elif isinstance(node, list) and len(node) == 5 \
+                and isinstance(node[0], str) \
+                and isinstance(node[1], int) and isinstance(node[2], int) \
+                and isinstance(node[3], int) and isinstance(node[4], int):
+            return 2, node[0]
+        else:
+            return 0, node
+
 
     @staticmethod
     def _walkSubTree(root: List[Tuple[str, any]], allSubFields=False) -> List[Tuple[str, str]]:
@@ -934,33 +997,38 @@ class ParsedMessage(object):
 
         subfields = []
         for fieldkey, subnode in root:
-            if fieldkey in ParsedMessage._prehooks:  # apply pre-hook if any for this field name
-                ranPreHook = ParsedMessage._prehooks[fieldkey](subnode, subfields)
+            nodetype, nodevalue = ParsedMessage._nodeValue(subnode)
+
+            # apply pre-hook if any for this field name
+            if fieldkey in ParsedMessage._prehooks:
+                ranPreHook = ParsedMessage._prehooks[fieldkey](nodevalue, subfields)
                 if ranPreHook is not None:
                     subfields.append(ranPreHook)
-            # leaf
-            if fieldkey.endswith(ParsedMessage.RK) and (isinstance(subnode, str)  # tshark 2.2.6
-                or (isinstance(subnode, list) and len(subnode) == 5  # tshark 2.6.3
-                    and isinstance(subnode[0], str)
-                    and isinstance(subnode[1], int) and isinstance(subnode[2], int)
-                    and isinstance(subnode[3], int) and isinstance(subnode[4], int))):
+
+            # append leaf data
+            if fieldkey.endswith(ParsedMessage.RK) and nodetype > 0:
                 if fieldkey not in CONSTANTS_CLASS.IGNORE_FIELDS:
                     subfields.append((fieldkey[:-len(ParsedMessage.RK)],
-                                      subnode if isinstance(subnode, str) else subnode[0]))
-            elif not isinstance(subnode, str):  # branch node, ignore textual descriptions
+                                      nodevalue))
+
+            # branch node, ignore textual descriptions
+            elif nodetype == 0:
                 if allSubFields or fieldkey in CONSTANTS_CLASS.INCLUDE_SUBFIELDS:
-                    subfields.extend(ParsedMessage._walkSubTree(subnode, fieldkey in CONSTANTS_CLASS.RECORD_STRUCTURE))
+                    subfields.extend(
+                        ParsedMessage._walkSubTree(nodevalue, fieldkey in CONSTANTS_CLASS.RECORD_STRUCTURE))
                 elif fieldkey not in CONSTANTS_CLASS.EXCLUDE_SUB_FIELDS:  # to get a notice on errors
                     print("Ignored sub field:", fieldkey)
                     if fieldkey == '_ws.expert':
-                        expertMessage = ParsedMessage._getElementByName(subnode, '_ws.expert.message')
+                        expertMessage = ParsedMessage._getElementByName(nodevalue, '_ws.expert.message')
                         if expertMessage:
                             print(expertMessage)
                         else:
                             print('Malformed packet with unknown error.')
-            if fieldkey in ParsedMessage._posthooks:  # apply post-hook, if any, for this field name
+
+            # apply post-hook, if any, for this field name
+            if fieldkey in ParsedMessage._posthooks:
                 try:
-                    ranPostHook = ParsedMessage._posthooks[fieldkey](subnode, subfields)
+                    ranPostHook = ParsedMessage._posthooks[fieldkey](nodevalue, subfields)
                 except NotImplementedError as e:
                     raise NotImplementedError( "{} Field name: {}".format(e, fieldkey) )
                 if ranPostHook is not None:
@@ -994,6 +1062,11 @@ class ParsedMessage(object):
         #         "a0.twimg.com: type A, class IN": {
         #             "dns.qry.name_raw": "026130057477696d6703636f6d00",
         #             ...
+
+
+
+    # TODO move all the hooks into the ParsingConstants class and their mapping
+    # TODO enable reuse by providing the original field name to the hook
 
     # noinspection PyUnusedLocal
     @staticmethod
@@ -1103,7 +1176,7 @@ class ParsedMessage(object):
     @staticmethod
     def _hookRaiseNotImpl(value, siblings) -> Tuple[str, str]:
         """
-        Hook to fail on LANMAN's Function Code: NetServerEnum2 (104).
+        Hook to fail in case a dissector lacks required field information.
 
         See :func:`_walkSubTree()`.
 
@@ -1186,15 +1259,32 @@ class ParsedMessage(object):
         return 'gss-api', value[:8]
 
 
+    @staticmethod
+    def _hookFirstByte(value: list, siblings: List[Tuple[str, str]]) -> Tuple[str, str]:
+        """
+        Hook to return the first byte of the given value for bootp.option.type
+
+        :param value: hex value of the field we are working on
+        :param siblings: subfields that we know of by now
+        :return: tuple of field name and value to add as new field
+        """
+        return 'bootp.option.type', value[:2]
+
+
     # HOOKS register. See :func:`_walkSubTree()`.
     # noinspection PyUnresolvedReferences
     _prehooks = {
-        'irc.response.prefix_raw': _hookAppendColon.__func__, 'irc.response.trailer_raw': _hookAppendColonSpace.__func__,
+        'bootp.option.type_raw': _hookFirstByte.__func__,
+
+        'irc.response.prefix_raw': _hookAppendColon.__func__,
+        'irc.response.trailer_raw': _hookAppendColonSpace.__func__,
         'irc.response.trailer': _hookIRCemptyTrailer.__func__,
-        'irc.request.prefix_raw': _hookAppendColon.__func__, 'irc.request.trailer_raw': _hookAppendColonSpace.__func__,
+        'irc.request.prefix_raw': _hookAppendColon.__func__,
+        'irc.request.trailer_raw': _hookAppendColonSpace.__func__,
         'irc.request.trailer': _hookIRCemptyTrailer.__func__,
 
-        'gss-api_raw' : _hookGssapi.__func__, 'ntlmssp.version.ntlm_current_revision_raw' : _hookAppendThreeZeros.__func__,
+        'gss-api_raw' : _hookGssapi.__func__,
+        'ntlmssp.version.ntlm_current_revision_raw' : _hookAppendThreeZeros.__func__,
     }
     ## Basic handling of missing single delimiter characters is generalized by comparing the original message to the
     ## concatenated dissector result. See :func:`_reassemblePostProcessing()
