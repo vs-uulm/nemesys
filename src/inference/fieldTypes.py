@@ -164,7 +164,7 @@ class RecognizedField(object):
 
 
 class FieldTypeRecognizer(object):
-    # from commit
+    # from commit f442b9d
     fieldtypeTemplates = [
         # macaddr
         FieldTypeMemento(numpy.array([0.0, 12.0, 41.0, 137.28571428571428, 123.17857142857143, 124.82142857142857]),

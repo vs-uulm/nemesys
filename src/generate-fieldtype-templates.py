@@ -10,8 +10,6 @@ import argparse, IPython
 from os.path import isfile, basename
 from itertools import chain
 
-from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
-    labelForSegment
 from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
 from inference.fieldTypes import FieldTypeMemento
 from inference.segments import TypedSegment, HelperSegment
@@ -22,7 +20,7 @@ from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.multiPlotter import MultiMessagePlotter, PlotGroups
-
+from utils.evaluationHelpers import *
 
 
 debug = False
@@ -37,10 +35,10 @@ distance_method = 'canberra'
 def types2segmentGroups(segmentGroups: Dict[str, List[TypedSegment]]) \
         -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
     """
+    Converts lists of segments grouped in a dict by field type into the list structure of plotable features
 
     :param segmentGroups: A dict of
         fieldtype (str) : segments of this type (list)
-
     :return: List/Tuple structure of annotated analyses, clusters, and segments.
                  List [ of cluster
                     Tuples (
@@ -172,7 +170,6 @@ if __name__ == '__main__':
         mmp = MultiMessagePlotter(specimens, pagetitle, len(groupStructure), isInteractive=False)
         mmp.plotMultiSegmentLines(groupStructure, True)
         mmp.writeOrShowFigure()
-        del mmp
     else:
         groupStructure = segments2typedClusters(segments, withPlots)
 
@@ -213,8 +210,6 @@ if __name__ == '__main__':
                   "access selected field type templates.")
         else:
             try:
-                # TODO refine selection for int(4) and float(4)
-
                 # select promising field type templates from binaryprotocols_merged_500.pcap
                 fieldtypeTemplates = dict()
                 # for ipv4: combine clusters 0 to 5
@@ -229,7 +224,7 @@ if __name__ == '__main__':
                 # for id: test whether this works
                 fieldtypeTemplates["id"] = [ ftMap["571bd5d4"] ]
 
-                # for float: use the complete group
+                # for float: use the complete group AND refine
                 floatHelpers = list()
                 # modify values to raise the first bytes from zero to get something like floatMean = [1, 4, 22, 117]
                 float_rand_lower = numpy.array([0, 0, 0, 0]) # , 14, 44]   # [1, 4, 0, 0]
@@ -295,7 +290,7 @@ if __name__ == '__main__':
             except KeyError as e:
                 print("There seems to have been a change since the (manual) selection of the templates. "
                       "Templates have been selected from clustering of tshark segments from "
-                      "binaryprotocols_merged_500.pcap at commit 4b69075. "
+                      "binaryprotocols_merged_500.pcap at commit f442b9d. "
                       "You most probably need to select new cluster IDs that are suitable as templates for types from "
                       "the plots and replace the invalid IDs in this script with your new ones.")
 

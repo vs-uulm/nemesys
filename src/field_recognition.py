@@ -15,8 +15,8 @@ from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import TypedSegment
 from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
-from utils.evaluationHelpers import analyses, annotateFieldTypes
 from visualization.simplePrint import segmentFieldTypes, tabuSeqOfSeg, printFieldContext
+from utils.evaluationHelpers import *
 import visualization.bcolors as bcolors
 
 # fix the analysis method to VALUE
@@ -301,6 +301,100 @@ def printRecogInSeg(recSegTup: Tuple[RecognizedField, TypedSegment]):
     print(recSegTup[1].fieldtype)
 
 
+def inspectFieldtypeIsolated(ftString: str):
+    """
+    ftString in [ "macaddr", "float", "id", "ipv4" ]
+
+    :param ftString: field type string
+    :return:
+    """
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Isolated, individual evaluation of field type recognition
+    #   see FieldTypes.ods
+    ftMemento = next((ftm for ftm in FieldTypeRecognizer.fieldtypeTemplates
+                       if ftString == ftm.fieldtype), None)
+    assert ftMemento is not None, "given field type string {} is unknown".format(ftString)
+
+    # parameters
+    ntimesthresh = 4
+    contextPrintLimit = 100
+
+    # for all messages
+    truePos = dict()
+    falsePos = dict()
+    falseNeg = dict()
+    for ftr in ftRecognizer:
+        msg = ftr.message
+        msgsegs = segmentedMessages[msg]
+
+        confidences = ftr.findInMessage(ftMemento)
+        sortRecogMacs = sorted([RecognizedField(msg, ftMemento, pos, con) for pos, con in enumerate(confidences)],
+                               key=lambda x: x.confidence)
+
+        # get true and false positives and false negatives and their recognized fields
+        fieldOffsets = {msgseg.offset for msgseg in msgsegs if msgseg.fieldtype == ftMemento.fieldtype
+                        and msgseg.offset <= msgsegs[-1].nextOffset - len(ftMemento)}
+        recogOffsets = {recogFtm.position: recogFtm for recogFtm in sortRecogMacs}
+        # globals().update(locals())
+        truePos[msg] = [recogOffsets[tpfo] for tpfo in fieldOffsets.intersection(set(recogOffsets.keys()))]
+        falsePos[msg] = [recogOffsets[fpfo] for fpfo in set(recogOffsets.keys()).difference(fieldOffsets)]
+        falseNeg[msg] = [recogOffsets[fnfo] for fnfo in fieldOffsets.difference(set(recogOffsets.keys()))]
+
+    # get confidence values for true and false positives
+    tphistoconf = numpy.histogram([recog.confidence for msgtp in truePos.values() for recog in msgtp])
+    # # median fails as a heuristic for a good confidence threshold
+    # tpmedianconf = numpy.median([recog.confidence for msgtp in truePos.values() for recog in msgtp])
+    tpsortconf = sorted([(recog.confidence, recog) for msgtp in truePos.values() for recog in msgtp],
+                        key=lambda x: x[0])
+    # minimum bin size to find reasonable confidence threshold to work with
+    tpminbin = tphistoconf[1][tphistoconf[0].argmin()]
+    tpthresh = max(
+        recog.confidence for msgtp in truePos.values() for recog in msgtp if recog.confidence < tpminbin) + 0.0001
+
+    # histogram of fp confidences with skewed bins. Interesting but not generally helpful
+    fpconf = [recog.confidence for msgfp in falsePos.values() for recog in msgfp]
+    fpbins = [0, tpthresh, tpthresh * 2, tpthresh * 4, tpthresh * 8]
+    if fpbins[-1] < max(fpconf) / 2:
+        fpbins.append(max(fpconf) / 2)
+    if fpbins[-1] < max(fpconf):
+        fpbins.append(max(fpconf))
+    fphistoconf = numpy.histogram(fpconf, bins=fpbins)
+
+    # best confidences (lower ntimesthresh times the first block if filled tp bins) sorted and with instance
+    fpsortconf = sorted([(recog.confidence, recog) for msgfp in falsePos.values()
+                         for recog in msgfp if recog.confidence < ntimesthresh * tpthresh], key=lambda x: x[0])
+    # # no false negatives since every position is a positive (with varying confidence)
+    # fnconf = [recog.confidence for msgfn in falseNeg.values() for recog in msgfn]
+    fpminbin = fphistoconf[1][fphistoconf[0].argmin()]
+    likelyGTerrors = [recog.confidence for msgfp in falsePos.values() for recog in msgfp if recog.confidence < fpminbin]
+    fpthresh = max(likelyGTerrors) if len(likelyGTerrors) > 0 else fpsortconf[0][1]
+
+    # numpy.argmin([recog.confidence for recog in falsePos[ftMemento]])
+    # fpminrecog = fpsortconf[0][1]
+
+    # # # # # #
+    # print out stuff
+    print("Contexts of first", contextPrintLimit, "false positives, sorted by confidence:\n")
+    for conf, recog in fpsortconf[:contextPrintLimit]:
+        printFieldContext(segmentedMessages, recog)
+        # TODO get macaddr, ipv4, ... statistics and print/analyze confidence outliers, ... and false positives
+        #   solve to note below by it.
+
+    print("\n\nEvaluating", ftString, "\n")
+    print("Histogram of true positive confidences (auto bins)")
+    print(tabulate(tphistoconf), "\n")
+    # print("Median:", tpmedianconf)
+    print("Low tp threshold:", tpthresh)
+    print("Max fp conf below", ntimesthresh, "times threshold", max(conf for conf, recog in fpsortconf), "\n")
+    print("Histogram of false positive confidences (manual bins)")
+    print(tabulate(fphistoconf), "\n")
+    print("Max fp conf below the bin separating likely gt errors from actual fps", fpthresh, "\n\n")
+
+    return truePos, falsePos, falseNeg
+
+
+
+
 # # test messages
 # near and far messages for int 189 243
 # near and far messages for ipv4 333 262
@@ -531,100 +625,31 @@ if __name__ == '__main__':
 
 
 
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # Hunting false positives
+        # # # field names and types of false positives
+        # fpfieldinfo = [comparator.lookupField(seg) for recog, seg in
+        #                sorted(matchStatistics["ipv4"][1], key=lambda r: r[0].confidence)]  # iterate false positives
+        # fpfieldinfoBC = set([(b, c) for a, b, c in fpfieldinfo])
+        # from collections import Counter
+        # fpfieldCount = Counter([(b, c) for a, b, c in fpfieldinfo])
+        # print(tabulate(fpfieldCount.most_common()))
         # # # # # # # # # # # # # # # # # # # # # # # #
 
-        # TODO evaluate bytes with only single (2-3?) bits set => flags?  (confidence?)
-
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # Hunting false positives
+        # # values per field name
+        val4fn = comparator.lookupValues4FieldName('bootp.option.type')
 
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # noinspection PyUnreachableCode
-        if True:
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            # Isolated, individual evaluation of field type recognition
-            #   see FieldTypes.ods
-            # ftString = "macaddr"
-            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[0]
-            ftString = "float"
-            ftMemento = FieldTypeRecognizer.fieldtypeTemplates[1]
-            # ftString = "id"
-            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[2]
-            # ftString = "ipv4"
-            # ftMemento = FieldTypeRecognizer.fieldtypeTemplates[3]
-            assert ftString == ftMemento.fieldtype
-            # for all messages
-            truePos = dict()
-            falsePos = dict()
-            falseNeg = dict()
-            for ftr in ftRecognizer:
-                msg = ftr.message
-                msgsegs = segmentedMessages[msg]
-
-                confidences = ftr.findInMessage(ftMemento)
-                sortRecogMacs = sorted([RecognizedField(msg, ftMemento, pos, con) for pos, con in enumerate(confidences)],
-                       key=lambda x: x.confidence)
-
-                # get true and false positives and false negatives and their recognized fields
-                fieldOffsets = {msgseg.offset for msgseg in msgsegs if msgseg.fieldtype == ftMemento.fieldtype
-                                and msgseg.offset <= msgsegs[-1].nextOffset - len(ftMemento)}
-                recogOffsets = {recogFtm.position: recogFtm for recogFtm in sortRecogMacs}
-                # globals().update(locals())
-                truePos[msg] = [recogOffsets[tpfo] for tpfo in fieldOffsets.intersection(set(recogOffsets.keys()))]
-                falsePos[msg] = [recogOffsets[fpfo] for fpfo in set(recogOffsets.keys()).difference(fieldOffsets)]
-                falseNeg[msg] = [recogOffsets[fnfo] for fnfo in fieldOffsets.difference(set(recogOffsets.keys()))]
-
-                # TODO filter interesting stuff:  see FieldTypes.ods
-                #   low (actually high) confidence - false positives  <-- what do they represent that looks like the template?
-                #   high confidence - false negatives  <-- why do they not resemble the template?
-
-            # get confidence values for true and false positives
-            tphistoconf = numpy.histogram([recog.confidence for msgtp in truePos.values() for recog in msgtp])
-            # # median fails as a heuristic for a good confidence threshold
-            # tpmedianconf = numpy.median([recog.confidence for msgtp in truePos.values() for recog in msgtp])
-            tpsortconf = sorted([(recog.confidence, recog) for msgtp in truePos.values() for recog in msgtp], key = lambda x: x[0])
-            # minimum bin size to find reasonable confidence threshold to work with
-            tpminbin = tphistoconf[1][tphistoconf[0].argmin()]
-            tpthresh = max(recog.confidence for msgtp in truePos.values() for recog in msgtp if recog.confidence < tpminbin) + 0.0001
-
-            # histogram of fp confidences with skewed bins. Interesting but not generally helpful
-            fpconf = [recog.confidence for msgfp in falsePos.values() for recog in msgfp]
-            fpbins = [0, tpthresh, tpthresh * 2, tpthresh * 4, tpthresh * 8]
-            if fpbins[-1] < max(fpconf) / 2:
-                fpbins.append(max(fpconf) / 2)
-            if fpbins[-1] < max(fpconf):
-                fpbins.append(max(fpconf))
-            fphistoconf = numpy.histogram(fpconf, bins=fpbins)
-
-            ntimesthresh = 4
-            # best confidences (lower ntimesthresh times the first block if filled tp bins) sorted and with instance
-            fpsortconf = sorted([(recog.confidence, recog) for msgfp in falsePos.values()
-                                 for recog in msgfp if recog.confidence < ntimesthresh*tpthresh], key=lambda x: x[0])
-            # # no false negatives since every position is a positive (with varying confidence)
-            # fnconf = [recog.confidence for msgfn in falseNeg.values() for recog in msgfn]
-            fpminbin = fphistoconf[1][fphistoconf[0].argmin()]
-            likelyGTerrors = [recog.confidence for msgfp in falsePos.values() for recog in msgfp if recog.confidence < fpminbin]
-            fpthresh = max(likelyGTerrors) if len(likelyGTerrors) > 0 else fpsortconf[0][1]
-
-            # numpy.argmin([recog.confidence for recog in falsePos[ftMemento]])
-            # fpminrecog = fpsortconf[0][1]
-
-
-            for conf, recog in fpsortconf[:100]:
-                printFieldContext(segmentedMessages, recog)
-
-                # TODO get macaddr, ipv4, ... statistics and print/analyze confidence outliers, ... and false positives
-                #   solve to note below by it.
-
-            print("Evaluating", ftString)
-            print("Histogram of true positive confidences (auto bins)")
-            print(tabulate(tphistoconf))
-            # print("Median:", tpmedianconf)
-            print("Low tp threshold:", tpthresh)
-            print("Max fp conf below", ntimesthresh, "times threshold", max(conf for conf, recog in fpsortconf))
-            print("Histogram of false positive confidences (manual bins)")
-            print(tabulate(fphistoconf))
-            print("Max fp conf below the bin separating likely gt errors from actual fps", fpthresh)
-
+        if False:
+            inspectFieldtypeIsolated("float")
+        # TODO filter interesting stuff:  see FieldTypes.ods
+        #   low confidence  - false positives  <-- what do they represent that looks like the template?
+        #   high confidence - false negatives  <-- why do they not resemble the template?
+        #   (confidence meaning inverse to number)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
         # TODO statistics of how well mahalanobis separates fieldtypes (select a threshold) per ftm:

@@ -14,7 +14,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
-from inference.segments import TypedSegment
+from inference.segments import MessageSegment
 
 
 class FormatMatchScore(object):
@@ -338,8 +338,49 @@ class MessageComparator(object):
         return texcode
 
 
+    def lookupField(self, segment: MessageSegment):
+        """
+        Look up the field name for a segment.
+
+        :param segment: The segment to look up
+        :return: Message type (from MessageTypeIdentifiers in messageParser.py),
+            field name (from tshark nomenclature),
+            field type (from ParsingConstants in messageParser.py)
+        """
+        pm = self.parsedMessages[self.messages[segment.message]]
+        fs = pm.getFieldSequence()
+        fsnum, offset = 0, 0
+        while offset < segment.offset:
+            offset += fs[fsnum][1]
+            fsnum += 1
+        return pm.messagetype, fs[fsnum][0], pm.getTypeSequence()[fsnum][0]
 
 
+    def segmentInfo(self, segment: MessageSegment):
+        """
+        Print the infos about the given segment
+
+        :param segment: The segment to look up
+        """
+        pmLookup = self.lookupField(segment)
+        print("Message type:", pmLookup[0])
+        print("Field name:  ", pmLookup[1])
+        print("Field type:  ", pmLookup[3])
+        print("Byte values: ", segment.bytes)
+        print("Hex values:  ", segment.bytes.hex())
+
+
+    def lookupValues4FieldName(self, fieldName: str):
+        """
+        Lookup the values for a given field name in all messages.
+
+        :param fieldName: name of field (according to tshark nomenclature)
+        :return: List of values of all fields carrying the given field name
+        """
+        values = list()
+        for pm in self.parsedMessages.values():
+            values.extend(pm.getValuesByName(fieldName))
+        return values
 
 
 class DissectorMatcher(object):
