@@ -117,7 +117,6 @@ class InterSegment(object):
 
 
 
-
 class DistanceCalculator(object):
     """
     Wrapper to calculate and look up pairwise distances between segments.
@@ -1161,6 +1160,7 @@ class DistanceCalculator(object):
             self._distances[b, a] = self._distances[b, a] * charMatchGain
 
 
+
 class Template(AbstractSegment):
     """
     Represents a template for some group of similar MessageSegments
@@ -1382,6 +1382,7 @@ class Template(AbstractSegment):
         return "Template {} bytes: {} | #base {}".format(self.length, printValues, len(self.baseSegments))
 
 
+
 class TypedTemplate(Template):
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
@@ -1414,6 +1415,7 @@ class TypedTemplate(Template):
         :param value: One of the types defined in ParsedMessage.ParsingConstants.TYPELOOKUP
         """
         self._fieldtype = value
+
 
 
 class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
@@ -1495,7 +1497,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         # print(segV)
 
         # self._cov = numpy.cov(segV, rowvar=False)
-        # pandas allows for nans, numpy not
+        # pandas cov allows for nans, numpy not
         pd = DataFrame(segV)
         self._cov = pd.cov().values
         self._picov = None  # fill on demand
@@ -1513,6 +1515,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
         return vals
+
 
 
 class TemplateGenerator(object):
@@ -1834,6 +1837,7 @@ class AbstractClusterer(ABC):
         raise NotImplementedError("This method needs to be implemented giving the configuration of this clusterer.")
 
 
+
 class HDBSCANsegmentClusterer(AbstractClusterer):
     """
     Hierarchical Density-Based Spatial Clustering of Applications with Noise
@@ -1885,6 +1889,7 @@ class HDBSCANsegmentClusterer(AbstractClusterer):
 
     def __repr__(self):
         return 'HDBSCAN mcs {} ms {}'.format(self.min_cluster_size, self.min_samples)
+
 
 
 class DBSCANsegmentClusterer(AbstractClusterer):

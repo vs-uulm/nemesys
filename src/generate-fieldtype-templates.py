@@ -210,6 +210,7 @@ if __name__ == '__main__':
                   "access selected field type templates.")
         else:
             try:
+                # # # # # # # # # # # # # # # # # # # # # # # # # # # #
                 # select promising field type templates from binaryprotocols_merged_500.pcap
                 fieldtypeTemplates = dict()
                 # for ipv4: combine clusters 0 to 5
@@ -253,31 +254,25 @@ if __name__ == '__main__':
                         print(ftm.codePersist, ",")
                         fieldtypeMementos.append(ftm)
                 print("]")
+                # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-                # extract some suitable example messages for testing (nearest, farthest for template)
-
-                def nf4ftt(ftt: FieldTypeTemplate):
-                    maha = [ftt.mahalanobis(bs.values) for bs in ftt.baseSegments]
-                    nea = ftt.baseSegments[numpy.argmin(maha)]
-                    far = ftt.baseSegments[numpy.argmax(maha)]
-                    return nea.analyzer.message, far.analyzer.message
-
-
-                for ftt in [fieldtypeTemplates["float"][0], fieldtypeTemplates["ipv4"][0]]:
-                    near, far = nf4ftt(ftt)
-                    nid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == near][0]
-                    fid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == far][0]
-
-                    print("near and far messages for", ftt.fieldtype, nid, fid)
-
-
-
-
-
-
-
-
+                # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+                # # extract some suitable example messages for testing (nearest, farthest for template)
+                #
+                # def nf4ftt(ftt: FieldTypeTemplate):
+                #     maha = [ftt.mahalanobis(bs.values) for bs in ftt.baseSegments]
+                #     nea = ftt.baseSegments[numpy.argmin(maha)]
+                #     far = ftt.baseSegments[numpy.argmax(maha)]
+                #     return nea.analyzer.message, far.analyzer.message
+                #
+                #
+                # for ftt in [fieldtypeTemplates["float"][0], fieldtypeTemplates["ipv4"][0]]:
+                #     near, far = nf4ftt(ftt)
+                #     nid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == near][0]
+                #     fid = [idx for idx, absmsg in enumerate(specimens.messagePool.keys()) if absmsg == far][0]
+                #
+                #     print("near and far messages for", ftt.fieldtype, nid, fid)
+                # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 

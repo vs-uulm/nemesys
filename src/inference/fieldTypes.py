@@ -70,6 +70,13 @@ class FieldTypeMemento(BaseTypeMemento):
 
     @property
     def cov(self):
+        """
+
+        There is some rounding error so the stdev is not entierely identical to the diagonal of the covariance matrix.
+        >>> numpy.round(ftt.stdev, 8) == numpy.round(ftt.cov.diagonal(), 8)
+
+        :return: The covariance matrix of the template.
+        """
         return self._cov
 
     @property
