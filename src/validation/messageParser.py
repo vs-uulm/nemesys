@@ -360,7 +360,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.dcm'] = 'flags'  # has value: 0000
     TYPELOOKUP['smb.data_len_low'] = 'int'  # has value: 6b00
     TYPELOOKUP['smb.data_len_high'] = 'int'  # has value: 00000000
-    TYPELOOKUP['smb.file_data'] = 'bytes'
+    TYPELOOKUP['smb.file_data'] = 'chars' # has value:  b'[.ShellClassInfo]\r\nInfoTip...
     TYPELOOKUP['smb.count_low'] = 'int'  # has value: 4800
     TYPELOOKUP['smb.count_high'] = 'int'  # has value: 0000
     TYPELOOKUP['smb.error_class'] = 'int'  # has value: 00
@@ -369,7 +369,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.fs_max_name_len'] = 'int'  # has value: ff000000
     TYPELOOKUP['smb.fs_name.len'] = 'int'  # has value: 08000000
     TYPELOOKUP['smb.fs_name'] = 'chars'  # has value: 4e00540046005300
-    TYPELOOKUP['smb.extra_byte_parameters'] = 'bytes'  # has value: 0000
+    TYPELOOKUP['smb.extra_byte_parameters'] = 'chars'  # has value: b'W\x00i\x00n\x00d\x00o\x00w\x00s\x00 \x00N\x00T...
     TYPELOOKUP['smb.ansi_pwlen'] = 'int'  # has value: 0100
     TYPELOOKUP['smb.unicode_pwlen'] = 'int'  # has value: 0000
     TYPELOOKUP['smb.ansi_password'] = 'bytes'  # has value: 00

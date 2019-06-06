@@ -4,7 +4,7 @@ import numpy
 import scipy.spatial
 
 from inference.analyzers import Value
-from inference.segments import MessageAnalyzer
+from inference.segments import MessageAnalyzer, MessageSegment, TypedSegment
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 
@@ -38,7 +38,6 @@ class BaseTypeMemento(object):
         return "FieldTypeMemento " + self.typeID + " for " + self.fieldtype
 
 
-
 class FieldTypeMemento(BaseTypeMemento):
     def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, cov: numpy.ndarray, fieldtype: str,
                  analyzerClass: Type[MessageAnalyzer] = Value, analysisParams: Union[Any, Tuple] = None,
@@ -46,33 +45,40 @@ class FieldTypeMemento(BaseTypeMemento):
         super().__init__(fieldtype)
         self._mean = mean
         self._cov = cov
+        self._picov = None
         self._stdev = stdev
         # for reference:
         self._analyzerClass = analyzerClass
         self._analysisParams = analysisParams
         self._unit = unit
-        self._picov = None
 
+
+    'from inference.templates import FieldTypeTemplate'
+    # noinspection PyUnresolvedReferences
     @staticmethod
-    def fromTemplate(ftt: "FieldTypeTemplate"):
+    def fromTemplate(ftt: 'FieldTypeTemplate'):
         ftm = FieldTypeMemento(ftt.mean, ftt.stdev, ftt.cov, ftt.fieldtype,
                                type(ftt.baseSegments[0].analyzer), ftt.baseSegments[0].analyzer.analysisParams,
                                ftt.baseSegments[0].analyzer.unit)
         return ftm
 
     @property
-    def mean(self):
+    def mean(self) -> numpy.ndarray:
         return self._mean
 
     @property
-    def stdev(self):
+    def stdev(self) -> numpy.ndarray:
         return self._stdev
 
     @property
-    def cov(self):
+    def cov(self) -> numpy.ndarray:
         """
 
         There is some rounding error so the stdev is not entierely identical to the diagonal of the covariance matrix.
+        >>> from inference.templates import FieldTypeTemplate
+        >>> from inference.segments import MessageSegment
+        >>> bs = [MessageSegment(None, 0, 1)]
+        >>> ftt = FieldTypeTemplate(bs)
         >>> numpy.round(ftt.stdev, 8) == numpy.round(ftt.cov.diagonal(), 8)
 
         :return: The covariance matrix of the template.
@@ -80,7 +86,7 @@ class FieldTypeMemento(BaseTypeMemento):
         return self._cov
 
     @property
-    def picov(self):
+    def picov(self) -> numpy.ndarray:
         """
         Often cov is a singluar matrix in our use case, so we use the approximate Moore-Penrose pseudo-inverse
         from numpy.
@@ -93,22 +99,34 @@ class FieldTypeMemento(BaseTypeMemento):
         return self._picov
 
     @property
-    def upper(self):
+    def upper(self) -> numpy.ndarray:
         return self._mean + self.stdev
 
     @property
-    def lower(self):
+    def lower(self) -> numpy.ndarray:
         return self._mean - self.stdev
 
     @property
-    def analyzer(self):
+    def analyzerClass(self) -> Type[MessageAnalyzer]:
+        """
+        :return: The type of the analyzer
+        """
         return self._analyzerClass
+
+    def recreateAnalyzer(self, message: AbstractMessage) -> MessageAnalyzer:
+        """
+        Recreate an analyzer of the type and configuration given in this memento instance.
+
+        :param message: The message to create the analyzer for.
+        :return: The newly created analyzer instance.
+        """
+        return MessageAnalyzer.findExistingAnalysis(self._analyzerClass, self._unit, message, self._analysisParams)
 
     def __len__(self):
         return len(self._mean)
 
     @property
-    def typeID(self, short=True):
+    def typeID(self, short=True) -> str:
         """
         :param short: Use only the last half (4 bytes) of the hash
         :return: As an identifier use the hash of the mean values
@@ -117,24 +135,27 @@ class FieldTypeMemento(BaseTypeMemento):
         return tid[-8:] if short else tid
 
     @property
-    def codePersist(self):
+    def codePersist(self) -> str:
         """:return: Python code to persist this Memento"""
         return "{}(numpy.array({}), numpy.array({}), numpy.array({}), '{}', {}, {}, {})".format(
             type(self).__name__, self.mean.tolist(), self.stdev.tolist(), self.cov.tolist(), self._fieldtype,
             self._analyzerClass.__name__, self._analysisParams,
             "MessageAnalyzer.U_BYTE" if self._unit == MessageAnalyzer.U_BYTE else "MessageAnalyzer.U_NIBBLE")
 
-    def mahalanobis(self, vector: Iterable[float]):
+    def mahalanobis(self, vector: Iterable[float]) -> numpy.ndarray:
         """
         Compute the Mahalanobis distance between this fieldtype's mean and the given vector using the
         covariance matrix contained in this object.
 
-        :param vector:
-        :return:
+        Mahalanobis distance measures the distance of a vector from the mean in terms of the multivariate pendent to
+        the standard deviation: https://blogs.sas.com/content/iml/2012/02/15/what-is-mahalanobis-distance.html
+
+        :param vector: The vector of which the distance to the mean shall be calculated
+        :return: The Mahalanobis distance between the field type mean and the given vector.
         """
         return scipy.spatial.distance.mahalanobis(self.mean, vector, self.picov)
 
-    def confidence(self, vector: Iterable[float]):
+    def confidence(self, vector: Iterable[float]) -> numpy.ndarray:
         conf = self.mahalanobis(vector)
         # TODO move to be a parameterizable property of the FieldTypeMemento class
         # make ids twice as unconfident
@@ -144,8 +165,21 @@ class FieldTypeMemento(BaseTypeMemento):
 
 
 class RecognizedField(object):
+    """
+    Represents a field recognized by a heuristic method.
+    """
+
     def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
                  position: int, confidence: float):
+        """
+        Create the representation of a heuristically recognized field.
+        This object is much more lightweight than inference.segments.AbstractSegment.
+
+        :param message: The message this field is contained in.
+        :param template: The field type template that this field resembles.
+        :param position: The byte position/offset in the message at which the field starts.
+        :param confidence: The confidence (0 is best) of the recognition.
+        """
         self.message = message
         self.position = position
         self.confidence = confidence
@@ -156,12 +190,21 @@ class RecognizedField(object):
             raise TypeError("Template needs to be a BaseTypeMemento")
 
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        :return: A textual representation of this heuristically recognized field.
+        """
         return "RecognizedField of {} at ({}, {}) (c {:.2f})".format(
             self.template.fieldtype, self.position, self.end, self.confidence)
 
 
-    def isOverlapping(self, otherField: 'RecognizedField'):
+    def isOverlapping(self, otherField: 'RecognizedField') -> bool:
+        """
+        Determines whether the current recognized field overlaps with a given other field.
+
+        :param otherField: The other field to check against.
+        :return: Is overlapping or not.
+        """
         if self.message == otherField.message \
                 and (self.position <= otherField.position < self.end
                 or otherField.position < self.end <= otherField.end):
@@ -170,147 +213,70 @@ class RecognizedField(object):
             return False
 
 
+    def toSegment(self, fallbackAnalyzer:Type[MessageAnalyzer]=Value,
+                  fallbackUnit: int=MessageAnalyzer.U_BYTE, fallbackParams: Tuple=()) -> TypedSegment:
+        if isinstance(self.template, FieldTypeMemento):
+            analyzer = self.template.recreateAnalyzer(self.message)
+        else:
+            # With out a FieldTypeMemento we have no information about the original analyzer, and probably there never
+            #   has existed any, e.g. for char and flag heuristics. Therefore define a fallback.
+            analyzer = MessageAnalyzer.findExistingAnalysis(
+                fallbackAnalyzer, fallbackUnit, self.message, fallbackParams)
+        return TypedSegment(analyzer, self.position, len(self.template), self.template.fieldtype)
+
+
+
 class FieldTypeRecognizer(object):
-    # from commit f442b9d
+
+    # TODO make extensible by moving to a ValueFieldTypeRecognizer subclass and making this class abstract.
+    # from commit 475d179
     fieldtypeTemplates = [
-        # macaddr
-        FieldTypeMemento(numpy.array([0.0, 12.0, 41.0, 137.28571428571428, 123.17857142857143, 124.82142857142857]),
-                         numpy.array([0.0, 0.0, 0.0, 69.38446570834607, 77.84143845546744, 67.62293227439753]),
-                         numpy.array(
-                             [[0.021970046310679538, 0.0020136654623123394, -0.0026257581320540666, 4.213851338930285,
-                               0.17211570097048762, -3.9634886782857977],
-                              [0.0020136654623123394, 0.018063678574276265, -0.0006785532618061956, 2.689394908620589,
-                               1.9445501397935412, -0.8648276565544288],
-                              [-0.0026257581320540666, -0.0006785532618061956, 0.021345716783985814,
-                               -0.5080691154469154,
-                               0.2594949158918283, 3.1756906394784004],
-                              [4.213851338930285, 2.689394908620589, -0.5080691154469154, 4992.5079365079355,
-                               746.2804232804233,
-                               -19.428571428571455],
-                              [0.17211570097048762, 1.9445501397935412, 0.2594949158918283, 746.2804232804233,
-                               6283.70767195767,
-                               452.44047619047615],
-                              [-3.9634886782857977, -0.8648276565544288, 3.1756906394784004, -19.428571428571455,
-                               452.44047619047615,
-                               4742.22619047619]]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE),
-        # # float
-        # FieldTypeMemento(numpy.array([1.5325427466287367, 4.9510477851422445, 22.105263157894736, 116.69473684210526]),
-        #                  numpy.array([0.25786246143446523, 0.5803090967897987, 8.562431632256324, 72.70952644225558]),
-        #                  numpy.array([[0.06720042187892449, 0.01108737945671801, 0.1334931031456571, 4.069510452989349],
-        #                               [0.01108737945671801, 0.34034118662355567, 0.7605770651397359, -0.08312808586398154],
-        #                               [0.1334931031456571, 0.7605770651397359, 74.09518477043672, -41.43561030235157],
-        #                               [4.069510452989349, -0.08312808586398154, -41.43561030235157, 5342.916461366181]]),
-        #                  'float', Value, (), MessageAnalyzer.U_BYTE),
-        # float
-        FieldTypeMemento(numpy.array([1.0124348286955043, 2.9684767616240912, 22.105263157894736, 116.69473684210526]),
-                         numpy.array([0.5859334443956004, 1.6856370764444046, 8.562431632256324, 72.70952644225558]),
-                         numpy.array(
-                             [[0.34697032042364634, -0.029258437144802, -0.19978884004957634, 0.22664826261354495],
-                              [-0.029258437144802, 2.871599718946636, -1.4304488415634842, 19.928809693594715],
-                              [-0.19978884004957634, -1.4304488415634842, 74.09518477043672, -41.43561030235157],
-                              [0.22664826261354495, 19.928809693594715, -41.43561030235157, 5342.916461366181]]),
-                         'float', Value, (), MessageAnalyzer.U_BYTE),
         # timestamp
-        FieldTypeMemento(numpy.array(
-            [205.75982532751092, 63.838427947598255, 24.375545851528383, 122.61135371179039, 133.65652173913043,
-             134.2608695652174, 147.52173913043478, 120.2695652173913]), numpy.array(
-            [25.70183334947299, 19.57641190835309, 53.50246711271789, 66.9864879316446, 71.84675313281585,
-             72.93261773499316, 72.72710729917598, 76.51925835899723]),
-            numpy.array([[663.4815368114683,
-                          -472.49073010036244,
-                          -423.75589902704553,
-                          139.7702826936337, 9.80247835746574,
-                          3.6199532674480817,
-                          -242.52683291197417,
-                          505.4362598636329],
-                         [-472.49073010036244,
-                          384.91676243009425,
-                          296.96445261625695,
-                          -111.35254347659536,
-                          75.25739293648974, -4.666034628054849,
-                          166.73218800275805,
-                          -345.0736612273047],
-                         [-423.75589902704553,
-                          296.96445261625695, 2875.068873056001,
-                          318.1860683367806, 261.37767179958604,
-                          84.96889603922475, 157.02409407798976,
-                          -593.1297594422736],
-                         [139.7702826936337,
-                          -111.35254347659536,
-                          318.1860683367806, 4506.870221405036,
-                          442.0494330805179, -212.5338044893896,
-                          -498.76463265149766,
-                          382.4062667585993],
-                         [9.80247835746574, 75.25739293648974,
-                          261.37767179958604, 442.0494330805179,
-                          5184.497228023539,
-                          -456.02790962597265,
-                          -181.6759065881906,
-                          370.75238276058485],
-                         [3.6199532674480817,
-                          -4.666034628054849, 84.96889603922475,
-                          -212.5338044893896,
-                          -456.02790962597265,
-                          5342.394531991645, -240.0144294664894,
-                          118.43155496487557],
-                         [-242.52683291197417,
-                          166.73218800275805,
-                          157.02409407798976,
-                          -498.76463265149766,
-                          -181.6759065881906,
-                          -240.0144294664894, 5312.329219669637,
-                          -311.37269793051064],
-                         [505.4362598636329, -345.0736612273047,
-                          -593.1297594422736, 382.4062667585993,
-                          370.75238276058485,
-                          118.43155496487557,
-                          -311.37269793051064,
-                          5880.76544522499]]),
-            'timestamp', Value, (), MessageAnalyzer.U_BYTE),
-        # id
-        FieldTypeMemento(numpy.array([122.0, 127.64444444444445, 140.22222222222223, 118.17777777777778]),
-                         numpy.array([69.96538826845425, 66.7549933398429, 72.37952101063115, 78.82252607779043]),
-                         numpy.array([[5006.409090909091, 1163.6590909090912, 0.36363636363636365, 830.5454545454546],
-                                      [1163.6590909090912, 4557.507070707072, -678.6691919191921, 770.9055555555553],
-                                      [0.36363636363636365, -678.6691919191921, 5357.858585858588, -94.7222222222223],
-                                      [830.5454545454546, 770.9055555555553, -94.7222222222223, 6354.19494949495]]),
-                         'id', Value, (), MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([205.75982532751092, 63.838427947598255, 24.375545851528383, 122.61135371179039, 133.65652173913043, 134.2608695652174, 147.52173913043478, 120.2695652173913]), numpy.array([25.70183334947299, 19.57641190835309, 53.50246711271789, 66.9864879316446, 71.84675313281585, 72.93261773499316, 72.72710729917598, 76.51925835899723]), numpy.array([[663.4815368114683, -472.49073010036244, -423.75589902704553, 139.7702826936337, 9.80247835746574, 3.6199532674480817, -242.52683291197417, 505.4362598636329], [-472.49073010036244, 384.91676243009425, 296.96445261625695, -111.35254347659536, 75.25739293648974, -4.666034628054849, 166.73218800275805, -345.0736612273047], [-423.75589902704553, 296.96445261625695, 2875.068873056001, 318.1860683367806, 261.37767179958604, 84.96889603922475, 157.02409407798976, -593.1297594422736], [139.7702826936337, -111.35254347659536, 318.1860683367806, 4506.870221405036, 442.0494330805179, -212.5338044893896, -498.76463265149766, 382.4062667585993], [9.80247835746574, 75.25739293648974, 261.37767179958604, 442.0494330805179, 5184.497228023539, -456.02790962597265, -181.6759065881906, 370.75238276058485], [3.6199532674480817, -4.666034628054849, 84.96889603922475, -212.5338044893896, -456.02790962597265, 5342.394531991645, -240.0144294664894, 118.43155496487557], [-242.52683291197417, 166.73218800275805, 157.02409407798976, -498.76463265149766, -181.6759065881906, -240.0144294664894, 5312.329219669637, -311.37269793051064], [505.4362598636329, -345.0736612273047, -593.1297594422736, 382.4062667585993, 370.75238276058485, 118.43155496487557, -311.37269793051064, 5880.76544522499]]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE) ,
         # ipv4
-        FieldTypeMemento(numpy.array([172.0, 18.979591836734695, 2.163265306122449, 22.755102040816325]),
-                         numpy.array([0.0, 1.4355514608219568, 0.7380874008173525, 24.153024581160828]), numpy.array(
-                [[0.019605839422040614, -0.027004344798568215, 0.02184009734406893, -0.27738019525778845],
-                 [-0.027004344798568215, 2.103741496598639, 0.0034013605442177, 0.9740646258503398],
-                 [0.02184009734406893, 0.0034013605442177, 0.5561224489795925, 11.769982993197274],
-                 [-0.27738019525778845, 0.9740646258503398, 11.769982993197274, 595.5221088435375]]), 'ipv4', Value, (),
-                         MessageAnalyzer.U_BYTE),
+        FieldTypeMemento(numpy.array([172.65573770491804, 23.098360655737704, 2.4098360655737703, 40.73770491803279]), numpy.array([3.561567374164002, 22.79682528805688, 1.5404603227322615, 68.36543600851412]), numpy.array([[12.896174863387957, 80.93442622950825, 3.726775956284154, 2.841530054644803], [80.93442622950825, 528.3568306010928, 19.475683060109265, 50.24289617486337], [3.726775956284154, 19.475683060109265, 2.4125683060109235, 19.059289617486336], [2.841530054644803, 50.24289617486337, 19.059289617486336, 4751.73005464481]]), 'ipv4', Value, (), MessageAnalyzer.U_BYTE) ,
+        # macaddr
+        FieldTypeMemento(numpy.array([0.0, 12.0, 41.0, 137.28571428571428, 123.17857142857143, 124.82142857142857]), numpy.array([0.0, 0.0, 0.0, 69.38446570834608, 77.84143845546744, 67.62293227439753]), numpy.array([[0.01691577109311472, 0.0017520133005179852, -0.0009323360045556071, 0.42935337597073336, 1.9917595051987003, -1.850657000447773], [0.0017520133005179852, 0.020892243107491996, -0.0016527739029342462, 0.6300638864312258, 1.8509234806353214, -3.728455646581064], [-0.0009323360045556071, -0.0016527739029342462, 0.0213386532068979, -0.7361112702560478, -0.9897013085501344, 1.1738129845129344], [0.42935337597073336, 0.6300638864312258, -0.7361112702560478, 4992.507936507936, 746.2804232804231, -19.428571428571523], [1.9917595051987003, 1.8509234806353214, -0.9897013085501344, 746.2804232804231, 6283.70767195767, 452.44047619047603], [-1.850657000447773, -3.728455646581064, 1.1738129845129344, -19.428571428571523, 452.44047619047603, 4742.22619047619]]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE) ,
+        # id
+        FieldTypeMemento(numpy.array([123.72916666666667, 122.125, 136.45833333333334, 117.16666666666667]), numpy.array([71.22374942839565, 68.57861212992479, 72.74726751263965, 79.2507448265034]), numpy.array([[5180.754875886526, 1118.9707446808509, -236.4476950354611, 433.72695035460987], [1118.9707446808509, 4803.090425531915, -360.46276595744695, 696.5531914893616], [-236.4476950354611, -360.46276595744695, 5404.764184397164, 237.8794326241136], [433.72695035460987, 696.5531914893616, 237.8794326241136, 6414.312056737587]]), 'id', Value, (), MessageAnalyzer.U_BYTE) ,
+        # float
+        FieldTypeMemento(numpy.array([0.9509647848839462, 3.3029185443164613, 22.105263157894736, 116.69473684210526]), numpy.array([0.5588487293595614, 1.6796493488314423, 8.562431632256324, 72.70952644225558]), numpy.array([[0.31563436935261324, -0.04162196912699606, -0.5355585699839925, 4.230231223185803], [-0.04162196912699606, 2.851234934338717, 0.39996987465004535, -16.023069981731833], [-0.5355585699839925, 0.39996987465004535, 74.09518477043672, -41.43561030235157], [4.230231223185803, -16.023069981731833, -41.43561030235157, 5342.916461366181]]), 'float', Value, (), MessageAnalyzer.U_BYTE) ,
+
+        # # int
+        # FieldTypeMemento(numpy.array([193.8953488372093, 157.2325581395349]),
+        #                  numpy.array([24.531436438079247, 32.666985830090965]),
+        #                  numpy.array([[608.8712722298224, -276.293023255814], [-276.293023255814, 1079.6864569083446]]),
+        #                  'int', Value, (), MessageAnalyzer.U_BYTE),
+        # # checksum
+        # FieldTypeMemento(numpy.array(
+        #     [109.45454545454545, 93.0909090909091, 134.8181818181818, 100.18181818181819, 138.27272727272728,
+        #      103.45454545454545, 138.63636363636363, 120.81818181818181]), numpy.array(
+        #     [61.14269990821566, 59.946119057722534, 71.2317832301618, 37.48167596383399, 69.24933988407517,
+        #      63.96925914611236, 73.5752833093396, 82.34276275734496]),
+        #     numpy.array([[4112.272727272727, -202.74545454545452, 197.29090909090905, -876.5909090909092,
+        #                   1638.7636363636366, -414.3272727272728, 115.38181818181832, 1327.9909090909096],
+        #                  [-202.74545454545452, 3952.890909090909, 1656.6181818181817, 1572.9818181818182,
+        #                   -1493.5272727272727, -1224.345454545455, -1531.1636363636364, 859.7181818181818],
+        #                  [197.29090909090905, 1656.6181818181817, 5581.363636363636, 1590.636363636364,
+        #                   -932.6454545454549, -1105.3090909090909, -2908.3727272727274, -871.1363636363635],
+        #                  [-876.5909090909092,  1572.9818181818182,  1590.636363636364,  1545.3636363636363,
+        #                   -1728.2545454545457,  -836.9909090909092,  -597.6272727272726,  -323.6636363636362],
+        #                  [1638.7636363636366,  -1493.5272727272727,  -932.6454545454549,  -1728.2545454545457,
+        #                   5275.018181818181,  -687.7363636363639,  -954.8909090909092,  1865.354545454546],
+        #                  [-414.3272727272728,  -1224.345454545455,  -1105.3090909090909,  -836.9909090909092,
+        #                   -687.7363636363639,  4501.272727272727,  1276.9818181818184,  2721.9909090909096],
+        #                  [115.38181818181832,  -1531.1636363636364,  -2908.3727272727274,  -597.6272727272726,
+        #                   -954.8909090909092,  1276.9818181818184,  5954.654545454545,  1005.1272727272728],
+        #                  [1327.9909090909096,  859.7181818181818,  -871.1363636363635,  -323.6636363636362,
+        #                   1865.354545454546,  2721.9909090909096,  1005.1272727272728,  7458.363636363637]]), 'checksum',
+        #                  Value, (), MessageAnalyzer.U_BYTE),
     ]
 
-    # # from commit 4b69075
-    # fieldtypeTemplates = [
-    #     # macaddr
-    #     FieldTypeMemento(numpy.array([0.0, 12.0, 41.0, 137.28571428571428, 123.17857142857143, 124.82142857142857]), numpy.array([0.0, 0.0, 0.0, 69.38446570834607, 77.84143845546744, 67.62293227439753]), numpy.array([[0.022103573766497436, 0.0046327614942338, -0.006504195407397688, 0.6591927243117947, -0.644376065770878, 0.9913785886639866], [0.0046327614942338, 0.021488881156709244, -0.001382945195792973, -1.1536744995748671, 5.150600064885553, 0.3555595274599619], [-0.006504195407397688, -0.001382945195792973, 0.026359085778108426, 1.0184065358245054, 0.6723490088910922, -0.3966508786750666], [0.6591927243117947, -1.1536744995748671, 1.0184065358245054, 4992.5079365079355, 746.2804232804233, -19.428571428571455], [-0.644376065770878, 5.150600064885553, 0.6723490088910922, 746.2804232804233, 6283.70767195767, 452.44047619047615], [0.9913785886639866, 0.3555595274599619, -0.3966508786750666, -19.428571428571455, 452.44047619047615, 4742.22619047619]]), 'macaddr', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # timestamp
-    #     FieldTypeMemento(numpy.array([205.75982532751092, 63.838427947598255, 24.375545851528383, 122.61135371179039, 133.65652173913043, 134.2608695652174, 147.52173913043478, 120.2695652173913]), numpy.array([25.70183334947299, 19.57641190835309, 53.50246711271789, 66.9864879316446, 71.84675313281585, 72.93261773499316, 72.72710729917598, 76.51925835899723]), numpy.array([[663.4815368114683, -472.49073010036244, -423.75589902704553, 139.7702826936337, 9.80247835746574, 3.6199532674480817, -242.52683291197417, 505.4362598636329], [-472.49073010036244, 384.91676243009425, 296.96445261625695, -111.35254347659536, 75.25739293648974, -4.666034628054849, 166.73218800275805, -345.0736612273047], [-423.75589902704553, 296.96445261625695, 2875.068873056001, 318.1860683367806, 261.37767179958604, 84.96889603922475, 157.02409407798976, -593.1297594422736], [139.7702826936337, -111.35254347659536, 318.1860683367806, 4506.870221405036, 442.0494330805179, -212.5338044893896, -498.76463265149766, 382.4062667585993], [9.80247835746574, 75.25739293648974, 261.37767179958604, 442.0494330805179, 5184.497228023539, -456.02790962597265, -181.6759065881906, 370.75238276058485], [3.6199532674480817, -4.666034628054849, 84.96889603922475, -212.5338044893896, -456.02790962597265, 5342.394531991645, -240.0144294664894, 118.43155496487557], [-242.52683291197417, 166.73218800275805, 157.02409407798976, -498.76463265149766, -181.6759065881906, -240.0144294664894, 5312.329219669637, -311.37269793051064], [505.4362598636329, -345.0736612273047, -593.1297594422736, 382.4062667585993, 370.75238276058485, 118.43155496487557, -311.37269793051064, 5880.76544522499]]), 'timestamp', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # id
-    #     FieldTypeMemento(numpy.array([122.91489361702128, 122.76595744680851, 136.2340425531915, 116.25531914893617]), numpy.array([69.99721264579163, 69.05662578282282, 74.7862806755008, 81.35382873860368]), numpy.array([[5006.123034227568, 1258.0448658649402, -284.06660499537475, 412.17437557816834], [1258.0448658649402, 4872.487511563368, -406.5527289546716, 674.6262719703982], [-284.06660499537475, -406.5527289546716, 5714.574468085107, 456.6345975948195], [412.17437557816834, 674.6262719703982, 456.6345975948195, 6762.324699352451]]), 'id', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # # float
-    #     # FieldTypeMemento(numpy.array([0.0, 2., 24., 113.]),
-    #     #                  numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array(
-    #     #         [[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784],
-    #     #          [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698],
-    #     #          [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628],
-    #     #          [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (),
-    #     #                  MessageAnalyzer.U_BYTE),
-    #     # FieldTypeMemento(numpy.array([0.0, 0.08080808080808081, 23.828282828282827, 113.43434343434343]), numpy.array([0.0, 0.7060598835273263, 16.235663701838636, 76.9843433664198]), numpy.array([[0.021138394040146703, 0.018424928271229466, 0.2192364920149479, 0.32239294646470784], [0.018424928271229466, 0.5036075036075054, 0.03442589156874873, 7.556380127808698], [0.2192364920149479, 0.03442589156874873, 266.28653885796797, -84.0164914450628], [0.32239294646470784, 7.556380127808698, -84.0164914450628, 5987.06452277881]]), 'float', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # # int
-    #     # # FieldTypeMemento(numpy.array([0.0, 0.0, 107.29166666666667]), numpy.array([0.0, 0.0, 47.78029507257382]), numpy.array([[0.027493310152260777, -0.005639908063087656, -0.07922934857447499], [-0.005639908063087656, 0.018914313768380903, -2.358032476778992], [-0.07922934857447499, -2.358032476778992, 2382.215579710145]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # FieldTypeMemento(numpy.array([0.0, 0.0, 4.75, 127.84375]), numpy.array([0.0, 0.0, 4.743416490252569, 39.259640038307786]), numpy.array([[0.021960602414756426, 0.0007935582831639521, -0.22956507460690648, 0.6994209166124543], [0.0007935582831639521, 0.017292996674435825, -0.06886282798507015, 1.917984540011557], [-0.22956507460690648, -0.06886282798507015, 23.225806451612904, -30.427419354838708], [0.6994209166124543, 1.917984540011557, -30.427419354838708, 1591.039314516129]]), 'int', Value, (), MessageAnalyzer.U_BYTE) ,
-    #     # ipv4
-    #     FieldTypeMemento(numpy.array([172.0, 18.928571428571427, 2.3095238095238093, 26.071428571428573]), numpy.array([0.0, 1.4374722712498649, 0.6721711530234811, 24.562256039881753]), numpy.array([[0.022912984623871414, 0.03544250639873077, -0.0004582497404991295, -0.4596803115368301], [0.03544250639873077, 2.1167247386759582, 0.022648083623693426, 2.2491289198606266], [-0.0004582497404991295, 0.022648083623693426, 0.4628339140534262, 10.19686411149826], [-0.4596803115368301, 2.2491289198606266, 10.19686411149826, 618.0191637630664]]), 'ipv4', Value, (), MessageAnalyzer.U_BYTE) ,
-    # ]
 
     def __init__(self, analyzer: MessageAnalyzer):
         self._analyzer = analyzer
+        for ftt in FieldTypeRecognizer.fieldtypeTemplates:
+            assert ftt.analyzerClass == type(analyzer), "The given analyzer is not compatible to the existing templates."
 
 
     @property
@@ -324,7 +290,7 @@ class FieldTypeRecognizer(object):
         :param fieldtypeTemplate:
         :return: list of (position, confidence) for all offsets.
         """
-        assert fieldtypeTemplate.analyzer == type(self._analyzer)
+        assert fieldtypeTemplate.analyzerClass == type(self._analyzer)
 
         # position, confidence
         posCon = list()
@@ -341,8 +307,9 @@ class FieldTypeRecognizer(object):
 
     def charsInMessage(self) -> List[RecognizedField]:
         """
-        # mark recognized char sequences  (TODO confidence?)
-        :return:
+        Mark recognized char sequences
+
+        :return: list of recognized char sequences with the constant confidence of 0.2
         """
         from inference.segmentHandler import isExtendedCharSeq
 
@@ -386,7 +353,12 @@ class FieldTypeRecognizer(object):
 
 
     def flagsInMessage(self) -> List[RecognizedField]:
-        # confidence = 0.2
+        """
+        Mark probable flag byte pairs.
+
+        :return: list of recog nized flag sequences with the constant confidence of 0.2
+        """
+        confidence = 3.0
         offset = 0
         minLen = 2
         bitset = 2
@@ -405,20 +377,25 @@ class FieldTypeRecognizer(object):
                     break
             if belowBitset and bitSum > 0:
                 # TODO find a valid dynamic generation by observing groundtruth
-                confidence = 4.0  # 4 * bitSum / bitset  # * minLen
+                # confidence = 4 * bitSum / bitset  # * minLen
                 recognizedFlags.append(
                     RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
             offset += 1
         return recognizedFlags
 
-    # = 2
+
     def recognizedFields(self, confidenceThreshold = None) -> Dict[FieldTypeMemento, List[RecognizedField]]:
         """
         Most probable inferred field structure: The field template positions with the highest confidence for a match.
-        TODO How to decide which of any overlapping fields should be the recognized one?
-        TODO How to decide which confidence value is high enough to assume a match if no concurring comparison values
-            ("no relevant matches") are in this message?
-        :return:
+        Iterate starting from the most confident match and removing all further matches that overlap with this high
+        confidence match.
+
+        :param confidenceThreshold: Threshold to decide which confidence value is high enough to assume a match if no
+            concurring comparison values ("no relevant matches") are in this message. If not given, a threshold is
+            determined dynamically from 20/numpy.log(ftMemento.stdev.mean()).
+            The rationale is that the stdev allows to estimate the original distance that the majority of base segments
+            the template was created from resided in. TODO what about the log and factor 20?
+        :return: Mapping of each field type to the list recognized fields for it.
         """
         applConfThre = confidenceThreshold
         mostConfident = dict()
@@ -481,9 +458,27 @@ class FieldTypeQuery(object):
         return sorted(nonConflicting, key=lambda n: n.position)
 
 
-    # def mostConfident4Type(self, ftMemento: FieldTypeMemento):
-    #     confidences = self.findInMessage(ftMemento)
-    #     pass
+    def resolvedSegments(self):  # TODO unfinished
+        """
+        Fills up the recognized fields with MessageSegments to completely cover the message.
+
+        :return: list of segments for this queries message
+        """
+        # we assume self.resolveConflicting() is sorted by position!
+        segmentList = list()
+        nonConflicting = [rf.toSegment() for rf in self.resolveConflicting()]
+        analyzer = nonConflicting[0].analyzer if len(nonConflicting) > 0 else \
+            MessageAnalyzer.findExistingAnalysis(Value, MessageAnalyzer.U_BYTE, self.message)  # fallback analyzer
+        for recseg in nonConflicting:
+            lastEnd = segmentList[-1].nextOffset if len(segmentList) > 0 else 0
+            if lastEnd < recseg.offset:
+                segmentList.append(MessageSegment(analyzer, lastEnd, recseg.offset - lastEnd))
+            segmentList.append(recseg)
+        # check to fill up rest
+        lastEnd = segmentList[-1].nextOffset if len(segmentList) > 0 else 0
+        if lastEnd < len(self.message.data):
+            segmentList.append(MessageSegment(analyzer, lastEnd, len(self.message.data) - lastEnd))
+        return segmentList
 
 
     @staticmethod
@@ -494,9 +489,10 @@ class FieldTypeQuery(object):
     from inference.segments import TypedSegment
     def matchStatistics(self, segmentedMessage: List[TypedSegment]):
         """
-        in the falseNeg, we omit those segments that are just zeros.
+        Generate lists for statistics of true and false positives and false negatives.
+        In the false negative list, we omit those segments that are just zeros.
 
-        :param segmentedMessage:
+        :param segmentedMessage: The segments according to dissection as ground truth.
         :return: dict, mapping fieldtype-names to (truePos, falsePos, falseNeg)
         """
         assert segmentedMessage[0].message == self.message

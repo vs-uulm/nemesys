@@ -5,13 +5,15 @@ Batch handling of multiple segments.
 import numpy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
+from netzob.Model.Vocabulary.Symbol import Symbol, Field
+
 from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from inference.analyzers import MessageAnalyzer
 from inference.templates import AbstractClusterer, TypedTemplate
 
 
-def segmentMeans(segmentsPerMsg: List[List]):
+def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
     """
     :param segmentsPerMsg: List of Lists of Segments per message
     :return: List of means of the values of each message
@@ -27,7 +29,7 @@ def segmentMeans(segmentsPerMsg: List[List]):
     return meanSegments
 
 
-def segmentStdevs(segmentsPerMsg: List[List]):
+def segmentStdevs(segmentsPerMsg: List[List[MessageSegment]]):
     """
     :param segmentsPerMsg: List of Lists of Segments per message
     :return: List of deviations of the values of each message
@@ -43,9 +45,16 @@ def segmentStdevs(segmentsPerMsg: List[List]):
     return meanSegments
 
 
-def symbolsFromSegments(segmentsPerMsg):
-    from netzob.Model.Vocabulary.Symbol import Symbol, Field
-    return [Symbol([Field(segment.bytes) for segment in sorted(segSeq, key=lambda f: f.offset)], messages=[segSeq[0].message]) for segSeq in segmentsPerMsg ]
+def symbolsFromSegments(segmentsPerMsg: Iterable[List[MessageSegment]]) -> List[Symbol]:
+    """
+    Generate a list of Netzob Symbols from the given lists of segments for each message.
+
+    :param segmentsPerMsg: List of messages, represented by lists of segments.
+    :return: list of Symbols, one for each entry in the given iterable of lists.
+    """
+    return [Symbol( [Field(segment.bytes) for segment in sorted(segSeq, key=lambda f: f.offset)],
+                    messages=[segSeq[0].message])
+        for segSeq in segmentsPerMsg ]
 
 
 def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
@@ -77,6 +86,8 @@ def segmentsFixed(length: int, comparator,
     :param analyzerType: Type of the analysis. Subclass of inference.analyzers.MessageAnalyzer.
     :param analysisArgs: Arguments for the analysis method.
     :param unit: Base unit for the analysis. Either MessageAnalyzer.U_BYTE or MessageAnalyzer.U_NIBBLE.
+    :param zeropadded: Toggle to pad the last segment to the requested fixed length or leave the last segment to be
+        shorter than length if the message length is not an exact multiple of the segment length.
     :return: Segments of the analyzer's message according to the true format.
     """
     segments = list()
@@ -176,13 +187,13 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     return msgSeg
 
 
-def refinements(segmentsPerMsg: List[List[MessageSegment]]):
+def refinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.
-    :return: refined segments in on list per message
+    :return: refined segments in list per message
     """
     import inference.formatRefinement as refine
 

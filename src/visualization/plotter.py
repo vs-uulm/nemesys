@@ -62,6 +62,7 @@ class MessagePlotter(object):
         else:
             plt.show()
         plt.close('all')
+        del self._figure
 
 
     @staticmethod

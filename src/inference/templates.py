@@ -1435,6 +1435,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         :param method:
         """
         self.baseSegments = list(baseSegments)
+        """:type List[AbstractSegment]"""
         self._baseOffsets = dict()
         relevantSegs = [seg for seg in self.baseSegments if set(seg.values) != {0}]
         segLens = {seg.length for seg in relevantSegs}

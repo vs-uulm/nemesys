@@ -216,14 +216,14 @@ if __name__ == '__main__':
                 # for ipv4: combine clusters 0 to 5
                 fieldtypeTemplates["ipv4"] = [ FieldTypeTemplate(chain.from_iterable(
                     [ ftMap[tid].baseSegments for tid in [
-                        "8b6908f0", "d678d05b", "93f2a49e", "c9f10baa", "f4891db9" ] ])) ]
+                        "0b3f139a" ] ])) ]
                 # for macaddr: use the complete group
                 fieldtypeTemplates["macaddr"] = [ FieldTypeTemplate(
                     [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("macaddr")
                       for cluster in page for segs in cluster[1] ]
                 ) ]
                 # for id: test whether this works
-                fieldtypeTemplates["id"] = [ ftMap["571bd5d4"] ]
+                fieldtypeTemplates["id"] = [ ftMap["153b0111"] ]
 
                 # for float: use the complete group AND refine
                 floatHelpers = list()
@@ -231,7 +231,7 @@ if __name__ == '__main__':
                 float_rand_lower = numpy.array([0, 0, 0, 0]) # , 14, 44]   # [1, 4, 0, 0]
                 float_rand_upper = numpy.array([2, 6, 0, 0]) # , 31, 190]
                 for tid in ["84f0fc52", "98b5b680"]:
-                    for bs in ftMap[tid].baseSegments:
+                    for bs in ftMap[tid].baseSegments:  # type; AbstractSegment
                         fh = HelperSegment(bs.analyzer, 0, bs.length)
                         fh.values = bs.values + \
                                     (float_rand_upper - float_rand_lower) * numpy.random.rand(4) + float_rand_lower
@@ -243,6 +243,16 @@ if __name__ == '__main__':
                     [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("timestamp")
                       for cluster in page for segs in cluster[1] ]
                 ) ]
+
+                # TODO for checksum: use only 8 byte fields
+                fieldtypeTemplates["checksum"] = [FieldTypeTemplate(
+                    [ms for ms in ftMap["bb3a6822"].baseSegments if ms.length == 8]
+                )]
+
+                # TODO for int: test two byte template
+                fieldtypeTemplates["int"] = [FieldTypeTemplate(
+                    ftMap["4e923fd9"].baseSegments
+                )]
 
                 # Python code representation to persist the fieldtypeTemplates
                 fieldtypeMementos = list()

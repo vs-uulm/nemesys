@@ -10,7 +10,10 @@ from os.path import isfile, basename
 from tabulate import tabulate
 import IPython
 
-from validation.dissectorMatcher import MessageComparator
+from inference.segmentHandler import symbolsFromSegments
+from nemesys_fms import mapQualities2Messages
+from validation import reportWriter
+from validation.dissectorMatcher import MessageComparator, DissectorMatcher
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import TypedSegment
@@ -569,10 +572,10 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # # Hunting false positives
         # # # field contexts of false positives
-        fpsortconf = sorted((recog for recog, seg in matchStatistics["flags"][1]), key=lambda r: r.confidence)
-        print("\nContexts of first 20 false positives, sorted by confidence:\n")
-        for recog in fpsortconf[:50]:
-            printFieldContext(segmentedMessages, recog)
+        # fpsortconf = sorted((recog for recog, seg in matchStatistics["flags"][1]), key=lambda r: r.confidence)
+        # print("\nContexts of first 20 false positives, sorted by confidence:\n")
+        # for recog in fpsortconf[:50]:
+        #     printFieldContext(segmentedMessages, recog)
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # inspectFieldtypeIsolated("float")
@@ -593,9 +596,52 @@ if __name__ == '__main__':
         #           determine mahalanobis distance to memento
         #       collect and sort all dists for this fieldtype
         #       overlay plot from before as histogram/function (see the one for segment type distance distributions)
-
         # # # # # # # # # # # # # # # # # # # # # # # #
 
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # make segments from recognized field candidates
+        recognizedMessages = OrderedDict()
+        for ftq in ftQueries:
+            recognizedMessages[ftq.message] = ftq.resolvedSegments()
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # # print recognized fields and filler segments side by side for each message
+        # for infsegs in recognizedMessages.values():
+        #     rectypes = [rsec.fieldtype if isinstance(rsec, TypedSegment) else "" for rsec in infsegs]
+        #     recsecs = [rsec.bytes.hex() if isinstance(rsec, TypedSegment) else "" for rsec in infsegs]
+        #     fillsecs = [fsec.bytes.hex() if not isinstance(fsec, TypedSegment) else "" for fsec in infsegs]
+        #     recsecs[-1] = recsecs[-1] + bcolors.ENDC
+        #     print(tabulate([recsecs, fillsecs],
+        #                    headers=rectypes,
+        #                    showindex=[bcolors.BOLD + "recognized", "filler"],
+        #                    disable_numparse=True))
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # FMS calculation
+        symbols = sorted(symbolsFromSegments(recognizedMessages.values()), key=lambda s: s.messages[0].messageType)
+        comparator.pprintInterleaved(symbols)
+
+        # calc FMS per message
+        print("Calculate FMS...")
+        message2quality = DissectorMatcher.symbolListFMS(comparator, symbols)
+
+        # have a mapping from quality to messages
+        quality2messages = mapQualities2Messages(message2quality)
+        msg2analyzer = {msg: segs[0].analyzer for msg, segs in recognizedMessages.items()}
+        minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # writeResults(tikzcode, specimens, inferenceTitle)
+        if args.interactive:
+            print('\nLoaded PCAP in: specimens, comparator')
+            print('Inferred messages in: symbols, recognizedMessages')
+            print('FMS of messages in: message2quality, quality2messages, minmeanmax\n')
+            IPython.embed()
+            exit(0)
+        else:
+            inferenceTitle = 'field-recognition'
+            reportWriter.writeReport(message2quality, -1, specimens, comparator, inferenceTitle)
+        # # # # # # # # # # # # # # # # # # # # # # # #
 
 
     if args.interactive:

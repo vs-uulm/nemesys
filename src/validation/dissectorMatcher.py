@@ -365,7 +365,7 @@ class MessageComparator(object):
         pmLookup = self.lookupField(segment)
         print("Message type:", pmLookup[0])
         print("Field name:  ", pmLookup[1])
-        print("Field type:  ", pmLookup[3])
+        print("Field type:  ", pmLookup[2])
         print("Byte values: ", segment.bytes)
         print("Hex values:  ", segment.bytes.hex())
 

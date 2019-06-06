@@ -421,8 +421,8 @@ class AbstractSegment(ABC):
     CORR_PEARSON = 0  # Pearson Product-Moment Correlation Coefficient
 
     def __init__(self):
-        # list of analysis result values for the segment scope
         self._values = None  # type: Union[List, numpy.ndarray]
+        """list of analysis result values for the segment scope"""
         self.length = None
 
     @property
@@ -437,8 +437,8 @@ class AbstractSegment(ABC):
         content. This base implementation just checks whether candidate has values set to not None otherwise raises an
         exception.
 
-        :param candidate:
-        :return:
+        :param candidate: Segment for which to ensure a compatible analyzer or meaningful values.
+        :return: The candidate asured to have compatible analyzer/values.
         """
         if self.values is None:
             raise ValueError("Analysis value missing of", self)
