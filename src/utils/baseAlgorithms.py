@@ -100,3 +100,38 @@ def autoconfigureDBSCAN(neighbors: List[List[Tuple[int, float]]]):
     epsilon = smoothknearest[k][x] if smoothknearest[k][x] > 0 else 0.001
     min_samples = round(sigma)
     return epsilon, min_samples, k
+
+
+def ecdf(data: List, evenlySpaced: bool = True):
+    """
+    Emperical Cumulative Distribution Function (ECDF)
+    from https://www.codementor.io/kripanshubharga/calculate-ecdf-in-python-gycltzxi3
+
+    :param data: The data for which to calculate the ECDF.
+    :param evenlySpaced: typically a CDF evaluates the occurance of samples (x-values) at evenly spaced intervals,
+        we sometimes need the exact discrete jump in the frequency, then set this to False
+    :return: x-values, y-values of the ECDF
+    """
+    raw_data = numpy.array(data)
+
+    # create a sorted series of unique data
+    cdfx = numpy.sort(list(set(data)))
+    if evenlySpaced:
+        # x-data for the ECDF: evenly spaced sequence of the uniques
+        x_values = numpy.linspace(start=min(cdfx), stop=max(cdfx), num=len(cdfx))
+    else:
+        x_values = cdfx
+    # size of the x_values
+    size_data = raw_data.size
+    # y-data for the ECDF:
+    y_values = []
+    for i in x_values:
+        # all the values in raw data less than the ith value in x_values
+        temp = raw_data[raw_data <= i]
+        # fraction of that value with respect to the size of the x_values
+        value = temp.size / size_data
+        # pushing the value in the y_values
+        y_values.append(value)
+    # return both x and y values
+    return x_values, y_values
+

@@ -80,6 +80,7 @@ epsdefault = 2.4
 
 reportFolder = "reports"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
+ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-clustering-statistics.csv')
 
 
 
@@ -164,6 +165,78 @@ def writeMessageClusteringStaticstics(
 
     return prList, conciseness
 
+# Element = TypeVar('Element')
+def writeCollectiveClusteringStaticstics(
+        clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
+        runtitle: str, comparator: MessageComparator):
+    """
+    Precision and recall for the whole clustering interpreted as number of draws from pairs of messages.
+
+    For details see: https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-clustering-1.html
+    How to calculate the draws is calculated for the Rand index in the document.
+
+    Writes a CSV with tp, fp, fn, tn, pr, rc
+        for (a) all clusters and for (b) clusters that have a size of at least 1/40 of the number of samples/messages.
+    """
+    from collections import Counter
+    from itertools import combinations, chain
+    from scipy.special import binom
+
+    print('Write message cluster statistics to {}...'.format(clStatsFile))
+
+    noise = []
+    noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
+    if noisekey is not None:
+        noise = clusters[noisekey]
+        clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
+
+    """
+    # # # # # # # #
+    # test case
+    >>> groundtruth = {
+    >>>     "x0": "x", "x1": "x", "x2": "x", "x3": "x", "x4": "x", "x5": "x", "x6": "x", "x7": "x",
+    >>>     "o0": "o", "o1": "o", "o2": "o", "o3": "o", "o4": "o",
+    >>>     "#0": "#", "#1": "#", "#2": "#", "#3": "#"
+    >>> }
+    >>> clusters = { "A": ["x1", "x2", "x3", "x4", "x5", "o1"],
+    >>>              "B": ["x6", "o2", "o3", "o4", "o0", "#1"],
+    >>>              "C": ["x7", "x0", "#2", "#3", "#0"],
+    >>>              }
+    >>> typeFrequencies = [Counter([groundtruth[element] for element in c])
+                             for c in clusters.values()]
+    # # # # # # # #
+    """
+
+    # numTypesOverall = Counter(groundtruth[comparator.messages[element[0].message]]
+    #                           for c in clusters.values() for element in c)
+    numTypesOverall = Counter(groundtruth.values())
+    # number of types per cluster
+    typeFrequencies = [Counter([groundtruth[comparator.messages[element[0].message]] for element in c])
+                             for c in clusters.values()]
+    noiseTypes = Counter([groundtruth[comparator.messages[element[0].message]] for element in noise])
+
+    tpfp = sum(binom(len(c), 2) for c in clusters.values())
+    tp = sum(binom(t,2) for c in typeFrequencies for t in c.values())
+    tnfn = sum(map(lambda n: n[0] * n[1], combinations(
+        (len(c) for c in chain.from_iterable([clusters.values(), [noise]])), 2)))
+    fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
+              for typeCluster in typeFrequencies + [noiseTypes]
+              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2
+
+    # precision = tp / (tp + fp)
+    precision = tp / tpfp
+    recall = tp / (tp + fn)
+
+    head = [ 'run_title', 'trace', 'true positives', 'false positives', 'false negatives', 'true negatives',
+             'precision', 'recall', 'noise']
+    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn, precision, recall, len(noise) ]
+
+    csvWriteHead = False if os.path.exists(ccStatsFile) else True
+    with open(ccStatsFile, 'a') as csvfile:
+        clStatscsv = csv.writer(csvfile)  # type: csv.writer
+        if csvWriteHead:
+            clStatscsv.writerow(head)
+        clStatscsv.writerow(row)
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
