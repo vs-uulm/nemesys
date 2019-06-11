@@ -42,6 +42,7 @@ debug = False
 analysis_method = 'value'
 distance_method = 'canberra'
 tokenizers = ('tshark', '4bytesfixed', 'nemesys')
+roundingprecision = 10**8
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -281,6 +282,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     withplots = args.with_plots
 
+    print("\n\n")
+
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
@@ -378,6 +381,35 @@ if __name__ == '__main__':
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
+    # triangle empirics: segments
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    from scipy.special import binom
+    print("count of segment triples", 6 * binom(dc.distanceMatrix.shape[0], 3))
+    # from scipy.special import binom
+    # triangles = list()
+    # falseTriangleCount = 0
+    # chunkIndex = 0
+    # for a, b, c in permutations(range(dc.distanceMatrix.shape[0]), 3):
+    #     triangles.append((dc.distanceMatrix[a,b] + dc.distanceMatrix[b,c], dc.distanceMatrix[a,c]))
+    #     if chunkIndex > 100000:
+    #         triround = numpy.array(triangles).round(6)
+    #         triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+    #         falseTriangleCount += len(triineq[triineq == False])
+    #         del triround, triineq
+    #         triangles = list()
+    #         chunkIndex = -1
+    #     chunkIndex += 1
+    # triround = numpy.array(triangles).round(6)
+    # triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+    # falseTriangleCount += len(triineq[triineq == False])
+    # del triround, triineq
+    # print(falseTriangleCount, "segment distance triangles false of", 6*binom(dc.distanceMatrix.shape[0], 3))
+    # del triangles
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # if not exists(smcachefn):
     print("Calculate distance for {} messages...".format(len(segmentedMessages)))
     dist_calc_messagesTime = time.time()
@@ -397,6 +429,32 @@ if __name__ == '__main__':
     cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
     # # # # # # # # # # # # # # # # # # # # # # # #
 
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # triangle empirics: messages
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    from itertools import permutations
+    from scipy.special import binom
+    triangles = list()
+    falseTriangleCount = 0
+    chunkIndex = 0
+    for a, b, c in permutations(range(sm.distances.shape[0]), 3):
+        triangles.append((sm.distances[a,b] + sm.distances[b,c], sm.distances[a,c]))
+        if chunkIndex > 100000:
+            triround = numpy.array(triangles).round(6)
+            triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+            falseTriangleCount += len(triineq[triineq == False])
+            del triround, triineq
+            triangles = list()
+            chunkIndex = -1
+        chunkIndex += 1
+    triround = numpy.array(triangles).round(6)
+    triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+    falseTriangleCount += len(triineq[triineq == False])
+    del triround, triineq
+    print(falseTriangleCount, "message distance triangles false of", 6*binom(sm.distances.shape[0], 3))
+    del triangles
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -493,61 +551,73 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     if args.split:
         from collections import Counter
-        import matplotlib.pyplot as plt
         clusterReplaceMap = dict()
         for aNum, aClu in alignedClusters.items():
-            freqThresh = numpy.round(numpy.log(len(aClu)))
+            if aNum == -1:
+                continue
+            freqThresh = numpy.floor(numpy.log(len(aClu)))  # numpy.round(numpy.log(len(aClu)))
             fields = [fld for fld in zip(*aClu)]  # type: List[List[MessageSegment]]
             distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
             # amount of distinct values per field
-            valsCount4fields = [len(valSet) for valSet in distinctVals4fields]
-            # empirical cumulative distribution function
-            ecdfX, ecdfY = ecdf(valsCount4fields, False)
-            # TODO determine elbow before rise of values counts - currently this is a relatively dumb estimate
-            ecdfDelta = numpy.diff(ecdfY) / numpy.diff(ecdfX)
-            firstBelowCent = 0
-            for idx, edd in enumerate(ecdfDelta):
-                if edd < 0.01:
-                    firstBelowCent = idx
-                    break
-            knee = ecdfX[firstBelowCent]
-            print("\nCluster", aNum, "of size", len(aClu), "with knee at", knee if firstBelowCent > 0 else "[none]",
+            valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
+
+            # # empirical cumulative distribution function
+            # ecdfX, ecdfY = ecdf(valAmount4fields, False)
+            # # TODO determine elbow before rise of values counts - currently this is a relatively dumb estimate
+            # ecdfDelta = numpy.diff(ecdfY) / numpy.diff(ecdfX)
+            # firstBelowCent = 0
+            # for idx, edd in enumerate(ecdfDelta):
+            #     if edd < 0.01:
+            #         firstBelowCent = idx
+            #         break
+            # knee = ecdfX[firstBelowCent]
+            print("\nCluster", aNum, "of size", len(aClu),
+                  # "with knee at", knee if firstBelowCent > 0 else "[none]",
                   "- threshold", numpy.log(len(aClu)))
-            print(tabulate([ecdfX, ecdfY, ecdfDelta, numpy.diff(numpy.diff(ecdfY) / numpy.diff(ecdfX))],
-                           showindex=["x", "ecdf", "delta", "delta2"] ))
+            # print(tabulate([ecdfX, ecdfY, ecdfDelta, numpy.diff(numpy.diff(ecdfY) / numpy.diff(ecdfX))],
+            #                showindex=["x", "ecdf", "delta", "delta2"] ))
+            #
+            # import matplotlib.pyplot as plt
+            # # plt.plot(ecdfX[:-1], ecdfDelta)
+            # # # plt.plot(ecdfX[:-2], numpy.diff(numpy.diff(ecdfY)/numpy.diff(ecdfX)))
+            # # plt.plot(ecdfX, ecdfY)
+            # # plt.axvline(knee)
+            # # plt.show()
 
-            # plt.plot(ecdfX[:-1], ecdfDelta)
-            # # plt.plot(ecdfX[:-2], numpy.diff(numpy.diff(ecdfY)/numpy.diff(ecdfX)))
-            # plt.plot(ecdfX, ecdfY)
-            # plt.axvline(knee)
-            # plt.show()
-
-            globals().update(locals())
             # threshold for considering the elbow value  TODO evaluate ln
-            if knee <= freqThresh:
-                valCnts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                                  for fidx, segs in enumerate(fields)}
-                pivotFieldIds = [fidx for fidx, vCnt in enumerate(valsCount4fields)
-                                 if 1 < vCnt <= knee
-                                 and not any(val is None for val in fields[fidx])  # omit fields that have gaps
-                                 and not any(cnt <= numpy.log(len(aClu))
-                                             for cnt in valCnts4fields[fidx].values())]  # remove fields with exotic values
-                if len(pivotFieldIds) == 0:
-                    continue  # conditions not met for splitting: next cluster
+            # if knee <= freqThresh:
+            valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
+                                for fidx, segs in enumerate(fields)}
+            pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
+                 if 1 < vCnt <= freqThresh  # knee
+                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
+                 and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
+                 and not any(cnt <= freqThresh
+                             for cnt in valCounts4fields[fidx].values())]  # remove fields with exotic values
+            if len(pivotFieldIds) == 0:
+                print("no pivot fields left")
+                exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
+                                   for fidx, vCnt in enumerate(valAmount4fields)]
+                if any(exo for fidx, exo in exoticCondition):
+                    print("fields (ids) that have exotic values:", [fidx for fidx, exo in exoticCondition if exo])
+                continue  # conditions not met for splitting: next cluster
+            elif len(pivotFieldIds) > 3:
+                print("too many pivot fields:", len(pivotFieldIds))
+                continue  # conditions not met for splitting: next cluster
 
-                # split clusters
-                clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
-                for msgsegs in aClu:
-                    globals().update(locals())
-                    # concatenate multiple distinct field combinations
-                    pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
-                                       for pId in pivotFieldIds])
-                    if pivotVals not in clusterSplits:
-                        clusterSplits[pivotVals] = list()
-                    clusterSplits[pivotVals].append(msgsegs)
-                clusterReplaceMap[aNum] = clusterSplits
-                print("replace cluster", aNum, "by")
-                print(tabulate((clusterSplits.keys())))
+            # split clusters
+            clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
+            for msgsegs in aClu:
+                globals().update(locals())
+                # concatenate multiple distinct field combinations
+                pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
+                                   for pId in pivotFieldIds])
+                if pivotVals not in clusterSplits:
+                    clusterSplits[pivotVals] = list()
+                clusterSplits[pivotVals].append(msgsegs)
+            clusterReplaceMap[aNum] = clusterSplits
+            print("replace cluster", aNum, "by")
+            print(tabulate((clusterSplits.keys())))
 
         # replace clusters by their splits
         for aNum, clusterSplits in clusterReplaceMap.items():
@@ -566,8 +636,8 @@ if __name__ == '__main__':
             del messageClusters[aNum]
 
         # labels for distance plot
-        msgLabelMap = {msgsegs: clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
-        labels = numpy.array([msgLabelMap[seglist] for seglist in segmentedMessages])
+        msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
+        labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         if withplots:
@@ -606,85 +676,84 @@ if __name__ == '__main__':
 
 
 
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # check for cluster merge candidates
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    print("Check for cluster merge candidates...")
-    from utils.evaluationHelpers import printClusterMergeConditions
-    # noinspection PyUnreachableCode
-    if True:
-        # ClusterMerger
-        clustermerger = ClusterMerger(alignedClusters, dc)
-
-        alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
-        # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
-        if tokenizer == "nemesys":
-            alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
-        matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
-        matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
-        mergedClusters = clustermerger.mergeClusters(
-            messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-        # # # # # # # #
-        writeCollectiveClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-        # # # # # # # # min cluster size 1/40th
-        noisekey = 'Noise' if 'Noise' in mergedClusters else -1
-        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
-        filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
-        filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
-                                          if len(v) < 0.025 * len(segmentedMessages) for s in v)
-        writeCollectiveClusteringStaticstics(
-            filteredMerged, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}-one40th".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-    else:
-        # # # # # # # # # # # # # # # # # # # # #
-        # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
-        # ClusterClusterer
-        clusterclusterer = ClusterClusterer(alignedClusters, dc)
-        # clusterDists = clusterclusterer.calcClusterDistances()
-
-        mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
-
-        clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
-        clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
-        mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
-        ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
-
-        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
-            comparator)
-
-        from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        from visualization.distancesPlotter import DistancesPlotter
-        typedClusterDummys = list()
-        for clunu in clusterclusterer.clusterOrder:
-            clusta = None
-            for stats in clusterStats:
-                if stats is not None and stats[0] == clunu:
-                    clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
-                    break
-            msgdum = RawMessage(messageType=clusta)
-            typedClusterDummys.append(msgdum)
-
-        dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
-        dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
-        dp.writeOrShowFigure()
-    # END # of # check for cluster merge candidates #
-    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO for now we do not need the rest of the script for evaluation. Remove outermost comment for final!
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # check for cluster merge candidates
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # print("Check for cluster merge candidates...")
+    # from utils.evaluationHelpers import printClusterMergeConditions
+    # # noinspection PyUnreachableCode
+    # if True:
+    #     # ClusterMerger
+    #     clustermerger = ClusterMerger(alignedClusters, dc)
+    #
+    #     alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
+    #     # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
+    #     if tokenizer == "nemesys":
+    #         alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
+    #     matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
+    #     matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
+    #     mergedClusters = clustermerger.mergeClusters(
+    #         messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
+    #     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+    #         mergedClusters, groundtruth,
+    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+    #         comparator)
+    #     # # # # # # # #
+    #     writeCollectiveClusteringStaticstics(
+    #         mergedClusters, groundtruth,
+    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+    #         comparator)
+    #     # # # # # # # # min cluster size 1/40th
+    #     noisekey = 'Noise' if 'Noise' in mergedClusters else -1
+    #     filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
+    #     filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
+    #     filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
+    #                                       if len(v) < 0.025 * len(segmentedMessages) for s in v)
+    #     writeCollectiveClusteringStaticstics(
+    #         filteredMerged, groundtruth,
+    #         "merged-{}-{}-eps={:.2f}-min_samples={}-one40th".format(
+    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+    #         comparator)
+    # else:
+    #     # # # # # # # # # # # # # # # # # # # # #
+    #     # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
+    #     # ClusterClusterer
+    #     clusterclusterer = ClusterClusterer(alignedClusters, dc)
+    #     # clusterDists = clusterclusterer.calcClusterDistances()
+    #
+    #     mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
+    #
+    #     clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
+    #     clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
+    #     mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
+    #     ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
+    #
+    #     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+    #         mergedClusters, groundtruth,
+    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+    #             tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
+    #         comparator)
+    #
+    #     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    #     from visualization.distancesPlotter import DistancesPlotter
+    #     typedClusterDummys = list()
+    #     for clunu in clusterclusterer.clusterOrder:
+    #         clusta = None
+    #         for stats in clusterStats:
+    #             if stats is not None and stats[0] == clunu:
+    #                 clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
+    #                 break
+    #         msgdum = RawMessage(messageType=clusta)
+    #         typedClusterDummys.append(msgdum)
+    #
+    #     dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
+    #     dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
+    #     dp.writeOrShowFigure()
+    # # END # of # check for cluster merge candidates #
+    # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
@@ -700,8 +769,10 @@ if __name__ == '__main__':
             symbolcsv = csv.writer(csvfile)
             for clunu, clusg in alignedClusters.items():
                 symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
-                symbolcsv.writerows([groundtruth[comparator.messages[msg[0].message]]] + [sg.bytes.hex() if sg is not None else '' for sg in msg]
-                                    for msg in clusg)
+                symbolcsv.writerows(
+                    [groundtruth[comparator.messages[next(seg for seg in msg if seg is not None).message]]]
+                    + [sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg
+                )
                 symbolcsv.writerow(["---"] * 5)
     else:
         print("Symbols not saved. File {} already exists.".format(csvpath))
