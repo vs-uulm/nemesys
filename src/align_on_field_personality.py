@@ -383,9 +383,9 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # triangle empirics: segments
     # # # # # # # # # # # # # # # # # # # # # # # #
-    from scipy.special import binom
-    print("count of segment triples", 6 * binom(dc.distanceMatrix.shape[0], 3))
     # from scipy.special import binom
+    # print("count of segment triples", 6 * binom(dc.distanceMatrix.shape[0], 3))
+    # from itertools import permutations
     # triangles = list()
     # falseTriangleCount = 0
     # chunkIndex = 0
@@ -433,27 +433,27 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # triangle empirics: messages
     # # # # # # # # # # # # # # # # # # # # # # # #
-    from itertools import permutations
-    from scipy.special import binom
-    triangles = list()
-    falseTriangleCount = 0
-    chunkIndex = 0
-    for a, b, c in permutations(range(sm.distances.shape[0]), 3):
-        triangles.append((sm.distances[a,b] + sm.distances[b,c], sm.distances[a,c]))
-        if chunkIndex > 100000:
-            triround = numpy.array(triangles).round(6)
-            triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
-            falseTriangleCount += len(triineq[triineq == False])
-            del triround, triineq
-            triangles = list()
-            chunkIndex = -1
-        chunkIndex += 1
-    triround = numpy.array(triangles).round(6)
-    triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
-    falseTriangleCount += len(triineq[triineq == False])
-    del triround, triineq
-    print(falseTriangleCount, "message distance triangles false of", 6*binom(sm.distances.shape[0], 3))
-    del triangles
+    # from itertools import permutations
+    # from scipy.special import binom
+    # triangles = list()
+    # falseTriangleCount = 0
+    # chunkIndex = 0
+    # for a, b, c in permutations(range(sm.distances.shape[0]), 3):
+    #     triangles.append((sm.distances[a,b] + sm.distances[b,c], sm.distances[a,c]))
+    #     if chunkIndex > 100000:
+    #         triround = numpy.array(triangles).round(6)
+    #         triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+    #         falseTriangleCount += len(triineq[triineq == False])
+    #         del triround, triineq
+    #         triangles = list()
+    #         chunkIndex = -1
+    #     chunkIndex += 1
+    # triround = numpy.array(triangles).round(6)
+    # triineq = numpy.greater_equal(triround[:, 0], triround[:, 1])
+    # falseTriangleCount += len(triineq[triineq == False])
+    # del triround, triineq
+    # print(falseTriangleCount, "message distance triangles false of", 6*binom(sm.distances.shape[0], 3))
+    # del triangles
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -551,6 +551,10 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     if args.split:
         from collections import Counter
+
+        exoticValueStats = "reports/exotic-values-statistics.csv"
+        fieldLenThresh = 4 if not tokenizer == "tshark" else 3
+
         clusterReplaceMap = dict()
         for aNum, aClu in alignedClusters.items():
             if aNum == -1:
@@ -563,7 +567,7 @@ if __name__ == '__main__':
 
             # # empirical cumulative distribution function
             # ecdfX, ecdfY = ecdf(valAmount4fields, False)
-            # # TODO determine elbow before rise of values counts - currently this is a relatively dumb estimate
+            # # TODO remove after checking of reuseability
             # ecdfDelta = numpy.diff(ecdfY) / numpy.diff(ecdfX)
             # firstBelowCent = 0
             # for idx, edd in enumerate(ecdfDelta):
@@ -571,9 +575,6 @@ if __name__ == '__main__':
             #         firstBelowCent = idx
             #         break
             # knee = ecdfX[firstBelowCent]
-            print("\nCluster", aNum, "of size", len(aClu),
-                  # "with knee at", knee if firstBelowCent > 0 else "[none]",
-                  "- threshold", numpy.log(len(aClu)))
             # print(tabulate([ecdfX, ecdfY, ecdfDelta, numpy.diff(numpy.diff(ecdfY) / numpy.diff(ecdfX))],
             #                showindex=["x", "ecdf", "delta", "delta2"] ))
             #
@@ -584,24 +585,131 @@ if __name__ == '__main__':
             # # plt.axvline(knee)
             # # plt.show()
 
-            # threshold for considering the elbow value  TODO evaluate ln
-            # if knee <= freqThresh:
+            print("\nCluster", aNum, "of size", len(aClu),
+                  # "with knee at", knee if firstBelowCent > 0 else "[none]",
+                  "- threshold", numpy.log(len(aClu)))
+            cPrec = next(cs[2] for cs in clusterStats if cs is not None and cs[0] == aNum)
+            print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
+
             valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
                                 for fidx, segs in enumerate(fields)}
             pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
                  if 1 < vCnt <= freqThresh  # knee
                  and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
-                 and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
+                 and not any(val.length > fieldLenThresh for val in fields[fidx] if val is not None)  # omit fields longer than 3/4
+                 and not any(set(val.values) == {0} for val in fields[fidx] if val is not None)  # omit fields that have zeros
                  and not any(cnt <= freqThresh
                              for cnt in valCounts4fields[fidx].values())]  # remove fields with exotic values
+
+            preExotic = [fidx for fidx, vCnt in enumerate(valAmount4fields)
+                 if 1 < vCnt <= freqThresh  # knee
+                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
+                 and not any([val.length > fieldLenThresh for val in fields[fidx] if val is not None])  # omit fields longer than 3/4
+                 and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
+                         ]
+
+            # newExotic = list()
+            # for fidx in preExotic:
+            #     scnt = sorted(valCounts4fields[fidx].values())
+            #     if len(scnt) > 1:
+            #         diffmax = numpy.diff(scnt).argmax() + 1
+            #         numValues_u = len(aClu) - diffmax
+            #         mean_u = numpy.mean(scnt[diffmax:])
+            #         halfsRatio = sum(scnt[:diffmax]) / sum(scnt[diffmax:])
+            #         if numValues_u > 1 and halfsRatio > 0.1 and mean_u > len(scnt) / 2 * numpy.log(len(scnt)):
+            #             newExotic.append(fidx)
+            #     # TODO scnt[0] > freqThresh
+
+            newExotic = list()
+            for fidx in preExotic:
+                scnt = sorted(valCounts4fields[fidx].values())
+                if len(scnt) > 1:
+                    # the pivot index and value to split the sorted list of type amounts
+                    iVal, pVal = next((i, cnt) for i, cnt in enumerate(scnt) if cnt > freqThresh)
+                    # iVal = numpy.diff(scnt).argmax() + 1
+                    # the special case of any(cnt <= freqThresh for cnt in scnt) is relaxedly included here
+                    numValues_u = len(scnt) - iVal
+                    # if there are no or only one frequent value, do not split
+                    if numValues_u > 1:
+                        # pVal = scnt[iVal]
+                        mean_u = numpy.mean(scnt[iVal:])
+                        halfsRatio =  sum(scnt[:iVal]) / sum(scnt[iVal:])
+                        if halfsRatio < 0.1 and mean_u > len(scnt) / 2 * numpy.log(len(scnt)):
+                            newExotic.append(fidx)
+
+            addExotics = set(newExotic) - set(pivotFieldIds)
+            remExotics = set(pivotFieldIds) - set(newExotic)
+            if not len(addExotics) == len(remExotics) == 0:
+                print("pivot field changes due to new exotics:")
+                print("  add fields:", addExotics)
+                print("  remove fields:", remExotics)
+
+
             if len(pivotFieldIds) == 0:
                 print("no pivot fields left")
                 exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
                                    for fidx, vCnt in enumerate(valAmount4fields)]
                 if any(exo for fidx, exo in exoticCondition):
-                    print("fields (ids) that have exotic values:", [fidx for fidx, exo in exoticCondition if exo])
+                    # print("fields (ids) that have exotic values:") #, [fidx for fidx, exo in exoticCondition if exo])
+                    for fidx, exo in exoticCondition:
+                        if exo:
+                            # print("Field ", fidx)
+                            scnt = sorted(valCounts4fields[fidx].values())
+                            # quart = len(scnt)/4
+                            # qids = [int(quart), int(2*quart), int(3*quart)]
+                            # quarts = [
+                            #     [scnt[qids[0]], scnt[qids[1]], scnt[qids[2]], scnt[-1]],
+                            #     [sum(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
+                            #      sum(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
+                            #      sum(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
+                            #      sum(scnt[qids[2]:]) if len(scnt[qids[2]:]) > 0 else "-"],
+                            #     [numpy.mean(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
+                            #      numpy.mean(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
+                            #      numpy.mean(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
+                            #      numpy.mean(scnt[qids[2]:])] if len(scnt[qids[2]:]) > 0 else "-",
+                            #     [numpy.median(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
+                            #      numpy.median(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
+                            #      numpy.median(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
+                            #      numpy.median(scnt[qids[2]:]) if len(scnt[qids[2]:]) > 0 else "-"]
+                            # ]
+                            # # counts = list(valCounts4fields[fidx].values())
+                            # # quarts = numpy.histogram(counts, bins=4, range=(1, max(counts)))
+                            # print(tabulate(quarts, headers=["1st quart", "2st quart", "3st quart", "4st quart" ],
+                            #                showindex=["max", "sum", "mean", "median"]))
+                            # print("num vals, maxdiff at, val", len(scnt),
+                            #       numpy.diff(scnt).argmax() if len(scnt) > 0 else "-",
+                            #       numpy.diff(scnt).max() if len(scnt) > 0 else "-", "\n")
+                            # print(quarts)
+                            # print(scnt)
+
+                            diffmax = (numpy.diff(scnt).argmax()+1) if len(scnt) > 1 else "-"
+                            csvWriteHead = False if exists(exoticValueStats) else True
+                            with open(exoticValueStats, 'a') as csvfile:
+                                exoticcsv = csv.writer(csvfile)  # type: csv.writer
+                                if csvWriteHead:
+                                    exoticcsv.writerow([
+                                        'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
+                                        'num_vals',
+                                        'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
+                                        'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
+                                    ])
+                                fieldParameters = [ "{}-{}-eps={:.2f}-min_samples={}".format(
+                                            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+                                        comparator.specimens.pcapFileName,
+                                        aNum, cPrec, len(aClu), fidx, len(scnt)]
+                                if len(scnt) > 1:
+                                    exoticcsv.writerow([
+                                        *fieldParameters, diffmax, scnt[diffmax],
+                                        sum(scnt[:diffmax]), sum(scnt[diffmax:]),
+                                        numpy.mean(scnt[:diffmax]), numpy.mean(scnt[diffmax:]),
+                                        numpy.std(scnt[:diffmax]), numpy.std(scnt[diffmax:]),
+                                        numpy.median(scnt[:diffmax]), numpy.median(scnt[diffmax:])
+                                    ])
+                                else:
+                                    exoticcsv.writerow(fieldParameters + [""] * 10)
+
                 continue  # conditions not met for splitting: next cluster
-            elif len(pivotFieldIds) > 3:
+            elif len(pivotFieldIds) > 2:
                 print("too many pivot fields:", len(pivotFieldIds))
                 continue  # conditions not met for splitting: next cluster
 
@@ -624,7 +732,7 @@ if __name__ == '__main__':
             for nci, cluSpl in enumerate(clusterSplits.values()):  # type: int, List[Tuple[MessageSegment]]
                 newCluLabel = (aNum+1) * 100 + nci
 
-                msgs = [msgsegs[0].message for msgsegs in cluSpl]
+                msgs = [next(seg for seg in msgsegs if seg is not None).message for msgsegs in cluSpl]
                 globals().update(locals())
                 messageClusters[newCluLabel] = [msgsegs for msgsegs in messageClusters[aNum]
                                                 if msgsegs[0].message in msgs]

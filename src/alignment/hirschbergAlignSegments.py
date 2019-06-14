@@ -7,9 +7,9 @@ debug = False
 
 class Alignment(ABC):
 
-    SCORE_GAP = -5
-    SCORE_MATCH = 5  # use as factor, to multiply with the similarity matrix.
-    SCORE_MISMATCH = -1
+    SCORE_GAP = -1
+    SCORE_MATCH = 1  # use as factor, to multiply with the similarity matrix.
+    SCORE_MISMATCH = 0
 
     def __init__(self, similarityMatrix, score_gap=SCORE_GAP, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH):
         """
