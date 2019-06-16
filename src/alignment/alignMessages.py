@@ -134,7 +134,6 @@ class SegmentedMessages(object):
                 base[i, j] = minScore * minDim  # == mu in paper
 
         distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
-        # # TODO verify mu and nu
         # distanceMatrix = 100 - 100 * ((similarityMatrix + base) / (maxScore - base))
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix

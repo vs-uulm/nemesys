@@ -490,6 +490,8 @@ if __name__ == '__main__':
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
 
+    minCsize = numpy.log(len(segmentedMessages))
+
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # write message clustering statistics to csv
@@ -501,14 +503,14 @@ if __name__ == '__main__':
     writeCollectiveClusteringStaticstics(
         messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-    # # # # # # # # min cluster size 1/40th
+    # # # # # # # # min cluster size
     noisekey = 'Noise' if 'Noise' in messageClusters else -1
-    filteredClusters = {k: v for k, v in messageClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
+    filteredClusters = {k: v for k, v in messageClusters.items() if len(v) >= minCsize}
     filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
     filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
-                                      if len(v) < 0.025 * len(segmentedMessages) for s in v)
+                                      if len(v) < minCsize for s in v)
     writeCollectiveClusteringStaticstics(
-        filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-one40th".format(
+        filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -543,14 +545,36 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+
+
+
+
+
+
+
+
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # split clusters based on fields with rare values
+    # split clusters based on fields without rare values
     # # # # # # # # # # # # # # # # # # # # # # # #
     if args.split:
+        # from alignment.clusterSplitting import *
+        #
+        # cSplitter = ClusterSplitter(6 if not tokenizer == "tshark" else 3)  # TODO was 4 instead of 6
+        # splitClusters = cSplitter.split()
+        # alignedSplits = cSplitter.align()
+        #
+        # for aNum, aClu in splitClusters.items():
+        #     cPrec = next(cs[2] for cs in mergedClusterStats if cs is not None and cs[0] == aNum)
+        #     print("\nCluster", aNum, "of size", len(aClu),
+        #           "- threshold", numpy.log(len(aClu)))
+        #     print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
         from collections import Counter
 
         exoticValueStats = "reports/exotic-values-statistics.csv"
-        fieldLenThresh = 6 if not tokenizer == "tshark" else 3  # TODO was 4 instead of 6
+        fieldLenThresh = 6 if not tokenizer == "tshark" else 3
 
         clusterReplaceMap = dict()
         for aNum, aClu in alignedClusters.items():
@@ -641,7 +665,7 @@ if __name__ == '__main__':
             for fidx in preExotic:
                 scnt = sorted(valCounts4fields[fidx].values())
                 if len(scnt) > 1:
-                    if scnt[0] > freqThresh and len(scnt) <= freqThresh:
+                    if scnt[0] > freqThresh >= len(scnt):
                         newExotic.append(fidx)
                         continue
 
@@ -682,7 +706,6 @@ if __name__ == '__main__':
             # split clusters
             clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
             for msgsegs in aClu:
-                globals().update(locals())
                 # concatenate multiple distinct field combinations
                 pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
                                    for pId in newExotic])
@@ -693,13 +716,14 @@ if __name__ == '__main__':
             print("replace cluster", aNum, "by")
             print(tabulate((clusterSplits.keys())))
 
+
         # replace clusters by their splits
         for aNum, clusterSplits in clusterReplaceMap.items():
             for nci, cluSpl in enumerate(clusterSplits.values()):  # type: int, List[Tuple[MessageSegment]]
-                newCluLabel = (aNum+1) * 100 + nci
+                # newCluLabel = (aNum+1) * 100 + nci
+                newCluLabel = "{}s{}".format(aNum, nci)
 
                 msgs = [next(seg for seg in msgsegs if seg is not None).message for msgsegs in cluSpl]
-                globals().update(locals())
                 messageClusters[newCluLabel] = [msgsegs for msgsegs in messageClusters[aNum]
                                                 if msgsegs[0].message in msgs]
 
@@ -737,16 +761,21 @@ if __name__ == '__main__':
         writeCollectiveClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # # min cluster size 1/40th
+        # # # # # # # # min cluster size
+
         noisekey = 'Noise' if 'Noise' in messageClusters else -1
-        filteredClusters = {k: v for k, v in messageClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
+        filteredClusters = {k: v for k, v in messageClusters.items()
+                            if len(v) >= minCsize }
         filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
         filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
-                                          if len(v) < 0.025 * len(segmentedMessages) for s in v)
+                                          if len(v) < minCsize for s in v)
         writeCollectiveClusteringStaticstics(
-            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-one40th".format(
+            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
 
 
 
@@ -780,15 +809,15 @@ if __name__ == '__main__':
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
             comparator)
-        # # # # # # # # min cluster size 1/40th
+        # # # # # # # # min cluster size
         noisekey = 'Noise' if 'Noise' in mergedClusters else -1
-        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
+        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= minCsize}
         filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
         filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
-                                          if len(v) < 0.025 * len(segmentedMessages) for s in v)
+                                          if len(v) < minCsize for s in v)
         writeCollectiveClusteringStaticstics(
             filteredMerged, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}-one40th".format(
+            "merged-{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
             comparator)
     else:
@@ -826,8 +855,40 @@ if __name__ == '__main__':
         dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
         dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
         dp.writeOrShowFigure()
+
+    # # overwrite existing variables
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # messageClusters = mergedClusters
+    #
+    # # align clusters that have been merged
+    # mergedAligned = dict()
+    # for cLabel, clusterMerges in messageClusters.items():  # type: Union[int, str], List[Tuple[MessageSegment]]
+    #     if cLabel not in alignedClusters:
+    #         clusteralignment, alignedsegments = sm.alignMessageType(clusterMerges)
+    #         mergedAligned[cLabel] = alignedsegments
+    #     else:
+    #         mergedAligned[cLabel] = alignedClusters[cLabel]
+    # alignedClusters = mergedAligned
+    # del mergedAligned
+    #
+    # # labels for distance plot
+    # msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
+    # labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
+
     # END # of # check for cluster merge candidates #
     # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
