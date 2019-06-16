@@ -650,3 +650,16 @@ if __name__ == '__main__':
 
 
 
+
+
+
+
+
+# For future use:
+    # TODO More Hypotheses:
+    #  small values at fieldend: int
+    #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
+
+    # TODO: Entropy rate (to identify non-inferable segments)
+
+    # TODO: Value domain per byte/nibble (for chars, flags,...)

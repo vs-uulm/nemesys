@@ -310,7 +310,7 @@ if __name__ == '__main__':
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
     smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn):  # TODO when manipulating distances, deactivate caching!  or True
+    if not exists(dccachefn):  # TODO when manipulating distances, deactivate caching! by    or True
         # dissect and label messages
         print("Load messages from {}...".format(pcapName))
         specimens = SpecimenLoader(args.pcapfilename, 2, True)
@@ -330,6 +330,7 @@ if __name__ == '__main__':
             segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
             segmentedMessages = refinements(segmentsPerMsg)
 
+            # TODO integrate into refinements()
             moco = CropDistinct.countCommonValues(segmentedMessages)
             newstuff = list()
             for msg in segmentedMessages:
@@ -352,7 +353,6 @@ if __name__ == '__main__':
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
                 for seg in msg] for msg in newstuff3]
             segments = list(chain.from_iterable(segmentedMessages))
-            # print([seg for seg in segments if not isinstance(seg.values, int)])
 
         segmentationTime = time.time() - segmentationTime
         print("done.")
@@ -486,9 +486,6 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-    # IPython.embed()
-
-
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
@@ -553,12 +550,13 @@ if __name__ == '__main__':
         from collections import Counter
 
         exoticValueStats = "reports/exotic-values-statistics.csv"
-        fieldLenThresh = 4 if not tokenizer == "tshark" else 3
+        fieldLenThresh = 6 if not tokenizer == "tshark" else 3  # TODO was 4 instead of 6
 
         clusterReplaceMap = dict()
         for aNum, aClu in alignedClusters.items():
             if aNum == -1:
                 continue
+            cPrec = next(cs[2] for cs in clusterStats if cs is not None and cs[0] == aNum)
             freqThresh = numpy.floor(numpy.log(len(aClu)))  # numpy.round(numpy.log(len(aClu)))
             fields = [fld for fld in zip(*aClu)]  # type: List[List[MessageSegment]]
             distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
@@ -588,7 +586,6 @@ if __name__ == '__main__':
             print("\nCluster", aNum, "of size", len(aClu),
                   # "with knee at", knee if firstBelowCent > 0 else "[none]",
                   "- threshold", numpy.log(len(aClu)))
-            cPrec = next(cs[2] for cs in clusterStats if cs is not None and cs[0] == aNum)
             print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
 
             valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
@@ -608,34 +605,60 @@ if __name__ == '__main__':
                  and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
                          ]
 
-            # newExotic = list()
-            # for fidx in preExotic:
-            #     scnt = sorted(valCounts4fields[fidx].values())
-            #     if len(scnt) > 1:
-            #         diffmax = numpy.diff(scnt).argmax() + 1
-            #         numValues_u = len(aClu) - diffmax
-            #         mean_u = numpy.mean(scnt[diffmax:])
-            #         halfsRatio = sum(scnt[:diffmax]) / sum(scnt[diffmax:])
-            #         if numValues_u > 1 and halfsRatio > 0.1 and mean_u > len(scnt) / 2 * numpy.log(len(scnt)):
-            #             newExotic.append(fidx)
-            #     # TODO scnt[0] > freqThresh
+
+
+            for fidx in preExotic:
+                scnt = sorted(valCounts4fields[fidx].values())
+                diffmax = (numpy.diff(scnt).argmax()+1) if len(scnt) > 1 else "-"
+                csvWriteHead = False if exists(exoticValueStats) else True
+                with open(exoticValueStats, 'a') as csvfile:
+                    exoticcsv = csv.writer(csvfile)  # type: csv.writer
+                    if csvWriteHead:
+                        exoticcsv.writerow([
+                            'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
+                            'num_vals',
+                            'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
+                            'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
+                        ])
+                    fieldParameters = [ "{}-{}-eps={:.2f}-min_samples={}".format(
+                                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+                            comparator.specimens.pcapFileName,
+                            aNum, cPrec, len(aClu), fidx, len(scnt)]
+                    if len(scnt) > 1:
+                        exoticcsv.writerow([
+                            *fieldParameters, diffmax, scnt[diffmax],
+                            sum(scnt[:diffmax]), sum(scnt[diffmax:]),
+                            numpy.mean(scnt[:diffmax]), numpy.mean(scnt[diffmax:]),
+                            numpy.std(scnt[:diffmax]), numpy.std(scnt[diffmax:]),
+                            numpy.median(scnt[:diffmax]), numpy.median(scnt[diffmax:])
+                        ])
+                    else:
+                        exoticcsv.writerow(fieldParameters + [""] * 10)
+
+
 
             newExotic = list()
             for fidx in preExotic:
                 scnt = sorted(valCounts4fields[fidx].values())
                 if len(scnt) > 1:
+                    if scnt[0] > freqThresh and len(scnt) <= freqThresh:
+                        newExotic.append(fidx)
+                        continue
+
                     # the pivot index and value to split the sorted list of type amounts
-                    iVal, pVal = next((i, cnt) for i, cnt in enumerate(scnt) if cnt > freqThresh)
-                    # iVal = numpy.diff(scnt).argmax() + 1
+                    # iVal, pVal = next((i, cnt) for i, cnt in enumerate(scnt) if cnt > freqThresh)
+                    iVal = numpy.diff(scnt).argmax() + 1
                     # the special case of any(cnt <= freqThresh for cnt in scnt) is relaxedly included here
                     numValues_u = len(scnt) - iVal
                     # if there are no or only one frequent value, do not split
                     if numValues_u > 1:
-                        # pVal = scnt[iVal]
+                        pVal = scnt[iVal]
                         mean_u = numpy.mean(scnt[iVal:])
                         halfsRatio =  sum(scnt[:iVal]) / sum(scnt[iVal:])
-                        if halfsRatio < 0.1 and mean_u > len(scnt) / 2 * numpy.log(len(scnt)):
+                        if halfsRatio < 0.1 and mean_u > 2 * len(aClu) / numpy.log(len(aClu)):
                             newExotic.append(fidx)
+
+
 
             addExotics = set(newExotic) - set(pivotFieldIds)
             remExotics = set(pivotFieldIds) - set(newExotic)
@@ -643,75 +666,18 @@ if __name__ == '__main__':
                 print("pivot field changes due to new exotics:")
                 print("  add fields:", addExotics)
                 print("  remove fields:", remExotics)
-
-
-            if len(pivotFieldIds) == 0:
+            # print info only if we do not split
+            if len(newExotic) == 0:
                 print("no pivot fields left")
-                exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
-                                   for fidx, vCnt in enumerate(valAmount4fields)]
-                if any(exo for fidx, exo in exoticCondition):
-                    # print("fields (ids) that have exotic values:") #, [fidx for fidx, exo in exoticCondition if exo])
-                    for fidx, exo in exoticCondition:
-                        if exo:
-                            # print("Field ", fidx)
-                            scnt = sorted(valCounts4fields[fidx].values())
-                            # quart = len(scnt)/4
-                            # qids = [int(quart), int(2*quart), int(3*quart)]
-                            # quarts = [
-                            #     [scnt[qids[0]], scnt[qids[1]], scnt[qids[2]], scnt[-1]],
-                            #     [sum(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
-                            #      sum(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
-                            #      sum(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
-                            #      sum(scnt[qids[2]:]) if len(scnt[qids[2]:]) > 0 else "-"],
-                            #     [numpy.mean(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
-                            #      numpy.mean(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
-                            #      numpy.mean(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
-                            #      numpy.mean(scnt[qids[2]:])] if len(scnt[qids[2]:]) > 0 else "-",
-                            #     [numpy.median(scnt[:qids[0]]) if len(scnt[:qids[0]]) > 0 else "-",
-                            #      numpy.median(scnt[qids[0]:qids[1]]) if len(scnt[qids[0]:qids[1]]) > 0 else "-",
-                            #      numpy.median(scnt[qids[1]:qids[2]]) if len(scnt[qids[1]:qids[2]]) > 0 else "-",
-                            #      numpy.median(scnt[qids[2]:]) if len(scnt[qids[2]:]) > 0 else "-"]
-                            # ]
-                            # # counts = list(valCounts4fields[fidx].values())
-                            # # quarts = numpy.histogram(counts, bins=4, range=(1, max(counts)))
-                            # print(tabulate(quarts, headers=["1st quart", "2st quart", "3st quart", "4st quart" ],
-                            #                showindex=["max", "sum", "mean", "median"]))
-                            # print("num vals, maxdiff at, val", len(scnt),
-                            #       numpy.diff(scnt).argmax() if len(scnt) > 0 else "-",
-                            #       numpy.diff(scnt).max() if len(scnt) > 0 else "-", "\n")
-                            # print(quarts)
-                            # print(scnt)
-
-                            diffmax = (numpy.diff(scnt).argmax()+1) if len(scnt) > 1 else "-"
-                            csvWriteHead = False if exists(exoticValueStats) else True
-                            with open(exoticValueStats, 'a') as csvfile:
-                                exoticcsv = csv.writer(csvfile)  # type: csv.writer
-                                if csvWriteHead:
-                                    exoticcsv.writerow([
-                                        'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
-                                        'num_vals',
-                                        'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
-                                        'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
-                                    ])
-                                fieldParameters = [ "{}-{}-eps={:.2f}-min_samples={}".format(
-                                            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-                                        comparator.specimens.pcapFileName,
-                                        aNum, cPrec, len(aClu), fidx, len(scnt)]
-                                if len(scnt) > 1:
-                                    exoticcsv.writerow([
-                                        *fieldParameters, diffmax, scnt[diffmax],
-                                        sum(scnt[:diffmax]), sum(scnt[diffmax:]),
-                                        numpy.mean(scnt[:diffmax]), numpy.mean(scnt[diffmax:]),
-                                        numpy.std(scnt[:diffmax]), numpy.std(scnt[diffmax:]),
-                                        numpy.median(scnt[:diffmax]), numpy.median(scnt[diffmax:])
-                                    ])
-                                else:
-                                    exoticcsv.writerow(fieldParameters + [""] * 10)
-
+                # exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
+                #                    for fidx, vCnt in enumerate(valAmount4fields)]
                 continue  # conditions not met for splitting: next cluster
-            elif len(pivotFieldIds) > 2:
-                print("too many pivot fields:", len(pivotFieldIds))
+            elif len(newExotic) > 2:
+                print("too many pivot fields:", len(newExotic))
                 continue  # conditions not met for splitting: next cluster
+
+
+
 
             # split clusters
             clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
@@ -719,7 +685,7 @@ if __name__ == '__main__':
                 globals().update(locals())
                 # concatenate multiple distinct field combinations
                 pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
-                                   for pId in pivotFieldIds])
+                                   for pId in newExotic])
                 if pivotVals not in clusterSplits:
                     clusterSplits[pivotVals] = list()
                 clusterSplits[pivotVals].append(msgsegs)
@@ -784,84 +750,84 @@ if __name__ == '__main__':
 
 
 
-    # TODO for now we do not need the rest of the script for evaluation. Remove outermost comment for final!
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # check for cluster merge candidates
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # print("Check for cluster merge candidates...")
-    # from utils.evaluationHelpers import printClusterMergeConditions
-    # # noinspection PyUnreachableCode
-    # if True:
-    #     # ClusterMerger
-    #     clustermerger = ClusterMerger(alignedClusters, dc)
-    #
-    #     alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
-    #     # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
-    #     if tokenizer == "nemesys":
-    #         alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
-    #     matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
-    #     matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
-    #     mergedClusters = clustermerger.mergeClusters(
-    #         messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-    #     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-    #         mergedClusters, groundtruth,
-    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-    #         comparator)
-    #     # # # # # # # #
-    #     writeCollectiveClusteringStaticstics(
-    #         mergedClusters, groundtruth,
-    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-    #         comparator)
-    #     # # # # # # # # min cluster size 1/40th
-    #     noisekey = 'Noise' if 'Noise' in mergedClusters else -1
-    #     filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
-    #     filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
-    #     filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
-    #                                       if len(v) < 0.025 * len(segmentedMessages) for s in v)
-    #     writeCollectiveClusteringStaticstics(
-    #         filteredMerged, groundtruth,
-    #         "merged-{}-{}-eps={:.2f}-min_samples={}-one40th".format(
-    #             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-    #         comparator)
-    # else:
-    #     # # # # # # # # # # # # # # # # # # # # #
-    #     # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
-    #     # ClusterClusterer
-    #     clusterclusterer = ClusterClusterer(alignedClusters, dc)
-    #     # clusterDists = clusterclusterer.calcClusterDistances()
-    #
-    #     mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
-    #
-    #     clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
-    #     clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
-    #     mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
-    #     ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
-    #
-    #     mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-    #         mergedClusters, groundtruth,
-    #         "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-    #             tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
-    #         comparator)
-    #
-    #     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-    #     from visualization.distancesPlotter import DistancesPlotter
-    #     typedClusterDummys = list()
-    #     for clunu in clusterclusterer.clusterOrder:
-    #         clusta = None
-    #         for stats in clusterStats:
-    #             if stats is not None and stats[0] == clunu:
-    #                 clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
-    #                 break
-    #         msgdum = RawMessage(messageType=clusta)
-    #         typedClusterDummys.append(msgdum)
-    #
-    #     dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
-    #     dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
-    #     dp.writeOrShowFigure()
-    # # END # of # check for cluster merge candidates #
-    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # check for cluster merge candidates
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO fully integrate into/encapsulate in ClusterMerger class
+    print("Check for cluster merge candidates...")
+    from utils.evaluationHelpers import printClusterMergeConditions
+    # noinspection PyUnreachableCode
+    if True:
+        # ClusterMerger
+        clustermerger = ClusterMerger(alignedClusters, dc)
+
+        alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
+        # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
+        if tokenizer == "nemesys":
+            alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
+        matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
+        matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
+        mergedClusters = clustermerger.mergeClusters(
+            messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
+        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+        # # # # # # # #
+        writeCollectiveClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+        # # # # # # # # min cluster size 1/40th
+        noisekey = 'Noise' if 'Noise' in mergedClusters else -1
+        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= 0.025 * len(segmentedMessages)}
+        filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
+        filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
+                                          if len(v) < 0.025 * len(segmentedMessages) for s in v)
+        writeCollectiveClusteringStaticstics(
+            filteredMerged, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}-one40th".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+    else:
+        # # # # # # # # # # # # # # # # # # # # #
+        # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
+        # ClusterClusterer
+        clusterclusterer = ClusterClusterer(alignedClusters, dc)
+        # clusterDists = clusterclusterer.calcClusterDistances()
+
+        mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
+
+        clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
+        clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
+        mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
+        ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
+
+        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
+            comparator)
+
+        from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        from visualization.distancesPlotter import DistancesPlotter
+        typedClusterDummys = list()
+        for clunu in clusterclusterer.clusterOrder:
+            clusta = None
+            for stats in clusterStats:
+                if stats is not None and stats[0] == clunu:
+                    clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
+                    break
+            msgdum = RawMessage(messageType=clusta)
+            typedClusterDummys.append(msgdum)
+
+        dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
+        dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
+        dp.writeOrShowFigure()
+    # END # of # check for cluster merge candidates #
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
@@ -908,25 +874,4 @@ if __name__ == '__main__':
 
 
 
-
-
-# For future use:
-    # # TODO cluster by template generation
-    # print("Templating segments...")
-    # tg = TemplateGenerator(list(chain.from_iterable(segmentedMessages)))
-    # clusters = tg.clusterSimilarSegments()
-
-    # print("Plotting templates...")
-    # import analysis_message_segments as ams
-    # ams.plotSegmentDistances(tg)
-
-    # templates = tg.generateTemplates()
-
-    # TODO More Hypotheses:
-    #  small values at fieldend: int
-    #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
-
-    # TODO: Entropy rate (to identify non-inferable segments)
-
-    # TODO: Value domain per byte/nibble (for chars, flags,...)
 
