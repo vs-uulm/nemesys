@@ -29,7 +29,7 @@ class FormatMatchScore(object):
     matchGain = None
     specificy = None
     nearWeights = None
-    meanDistance = None
+    meanDistance = None  # mean of "near" distances
     trueCount = None
     inferredCount = None
     exactCount = None
@@ -664,7 +664,7 @@ class DissectorMatcher(object):
             fms.specificyPenalty = specificyPenalty
             fms.matchGain = matchGain
             fms.nearWeights = nearweights
-            fms.meanDistance = numpy.mean(list(nearestdistances.values()))
+            fms.meanDistance = numpy.mean(list(nearestdistances.values())) if len(nearestdistances) > 0 else numpy.nan
             fms.trueCount = fieldcount
             fms.inferredCount = inferredcount
             fms.exactCount = exactcount
