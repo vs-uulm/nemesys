@@ -1,6 +1,6 @@
 """
-Recognize fields by subsequence frequency analysis
-(and recognize field types by templates)
+Recognize recognize field types by templates
+(and evaluate to identify some fields by subsequence frequency analysis)
 """
 
 import argparse
@@ -410,6 +410,9 @@ if __name__ == '__main__':
                         action="store_true")
     parser.add_argument('--count', '-c', help='Count common values of features.',
                         action="store_true")
+    parser.add_argument('--fpn', '-f', help='Hunt false positives and negatives.',
+                        action="store_true")
+
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
@@ -514,46 +517,43 @@ if __name__ == '__main__':
 
 
 
-
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
-        # for fpid, seg in falsePositiveIDs:
-        #     printFieldContext(segmentedMessages, fpid)
-        #
-        # # the confidence of
-        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
-        # # at position
-        # offsAtFpO = falsePositiveIDs[0][1].offset
-        # # that overlaps with
-        # recogAtFpO = falsePositiveIDs[0][0]
-        # # which became the recognized field type with confidence 0.98
-        # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
-        # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
-        # # is 1.48
-        # # # # # # # # # # # # # # # # # # # # # # # #
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
-        # for fpFlags, seg in falsePositiveFlags[:20]:
-        #     printFieldContext(segmentedMessages, fpFlags)
-        #
-        # # the confidence of
-        # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
-        # # at position
-        # offsAtFpO = falsePositiveFlags[0][1].offset
-        # # that overlaps with
-        # recogAtFpO = falsePositiveFlags[0][0]
-        # # which became the recognized field type with confidence 0.98
-        # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
-        # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
-        # # is 1.48
-        # # # # # # # # # # # # # # # # # # # # # # # #
-
         # # # # # # # # # # # # # # # # # # # # # # # # #
-        # # Hunting false positives
-        # noinspection PyUnreachableCode
-        if False:
+        # # Hunting false positives and negatives
+        if args.fpn:
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
+            # for fpid, seg in falsePositiveIDs:
+            #     printFieldContext(segmentedMessages, fpid)
+            #
+            # # the confidence of
+            # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
+            # # at position
+            # offsAtFpO = falsePositiveIDs[0][1].offset
+            # # that overlaps with
+            # recogAtFpO = falsePositiveIDs[0][0]
+            # # which became the recognized field type with confidence 0.98
+            # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+            # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+            # # is 1.48
+            # # # # # # # # # # # # # # # # # # # # # # # #
+
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
+            # for fpFlags, seg in falsePositiveFlags[:20]:
+            #     printFieldContext(segmentedMessages, fpFlags)
+            #
+            # # the confidence of
+            # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
+            # # at position
+            # offsAtFpO = falsePositiveFlags[0][1].offset
+            # # that overlaps with
+            # recogAtFpO = falsePositiveFlags[0][0]
+            # # which became the recognized field type with confidence 0.98
+            # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+            # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
+            # # is 1.48
+            # # # # # # # # # # # # # # # # # # # # # # # #
+
             # # # # # # # # # # # # # # # # # # # # # # # # #
             # # Hunting false positives
             # # # field names and types of false positives
