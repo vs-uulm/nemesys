@@ -27,8 +27,7 @@ from inference.segments import MessageSegment, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
-from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics, \
-    sigmapertrace, writeCollectiveClusteringStaticstics
+from utils.evaluationHelpers import *
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
@@ -120,10 +119,72 @@ def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
 def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
     return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
 
+
+def epsautoconfcdf(epsilon):
+    """
+    According to the introspection of the plots, there is no usable epsilon detected by kneedle.
+    TODO Probably using the raw maximum curvature by own calculation could be an alternative if necessary.
+
+    :param epsilon:
+    :return:
+    """
+    neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
+    from math import log
+    sigma = log(len(neighbors))
+
+    mmp = MultiMessagePlotter(specimens, tokenizer + "-knn-cdf-distance-funtion", 1, 2,
+                              isInteractive=False)
+    mmp.axes[0].axvline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
+    mmp.axes[1].axvline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
+
+    krange = (0, 16, 1)
+
+    # kneedle approach
+    from kneed import KneeLocator
+    kneeK = dict()
+    for k in range(*krange):
+        knearest = ecdf([nfori[k][1] for nfori in neighbors], False)
+        # smoothknn = gaussian_filter1d(knearest[k], sigma)
+
+        # knArray = numpy.array([a for a in zip(*knearest)])
+        # IPython.embed()
+        # mmp.plotToSubfig(1, knearest, alpha=.4, label="k={}".format(k))
+        mmp.axes[1].plot(*knearest, alpha=.4, label="k={}".format(k))
+
+        kneel = KneeLocator(*knearest, curve='convex', direction='increasing')
+        kneeX = kneel.knee
+        kneeK[k] = kneeX
+        mmp.axes[0].axvline(kneeX, linestyle='dashed', color='blue', alpha=.4,
+                            label="kneedle {:.2f} of k={}".format(kneeX, k))
+        if k == round(sigma):
+            mmp.axes[1].axvline(kneeX, linestyle='dashed', color='blue', alpha=.4,
+                                label="kneedle {:.2f} of k={}".format(kneeX, k))
+            mmp.axes[0].plot(*knearest, alpha=.4)
+
+    # kneeDists = list(kneeK.keys())
+    # bestEpsMatchIdx = numpy.argmin([abs(kneeDist-epsilon) for kneeDist in kneeDists])
+    # bestEpsMatchDist = kneeDists[bestEpsMatchIdx]
+
+    # # range of distances for a k-neighborhood, determines the maximum range of distances
+    # # results do not correlate with a suitable choice of k compared to manual introspection.
+    # distrange4k = list()
+    # for k in range(*krange):
+    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
+    #     distrange4k.append((k, max(knearest) - min(knearest)))
+    # maxdran = max([dran[1] for dran in distrange4k])
+    # maxkran = [dran[0] for dran in distrange4k if dran[1] == maxdran][0]
+    # mmp.textInEachAx(["max range {:.2f} at k={}".format(maxdran, maxkran)])
+    # mmp.axes[0].axhline(bestEpsMatchDist, linestyle='dashed', color='blue', alpha=.4,
+    #                     label="kneedle {:.2f} of k={}".format(bestEpsMatchDist, kneeK[bestEpsMatchDist]))
+
+    mmp.writeOrShowFigure()
+
+    return None
+
 def epsautoconfeval(epsilon):
     """
-    # investigate distance properties for clustering autoconfiguration
-    # plots of k-nearest-neighbor distance histogram and "knee"
+    investigate distance properties for clustering autoconfiguration
+    plots of k-nearest-neighbor distance histogram and "knee"
 
     See SegmentedMessages#autoconfigureDBSCAN
 
@@ -141,7 +202,7 @@ def epsautoconfeval(epsilon):
 
     neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
 
-    mmp = MultiMessagePlotter(specimens, tokenizer + "-k-nearest-neighbor-distance-distribution", 1, 2,
+    mmp = MultiMessagePlotter(specimens, tokenizer + "-knn-distance-funtion", 1, 2,
                               isInteractive=False)
     mmp.axes[0].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
     mmp.axes[1].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
@@ -152,33 +213,8 @@ def epsautoconfeval(epsilon):
         knearest = sorted([nfori[k][1] for nfori in neighbors])
         mmp.plotToSubfig(1, knearest, alpha=.4, label="k={}".format(k))
 
-    # # kneedle approach
-    # # unusable results. does not find a knee!
-    # from kneed import KneeLocator
-    # kneeK = dict()
-    # for k in range(*krange):
-    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
-    #     mmp.plotToSubfig(0, knearest, alpha=.1)  # , label="k={}".format(k)
-    #
-    #     kneel = KneeLocator(range(len(knearest)), knearest, curve='convex', direction='increasing')
-    #     kneeX = kneel.knee
-    #     kneeK[knearest[kneeX]] = k
-    #
-    # kneeDists = list(kneeK.keys())
-    # bestEpsMatchIdx = numpy.argmin([abs(kneeDist-epsilon) for kneeDist in kneeDists])
-    # bestEpsMatchDist = kneeDists[bestEpsMatchIdx]
+    # # kneedle approach: yields unusable results. does not find a knee!
 
-    # # range of distances for a k-neighborhood, determines the maximum range of distances
-    # # results do not correlate with a suitable choice of k compared to manual introspection.
-    # distrange4k = list()
-    # for k in range(*krange):
-    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
-    #     distrange4k.append((k, max(knearest) - min(knearest)))
-    # maxdran = max([dran[1] for dran in distrange4k])
-    # maxkran = [dran[0] for dran in distrange4k if dran[1] == maxdran][0]
-    # mmp.textInEachAx(["max range {:.2f} at k={}".format(maxdran, maxkran)])
-    # mmp.axes[0].axhline(bestEpsMatchDist, linestyle='dashed', color='blue', alpha=.4,
-    #                     label="kneedle {:.2f} of k={}".format(bestEpsMatchDist, kneeK[bestEpsMatchDist]))
 
     # smoothing approach
     from scipy.ndimage.filters import gaussian_filter1d
@@ -467,6 +503,8 @@ if __name__ == '__main__':
         eps = eps * .8
     if withplots:
         epsConfirm = epsautoconfeval(eps)
+        # epsautoconfcdf(eps)  # CDF°!°
+        # exit()
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -557,20 +595,59 @@ if __name__ == '__main__':
     # split clusters based on fields without rare values
     # # # # # # # # # # # # # # # # # # # # # # # #
     if args.split:
-        # from alignment.clusterSplitting import *
-        #
-        # cSplitter = ClusterSplitter(6 if not tokenizer == "tshark" else 3)  # TODO was 4 instead of 6
-        # splitClusters = cSplitter.split()
-        # alignedSplits = cSplitter.align()
-        #
-        # for aNum, aClu in splitClusters.items():
-        #     cPrec = next(cs[2] for cs in mergedClusterStats if cs is not None and cs[0] == aNum)
-        #     print("\nCluster", aNum, "of size", len(aClu),
-        #           "- threshold", numpy.log(len(aClu)))
-        #     print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
+        from alignment.clusterSplitting import *
+
+        cSplitter = RelaxedExoticClusterSplitter(6 if not tokenizer == "tshark" else 3,
+                                    alignedClusters, messageClusters, sm)
+        cSplitter.activateCVSout("{}-{}-eps={:.2f}-min_samples={}".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
+        # in-place split of clusters in alignedClusters and messageClusters
+        cSplitter.split()
+        labels = cSplitter.labels
+
 
         # # # # # # # # # # # # # # # # # # # # # # # #
+        if withplots:
+            # plot distances and message clusters
+            print("Plot distances...")
+            from visualization.distancesPlotter import DistancesPlotter
 
+            dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
+            dp.plotManifoldDistances(
+                [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+                sm.distances, labels)  # segmentedMessages
+            dp.writeOrShowFigure()
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # clusterStats for merger
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # write message clustering statistics to csv
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        clusterStats, conciseness = writeMessageClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # #
+        writeCollectiveClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # min cluster size
+
+        noisekey = 'Noise' if 'Noise' in messageClusters else -1
+        filteredClusters = {k: v for k, v in messageClusters.items()
+                            if len(v) >= minCsize }
+        filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
+        filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
+                                          if len(v) < minCsize for s in v)
+        writeCollectiveClusteringStaticstics(
+            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+    else:
         from collections import Counter
 
         exoticValueStats = "reports/exotic-values-statistics.csv"
@@ -587,28 +664,7 @@ if __name__ == '__main__':
             # amount of distinct values per field
             valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
 
-            # # empirical cumulative distribution function
-            # ecdfX, ecdfY = ecdf(valAmount4fields, False)
-            # # TODO remove after checking of reuseability
-            # ecdfDelta = numpy.diff(ecdfY) / numpy.diff(ecdfX)
-            # firstBelowCent = 0
-            # for idx, edd in enumerate(ecdfDelta):
-            #     if edd < 0.01:
-            #         firstBelowCent = idx
-            #         break
-            # knee = ecdfX[firstBelowCent]
-            # print(tabulate([ecdfX, ecdfY, ecdfDelta, numpy.diff(numpy.diff(ecdfY) / numpy.diff(ecdfX))],
-            #                showindex=["x", "ecdf", "delta", "delta2"] ))
-            #
-            # import matplotlib.pyplot as plt
-            # # plt.plot(ecdfX[:-1], ecdfDelta)
-            # # # plt.plot(ecdfX[:-2], numpy.diff(numpy.diff(ecdfY)/numpy.diff(ecdfX)))
-            # # plt.plot(ecdfX, ecdfY)
-            # # plt.axvline(knee)
-            # # plt.show()
-
             print("\nCluster", aNum, "of size", len(aClu),
-                  # "with knee at", knee if firstBelowCent > 0 else "[none]",
                   "- threshold", numpy.log(len(aClu)))
             print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
 
@@ -628,8 +684,6 @@ if __name__ == '__main__':
                  and not any([val.length > fieldLenThresh for val in fields[fidx] if val is not None])  # omit fields longer than 3/4
                  and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
                          ]
-
-
 
             for fidx in preExotic:
                 scnt = sorted(valCounts4fields[fidx].values())
@@ -683,7 +737,6 @@ if __name__ == '__main__':
                             newExotic.append(fidx)
 
 
-
             addExotics = set(newExotic) - set(pivotFieldIds)
             remExotics = set(pivotFieldIds) - set(newExotic)
             if not len(addExotics) == len(remExotics) == 0:
@@ -701,8 +754,7 @@ if __name__ == '__main__':
                 continue  # conditions not met for splitting: next cluster
 
 
-
-
+            print(newExotic)
             # split clusters
             clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
             for msgsegs in aClu:

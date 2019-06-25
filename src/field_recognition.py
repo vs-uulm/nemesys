@@ -550,111 +550,109 @@ if __name__ == '__main__':
         # # is 1.48
         # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-
-
-
-
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # # Hunting false positives
-        # # # field names and types of false positives
-        # fpfieldinfo = [comparator.lookupField(seg) for recog, seg in
-        #                sorted(matchStatistics["chars"][1], key=lambda r: r[0].confidence)]  # iterate false positives
-        # fpfieldinfoBC = set([(b, c) for a, b, c in fpfieldinfo])
-        # from collections import Counter
-        # fpfieldCount = Counter([(b, c) for a, b, c in fpfieldinfo])
-        # print(tabulate(fpfieldCount.most_common()))
-        # # # # # # # # # # # # # # # # # # # # # # # #
+        # noinspection PyUnreachableCode
+        if False:
+            # # # # # # # # # # # # # # # # # # # # # # # # #
+            # # Hunting false positives
+            # # # field names and types of false positives
+            # fpfieldinfo = [comparator.lookupField(seg) for recog, seg in
+            #                sorted(matchStatistics["chars"][1], key=lambda r: r[0].confidence)]  # iterate false positives
+            # fpfieldinfoBC = set([(b, c) for a, b, c in fpfieldinfo])
+            # from collections import Counter
+            # fpfieldCount = Counter([(b, c) for a, b, c in fpfieldinfo])
+            # print(tabulate(fpfieldCount.most_common()))
+            # # # # # # # # # # # # # # # # # # # # # # # #
 
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # Hunting false positives
-        # # values per field name
-        # val4fn = comparator.lookupValues4FieldName('bootp.option.dhcp_auto_configuration'); print(val4fn)
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # Hunting false positives
+            # # values per field name
+            # val4fn = comparator.lookupValues4FieldName('bootp.option.dhcp_auto_configuration'); print(val4fn)
 
-        # # # # # # # # # # # # # # # # # # # # # # # # #
-        # # Hunting false positives
-        # # # field contexts of false positives
-        # fpsortconf = sorted((recog for recog, seg in matchStatistics["flags"][1]), key=lambda r: r.confidence)
-        # print("\nContexts of first 20 false positives, sorted by confidence:\n")
-        # for recog in fpsortconf[:50]:
-        #     printFieldContext(segmentedMessages, recog)
+            # # # field contexts of false positives
+            # fpsortconf = sorted((recog for recog, seg in matchStatistics["flags"][1]), key=lambda r: r.confidence)
+            # print("\nContexts of first 20 false positives, sorted by confidence:\n")
+            # for recog in fpsortconf[:50]:
+            #     printFieldContext(segmentedMessages, recog)
 
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # inspectFieldtypeIsolated("float")
-        # filter interesting stuff:  see FieldTypes.txt
-        #   low confidence  - false positives  <-- what do they represent that looks like the template?
-        #   most fp: flags, id, chars
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # inspectFieldtypeIsolated("float")
+            # filter interesting stuff:  see FieldTypes.txt
+            #   low confidence  - false positives  <-- what do they represent that looks like the template?
+            #   most fp: flags, id, chars
 
-        for recog, seg in matchStatistics["chars"][1]:
-            printFieldContext(segmentedMessages, recog)
-        for recog, seg in matchStatistics["chars"][1]:
-            print(recog.toSegment().bytes)
-        #   * chars: mostly short (len 6, 7) macaddr and combinations of enum and int
-        #       that coincidently contain zeros and ASCII-valued bytes in similar amounts
-        #       (some smb-enums "IPC" + adjacent bytes)
+            for recog, seg in matchStatistics["chars"][1]:
+                printFieldContext(segmentedMessages, recog)
+            for recog, seg in matchStatistics["chars"][1]:
+                print(recog.toSegment().bytes)
+            #   * chars: mostly short (len 6, 7) macaddr and combinations of enum and int
+            #       that coincidently contain zeros and ASCII-valued bytes in similar amounts
+            #       (some smb-enums "IPC" + adjacent bytes)
 
-        fp_id_by = [recog.toSegment().bytes for recog, seg in matchStatistics["id"][1]]
-        from collections import Counter
-        fp_id_c = Counter(fp_id_by)
-        fp_id_c.most_common()
-        for recog, seg in sorted(matchStatistics["id"][1], key=lambda r: r[0].confidence):
-            printFieldContext(segmentedMessages, recog)
-        #   * id: mostly string "SMB" + adjacent int
+            fp_id_by = [recog.toSegment().bytes for recog, seg in matchStatistics["id"][1]]
+            from collections import Counter
+            fp_id_c = Counter(fp_id_by)
+            fp_id_c.most_common()
+            for recog, seg in sorted(matchStatistics["id"][1], key=lambda r: r[0].confidence):
+                printFieldContext(segmentedMessages, recog)
+            #   * id: mostly string "SMB" + adjacent int
 
-        for recog, seg in sorted(matchStatistics["flags"][1], key=lambda r: r[0].confidence):
-            printFieldContext(segmentedMessages, recog)
-        #   * flags: many very arbitrary matches
+            for recog, seg in sorted(matchStatistics["flags"][1], key=lambda r: r[0].confidence):
+                printFieldContext(segmentedMessages, recog)
+            #   * flags: many very arbitrary matches
 
-        # filter interesting stuff:  see FieldTypes.txt
-        #   high confidence - false negatives  <-- why do they not resemble the template?
-        #   (confidence grade has inverse meaning to number)
-        #   most fn: flags, id, ipv4, float, timestamp
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # filter interesting stuff:  see FieldTypes.txt
+            #   high confidence - false negatives  <-- why do they not resemble the template?
+            #   (confidence grade has inverse meaning to number)
+            #   most fn: flags, id, ipv4, float, timestamp
 
-        fn_flags_c = Counter([seg.bytes for seg in matchStatistics["flags"][2]])
-        fn_flags_mc = fn_flags_c.most_common(10)
-        # [(b'\x00\x01', 200),
-        #  (b'\x01', 158),
-        #  (b'\x07\xc8', 92),
-        #  (b'\xff\xfe', 88),
-        #  (b'\x98', 52),
-        #  (b'%', 29),
-        #  (b'#', 22),
-        #  (b'\x81\x82', 19),
-        #  (b'\x07\x18', 13),
-        #  (b'\x03', 12)]
-        fn_flags_finfo = [ {comparator.lookupField(seg) for seg in matchStatistics["flags"][2] if seg.bytes == ffm[0]}
-            for ffm in fn_flags_mc ]
-        #   * flags: mostly DNS RR class (fn_flags_mc[0]), DHCP bootp(.hw).type (fn_flags_mc[1]), mostly SMB stuff
-        #       (fn_flags_mc[2..])
+            fn_flags_c = Counter([seg.bytes for seg in matchStatistics["flags"][2]])
+            fn_flags_mc = fn_flags_c.most_common(10)
+            # [(b'\x00\x01', 200),
+            #  (b'\x01', 158),
+            #  (b'\x07\xc8', 92),
+            #  (b'\xff\xfe', 88),
+            #  (b'\x98', 52),
+            #  (b'%', 29),
+            #  (b'#', 22),
+            #  (b'\x81\x82', 19),
+            #  (b'\x07\x18', 13),
+            #  (b'\x03', 12)]
+            fn_flags_finfo = [ {comparator.lookupField(seg) for seg in matchStatistics["flags"][2] if seg.bytes == ffm[0]}
+                for ffm in fn_flags_mc ]
+            #   * flags: mostly DNS RR class (fn_flags_mc[0]), DHCP bootp(.hw).type (fn_flags_mc[1]), mostly SMB stuff
+            #       (fn_flags_mc[2..])
 
-        fn_id_c = Counter([seg.bytes for seg in matchStatistics["id"][2]])
-        fn_id_mc = fn_id_c.most_common(10)
-        fn_id_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["id"][2] if seg.bytes == ffm[0]}
-            for ffm in fn_id_mc }
-        #   * id: mostly b'\xffSMB' (smb.server_component), some bootp.id
+            fn_id_c = Counter([seg.bytes for seg in matchStatistics["id"][2]])
+            fn_id_mc = fn_id_c.most_common(10)
+            fn_id_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["id"][2] if seg.bytes == ffm[0]}
+                for ffm in fn_id_mc }
+            #   * id: mostly b'\xffSMB' (smb.server_component), some bootp.id
 
-        fn_ipv4_c = Counter([seg.bytes for seg in matchStatistics["ipv4"][2]])
-        fn_ipv4_mc = fn_ipv4_c.most_common(10)
-        fn_ipv4_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["ipv4"][2] if seg.bytes == ffm[0]}
-            for ffm in fn_ipv4_mc }
-        print(tabulate(sorted(fn_ipv4_finfo.items(), key=lambda x: x[0][1], reverse=True)))
-        #   * ipv4: mostly ntp.refid  <-- ips outside of trained subnet
+            fn_ipv4_c = Counter([seg.bytes for seg in matchStatistics["ipv4"][2]])
+            fn_ipv4_mc = fn_ipv4_c.most_common(10)
+            fn_ipv4_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["ipv4"][2] if seg.bytes == ffm[0]}
+                for ffm in fn_ipv4_mc }
+            print(tabulate(sorted(fn_ipv4_finfo.items(), key=lambda x: x[0][1], reverse=True)))
+            #   * ipv4: mostly ntp.refid  <-- ips outside of trained subnet
 
-        fn_float_c = Counter([seg.bytes for seg in matchStatistics["float"][2]])
-        fn_float_mc = fn_float_c.most_common(10)
-        fn_float_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["float"][2] if seg.bytes == ffm[0]}
-            for ffm in fn_float_mc }
-        print(tabulate(sorted(fn_float_finfo.items(), key=lambda x: x[0][1], reverse=True)))
-        #   * float: ntp.rootdelay starting with 0000  <-- unclear
-        
-        fn_timestamp_c = Counter([seg.bytes for seg in matchStatistics["timestamp"][2]])
-        fn_timestamp_mc = fn_timestamp_c.most_common(10)
-        fn_timestamp_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["timestamp"][2] if seg.bytes == ffm[0]}
-            for ffm in fn_timestamp_mc }
-        print(tabulate(sorted(fn_timestamp_finfo.items(), key=lambda x: x[0][1], reverse=True)))
-        #   * timestamp: mostly ntp.reftime,
-        #       some smb.last_write.time, smb.create.time, smb.access.time, smb.change.time  <-- unclear
-        # # # # # # # # # # # # # # # # # # # # # # # #
+            fn_float_c = Counter([seg.bytes for seg in matchStatistics["float"][2]])
+            fn_float_mc = fn_float_c.most_common(10)
+            fn_float_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["float"][2] if seg.bytes == ffm[0]}
+                for ffm in fn_float_mc }
+            print(tabulate(sorted(fn_float_finfo.items(), key=lambda x: x[0][1], reverse=True)))
+            #   * float: ntp.rootdelay starting with 0000  <-- unclear
+
+            fn_timestamp_c = Counter([seg.bytes for seg in matchStatistics["timestamp"][2]])
+            fn_timestamp_mc = fn_timestamp_c.most_common(10)
+            fn_timestamp_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["timestamp"][2] if seg.bytes == ffm[0]}
+                for ffm in fn_timestamp_mc }
+            print(tabulate(sorted(fn_timestamp_finfo.items(), key=lambda x: x[0][1], reverse=True)))
+            #   * timestamp: mostly ntp.reftime,
+            #       some smb.last_write.time, smb.create.time, smb.access.time, smb.change.time  <-- unclear
+            # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 

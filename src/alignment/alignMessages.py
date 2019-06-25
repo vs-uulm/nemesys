@@ -9,10 +9,11 @@ from scipy.special import comb
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
 from inference.segmentHandler import matrixFromTpairs
 from inference.segments import MessageSegment
+from inference.templates import DistanceCalculator
 
 
 class SegmentedMessages(object):
-    def __init__(self, dc, segmentedMessages):
+    def __init__(self, dc: DistanceCalculator, segmentedMessages: Sequence[Tuple[MessageSegment]]):
         self._score_match = None
         self._score_mismatch = None
         self._score_gap = None
