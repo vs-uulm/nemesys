@@ -421,7 +421,7 @@ if __name__ == '__main__':
 
     pcapbasename = basename(args.pcapfilename)
 
-    print("Loading messages...")
+    print("Loading messages from {}...".format(pcapbasename))
     specimens = SpecimenLoader(args.pcapfilename, layer=2, relativeToIP=True)
 
 
@@ -521,23 +521,6 @@ if __name__ == '__main__':
         # # Hunting false positives and negatives
         if args.fpn:
             # # # # # # # # # # # # # # # # # # # # # # # #
-            # falsePositiveIDs = sorted([idfp for idfp in matchStatistics["id"][1]], key=lambda o: o[0].confidence)
-            # for fpid, seg in falsePositiveIDs:
-            #     printFieldContext(segmentedMessages, fpid)
-            #
-            # # the confidence of
-            # timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
-            # # at position
-            # offsAtFpO = falsePositiveIDs[0][1].offset
-            # # that overlaps with
-            # recogAtFpO = falsePositiveIDs[0][0]
-            # # which became the recognized field type with confidence 0.98
-            # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
-            # confAtFpO = msg4FpO.findInMessage(timestamp)[offsAtFpO]
-            # # is 1.48
-            # # # # # # # # # # # # # # # # # # # # # # # #
-
-            # # # # # # # # # # # # # # # # # # # # # # # #
             # falsePositiveFlags = sorted([flagsfp for flagsfp in matchStatistics["flags"][1]], key=lambda o: o[0].confidence)
             # for fpFlags, seg in falsePositiveFlags[:20]:
             #     printFieldContext(segmentedMessages, fpFlags)
@@ -563,10 +546,7 @@ if __name__ == '__main__':
             # from collections import Counter
             # fpfieldCount = Counter([(b, c) for a, b, c in fpfieldinfo])
             # print(tabulate(fpfieldCount.most_common()))
-            # # # # # # # # # # # # # # # # # # # # # # # #
-
-            # # # # # # # # # # # # # # # # # # # # # # # #
-            # Hunting false positives
+            #
             # # values per field name
             # val4fn = comparator.lookupValues4FieldName('bootp.option.dhcp_auto_configuration'); print(val4fn)
 
@@ -597,6 +577,21 @@ if __name__ == '__main__':
             for recog, seg in sorted(matchStatistics["id"][1], key=lambda r: r[0].confidence):
                 printFieldContext(segmentedMessages, recog)
             #   * id: mostly string "SMB" + adjacent int
+
+            # # manually determine special stuff:
+            # # # # # # # # # # #
+            # # the confidence of
+            # fp_id_s = sorted(matchStatistics["id"][1], key=lambda r: r[0].confidence)
+            # # at position
+            # offsAtFpO = fp_id_s[0][1].offset
+            # # that overlaps with
+            # recogAtFpO = fp_id_s[0][0]
+            # # which became the recognized field type with confidence 0.98
+            # msg4FpO = next((ftr for ftr in ftRecognizer if ftr.message == recogAtFpO.message), None)
+            # fttemp_timestamp = FieldTypeRecognizer.fieldtypeTemplates[2]
+            # confAtFpO = msg4FpO.findInMessage(fttemp_timestamp)[offsAtFpO]
+            # # # # # # # # # # #
+
 
             for recog, seg in sorted(matchStatistics["flags"][1], key=lambda r: r[0].confidence):
                 printFieldContext(segmentedMessages, recog)
@@ -663,22 +658,25 @@ if __name__ == '__main__':
 
 
         # # # # # # # # # # # # # # # # # # # # # # # #
-        # TODO statistics of how well mahalanobis separates fieldtypes (select a threshold) per ftm:
-        #   for all fieldtype memento:
-        #       for all recognized positions that match the true fieldtype (true positives):
-        #           determine mahalanobis distance to memento
-        #       collect and sort all dists for this fieldtype
-        #       plot as histogram/function
-        #       |
-        #       for all recognized positions that not match the true fieldtype (false positives):
-        #           determine mahalanobis distance to memento
-        #       collect and sort all dists for this fieldtype
-        #       overlay plot from before as histogram/function (see the one for segment type distance distributions)
+        # statistics of how well mahalanobis separates fieldtypes (select a threshold) per ftm:
         # # # # # # # # # # # # # # # # # # # # # # # #
+        mmp = MultiMessagePlotter(specimens, 'histo-ftmementos', len(matchStatistics))
+        # for all fieldtype mementos
+        for figIdx, ftype in enumerate(FieldTypeRecognizer.fieldtypeTemplates):
+            recogFields = [
+                (seg.fieldtype,
+                 next((recog for recog in ftq.retrieve4position(seg.offset) if recog.template == ftype), None))
+                           for ftq in ftQueries for seg in segmentedMessages[ftq.message]]
+            # mahalanobis distance to memento of all recognized positions that match the true fieldtype
+            trueRecog = [recog.confidence for tft, recog in recogFields if tft == ftype.fieldtype if recog is not None]
+            # mahalanobis distance to memento of all recognized positions that not match the true fieldtype
+            falseRecog = [recog.confidence for tft, recog in recogFields if tft != ftype.fieldtype if recog is not None]
 
-
-
-
+            mmp.histoToSubfig(figIdx, [trueRecog, falseRecog], bins=numpy.linspace(0, 8, 20),
+                              label=[ftype.fieldtype, 'not ' + ftype.fieldtype])
+        # overlay both plots as histogram in subfigures per ftype on one page
+        mmp.writeOrShowFigure()
+        # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 

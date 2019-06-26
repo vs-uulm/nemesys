@@ -21,18 +21,14 @@ from tabulate import tabulate
 # mpl.use('Agg')
 
 from alignment.alignMessages import SegmentedMessages
-from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
-from inference.segments import MessageSegment, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
-from inference.analyzers import *
 from utils.evaluationHelpers import *
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from characterize_fieldtypes import analyses
 from visualization.multiPlotter import MultiMessagePlotter
-from visualization.simplePrint import tabuSeqOfSeg
 from alignment.clusterMerging import ClusterMerger, ClusterClusterer
 from utils.baseAlgorithms import ecdf
 
@@ -57,15 +53,6 @@ def relign(segseqA, segseqB):
     hirsch = HirschbergOnSegmentSimilarity(dc.similarityMatrix())
     return hirsch.align(dc.segments2index([s for s in segseqA if isinstance(s, MessageSegment)]),
                         dc.segments2index([s for s in segseqB if isinstance(s, MessageSegment)]))
-
-def resolveIdx2Seg(segseq):
-    """
-
-    :param segseq: list of segment indices (from raw segment list) per message
-    :return:
-    """
-    print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
-                        for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
 
 def columnOfAlignment(alignedSegments: List[List[MessageSegment]], colnum: int):
     return [msg[colnum] for msg in alignedSegments]
@@ -310,7 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.6')
-    parser.add_argument('--split', help='Split clusters based on fields with rare values before merge step.',
+    parser.add_argument('--split', help='Use old split-clusters implementation.',
                         action="store_true")
     parser.add_argument('-p', '--with-plots',
                         help='Generate plots.',
@@ -365,29 +352,10 @@ if __name__ == '__main__':
             # 3. segment messages by NEMESYS
             segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
             segmentedMessages = refinements(segmentsPerMsg)
-
-            # TODO integrate into refinements()
-            moco = CropDistinct.countCommonValues(segmentedMessages)
-            newstuff = list()
-            for msg in segmentedMessages:
-                crop = CropDistinct(msg, moco)
-                newmsg = crop.split()
-                newstuff.append(newmsg)
-            newstuff2 = list()
-            for msg in newstuff:
-                charmerge = CumulativeCharMerger(msg)
-                newmsg = charmerge.merge()
-                newstuff2.append(newmsg)
-            newstuff3 = list()
-            for msg in newstuff2:
-                splitfixed = SplitFixed(msg)
-                newmsg = splitfixed.split(0, 1)
-                newstuff3.append(newmsg)
-
             segmentedMessages = [[
                 MessageSegment(MessageAnalyzer.findExistingAnalysis(
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in newstuff3]
+                for seg in msg] for msg in segmentedMessages]
             segments = list(chain.from_iterable(segmentedMessages))
 
         segmentationTime = time.time() - segmentationTime
@@ -594,7 +562,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # split clusters based on fields without rare values
     # # # # # # # # # # # # # # # # # # # # # # # #
-    if args.split:
+    if not args.split:
         from alignment.clusterSplitting import *
 
         cSplitter = RelaxedExoticClusterSplitter(6 if not tokenizer == "tshark" else 3,
@@ -604,7 +572,9 @@ if __name__ == '__main__':
             comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
         # in-place split of clusters in alignedClusters and messageClusters
         cSplitter.split()
+        print(labels)
         labels = cSplitter.labels
+        print(labels)
 
 
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -648,6 +618,7 @@ if __name__ == '__main__':
 
         # # # # # # # # # # # # # # # # # # # # # # # #
     else:
+        # old implementation
         from collections import Counter
 
         exoticValueStats = "reports/exotic-values-statistics.csv"

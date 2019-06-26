@@ -5,6 +5,7 @@ from netzob.Common.Utils.MatrixList import MatrixList
 
 from inference.segments import MessageSegment, TypedSegment
 from inference.fieldTypes import BaseTypeMemento, RecognizedField
+from inference.templates import DistanceCalculator
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):
@@ -120,7 +121,7 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
     tabmod.PRESERVE_WHITESPACE = False
 
 
-def printFieldContext(segmentedMessages, recog: RecognizedField):
+def printFieldContext(segmentedMessages: Sequence[Sequence[TypedSegment]], recog: RecognizedField):
     # # # # # # # # # # # # # # # # # # # # # # # #
     # get and print segment context around a selected recognition (here: recog)
     posSegMatch = None  # first segment that starts at or after the recognized field
@@ -138,3 +139,14 @@ def printFieldContext(segmentedMessages, recog: RecognizedField):
             posSegEnd = posSegMatch
         segmentFieldTypes(segmentedMessages[recog.message][posSegMatch - 2:posSegEnd + 1],
                           {recog.template: [recog]}, posSegMatch - 2)
+
+
+def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
+    """
+    Prints tabulated hex representations of (aligned) sequences of indices.
+
+    :param dc: DistanceCalculator to use for resolving indices to MessageSegment objects.
+    :param segseq: list of segment indices (from raw segment list) per message.
+    """
+    print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
+                        for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))

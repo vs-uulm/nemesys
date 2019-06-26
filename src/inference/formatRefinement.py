@@ -538,12 +538,15 @@ class SplitFixed(MessageModifier):
 
     def split(self, segmentID: int, chunkLength: int):
         selSeg = self.segments[segmentID]
-        newSegs = list()
-        for chunkoff in range(selSeg.offset, selSeg.nextOffset, chunkLength):
-            remainLen = selSeg.nextOffset - chunkoff
-            newSegs.append(MessageSegment(selSeg.analyzer, chunkoff, min(remainLen, chunkLength)))
-        newmsg = self.segments[:segmentID] + newSegs + self.segments[segmentID + 1:]
-        return newmsg
+        if chunkLength < selSeg.length:
+            newSegs = list()
+            for chunkoff in range(selSeg.offset, selSeg.nextOffset, chunkLength):
+                remainLen = selSeg.nextOffset - chunkoff
+                newSegs.append(MessageSegment(selSeg.analyzer, chunkoff, min(remainLen, chunkLength)))
+            newmsg = self.segments[:segmentID] + newSegs + self.segments[segmentID + 1:]
+            return newmsg
+        else:
+            return self.segments
 
 
 

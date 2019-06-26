@@ -164,8 +164,11 @@ class DistancesPlotter(MessagePlotter):
                     ulab.remove(l)
         elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
             for l in ulab:
-                if l == -1:
-                    ulab.remove(l)
+                try:
+                    if int(l) == -1:
+                        ulab.remove(l)
+                except ValueError as e:
+                    pass  # not a problem, just keep the cluster, since its not noise.
 
         # prepare color space
         cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]

@@ -1,7 +1,11 @@
 """
-Characterize subsequences of messages by multiple metrics and visualize them.
+Main module to find and test valid features for refining field boundaries.
 
-To find valid features for identifying field boundaries and to distinguish between field types.
+* Count common values in segments
+* CropDistinct
+* CumulativeCharMerger
+* SplitFixed
+
 """
 import argparse
 
@@ -13,7 +17,8 @@ import IPython
 
 import inference.segmentHandler as sh
 import utils.evaluationHelpers
-from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
+from inference.formatRefinement import MergeConsecutiveChars, ResplitConsecutiveChars,\
+    CropDistinct, CumulativeCharMerger, SplitFixed
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
@@ -92,7 +97,13 @@ if __name__ == '__main__':
     # segment messages according to true fields from the labels
     print("Segmenting messages...", end=' ')
     segmentsPerMsg = sh.bcDeltaGaussMessageSegmentation(specimens, sigma)
-    segmentedMessages = sh.refinements(segmentsPerMsg)
+    # manually perform refinements prior to the ones to test instead of using sh.refinements(segmentsPerMsg)
+    segmentedMessages = list()
+    for msg in segmentsPerMsg:
+        # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
+        charsMerged = MergeConsecutiveChars(msg).merge()
+        charSplited = ResplitConsecutiveChars(charsMerged).split()
+        segmentedMessages.append(charSplited)
     segments = list(chain.from_iterable(segmentedMessages))
     print("done.")
 
@@ -102,41 +113,43 @@ if __name__ == '__main__':
 
     # count common values
     if args.count:
-        # segcnt = Counter([seg.bytes for seg in segments])
-        # moco25 = segcnt.most_common(25)
-        # print(tabulate([(featvect.hex(), cntr,
-        #                  sum([msg.data.count(featvect) for msg in specimens.messagePool.keys()]),
-        #                  sum([seg.bytes.count(featvect) for seg in segments])
-        #                  ) for featvect, cntr in moco25],
-        #     headers= ['Feature', 'Count (Inf)', 'Count (Msg)', 'Count (Seg)']))
-        # # [sum([msg.data.count(moco) for msg in specimens.messagePool.keys()]) for moco in moco25]
-        #
-        # # # False Negatives - when only searching for full containment within segments
-        # # featvect = bytes.fromhex("8182")
-        # # inseg = [seg.message for seg in segments if seg.bytes.count(featvect) > 0]
-        # # [msg.data.hex() for msg in set(inmsg) - set(inseg)]
-        #
-        #
-        # # # determine drop (max gradient)
-        # # mocoCnt = [cntr for featvect, cntr in segcnt.most_common()]
-        # # diff2nd = numpy.diff(mocoCnt, 2)
-        # # diff2ndmiX = diff2nd.argmax()
-        # # steepdrop = mocoCnt[diff2ndmiX]
-        # # # --> does not work at all for dns-1000: drop after the first entry, should be at 6 or so.
-        # # from matplotlib import pyplot as plt
-        # # plt.axhline(steepdrop)
-        # # plt.plot(list(diff2nd[:25]))
-        # # plt.plot([c for b, c in moco25])
-        # # plt.text(0,0,"x {}; y {}".format(diff2ndmiX, steepdrop))
-        # # plt.show()
-        # # # so:
-        # # # use message-amount-dependent threshold for frequency:
-        # segFreq = segcnt.most_common()
-        # freqThre = .2 * len(segmentedMessages)
-        # thre = 0
-        # while segFreq[thre][1] > freqThre:
-        #     thre += 1
-        # moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
+        segcnt = Counter([seg.bytes for seg in segments])
+        moco25 = segcnt.most_common(25)
+        print(tabulate([(featvect.hex(), cntr,
+                         sum([msg.data.count(featvect) for msg in specimens.messagePool.keys()]),
+                         sum([seg.bytes.count(featvect) for seg in segments])
+                         ) for featvect, cntr in moco25],
+            headers= ['Feature', 'Count (Inf)', 'Count (Msg)', 'Count (Seg)']))
+        # [sum([msg.data.count(moco) for msg in specimens.messagePool.keys()]) for moco in moco25]
+
+        # # False Negatives - when only searching for full containment within segments
+        # featvect = bytes.fromhex("8182")
+        # inseg = [seg.message for seg in segments if seg.bytes.count(featvect) > 0]
+        # [msg.data.hex() for msg in set(inmsg) - set(inseg)]
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # # determine drop (max gradient)
+        # mocoCnt = [cntr for featvect, cntr in segcnt.most_common()]
+        # diff2nd = numpy.diff(mocoCnt, 2)
+        # diff2ndmiX = diff2nd.argmax()
+        # steepdrop = mocoCnt[diff2ndmiX]
+        # # --> does not work at all for dns-1000: drop after the first entry, should be at 6 or so.
+        # from matplotlib import pyplot as plt
+        # plt.axhline(steepdrop)
+        # plt.plot(list(diff2nd[:25]))
+        # plt.plot([c for b, c in moco25])
+        # plt.text(0,0,"x {}; y {}".format(diff2ndmiX, steepdrop))
+        # plt.show()
+        # # so, instead...
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # # ... use message-amount-dependent threshold for frequency:
+        segFreq = segcnt.most_common()
+        freqThre = .2 * len(segmentedMessages)
+        thre = 0
+        while segFreq[thre][1] > freqThre:
+            thre += 1
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
+    else:
         moco = CropDistinct.countCommonValues(segmentedMessages)
 
         # split segment to reinforce most common values
@@ -153,6 +166,13 @@ if __name__ == '__main__':
                     print(" ".join([seg.bytes.hex() for seg in newmsg]))
                     print()
 
+                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CRPDSTC ", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print()
+
+
         # cumulatively merge consecutive clusters that together fulfill the char condition
         # of inference.segmentHandler.isExtendedCharSeq
         newstuff2 = list()
@@ -165,9 +185,9 @@ if __name__ == '__main__':
                     print("\nINCORRECT SPLIT!\n")
 
                 pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
-                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
-                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
-                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CHRMRGE ", " ".join([seg.bytes.hex() for seg in newmsg]))
                 print()
                 # if newmsg[0].length > 2:
                 #     from inference.segmentHandler import isExtendedCharSeq
@@ -187,9 +207,9 @@ if __name__ == '__main__':
                     print("\nINCORRECT SPLIT!\n")
 
                 pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
-                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
-                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
-                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+                print("SPLTFXD ", " ".join([seg.bytes.hex() for seg in newmsg]))
                 print()
 
 
