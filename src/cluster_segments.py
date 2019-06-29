@@ -80,8 +80,17 @@ if __name__ == '__main__':
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
 
+    filteredClusters = list()
+    for segments in clusters:
+        # omit one-byte segments. Such clusters are not meaningful.
+        if max({seg.length for seg in segments}) < 2:
+            print("Skip cluster due to length < 2. It has", len(segments), "Segments")
+        else:
+            filteredClusters.append(segments)
+
+
     fTypeTemplates = list()
-    for cLabel, segments in enumerate(clusters):
+    for cLabel, segments in enumerate(filteredClusters):
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
         fTypeTemplates.append(ftype)
@@ -116,7 +125,7 @@ if __name__ == '__main__':
         sdp = DistancesPlotter(specimens,
                                'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{}".format(
                                    clusterer.eps, clusterer.min_samples), False)
-        clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
+        clustermask = {segid: cluN for cluN, segL in enumerate(filteredClusters) for segid in dc.segments2index(segL)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
         sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
         sdp.writeOrShowFigure()
