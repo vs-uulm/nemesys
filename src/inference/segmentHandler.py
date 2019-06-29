@@ -331,10 +331,17 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
 
 def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     """
-    Filter input segment for only those segments that are adding relevant information for further analysis.
+    Filter input segment for only those segments that are adding relevant information for further analysis:
+    * filter out segments shorter than 3 bytes
+    * filter out all-zero byte sequences
+    * filter out segments that resulted in no relevant feature data, i. e.,
+      (0, .., 0) | (nan, .., nan) | or a mixture of both
+    * filter out identical segments to leave only one representative
 
-    :param segments:
-    :return:
+    (as an more advanced alternative see inference.templates.DelegatingDC)
+
+    :param segments: list of segments to filter.
+    :return: Sorted list of Segments that remained after applying all filter conditions.
     """
     # filter out segments shorter than 3 bytes
     filteredSegments = [t for t in segments if t.length > 2]

@@ -349,7 +349,7 @@ if __name__ == '__main__':
             filteredSegments = list(chain.from_iterable(segmentedMessages))
 
             # fixed values based on evaluation from Jan 18-22, 2019 - evaluation in nemesys-reports commit be95f9c
-            # epsion should be 1.2 (default)
+            # epsilon should be 1.2 (default)
             # SUPERSEDED!
 
             pcapbasename = basename(specimens.pcapFileName)
@@ -370,7 +370,7 @@ if __name__ == '__main__':
     #  small values at fieldend: int
     #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
     #  len > 16: chars (pad if all 0)
-    # For a new hypothesis: what are the longest seen ints?
+    #  For a new hypothesis: what are the longest seen ints?
     #
 
 

@@ -14,7 +14,7 @@ from os.path import isfile
 from inference.analyzers import *
 from inference.segmentHandler import segments2types, filterSegments
 from inference.segments import TypedSegment
-from inference.templates import DistanceCalculator, Template, TemplateGenerator
+from inference.templates import DistanceCalculator, Template, TemplateGenerator, DelegatingDC
 from utils.evaluationHelpers import annotateFieldTypes
 from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator
@@ -54,9 +54,13 @@ if __name__ == '__main__':
     # segment messages according to true fields from the labels
     print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))  # type: List[TypedSegment]
-    # filteredSegments = list(chain.from_iterable(segmentedMessages))
-    dc = DistanceCalculator(filteredSegments)
+    # # filter segments
+    # filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))  # type: List[TypedSegment]
+    # # all segments
+    filteredSegments = list(chain.from_iterable(segmentedMessages))
+
+    # dc = DistanceCalculator(filteredSegments)
+    dc = DelegatingDC(filteredSegments)
 
     typegroups = segments2types(filteredSegments)
     typelabels = list(typegroups.keys())
