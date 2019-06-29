@@ -4,7 +4,7 @@ from tabulate import tabulate
 from netzob.Common.Utils.MatrixList import MatrixList
 
 from inference.segments import MessageSegment, TypedSegment
-from inference.fieldTypes import BaseTypeMemento, RecognizedField
+from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
 from inference.templates import DistanceCalculator
 
 
@@ -61,7 +61,7 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
 
 
 def segmentFieldTypes(sequence: Sequence[TypedSegment],
-                      recognizedFields: Dict[Union[BaseTypeMemento, str], List[RecognizedField]],
+                      recognizedFields: Dict[Union[BaseTypeMemento, str], List[RecognizedVariableLengthField]],
                       fieldNumStart=0):
     """
     Visualization for recognized field type templates in message.
@@ -122,15 +122,14 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
     tabmod.PRESERVE_WHITESPACE = False
 
 
-def printFieldContext(trueSegmentedMessages: Sequence[Sequence[TypedSegment]], recognizedField: RecognizedField):
+def printFieldContext(trueSegmentedMessages: Sequence[Sequence[TypedSegment]],
+                      recognizedField: RecognizedVariableLengthField):
     """
     Get and print true segment context around a selected recognition
 
     :param trueSegmentedMessages: true segments to use as reference for determining the context of recognizedField.
     :param recognizedField: The field for which to print the context.
     """
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    #
     posSegMatch = None  # first segment that starts at or after the recognized field
     for sid, seg in enumerate(trueSegmentedMessages[recognizedField.message]):
         if seg.offset > recognizedField.position:
@@ -142,10 +141,12 @@ def printFieldContext(trueSegmentedMessages: Sequence[Sequence[TypedSegment]], r
             posSegEnd = sid
             break
     if posSegMatch is not None:
+        contextStart = max(posSegMatch - 2, 0)
         if posSegEnd is None:
             posSegEnd = posSegMatch
-        segmentFieldTypes(trueSegmentedMessages[recognizedField.message][posSegMatch - 2:posSegEnd + 1],
-                          {recognizedField.template: [recognizedField]}, posSegMatch - 2)
+        contextEnd = min(posSegEnd + 1, len(trueSegmentedMessages))
+        segmentFieldTypes(trueSegmentedMessages[recognizedField.message][contextStart:contextEnd],
+                          {recognizedField.template: [recognizedField]}, contextStart)
 
 
 def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):

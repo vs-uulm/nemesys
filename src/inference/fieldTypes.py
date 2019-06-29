@@ -150,7 +150,7 @@ class FieldTypeMemento(BaseTypeMemento):
         Mahalanobis distance measures the distance of a vector from the mean in terms of the multivariate pendent to
         the standard deviation: https://blogs.sas.com/content/iml/2012/02/15/what-is-mahalanobis-distance.html
 
-        :param vector: The vector of which the distance to the mean shall be calculated
+        :param vector: The vector of which the distance to the mean shall be calculated.
         :return: The Mahalanobis distance between the field type mean and the given vector.
         """
         return scipy.spatial.distance.mahalanobis(self.mean, vector, self.picov)
@@ -164,31 +164,14 @@ class FieldTypeMemento(BaseTypeMemento):
         return conf
 
 
-class RecognizedField(object):
-    """
-    Represents a field recognized by a heuristic method.
-    """
-
+class RecognizedVariableLengthField(object):
     def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
-                 position: int, confidence: float):
-        """
-        Create the representation of a heuristically recognized field.
-        This object is much more lightweight than inference.segments.AbstractSegment.
-
-        :param message: The message this field is contained in.
-        :param template: The field type template that this field resembles.
-        :param position: The byte position/offset in the message at which the field starts.
-        :param confidence: The confidence (0 is best) of the recognition.
-        """
+                 position: int, end: int, confidence: float):
         self.message = message
         self.position = position
+        self.end = end
         self.confidence = confidence
-        if isinstance(template, BaseTypeMemento):
-            self.template = template
-            self.end = position + len(template)
-        else:
-            raise TypeError("Template needs to be a BaseTypeMemento")
-
+        self.template = template
 
     def __repr__(self) -> str:
         """
@@ -223,6 +206,27 @@ class RecognizedField(object):
             analyzer = MessageAnalyzer.findExistingAnalysis(
                 fallbackAnalyzer, fallbackUnit, self.message, fallbackParams)
         return TypedSegment(analyzer, self.position, len(self.template), self.template.fieldtype)
+
+
+class RecognizedField(RecognizedVariableLengthField):
+    """
+    Represents a field recognized by a heuristic method.
+    """
+    def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
+                 position: int, confidence: float):
+        """
+        Create the representation of a heuristically recognized field.
+        This object is much more lightweight than inference.segments.AbstractSegment.
+
+        :param message: The message this field is contained in.
+        :param template: The field type template that this field resembles.
+        :param position: The byte position/offset in the message at which the field starts.
+        :param confidence: The confidence (0 is best) of the recognition.
+        """
+        if isinstance(template, BaseTypeMemento):
+            super().__init__(message, template, position, position + len(template), confidence)
+        else:
+            raise TypeError("Template needs to be a BaseTypeMemento")
 
 
 

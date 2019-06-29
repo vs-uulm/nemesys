@@ -4,9 +4,10 @@ segment messages by NEMESYS and cluster
 
 import argparse, IPython
 from os.path import isfile, basename
+from math import log
 
-from inference.templates import DBSCANsegmentClusterer
-from inference.fieldTypes import BaseTypeMemento, RecognizedField
+from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template
+from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
 from inference.segments import TypedSegment, HelperSegment
 from inference.analyzers import *
 from visualization.distancesPlotter import DistancesPlotter
@@ -67,16 +68,42 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     clusterer = DBSCANsegmentClusterer(dc)
-    noise, *clusters = clusterer.clusterSimilarSegments(False)  # type: Tuple[List[MessageSegment], List[List[MessageSegment]]]
+    # noise: List[MessageSegment]
+    # clusters: List[List[MessageSegment]]
+    noise, *clusters = clusterer.clusterSimilarSegments(False)
+    # extract "large" templates from noise that should rather be its own cluster
+    for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
+        freqThresh = log(len(dc.rawSegments))
+        if isinstance(seg, Template):
+            if len(seg.baseSegments) > freqThresh:
+                clusters.append(noise.pop(idx).baseSegments)
+
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
 
+    fTypeTemplates = list()
     for cLabel, segments in enumerate(clusters):
-    #     # print({seg.length for seg in segments})  # TODO yea, they have different lengths
-        ftype = BaseTypeMemento("tf{:02d}".format(cLabel))  # TODO we need a length lateron!
-        for seg in segments:
-
-            # recog = RecognizedField(seg.message, ftype, seg.offset, 0.0)
-            # printFieldContext(trueSegmentedMessages, recog)
+        ftype = FieldTypeTemplate(segments)
+        ftype.fieldtype = "tf{:02d}".format(cLabel)
+        fTypeTemplates.append(ftype)
+        print("\nCluster", cLabel, "Segments", len(segments))
+        print({seg.bytes for seg in segments})
+        # for seg in segments:
+        #     # # sometimes raises: ValueError: On entry to DLASCL parameter number 4 had an illegal value
+        #     # try:
+        #     #     confidence = float(ftype.confidence(numpy.array(seg.values))) if ftype.length == seg.length else 0.0
+        #     # except ValueError as e:
+        #     #     print(seg.values)
+        #     #     raise e
+        #     #
+        #
+        #     confidence = 0.0
+        #     if isinstance(seg, Template):
+        #         for bs in seg.baseSegments:
+        #             recog = RecognizedVariableLengthField(bs.message, ftype, bs.offset, bs.nextOffset, confidence)
+        #             printFieldContext(trueSegmentedMessages, recog)
+        #     else:
+        #         recog = RecognizedVariableLengthField(seg.message, ftype, seg.offset, seg.nextOffset, confidence)
+        #         printFieldContext(trueSegmentedMessages, recog)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 

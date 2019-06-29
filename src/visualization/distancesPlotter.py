@@ -107,7 +107,8 @@ class DistancesPlotter(MessagePlotter):
         fcm = cm.cubehelix  # type color map
 
         # identify unique labels
-        ulab = sorted(set(labels))
+        ulab = sorted(set(labels),
+                      key=lambda l: -1 if l == "Noise" else int(l) if isinstance(l, str) and l.isdigit() else l)
 
         # subsample if segment count is larger than maxSamples
         maxSamples = 1000

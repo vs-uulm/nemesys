@@ -1428,8 +1428,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         to be represented by a vector of one common vector space and thus a fixed number of dimensions.
         Thus for the calculation:
             * zero-only segments are ignored
-            *
-
+            * nans are used for shorter segments at don't-care positions
 
         :param baseSegments:
         :param method:
