@@ -4,15 +4,16 @@ NEMESYS and NEMETYL approaches.
 """
 from typing import Union, Tuple, List, TypeVar, Hashable, Sequence
 from netzob.all import RawMessage
-import os, csv
+from itertools import chain
+import os, csv, pickle, time
 
 from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import MessageComparator
+from validation.dissectorMatcher import MessageComparator, ParsedMessage
 from inference.analyzers import *
-from inference.segmentHandler import segmentsFromLabels
+from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, segmentsFixed
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
+from inference.templates import DistanceCalculator, DelegatingDC
 from visualization.multiPlotter import MultiMessagePlotter
-
 
 
 # available analysis methods
@@ -450,5 +451,78 @@ def calcHexDist(hexA, hexB):
     dc = DistanceCalculator(segments)
     return dc.pairDistance(*segments)
 
+
+def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
+                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, disableCache=False) \
+        -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
+        float, float]:
+    """
+    cache or load the DistanceCalculator to or from the filesystem
+
+    >>> chainedSegments = dc.rawSegments
+
+    :param disableCache: When experimenting with distances manipulation, deactivate caching!
+    :return:
+    """
+    pcapbasename = os.path.basename(pcapfilename)
+    sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
+        0.9 if not sigma else sigma
+    pcapName = os.path.splitext(pcapbasename)[0]
+    # noinspection PyUnboundLocalVariable
+    tokenparm = tokenizer if tokenizer != "nemesys" else \
+        "{}{:.0f}".format(tokenizer, sigma * 10)
+    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
+    # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
+    if disableCache or not os.path.exists(dccachefn):
+        # dissect and label messages
+        print("Load messages from {}...".format(pcapName))
+        specimens = SpecimenLoader(pcapfilename, 2, True)
+        comparator = MessageComparator(specimens, 2, True, debug=debug)
+
+        print("Segmenting messages...", end=' ')
+        segmentationTime = time.time()
+        # select tokenizer by command line parameter
+        if tokenizer == "tshark":
+            # 1. segment messages according to true fields from the labels
+            segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
+        elif tokenizer == "4bytesfixed":
+            # 2. segment messages into fixed size chunks for testing
+            segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
+        elif tokenizer == "nemesys":
+            # 3. segment messages by NEMESYS
+            segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
+            segmentedMessages = refinements(segmentsPerMsg)
+            segmentedMessages = [[
+                MessageSegment(MessageAnalyzer.findExistingAnalysis(
+                    analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
+                for seg in msg] for msg in segmentedMessages]
+            # segments = list(chain.from_iterable(segmentedMessages))
+
+        segmentationTime = time.time() - segmentationTime
+        print("done.")
+
+        # noinspection PyUnboundLocalVariable
+        chainedSegments = list(chain.from_iterable(segmentedMessages))
+
+        print("Calculate distance for {} segments...".format(len(chainedSegments)))
+        # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
+        dist_calc_segmentsTime = time.time()
+        dc = DelegatingDC(chainedSegments)
+        dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
+        with open(dccachefn, 'wb') as f:
+            pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
+    else:
+        print("Load distances from cache file {}".format(dccachefn))
+        with open(dccachefn, 'rb') as f:
+            segmentedMessages, comparator, dc = pickle.load(f)
+        if not (isinstance(comparator, MessageComparator)
+                and isinstance(dc, DistanceCalculator)):
+            print('Loading of cached distances failed.')
+            exit(10)
+        specimens = comparator.specimens
+        # chainedSegments = list(chain.from_iterable(segmentedMessages))
+        segmentationTime, dist_calc_segmentsTime = None, None
+
+    return specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime
 
 

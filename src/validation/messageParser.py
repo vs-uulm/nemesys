@@ -593,7 +593,8 @@ class ParsedMessage(object):
     """Cache the last used tsharkConnector for reuse."""
 
 
-    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True, failOnUndissectable:bool=True,
+    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True,
+                 failOnUndissectable:bool=True,
                  linktype:int=ParsingConstants.LINKTYPES['ETHERNET']):
         """
         Construct a new ParsedMessage for ``message``.
@@ -1421,3 +1422,30 @@ class ParsedMessage(object):
     @property
     def messagetype(self):
         return MessageTypeIdentifiers.typeOfMessage(self)
+
+
+    def __getstate__(self):
+        """
+        Include required class arribute in pickling.
+
+        :return: The dict of this object for use in pickle.dump()
+        """
+        statecopy = self.__dict__.copy()
+        statecopy["_ParsedMessage_CLASS___tshark"] = ParsedMessage.__tshark
+        return statecopy
+
+
+    def __setstate__(self, state):
+        """
+        Include required class arribute in pickling.
+
+        :param state: The dict of this object got from pickle.load()
+        """
+        # TODO This could be made more efficient by just referencing the class variable once for all instances
+        #  by some external wrapper method/class managed by utils.evaluationHelpers.cacheAndLoadDC for pickling
+        ParsedMessage.__tshark = state["_ParsedMessage_CLASS___tshark"]
+        del state["_ParsedMessage_CLASS___tshark"]
+        self.__dict__.update(state)
+
+
+

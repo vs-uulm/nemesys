@@ -296,7 +296,7 @@ if __name__ == '__main__':
                         action="store_true")
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
-                                                          'default: 0.6')
+                                                          'default: 0.9')
     parser.add_argument('--split', help='Use old split-clusters implementation.',
                         action="store_true")
     parser.add_argument('-p', '--with-plots',
@@ -310,6 +310,8 @@ if __name__ == '__main__':
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
+    pcapbasename = basename(args.pcapfilename)
+
     analyzerType = analyses[analysis_method]
     analysisArgs = None
     analysisTitle = analysis_method
@@ -321,67 +323,15 @@ if __name__ == '__main__':
         exit(2)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # cache the DistanceCalculator to the filesystem
+    # cache/load the DistanceCalculator to the filesystem
     # # # # # # # # # # # # # # # # # # # # # # # #
-    pcapbasename = basename(args.pcapfilename)
-    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-        0.9 if not args.sigma else args.sigma
-    pcapName = splitext(pcapbasename)[0]
+    # TODO when manipulating distances, deactivate caching! by adding "True"
     # noinspection PyUnboundLocalVariable
-    tokenparm = tokenizer if tokenizer != "nemesys" else \
-        "{}{:.0f}".format(tokenizer, sigma * 10)
-    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
-    smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
-    # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn):  # TODO when manipulating distances, deactivate caching! by    or True
-        # dissect and label messages
-        print("Load messages from {}...".format(pcapName))
-        specimens = SpecimenLoader(args.pcapfilename, 2, True)
-        comparator = MessageComparator(specimens, 2, True, debug=debug)
+    specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma   # , True
+    )
+    chainedSegments = dc.rawSegments
 
-        print("Segmenting messages...", end=' ')
-        segmentationTime = time.time()
-        # select tokenizer by command line parameter
-        if tokenizer == "tshark":
-            # 1. segment messages according to true fields from the labels
-            segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-        elif tokenizer == "4bytesfixed":
-            # 2. segment messages into fixed size chunks for testing
-            segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
-        elif tokenizer == "nemesys":
-            # 3. segment messages by NEMESYS
-            segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-            segmentedMessages = refinements(segmentsPerMsg)
-            segmentedMessages = [[
-                MessageSegment(MessageAnalyzer.findExistingAnalysis(
-                    analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in segmentedMessages]
-            segments = list(chain.from_iterable(segmentedMessages))
-
-        segmentationTime = time.time() - segmentationTime
-        print("done.")
-
-        # noinspection PyUnboundLocalVariable
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
-
-        print("Calculate distance for {} segments...".format(len(chainedSegments)))
-        # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
-        dist_calc_segmentsTime = time.time()
-        dc = DelegatingDC(chainedSegments)
-        dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
-        with open(dccachefn, 'wb') as f:
-            pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
-    else:
-        print("Load distances from cache file {}".format(dccachefn))
-        segmentedMessages, comparator, dc = pickle.load(open(dccachefn, 'rb'))
-        if not (isinstance(comparator, MessageComparator)
-                and isinstance(dc, DistanceCalculator)):
-            print('Loading of cached distances failed.')
-            exit(10)
-        specimens = comparator.specimens
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
-        segmentationTime, dist_calc_segmentsTime = None, None
-    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -419,6 +369,7 @@ if __name__ == '__main__':
     dist_calc_messagesTime = time.time()
     sm = SegmentedMessages(dc, segmentedMessages)
     dist_calc_messagesTime = time.time() - dist_calc_messagesTime
+    # smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     #     with open(smcachefn, 'wb') as f:
     #         pickle.dump(sm, f, pickle.HIGHEST_PROTOCOL)
     # else:
@@ -465,7 +416,6 @@ if __name__ == '__main__':
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
     # retrieve manually determined epsilon value
-    pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
     if tokenizer == "nemesys":
         eps = eps * .8
@@ -572,10 +522,7 @@ if __name__ == '__main__':
             comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
         # in-place split of clusters in alignedClusters and messageClusters
         cSplitter.split()
-        print(labels)
         labels = cSplitter.labels
-        print(labels)
-
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         if withplots:
@@ -919,6 +866,7 @@ if __name__ == '__main__':
     # write alignments to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
     reportFolder = "reports"
+    pcapName = splitext(pcapbasename)[0]
     fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
     csvpath = join(reportFolder, fileNameS + '.csv')
     if not exists(csvpath):

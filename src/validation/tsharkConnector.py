@@ -1,6 +1,7 @@
 import subprocess, io, struct, time
 from queue import Queue
 from tempfile import NamedTemporaryFile
+from typing import Dict
 
 class TsharkConnector(object):
     """
@@ -122,6 +123,7 @@ class TsharkConnector(object):
 
         :return: A JSON string, trimmed and superficially validated.
         """
+        assert self.__tempreader is not None, "Call writePacket() first"
         TsharkConnector.__readlines(self.__tempreader, self.__tsharkqueue)
 
         if self.__tsharkqueue.empty():
@@ -208,4 +210,34 @@ class TsharkConnector(object):
                   "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
             return versionlist[2], False
         return versionlist[2], True
+
+
+    def __getstate__(self):
+        """
+        Handling of runtime specific object attributes for pickling. This basically omits all instances of
+            io.BufferedReader, io.BufferedRandom, and subprocess.Popen
+            that need to be freshly instanciated after pickle.load() anyway.
+
+        :return: The dict of this object for use in pickle.dump()
+        """
+        return {
+            '_TsharkConnector__linktype': self.__linktype,
+            '_TsharkConnector__version': self.__version,
+        }
+
+
+    def __setstate__(self, state: Dict):
+        """
+        Handling of runtime specific object attributes for pickling.
+
+        :param state: The dict of this object got from pickle.load()
+        :return:
+        """
+        self.__linktype = state['_TsharkConnector__linktype']
+        self.__version = state['_TsharkConnector__version']
+        self.__tsharkqueue = Queue()
+        self.__tempfile = None
+        self.__tempreader = None
+        self.__tshark = None
+
 

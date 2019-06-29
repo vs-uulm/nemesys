@@ -230,7 +230,7 @@ class DistancesPlotter(MessagePlotter):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
-                lColor = colors.to_rgba_array(self._cm(cIdx[c]))
+                lColor = self._cm(cIdx[c])
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)

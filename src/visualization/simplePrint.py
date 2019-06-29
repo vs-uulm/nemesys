@@ -65,10 +65,11 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
                       fieldNumStart=0):
     """
     Visualization for recognized field type templates in message.
-    Abbreviate long zero sequences
+    Abbreviates long zero sequences.
 
     :param sequence:
     :param recognizedFields:
+    :param fieldNumStart: Start numbering of fields with this offset.
     :return:
     """
     sortedRecognizedFieldKeys = sorted(recognizedFields.keys(),
@@ -121,24 +122,30 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
     tabmod.PRESERVE_WHITESPACE = False
 
 
-def printFieldContext(segmentedMessages: Sequence[Sequence[TypedSegment]], recog: RecognizedField):
+def printFieldContext(trueSegmentedMessages: Sequence[Sequence[TypedSegment]], recognizedField: RecognizedField):
+    """
+    Get and print true segment context around a selected recognition
+
+    :param trueSegmentedMessages: true segments to use as reference for determining the context of recognizedField.
+    :param recognizedField: The field for which to print the context.
+    """
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # get and print segment context around a selected recognition (here: recog)
+    #
     posSegMatch = None  # first segment that starts at or after the recognized field
-    for sid, seg in enumerate(segmentedMessages[recog.message]):
-        if seg.offset > recog.position:
+    for sid, seg in enumerate(trueSegmentedMessages[recognizedField.message]):
+        if seg.offset > recognizedField.position:
             posSegMatch = sid
             break
     posSegEnd = None  # last segment that ends after the recognized field
-    for sid, seg in enumerate(segmentedMessages[recog.message]):
-        if seg.nextOffset > recog.end:
+    for sid, seg in enumerate(trueSegmentedMessages[recognizedField.message]):
+        if seg.nextOffset > recognizedField.end:
             posSegEnd = sid
             break
     if posSegMatch is not None:
         if posSegEnd is None:
             posSegEnd = posSegMatch
-        segmentFieldTypes(segmentedMessages[recog.message][posSegMatch - 2:posSegEnd + 1],
-                          {recog.template: [recog]}, posSegMatch - 2)
+        segmentFieldTypes(trueSegmentedMessages[recognizedField.message][posSegMatch - 2:posSegEnd + 1],
+                          {recognizedField.template: [recognizedField]}, posSegMatch - 2)
 
 
 def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
@@ -150,3 +157,6 @@ def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
     """
     print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
                         for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
+
+
+
