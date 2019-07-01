@@ -2,12 +2,15 @@
 Evaluation of field type clustering quality:
 
 Transform the output of the clustering process performed by characterize_fieldtypes.py
-into a table of cluster quality scores. It expects the input to be named clusterStatisticsHDBSCAN.csv
+into a table of cluster quality scores. It expects the input to be named segment-cluster-statistics.csv
+as defined in utils.evaluationHelpers.scStatsFile
 and outputs scoreTable.csv
 """
 
-import csv
+import csv, os
 from tabulate import tabulate
+
+from utils.evaluationHelpers import reportFolder, scStatsFile
 
 cols = [
     #   0           1           2               3               4          5           6
@@ -36,7 +39,7 @@ def typedrecallsums(clusterlist):
 
 if __name__ == '__main__':
     cstat = dict()
-    with open('clusterStatisticsHDBSCAN.csv', 'r') as csvfile:
+    with open(scStatsFile, 'r') as csvfile:
         cstatr = csv.DictReader(csvfile)
 
         for colheader in cols:
@@ -68,7 +71,7 @@ if __name__ == '__main__':
     scoretable = [ [ e[h] if h in e else None for h in scoreheaders ] for e in mcstat]
     print(tabulate(scoretable, scoreheaders, tablefmt="pipe"))
 
-    with open('scoreTable.csv', 'w') as scorefile:
+    with open(os.path.join(reportFolder, 'scoreTable.csv'), 'w') as scorefile:
         sfw = csv.writer(scorefile)
         sfw.writerow(scoreheaders)
         for line in scoretable:

@@ -306,15 +306,6 @@ class MultiMessagePlotter(MessagePlotter):
                             conlor if not colorPerLabel else unilabels.index(label)),
                         alpha=0.4, label=label)
 
-                # deduplicate labels
-                handles, labels = ax.get_legend_handles_labels()
-                newLabels, newHandles = [], []
-                for handle, label in zip(handles, labels):
-                    if label not in newLabels:
-                        newLabels.append(label)
-                        newHandles.append(handle)
-                ax.legend(newHandles, newLabels)
-
 
     def plotToSubfig(self, subfigid: Union[int, plt.Axes], values: Union[List, numpy.ndarray], **plotkwArgs):
         """
@@ -335,7 +326,14 @@ class MultiMessagePlotter(MessagePlotter):
 
     def writeOrShowFigure(self):
         for sf in self.axes:
-            sf.legend()
+            # deduplicate labels
+            handles, labels = sf.get_legend_handles_labels()
+            newLabels, newHandles = [], []
+            for handle, label in zip(handles, labels):
+                if label not in newLabels:
+                    newLabels.append(label)
+                    newHandles.append(handle)
+            sf.legend(newHandles, newLabels)
         super().writeOrShowFigure()
 
 

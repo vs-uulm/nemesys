@@ -80,6 +80,7 @@ if __name__ == '__main__':
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
 
+    # TODO filter 1-byte segments before clustering see src/fieldtype-aware_distances.py
     filteredClusters = list()
     for segments in clusters:
         # omit one-byte segments. Such clusters are not meaningful.

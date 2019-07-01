@@ -281,8 +281,18 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
             )
         ]
     """
+    from math import log
+    from .templates import Template
     print("Clustering segments...")
     noise, *clusters = clusterer.clusterSimilarSegments(False)
+
+    # extract "large" templates from noise that should rather be its own cluster
+    for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
+        freqThresh = log(len(clusterer.segments))
+        if isinstance(seg, Template):
+            if len(seg.baseSegments) > freqThresh:
+                clusters.append([noise.pop(idx)])  # .baseSegments
+
     print("{} clusters generated from {} segments".format(len(clusters), len(clusterer.segments)))
 
     segmentClusters = list()
@@ -295,15 +305,10 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
             outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
         segLengths.update(noiseSegLengths)
         noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
-        try:
-            segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-                analysisTitle, " ".join(outputLengths), numNoise),
-                                       [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
-                                        for cseg in noise] )) # ''
-        except:
-            # TODO debugging
-            import IPython
-            IPython.embed()
+        segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
+            analysisTitle, " ".join(outputLengths), numNoise),
+                                   [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
+                                    for cseg in noise] )) # ''
     for cnum, segs in enumerate(clusters):
         clusterDists = clusterer.distanceCalculator.distancesSubset(segs)
         typegroups = segments2types(segs)
@@ -319,8 +324,6 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
         for ftype, tsegs in typegroups.items():  # [label, segment]
             segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
         segmentClusters.append(segmentGroups)
-
-    # print(len(clusters), len(noise))
 
     segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
                                                     next(iter(segLengths)) if len(segLengths) == 1 else 'mixedamount',

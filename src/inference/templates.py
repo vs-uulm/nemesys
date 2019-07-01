@@ -1985,7 +1985,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         k, min_samples = self._maximumPositiveCurvature()
         print("dists of", self._distances.shape[0], "neighbors, k", k, "min_samples", min_samples)
 
-        # get minpts-nearest-neighbor distance:
+        # get k-nearest-neighbor distances:
         neighdists = self._knearestdistance(  # add a margin relative to the remaining interval to the number of neigbors
             round(k + (self._distances.shape[0] - 1 - k) * .2))
             # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
@@ -2013,43 +2013,105 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         return min_samples, epsilon
 
 
-    def _autoconfigureEvaluation(self):
+    def autoconfigureEvaluation(self, filename: str, markeps: float = False):
         """
         Auto configure the clustering parameters epsilon and minPts regarding the input data
 
         :return: minpts, epsilon
         """
-        pass
-        # # another alternative to get min_cluster_size estimation
-        # import math
-        # min_cluster_size = round(math.log(similarities.shape[0]))
+        import time, numpy
+        import matplotlib.pyplot as plt
+        from tabulate import tabulate
+        from math import ceil, log
+        from scipy.ndimage.filters import gaussian_filter1d
+        from kneed import KneeLocator
 
-        # # get mean of minpts-nearest-neighbors:
-        # neighdists = self._knearestmean(minpts)
-        # # it gives no significantly better results than the direct k-nearest distance,
-        # # but requires more computation.
+        from utils.baseAlgorithms import ecdf
 
-        # # knee calculation by rule of thumb
-        # kneeX = self._kneebyruleofthumb(neighdists)
-        # # result is far (too far) left of the actual knee
+        sigma = log(len(self.segments))
+        # k, min_samples = self._maximumPositiveCurvature()
+        # smoothknearest = dict()
+        # seconddiffMax = dict()
+        # maxD = 0
+        # maxK = 0
+        minD = 0
+        minK = None
+        minX = None
+        for curvK in range(0, int(len(self.segments) * 0.7)):
+            neighdists = self._knearestdistance(curvK)
+            knncdf = ecdf(neighdists, True)
+            smoothknn = gaussian_filter1d(knncdf[1], sigma)
+            # diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
+            diff2smooth = numpy.diff(smoothknn, 2)
+            mX = diff2smooth.argmin()
+            if minD > diff2smooth[mX]:
+                print(curvK, minD)
+                minD = diff2smooth[mX]
+                minK = curvK
+                minX = knncdf[0][mX+1]
 
-        # steepest-drop position:
-        # kneeX = numpy.ediff1d(neighdists).argmax()
-        # # better results than "any of the" knee values
+            # seconddiffMax[curvK] = seconddiff.max()
+            # if seconddiffMax[curvK] > maxD:
+            #     maxD = seconddiffMax[curvK]
+            #     maxK = curvK
 
-        # # DEBUG and TESTING
-        # #
-        # # plots of k-nearest-neighbor distance histogram and "knee"
-        # import matplotlib.pyplot as plt
+        k = minK
+        epsilon = minX
+        min_samples = sigma
+        print("selected k = {}; epsilon = {:.3f}; min_samples = {:.0f}".format(k, epsilon, min_samples))
+
+        # neighdists = self._knearestdistance(k)
+        # knncdf = ecdf(neighdists, False)
+        # kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
+        # epsilon = kneel.knee
+
+        # plots of k-nearest-neighbor distance histogram and "knee"
+        plt.rc('legend', frameon=False)
+        fig = plt.gcf()
+        fig.set_size_inches(16, 9)
+
+        numK = 100 # ceil(sigma**2))
+        minK = max(0, k - numK//2)
+        maxK = min( len(self.segments) - 1, k + numK//2)
+        for curvK in range(minK, maxK):
+            alpha = 1 if curvK == k else .4
+            neighdists = self._knearestdistance(curvK)
+            knncdf = ecdf(neighdists, True)
+
+            if curvK == k:
+                smoothknn = gaussian_filter1d(knncdf[1], sigma)
+                # seconddiff = numpy.gradient(knncdf[1])
+                diff1smooth = numpy.gradient(smoothknn)
+                diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
+                diff3smooth = numpy.gradient(numpy.gradient(numpy.gradient(smoothknn)))
+
+                plt.plot(knncdf[0], knncdf[1], alpha=alpha, label=curvK, color='lime')
+                plt.plot(knncdf[0], smoothknn, label="$g(\cdot)$", color='red')
+                # plt.plot(knncdf[0], seconddiff, linestyle="dashed", color='blue')
+                plt.plot(knncdf[0], diff1smooth * 10, linestyle="dashed", color='blue', label="$\Delta(g(\cdot))$")
+                plt.plot(knncdf[0], diff2smooth * 20, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
+                plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted", color='indigo', label="$\Delta^3(g(\cdot))$")
+                # plt.axvline(knncdf[0][diff2smooth.argmin()])
+
+                # plt.legend()
+                # plt.show()
+                # import IPython
+                # IPython.embed()
+
+            else:
+                plt.plot(knncdf[0], knncdf[1], alpha=alpha)
+        plt.axvline(epsilon, label="new eps {:.3f}".format(epsilon), linestyle="dashed", color='green')
+        plt.axvline(epsilon*8, label="new eps*8 {:.3f}".format(epsilon*8), linestyle="dashed", color='seagreen')
+        if markeps:
+            plt.axvline(markeps, label="old eps {:.3f}".format(markeps), linestyle="-.", color='orchid')
+            plt.axvline(markeps/2, label="old eps/2 {:.3f}".format(markeps/2), linestyle="dotted", color='darkmagenta')
+
+        plt.tight_layout(rect=[0,0,1,.95])
+        plt.legend()
+        plt.savefig(filename)
+
         # fig, ax = plt.subplots(1, 2)
-        #
         # axl, axr = ax.flat
-        #
-        # # for k in range(0, 100, 10):
-        # #     alpha = .4
-        # #     if k == minpts:
-        # #         alpha = 1
-        # #     plt.plot(sorted([dpn[k] for nid, dpn in npn]), alpha=alpha, label=k)
         #
         # # farthest
         # # plt.plot([max([dpn[k] for nid, dpn in npn]) for k in range(0, len(npn)-1)], alpha=.4)
@@ -2058,7 +2120,6 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # disttril = numpy.tril(self._distances)
         # alldist = [e for e in disttril.flat if e > 0]
         # axr.hist(alldist, 50)
-        #
         # # plt.plot(smoothdists, alpha=.8)
         # # axl.axvline(minpts, linestyle='dashed', color='red', alpha=.4)
         # axl.axvline(steepslopeK, linestyle='dotted', color='blue', alpha=.4)
@@ -2069,25 +2130,18 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # # plt.plot(range(len(numpy.ediff1d(smoothdists))), numpy.ediff1d(smoothdists), linestyle='dotted')
         # # plt.plot(range(len(numpy.ediff1d(neighdists))), numpy.ediff1d(neighdists), linestyle='dotted')
         # axl.legend()
-        # # plt.text(0,0,'max {:.3f}, mean {:.3f}'.format(self.distances.max(), self.distances.mean()))
-        # import time
-        # # plt.show()
-        # plt.savefig("reports/k-nearest_distance_{:0.0f}.pdf".format(time.time()))
-        # plt.close('all')
-        # plt.clf()
-        #
-        # # print(kneeX, smoothdists[kneeX], neighdists[kneeX])
-        # # print(tabulate([neighdists[:10]], headers=[i for i in range(10)]))
-        # # print(tabulate([dpn[:10] for nid, dpn in npn], headers=[i for i in range(10)]))
-        # # import IPython; IPython.embed()
-        # #
-        # # DEBUG and TESTING
 
-        # return minpts, epsilon
+        plt.close('all')
+        plt.clf()
+
+        return min_samples, epsilon
 
 
     def _knearestmean(self, k: int):
         """
+        it gives no significantly better results than the direct k-nearest distance,
+        but requires more computation.
+
         :param k: range of neighbors to be selected
         :return: The mean of the k-nearest neighbors for all the distances of this clusterer instance.
         """
@@ -2116,6 +2170,8 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         """
         according to the paper
         (!? this is the wrong reference ?!) https://www.sciencedirect.com/science/article/pii/S0169023X06000218
+
+        result is far (too far) left of the actual knee
 
         :param neighdists: k-nearest-neighbor distances
         :return: x coordinate of knee point on the distance distribution of the parameter neighdists

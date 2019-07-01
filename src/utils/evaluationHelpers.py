@@ -82,7 +82,7 @@ epsdefault = 2.4
 reportFolder = "reports"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
 ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-clustering-statistics.csv')
-
+scStatsFile = os.path.join(reportFolder, 'segment-cluster-statistics.csv')
 
 
 
@@ -241,7 +241,8 @@ def writeCollectiveClusteringStaticstics(
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
-                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False, typeDict = None,
+                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False,
+                          typeDict: Dict[str, List[MessageSegment]] = None,
                           isInteractive=False):
     """
     This is a not awfully important helper function saving the writing of a few lines code.
@@ -256,9 +257,26 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     """
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
-    numSegs = 0
+
     if typeDict:  # calculate conciseness, correctness = precision, and recall
-        clusters = [segList for label, segList in segmentGroups]
+        import os, csv
+        from collections import Counter
+        from inference.templates import Template
+
+        # mapping from each segment in typeDict to the corresponding cluster and true type,
+        # considering representative templates
+        segment2type = {seg: ft for ft, segs in typeDict.items() for seg in segs}
+        clusters = list()
+        for label, segList in segmentGroups:
+            cluster = list()
+            for tl, seg in segList:
+                if isinstance(seg, Template):
+                    cluster.extend((tl, bs) for bs in seg.baseSegments)
+                else:
+                    cluster.append((tl, seg))
+            clusters.append(cluster)
+
+        numSegs = len(segment2type)
         prList = []
         noise = None
         if 'Noise' in segmentGroups[0][0]:
@@ -269,18 +287,20 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
         numFtypes = len(typeDict)
         conciseness = numClusters / numFtypes
 
-        from collections import Counter
         for clusterSegs in clusters:
-            typeFrequency = Counter([ft for ft, seg in clusterSegs])
-            mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
-            numMFToverall = len(typeDict[mostFreqentType.split(':', 2)[0]])
+            # type from typeDict
+            typeKey, numMFTinCluster = Counter(segment2type[seg] for tl, seg in clusterSegs).most_common(1)[0]
+            # number of segments for the prevalent type in the trace
+            numMFToverall = len(typeDict[typeKey])
             numSegsinCuster = len(clusterSegs)
-            numSegs += numSegsinCuster
 
             precision = numMFTinCluster / numSegsinCuster
             recall = numMFTinCluster / numMFToverall
 
-            prList.append((mostFreqentType, precision, recall, numSegsinCuster))
+            # # rather do not repeat the amount in the label
+            # mostFrequentType = "{}: {} Seg.s".format(typeKey, numMFTinCluster)
+            mostFrequentType = typeKey
+            prList.append((mostFrequentType, precision, recall, numSegsinCuster))
 
         mmp.textInEachAx(["precision = {:.2f}\n"  # correctness
                           "recall = {:.2f}".format(pr[1], pr[2]) if pr else None for pr in prList])
@@ -288,21 +308,21 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
         # noise statistics
         if noise:
             numNoise = len(noise)
-            numSegs += numNoise
             ratioNoise = numNoise / numSegs
             noiseTypes = {ft for ft, seg in noise}
 
-        import os, csv
-        clStatsFile = os.path.join('reports/', 'clusterStatisticsHDBSCAN.csv')
-        csvWriteHead = False if os.path.exists(clStatsFile) else True
-        with open(clStatsFile, 'a') as csvfile:
+
+        csvWriteHead = False if os.path.exists(scStatsFile) else True
+        with open(scStatsFile, 'a') as csvfile:
             clStatscsv = csv.writer(csvfile)  # type: csv.writer
             if csvWriteHead:
                 # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
-                clStatscsv.writerow(['run_title', 'trace', 'conciseness', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
+                clStatscsv.writerow(['run_title', 'trace', 'conciseness', 'most_freq_type',
+                                     'precision', 'recall', 'cluster_size'])
             if noise:
                 # noinspection PyUnboundLocalVariable
-                clStatscsv.writerow([pagetitle, specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), ratioNoise, numNoise])
+                clStatscsv.writerow([pagetitle, specimens.pcapFileName, conciseness, 'NOISE',
+                                     str(noiseTypes), ratioNoise, numNoise])
             clStatscsv.writerows([
                 (pagetitle, specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
             ])
@@ -316,11 +336,13 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
     """
     Determine group label of an segment from deep hierarchy of segment clusters/groups.
 
+    A more advanced variant of `numpy.array([seg.fieldtype for seg in tg.segments])`
+
     see #segments2clusteredTypes()
 
-    :param segGrpHier:
-    :param seg:
-    :return:
+    :param segGrpHier: Hierarchy of segment groups
+    :param seg: The segment to label
+    :return: The label of the cluster that the seg is member of
     """
     for name, grp in segGrpHier[0][1]:
         if seg in (s for t, s in grp):

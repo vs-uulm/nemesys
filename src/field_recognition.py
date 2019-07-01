@@ -507,6 +507,11 @@ if __name__ == '__main__':
         print()
         print(tabulate(mstattab, headers=("ftName", "truePos", "falsePos", "falseNeg")))
         print()
+        with open(os.path.join(reportFolder,
+                               "recognized-fields-{}.csv".format(os.path.splitext(pcapbasename)[0])), "w") as csvf:
+            csvw = csv.writer(csvf)
+            csvw.writerow(("ftName", "truePos", "falsePos", "falseNeg"))
+            csvw.writerows(mstattab)
         # TODO for reference remove from the false positives/negatives of id and flags all those
         #  that match a true segment of type int (and id?) of one or two bytes length
         # # compare true and recognized fieldtypes of false positives.

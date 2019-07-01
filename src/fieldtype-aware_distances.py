@@ -10,8 +10,9 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
-from os.path import isfile, basename
+from os.path import isfile, basename, splitext
 from itertools import chain
+from matplotlib import pyplot as plt
 import numpy
 
 from utils.baseAlgorithms import tril
@@ -38,6 +39,24 @@ distance_method = 'canberra'
 
 
 
+besteps = {
+    "smb_SMIA20111010-one_deduped-100.pcap": 1.169,
+    "nbns_SMIA20111010-one_deduped-1000.pcap": 1.199,
+    "nbns_SMIA20111010-one_deduped-100.pcap": 1.226,
+    "smb_SMIA20111010-one_deduped-1000.pcap": 1.543,
+    "dns_ictf2010_deduped-982-1000.pcap": 1.141,
+    "dns_ictf2010_deduped-100.pcap": 0.939,
+    "dhcp_SMIA2011101X_deduped-100.pcap": 1.273,
+    "dhcp_SMIA2011101X_deduped-1000.pcap": 1.397,
+    "ntp_SMIA-20111010_deduped-1000.pcap": 1.581,
+    "ntp_SMIA-20111010_deduped-100.pcap": 1.523
+}
+
+
+
+
+epsfactors = (1, 1.4, 1.6, 2)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -46,28 +65,18 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interactive', help='Show interactive plot instead of writing output to file and '
                                                     'open ipython prompt after finishing the analysis.',
                         action="store_true")
-
-    parser.add_argument('--epsilon', '-e', help='Parameter epsilon for the DBSCAN clusterer.', type=float, default=epsdefault)
+    parser.add_argument('-f', '--epsfactor', help='Vary epsilon by factors ' + repr(epsfactors), action="store_true")
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
-    # if args.isolengths and args.iterate:
-    #     print('Iterating clustering parameters over isolated-lengths fields is not implemented.')
-    #     exit(2)
-    if args.epsilon != parser.get_default('epsilon') and (args.isolengths or args.iterate):
-        print('Setting epsilon is not supported for clustering over isolated-lengths fields and parameter iteration.')
-        exit(2)
 
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
 
     pcapbasename = basename(args.pcapfilename)
     print("Trace:", pcapbasename)
-    epsilon = args.epsilon  # TODO make "not set" epsilon and "default" distinguishable
-    if args.epsilon == epsdefault and pcapbasename in epspertrace:
-        epsilon = epspertrace[pcapbasename]
 
     # dissect and label messages
     print("Load messages...")
@@ -78,50 +87,67 @@ if __name__ == '__main__':
     print("Segmenting messages...")
     # produce TypedSegments from dissection field information
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    segments = list(chain.from_iterable(segmentedMessages))
+    # filter 1-byte segments before clustering
+    segments = [seg for seg in chain.from_iterable(segmentedMessages) if seg.length > 1 and set(seg.values) != {0} ]
 
     print("Calculate distances...")
-    # dc = DelegatingDC(segments)
-    dc = DistanceCalculator(segments)
+    dc = DelegatingDC(segments)
+    # dc = DistanceCalculator(segments)
 
     print("Clustering...")
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
     # use DBSCAN
-    clusterer = DBSCANsegmentClusterer(dc, eps=epsilon, min_samples=20)
-    segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
-    # re-extract cluster labels for segments
-    clusterer.getClusterLabels()
-    labels = numpy.array([
-        labelForSegment(segmentGroups, seg) for seg in dc.segments
-    ])
+    clusterer = DBSCANsegmentClusterer(dc)
 
-    titleFormat = "{} ({}, {}-{})".format(
-        segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
+    titleFormat = "{} ({}-{})".format(
+        distance_method, dc.thresholdFunction.__name__,
         "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
 
-    print("Plot distances...")
-    sdp = DistancesPlotter(specimens, 'distances-' + titleFormat,
-                           args.interactive)
-    # old: 'mixedlength', analysisTitle, distance_method, tg.clusterer if tg.clusterer else 'n/a'
-    # sdp.plotSegmentDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-    sdp.plotSegmentDistances(dc, labels)
-    sdp.writeOrShowFigure()
-    del sdp
+    # TODO hier gehts weiter
+    clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename),
+                                      besteps[pcapbasename]) # clusterer.eps)
 
-    hstplt = SingleMessagePlotter(specimens, 'histo-distance-' + titleFormat, args.interactive)
-    hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
+    # Histogram of all the distances between the segments
+    hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
+    # hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
+    knn = [dc.neigbors(seg)[0][1] for seg in dc.segments]
+    # print(knn)
+    hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
+    plt.axvline(besteps[pcapbasename], label=besteps[pcapbasename], color="darkmagenta")
+    plt.axvline(besteps[pcapbasename]/2, label=besteps[pcapbasename]/2, color="orchid", linestyle="dotted")
     hstplt.writeOrShowFigure()
-    del hstplt
+    plt.clf()
 
-    print("Prepare output...")
-    typeDict = segments2types(segments)
-    for pagetitle, segmentClusters in segmentGroups:
-        plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
-                              True, typeDict, args.interactive)
+    # TODO hier gehts weiter
+    exit()
 
+    # vary epsilon
+    autoeps = clusterer.eps
+    for epsfactor in epsfactors if args.epsfactor else (1,):
+        clusterer.eps = epsfactor * autoeps
+        segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
 
+        # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
+        labels = numpy.array([
+            labelForSegment(segmentGroups, seg) for seg in dc.segments
+        ])
 
+        titleFormat = "{} ({}, {}-{})".format(
+            segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
+            "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
+
+        print("Plot distances...")
+        sdp = DistancesPlotter(specimens, 'distances-' + titleFormat, False)
+        sdp.plotSegmentDistances(dc, labels)
+        sdp.writeOrShowFigure()
+        del sdp
+
+        print("Prepare output...")
+        typeDict = segments2types(segments)
+        for pagetitle, segmentClusters in segmentGroups:
+            plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
+                                  True, typeDict, False)
 
 
 
