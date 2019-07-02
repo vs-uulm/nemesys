@@ -1925,7 +1925,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             return numpy.zeros_like(self._distances[0], int)
 
         dbscan = sklearn.cluster.DBSCAN(eps=self.eps, min_samples=self.min_samples, metric='precomputed')
-        print("DBSCAN epsilon: {:0.3f}, minpts: {}".format(self.eps, self.min_samples))
+        print("DBSCAN epsilon: {:0.3f}, minpts: {}".format(self.eps, int(self.min_samples)))
         dbscan.fit(self._distances)
         return dbscan.labels_
 
@@ -2044,7 +2044,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
-        epsilon = kneel.knee
+        epsilon = kneel.knee * 0.8
 
         print("eps {:0.3f} autoconfigured (Kneedle on ECDF) from k {}".format(epsilon, k))
         return min_samples, epsilon
@@ -2098,9 +2098,9 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         neighdists = self._knearestdistance(k)
         knncdf = ecdf(neighdists, True)
-        smoothknn = gaussian_filter1d(knncdf[1], sigma)
+        # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         kneel = KneeLocator(knncdf[0], smoothknn, curve='concave', direction='increasing')
-        epsilon = kneel.knee
+        epsilon = kneel.knee * 0.8
 
         print("selected k = {}; epsilon = {:.3f}; min_samples = {:.0f}".format(k, epsilon, min_samples))
 
@@ -2126,8 +2126,6 @@ class DBSCANsegmentClusterer(AbstractClusterer):
                 diff2smooth = numpy.diff(smoothknn, 2)
                 # diff3smooth = numpy.gradient(numpy.gradient(numpy.gradient(smoothknn)))
 
-                abThresh = 0.1
-
                 diffknn = numpy.diff(smoothknn)
                 mX = diffknn.argmax()
                 mQ = 0.1 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
@@ -2135,30 +2133,28 @@ class DBSCANsegmentClusterer(AbstractClusterer):
                 b = next(xB for xB in range(mX, len(knncdf[0])-1) if diffknn[xB] < mQ or xB == len(knncdf[0]) - 2)
                 # tozerone = cdist(numpy.array(knncdf).transpose(), numpy.array([[0, 1]])).argmin()
 
+                diffshrink = 0.05
+
                 plt.plot(knncdf[0], knncdf[1], alpha=alpha, label=curvK, color='lime')
                 plt.plot(knncdf[0], smoothknn, label="$g(\cdot)$", color='red')
-                plt.plot(knncdf[0][1:], 0.1 * diffknn / numpy.diff(knncdf[0]), linestyle="dashed", color='blue',
+                plt.plot(knncdf[0][1:], diffshrink * diffknn / numpy.diff(knncdf[0]), linestyle="dashed", color='blue',
                          label="$\Delta(g(\cdot))$")
                 plt.plot(knncdf[0][2:], 20 * diff2smooth, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
-                plt.scatter(knncdf[0][a+1], abThresh*diffknn[a] / (knncdf[0][a+1] - knncdf[0][a]),
+                plt.scatter(knncdf[0][a+1], diffshrink * diffknn[a] / (knncdf[0][a+1] - knncdf[0][a]),
                             label="a = {:.3f}".format(knncdf[0][a+1]))
-                plt.scatter(knncdf[0][b+1], abThresh*diffknn[b] / (knncdf[0][b+1] - knncdf[0][b]),
+                plt.scatter(knncdf[0][b+1], diffshrink * diffknn[b] / (knncdf[0][b+1] - knncdf[0][b]),
                             label="b = {:.3f}".format(knncdf[0][b+1]) )
-                # plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted", color='indigo', label="$\Delta^3(g(\cdot))$")
-                plt.axvline(knncdf[0][diff2smooth.argmin()])
-
-                # plt.legend()
-                # plt.show()
-                # import IPython
-                # IPython.embed()
+                # plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted",
+                #             label="$\Delta^3(g(\cdot))$")
+                plt.axvline(knncdf[0][diff2smooth.argmin()], color='indigo', label="$min(\Delta^2(\cdot))$")
 
             else:
                 plt.plot(knncdf[0], knncdf[1], alpha=alpha)
-        plt.axvline(epsilon, label="new eps {:.3f}".format(epsilon), linestyle="dashed", color='green')
-        plt.axvline(sqrt(epsilon), label="sqrt(neps) {:.3f}".format(sqrt(epsilon)),
-                    linestyle="dashed", color='lawngreen')
+        plt.axvline(epsilon, label="alt eps {:.3f}".format(epsilon), linestyle="dashed", color='lawngreen')
+        # plt.axvline(sqrt(epsilon), label="sqrt(neps) {:.3f}".format(sqrt(epsilon)),
+        #             linestyle="dashed", color='green')
         if markeps:
-            plt.axvline(markeps, label="old eps {:.3f}".format(markeps), linestyle="-.", color='orchid')
+            plt.axvline(markeps, label="applied eps {:.3f}".format(markeps), linestyle="-.", color='orchid')
 
         plt.tight_layout(rect=[0,0,1,.95])
         plt.legend()

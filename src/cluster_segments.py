@@ -3,7 +3,7 @@ segment messages by NEMESYS and cluster
 """
 
 import argparse, IPython
-from os.path import isfile, basename
+from os.path import isfile, basename, join, splitext
 from math import log
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     #
     # noinspection PyUnboundLocalVariable
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma #, True
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True  # , True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -80,23 +80,24 @@ if __name__ == '__main__':
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
 
-    # TODO filter 1-byte segments before clustering see src/fieldtype-aware_distances.py
-    filteredClusters = list()
-    for segments in clusters:
-        # omit one-byte segments. Such clusters are not meaningful.
-        if max({seg.length for seg in segments}) < 2:
-            print("Skip cluster due to length < 2. It has", len(segments), "Segments")
-        else:
-            filteredClusters.append(segments)
-
-
     fTypeTemplates = list()
-    for cLabel, segments in enumerate(filteredClusters):
+    for cLabel, segments in enumerate(clusters):
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
         fTypeTemplates.append(ftype)
-        print("\nCluster", cLabel, "Segments", len(segments))
-        print({seg.bytes for seg in segments})
+        with open(join(reportFolder, "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"), "a") as segfile:
+            segcsv = csv.writer(segfile)
+            segcsv.writerows([
+                [],
+                ["# Cluster", cLabel, "Segments", len(segments)],
+                ["-"*10]*4,
+            ])
+            segcsv.writerows(
+                {(seg.bytes.hex(), seg.bytes) for seg in segments}
+            )
+        # print("\nCluster", cLabel, "Segments", len(segments))
+        # print({seg.bytes for seg in segments})
+
         # for seg in segments:
         #     # # sometimes raises: ValueError: On entry to DLASCL parameter number 4 had an illegal value
         #     # try:
@@ -124,9 +125,9 @@ if __name__ == '__main__':
     if withPlots:
         print("Plot distances...")
         sdp = DistancesPlotter(specimens,
-                               'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{}".format(
-                                   clusterer.eps, clusterer.min_samples), False)
-        clustermask = {segid: cluN for cluN, segL in enumerate(filteredClusters) for segid in dc.segments2index(segL)}
+                               'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+                                   clusterer.eps, int(clusterer.min_samples)), False)
+        clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
         sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
         sdp.writeOrShowFigure()

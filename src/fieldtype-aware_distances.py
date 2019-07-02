@@ -37,26 +37,25 @@ analysisTitle = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 
-
-
+# for evaluation
 besteps = {
-    "smb_SMIA20111010-one_deduped-100.pcap": 1.169,
-    "nbns_SMIA20111010-one_deduped-1000.pcap": 1.199,
-    "nbns_SMIA20111010-one_deduped-100.pcap": 1.226,
-    "smb_SMIA20111010-one_deduped-1000.pcap": 1.543,
-    "dns_ictf2010_deduped-982-1000.pcap": 1.141,
-    "dns_ictf2010_deduped-100.pcap": 0.939,
-    "dhcp_SMIA2011101X_deduped-100.pcap": 1.273,
-    "dhcp_SMIA2011101X_deduped-1000.pcap": 1.397,
-    "ntp_SMIA-20111010_deduped-1000.pcap": 1.581,
-    "ntp_SMIA-20111010_deduped-100.pcap": 1.523
+    "dhcp_SMIA2011101X_deduped-100.pcap": 0.188,
+    "dhcp_SMIA2011101X_deduped-1000.pcap": 0.251,
+    "dns_ictf2010_deduped-100.pcap": 0.483,
+    "dns_ictf2010_deduped-982-1000.pcap": 0.167,
+    "nbns_SMIA20111010-one_deduped-100.pcap": 0.346,
+    "nbns_SMIA20111010-one_deduped-1000.pcap": 0.400,
+    "ntp_SMIA-20111010_deduped-100.pcap": 0.340,
+    "ntp_SMIA-20111010_deduped-1000.pcap": 0.351,
+    "smb_SMIA20111010-one_deduped-100.pcap": 0.259,
+    "smb_SMIA20111010-one_deduped-1000.pcap": 0.242,
 }
 
 
 
 
 # epsfactors = (1, 1.4, 1.6, 2)
-epsfactors = (1, 0.8, 1.2)
+epsfactors = (1, 0.9, 1.1)
 
 
 if __name__ == '__main__':

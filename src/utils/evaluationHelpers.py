@@ -475,7 +475,7 @@ def calcHexDist(hexA, hexB):
 
 
 def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
-                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, disableCache=False) \
+                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filter=False, disableCache=False) \
         -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
         float, float]:
     """
@@ -483,6 +483,8 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
 
     >>> chainedSegments = dc.rawSegments
 
+
+    :param filter: Filter out one-byte segments and such, just consisting of zeros.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
     :return:
     """
@@ -493,7 +495,8 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     # noinspection PyUnboundLocalVariable
     tokenparm = tokenizer if tokenizer != "nemesys" else \
         "{}{:.0f}".format(tokenizer, sigma * 10)
-    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
+    dccachefn = 'cache-dc-{}-{}-{}-{}.{}'.format(analysisTitle, tokenparm, "filtered" if filter else "all",
+                                                 pcapName, 'ddc')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if disableCache or not os.path.exists(dccachefn):
         # dissect and label messages
@@ -523,8 +526,13 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         segmentationTime = time.time() - segmentationTime
         print("done.")
 
-        # noinspection PyUnboundLocalVariable
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
+        if filter:
+            # noinspection PyUnboundLocalVariable
+            chainedSegments = [seg for seg in chain.from_iterable(segmentedMessages) if
+                        seg.length > 1 and set(seg.values) != {0}]
+        else:
+            # noinspection PyUnboundLocalVariable
+            chainedSegments = list(chain.from_iterable(segmentedMessages))
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
