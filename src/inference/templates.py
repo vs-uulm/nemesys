@@ -1942,7 +1942,9 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         :return: min_samples, epsilon
         """
-        return self._autoconfigureKneedle()
+        # return self._autoconfigureKneedle()
+        return self._autoconfigureECDFKneedle()
+
 
 
     def _autoconfigureMPC(self):
@@ -1955,7 +1957,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         from utils.baseAlgorithms import autoconfigureDBSCAN
         neighbors = [self.distanceCalculator.neigbors(seg) for seg in self.distanceCalculator.segments]
         epsilon, min_samples, k = autoconfigureDBSCAN(neighbors)
-        print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
+        print("eps {:0.3f} autoconfigured (MPC) from k {}".format(epsilon, k))
         return min_samples, epsilon
 
 
@@ -1983,7 +1985,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         """
         # min_samples, k = self.steepestSlope()
         k, min_samples = self._maximumPositiveCurvature()
-        print("dists of", self._distances.shape[0], "neighbors, k", k, "min_samples", min_samples)
+        print("KneeLocator: dists of", self._distances.shape[0], "neighbors, k", k, "min_samples", min_samples)
 
         # get k-nearest-neighbor distances:
         neighdists = self._knearestdistance(k)
@@ -1991,7 +1993,6 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             # round(k + (self._distances.shape[0] - 1 - k) * .2))
             # # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
 
-        print("KneeLocator")
         # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
         from kneed import KneeLocator
         kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='increasing')
@@ -2014,18 +2015,52 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         return min_samples, epsilon
 
 
+    def _autoconfigureECDFKneedle(self):
+        from math import log, ceil
+        from scipy.ndimage.filters import gaussian_filter1d
+        from kneed import KneeLocator
+        from utils.baseAlgorithms import ecdf
+
+        sigma = log(len(self.segments)) / 2
+        min_samples = sigma * 2
+        minD = 1
+        minK = None
+        minX = None
+        for curvK in range(0, ceil(log(len(self.segments) ** 2))):
+            neighdists = self._knearestdistance(curvK)
+            knncdf = ecdf(neighdists, True)
+            smoothknn = gaussian_filter1d(knncdf[1], sigma)
+            diff2smooth = numpy.diff(smoothknn, 2) / numpy.diff(knncdf[0])[1:]
+            mX = diff2smooth.argmin()
+            if minD > diff2smooth[mX]:
+                print(curvK, minD)
+                minD = diff2smooth[mX]
+                minK = curvK
+                minX = knncdf[0][mX+1]
+        k = minK
+        # epsilon = minX
+
+        neighdists = self._knearestdistance(k)
+        knncdf = ecdf(neighdists, True)
+        # smoothknn = gaussian_filter1d(knncdf[1], sigma)
+        kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
+        epsilon = kneel.knee
+
+        print("eps {:0.3f} autoconfigured (Kneedle on ECDF) from k {}".format(epsilon, k))
+        return min_samples, epsilon
+
+
     def autoconfigureEvaluation(self, filename: str, markeps: float = False):
         """
         Auto configure the clustering parameters epsilon and minPts regarding the input data
 
         :return: minpts, epsilon
         """
-        import time, numpy
+        import numpy
         import matplotlib.pyplot as plt
         from tabulate import tabulate
         from math import ceil, log, sqrt
         from scipy.ndimage.filters import gaussian_filter1d
-        from scipy.spatial.distance import cdist
         from kneed import KneeLocator
 
         from utils.baseAlgorithms import ecdf
@@ -2039,30 +2074,18 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         minD = 1
         minK = None
         minX = None
-        for curvK in range(0, int(len(self.segments) * 0.7)):
+        # just the first... int(len(self.segments) * 0.7)
+        for curvK in range(0, ceil(log(len(self.segments) ** 2))):
             neighdists = self._knearestdistance(curvK)
             knncdf = ecdf(neighdists, True)
             smoothknn = gaussian_filter1d(knncdf[1], sigma)
-            diffknn = numpy.diff(smoothknn)
-            mX = diffknn.argmax()
-            mQ = 0.03 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
-            a = next(knncdf[0][xA+1] for xA in range(mX, -1, -1) if diffknn[xA] < mQ or xA == 0)
-            b = next(knncdf[0][xB+1] for xB in range(mX, len(knncdf[0])-1) if diffknn[xB] < mQ or xB == len(knncdf[0])-2)
-            slopeAperture = b - a
-            if slopeAperture < minD:
-                # print(curvK, minD)
-                minD = slopeAperture
+            diff2smooth = numpy.diff(smoothknn, 2) / numpy.diff(knncdf[0])[1:]
+            mX = diff2smooth.argmin()
+            if minD > diff2smooth[mX]:
+                print(curvK, minD)
+                minD = diff2smooth[mX]
                 minK = curvK
-                # minX = knncdf[0][tozerone]
-                minX = b
-
-            # diff2smooth = numpy.diff(smoothknn, 2)
-            # mX = diff2smooth.argmin()
-            # if minD > diff2smooth[mX]:
-            #     print(curvK, minD)
-            #     minD = diff2smooth[mX]
-            #     minK = curvK
-            #     minX = knncdf[0][mX+1]
+                minX = knncdf[0][mX+1]
 
             # seconddiffMax[curvK] = seconddiff.max()
             # if seconddiffMax[curvK] > maxD:
@@ -2070,15 +2093,19 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             #     maxK = curvK
 
         k = minK
-        epsilon = minX
+        # epsilon = minX
         min_samples = sigma*2
+
+        neighdists = self._knearestdistance(k)
+        knncdf = ecdf(neighdists, True)
+        smoothknn = gaussian_filter1d(knncdf[1], sigma)
+        kneel = KneeLocator(knncdf[0], smoothknn, curve='concave', direction='increasing')
+        epsilon = kneel.knee
+
         print("selected k = {}; epsilon = {:.3f}; min_samples = {:.0f}".format(k, epsilon, min_samples))
 
-        # neighdists = self._knearestdistance(k)
-        # knncdf = ecdf(neighdists, False)
-        # kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
-        # epsilon = kneel.knee
 
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         # plots of k-nearest-neighbor distance histogram and "knee"
         plt.rc('legend', frameon=False)
         fig = plt.gcf()
@@ -2096,29 +2123,29 @@ class DBSCANsegmentClusterer(AbstractClusterer):
                 smoothknn = gaussian_filter1d(knncdf[1], sigma)
 
                 # diff1smooth = numpy.gradient(smoothknn)
-                # diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
+                diff2smooth = numpy.diff(smoothknn, 2)
                 # diff3smooth = numpy.gradient(numpy.gradient(numpy.gradient(smoothknn)))
+
+                abThresh = 0.1
 
                 diffknn = numpy.diff(smoothknn)
                 mX = diffknn.argmax()
-                mQ = 0.03 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
+                mQ = 0.1 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
                 a = next(xA for xA in range(mX, -1, -1) if diffknn[xA] < mQ or xA == 0)
                 b = next(xB for xB in range(mX, len(knncdf[0])-1) if diffknn[xB] < mQ or xB == len(knncdf[0]) - 2)
                 # tozerone = cdist(numpy.array(knncdf).transpose(), numpy.array([[0, 1]])).argmin()
 
                 plt.plot(knncdf[0], knncdf[1], alpha=alpha, label=curvK, color='lime')
                 plt.plot(knncdf[0], smoothknn, label="$g(\cdot)$", color='red')
-                # plt.plot(knncdf[0], seconddiff, linestyle="dashed", color='blue')
-                plt.plot(knncdf[0][1:], 0.05* diffknn / numpy.diff(knncdf[0]), linestyle="dashed", color='blue',
+                plt.plot(knncdf[0][1:], 0.1 * diffknn / numpy.diff(knncdf[0]), linestyle="dashed", color='blue',
                          label="$\Delta(g(\cdot))$")
-                # plt.plot(knncdf[0], diff2smooth * 20, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
-                plt.scatter(knncdf[0][a+1], 0.05*diffknn[a] / (knncdf[0][a+1] - knncdf[0][a]),
+                plt.plot(knncdf[0][2:], 20 * diff2smooth, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
+                plt.scatter(knncdf[0][a+1], abThresh*diffknn[a] / (knncdf[0][a+1] - knncdf[0][a]),
                             label="a = {:.3f}".format(knncdf[0][a+1]))
-                plt.scatter(knncdf[0][b+1], 0.05*diffknn[b] / (knncdf[0][b+1] - knncdf[0][b]),
+                plt.scatter(knncdf[0][b+1], abThresh*diffknn[b] / (knncdf[0][b+1] - knncdf[0][b]),
                             label="b = {:.3f}".format(knncdf[0][b+1]) )
-                # plt.scatter(knncdf[0][tozerone], knncdf[1][tozerone], label="nearest to (0,1)")
                 # plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted", color='indigo', label="$\Delta^3(g(\cdot))$")
-                # plt.axvline(knncdf[0][diff2smooth.argmin()])
+                plt.axvline(knncdf[0][diff2smooth.argmin()])
 
                 # plt.legend()
                 # plt.show()

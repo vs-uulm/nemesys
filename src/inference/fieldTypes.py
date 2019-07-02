@@ -148,7 +148,7 @@ class FieldTypeMemento(BaseTypeMemento):
         covariance matrix contained in this object.
 
         Mahalanobis distance measures the distance of a vector from the mean in terms of the multivariate pendent to
-        the standard deviation: https://blogs.sas.com/content/iml/2012/02/15/what-is-mahalanobis-distance.html
+        the standard deviation: zoter
 
         :param vector: The vector of which the distance to the mean shall be calculated.
         :return: The Mahalanobis distance between the field type mean and the given vector.

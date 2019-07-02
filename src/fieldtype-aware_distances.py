@@ -106,19 +106,19 @@ if __name__ == '__main__':
         "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
 
     # TODO hier gehts weiter
-    # clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename),
-    #                                   besteps[pcapbasename]) # clusterer.eps)
+    clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename))
+                                      # besteps[pcapbasename]) # clusterer.eps)
 
-    # # Histogram of all the distances between the segments
-    # hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
-    # # hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
-    # knn = [dc.neigbors(seg)[0][1] for seg in dc.segments]
-    # # print(knn)
-    # hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
-    # plt.axvline(besteps[pcapbasename], label=besteps[pcapbasename], color="darkmagenta")
-    # plt.axvline(besteps[pcapbasename]/2, label=besteps[pcapbasename]/2, color="orchid", linestyle="dotted")
-    # hstplt.writeOrShowFigure()
-    # plt.clf()
+    # Histogram of all the distances between the segments
+    hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
+    # hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
+    knn = [dc.neigbors(seg)[0][1] for seg in dc.segments]
+    # print(knn)
+    hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
+    plt.axvline(besteps[pcapbasename], label=besteps[pcapbasename], color="darkmagenta")
+    plt.axvline(besteps[pcapbasename]/2, label=besteps[pcapbasename]/2, color="orchid", linestyle="dotted")
+    hstplt.writeOrShowFigure()
+    plt.clf()
 
     # TODO hier gehts weiter
     # exit()
