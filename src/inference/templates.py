@@ -1924,7 +1924,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         if numpy.count_nonzero(self._distances) == 0:  # the distance matrix contains only identical segments
             return numpy.zeros_like(self._distances[0], int)
 
-        dbscan = sklearn.cluster.DBSCAN(eps=self.eps, min_samples=self.min_samples)
+        dbscan = sklearn.cluster.DBSCAN(eps=self.eps, min_samples=self.min_samples, metric='precomputed')
         print("DBSCAN epsilon: {:0.3f}, minpts: {}".format(self.eps, self.min_samples))
         dbscan.fit(self._distances)
         return dbscan.labels_
@@ -1986,9 +1986,10 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         print("dists of", self._distances.shape[0], "neighbors, k", k, "min_samples", min_samples)
 
         # get k-nearest-neighbor distances:
-        neighdists = self._knearestdistance(  # add a margin relative to the remaining interval to the number of neigbors
-            round(k + (self._distances.shape[0] - 1 - k) * .2))
-            # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
+        neighdists = self._knearestdistance(k)
+            # # add a margin relative to the remaining interval to the number of neigbors
+            # round(k + (self._distances.shape[0] - 1 - k) * .2))
+            # # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
 
         print("KneeLocator")
         # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
@@ -2022,33 +2023,46 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         import time, numpy
         import matplotlib.pyplot as plt
         from tabulate import tabulate
-        from math import ceil, log
+        from math import ceil, log, sqrt
         from scipy.ndimage.filters import gaussian_filter1d
+        from scipy.spatial.distance import cdist
         from kneed import KneeLocator
 
         from utils.baseAlgorithms import ecdf
 
-        sigma = log(len(self.segments))
+        sigma = log(len(self.segments))/2
         # k, min_samples = self._maximumPositiveCurvature()
         # smoothknearest = dict()
         # seconddiffMax = dict()
         # maxD = 0
         # maxK = 0
-        minD = 0
+        minD = 1
         minK = None
         minX = None
         for curvK in range(0, int(len(self.segments) * 0.7)):
             neighdists = self._knearestdistance(curvK)
             knncdf = ecdf(neighdists, True)
             smoothknn = gaussian_filter1d(knncdf[1], sigma)
-            # diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
-            diff2smooth = numpy.diff(smoothknn, 2)
-            mX = diff2smooth.argmin()
-            if minD > diff2smooth[mX]:
-                print(curvK, minD)
-                minD = diff2smooth[mX]
+            diffknn = numpy.diff(smoothknn)
+            mX = diffknn.argmax()
+            mQ = 0.03 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
+            a = next(knncdf[0][xA+1] for xA in range(mX, -1, -1) if diffknn[xA] < mQ or xA == 0)
+            b = next(knncdf[0][xB+1] for xB in range(mX, len(knncdf[0])-1) if diffknn[xB] < mQ or xB == len(knncdf[0])-2)
+            slopeAperture = b - a
+            if slopeAperture < minD:
+                # print(curvK, minD)
+                minD = slopeAperture
                 minK = curvK
-                minX = knncdf[0][mX+1]
+                # minX = knncdf[0][tozerone]
+                minX = b
+
+            # diff2smooth = numpy.diff(smoothknn, 2)
+            # mX = diff2smooth.argmin()
+            # if minD > diff2smooth[mX]:
+            #     print(curvK, minD)
+            #     minD = diff2smooth[mX]
+            #     minK = curvK
+            #     minX = knncdf[0][mX+1]
 
             # seconddiffMax[curvK] = seconddiff.max()
             # if seconddiffMax[curvK] > maxD:
@@ -2057,7 +2071,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         k = minK
         epsilon = minX
-        min_samples = sigma
+        min_samples = sigma*2
         print("selected k = {}; epsilon = {:.3f}; min_samples = {:.0f}".format(k, epsilon, min_samples))
 
         # neighdists = self._knearestdistance(k)
@@ -2080,17 +2094,30 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
             if curvK == k:
                 smoothknn = gaussian_filter1d(knncdf[1], sigma)
-                # seconddiff = numpy.gradient(knncdf[1])
-                diff1smooth = numpy.gradient(smoothknn)
-                diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
-                diff3smooth = numpy.gradient(numpy.gradient(numpy.gradient(smoothknn)))
+
+                # diff1smooth = numpy.gradient(smoothknn)
+                # diff2smooth = numpy.gradient(numpy.gradient(smoothknn))
+                # diff3smooth = numpy.gradient(numpy.gradient(numpy.gradient(smoothknn)))
+
+                diffknn = numpy.diff(smoothknn)
+                mX = diffknn.argmax()
+                mQ = 0.03 * numpy.diff(knncdf[0]).mean() * sum(diffknn) # diffknn[mX] * 0.15
+                a = next(xA for xA in range(mX, -1, -1) if diffknn[xA] < mQ or xA == 0)
+                b = next(xB for xB in range(mX, len(knncdf[0])-1) if diffknn[xB] < mQ or xB == len(knncdf[0]) - 2)
+                # tozerone = cdist(numpy.array(knncdf).transpose(), numpy.array([[0, 1]])).argmin()
 
                 plt.plot(knncdf[0], knncdf[1], alpha=alpha, label=curvK, color='lime')
                 plt.plot(knncdf[0], smoothknn, label="$g(\cdot)$", color='red')
                 # plt.plot(knncdf[0], seconddiff, linestyle="dashed", color='blue')
-                plt.plot(knncdf[0], diff1smooth * 10, linestyle="dashed", color='blue', label="$\Delta(g(\cdot))$")
-                plt.plot(knncdf[0], diff2smooth * 20, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
-                plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted", color='indigo', label="$\Delta^3(g(\cdot))$")
+                plt.plot(knncdf[0][1:], 0.05* diffknn / numpy.diff(knncdf[0]), linestyle="dashed", color='blue',
+                         label="$\Delta(g(\cdot))$")
+                # plt.plot(knncdf[0], diff2smooth * 20, linestyle="-.", color='violet', label="$\Delta^2(g(\cdot))$")
+                plt.scatter(knncdf[0][a+1], 0.05*diffknn[a] / (knncdf[0][a+1] - knncdf[0][a]),
+                            label="a = {:.3f}".format(knncdf[0][a+1]))
+                plt.scatter(knncdf[0][b+1], 0.05*diffknn[b] / (knncdf[0][b+1] - knncdf[0][b]),
+                            label="b = {:.3f}".format(knncdf[0][b+1]) )
+                # plt.scatter(knncdf[0][tozerone], knncdf[1][tozerone], label="nearest to (0,1)")
+                # plt.plot(knncdf[0], diff3smooth * 100, linestyle="dotted", color='indigo', label="$\Delta^3(g(\cdot))$")
                 # plt.axvline(knncdf[0][diff2smooth.argmin()])
 
                 # plt.legend()
@@ -2101,10 +2128,10 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             else:
                 plt.plot(knncdf[0], knncdf[1], alpha=alpha)
         plt.axvline(epsilon, label="new eps {:.3f}".format(epsilon), linestyle="dashed", color='green')
-        plt.axvline(epsilon*8, label="new eps*8 {:.3f}".format(epsilon*8), linestyle="dashed", color='seagreen')
+        plt.axvline(sqrt(epsilon), label="sqrt(neps) {:.3f}".format(sqrt(epsilon)),
+                    linestyle="dashed", color='lawngreen')
         if markeps:
             plt.axvline(markeps, label="old eps {:.3f}".format(markeps), linestyle="-.", color='orchid')
-            plt.axvline(markeps/2, label="old eps/2 {:.3f}".format(markeps/2), linestyle="dotted", color='darkmagenta')
 
         plt.tight_layout(rect=[0,0,1,.95])
         plt.legend()
