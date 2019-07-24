@@ -2,10 +2,12 @@ from typing import Tuple, Iterable, Sequence, Dict, List, Union
 from tabulate import tabulate
 
 from netzob.Common.Utils.MatrixList import MatrixList
+from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.segments import MessageSegment, TypedSegment
+from inference.segments import MessageSegment, TypedSegment, AbstractSegment
 from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
-from inference.templates import DistanceCalculator
+from inference.templates import DistanceCalculator, Template
+from visualization import bcolors as bcolors
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):
@@ -122,7 +124,7 @@ def segmentFieldTypes(sequence: Sequence[TypedSegment],
     tabmod.PRESERVE_WHITESPACE = False
 
 
-def printFieldContext(trueSegmentedMessages: Sequence[Sequence[TypedSegment]],
+def printFieldContext(trueSegmentedMessages: Dict[AbstractMessage, Sequence[TypedSegment]],
                       recognizedField: RecognizedVariableLengthField):
     """
     Get and print true segment context around a selected recognition
@@ -158,6 +160,33 @@ def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
     """
     print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
                         for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
+
+
+def printMarkedBytesInMessage(message: AbstractMessage, markStart, markEnd, subStart=0, subEnd=None):
+    if subEnd is None:
+        subEnd = len(message.data)
+    assert markStart >= subStart
+    assert markEnd <= subEnd
+    sub = message.data[subStart:subEnd]
+    relMarkStart = markStart-subStart
+    relMarkEnd = markEnd-subStart
+    colored = \
+        sub[:relMarkStart].hex() + \
+        bcolors.colorizeStr(
+            sub[relMarkStart:relMarkEnd].hex(),
+            10
+        ) + \
+        sub[relMarkEnd:].hex()
+    print(colored)
+
+
+
+def markSegmentInMessage(segment: Union[MessageSegment, Template]):
+    if isinstance(segment, MessageSegment):
+        printMarkedBytesInMessage(segment.message, segment.offset, segment.nextOffset)
+    else:
+        for bs in segment.baseSegments:
+            markSegmentInMessage(bs)
 
 
 

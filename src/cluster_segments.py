@@ -5,14 +5,16 @@ segment messages by NEMESYS and cluster
 import argparse, IPython
 from os.path import isfile, basename, join, splitext
 from math import log
+from typing import Union
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template
+from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate
 from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
 from inference.segments import TypedSegment, HelperSegment
+from inference.segmentHandler import symbolsFromSegments
 from inference.analyzers import *
 from visualization.distancesPlotter import DistancesPlotter
-from visualization.simplePrint import printFieldContext, tabuSeqOfSeg
 from visualization.multiPlotter import MultiMessagePlotter, PlotGroups
+from visualization.simplePrint import *
 from utils.evaluationHelpers import *
 
 
@@ -24,6 +26,57 @@ analysisTitle = 'value'
 distance_method = 'canberra'
 # use NEMESYS segments
 tokenizer = 'nemesys'
+
+
+
+def markSegNearMatch(segment: Union[MessageSegment, Template]):
+
+    # TODO support Templates
+    if isinstance(segment, Template):
+        segs = segment.baseSegments
+    else:
+        segs = [segment]
+
+    print()  # one blank line for structure
+    for seg in segs:
+        inf4seg = inferred4segment(seg)
+        comparator.pprint2Interleaved(seg.message, [infs.nextOffset for infs in inf4seg],
+                                      (seg.offset, seg.nextOffset))
+
+    # # a simpler approach
+    # markSegmentInMessage(segment)
+
+    # # get field number of next true field
+    # tsm = trueSegmentedMessages[segment.message]  # type: List[MessageSegment]
+    # fsnum, offset = 0, 0
+    # while offset < segment.offset:
+    #     offset += tsm[fsnum].offset
+    #     fsnum += 1
+    # markSegmentInMessage(trueSegmentedMessages[segment.message][fsnum])
+
+    # # limit to immediate segment context
+    # posSegMatch = None  # first segment that starts at or after the recognized field
+    # for sid, seg in enumerate(trueSegmentedMessages[segment.message]):
+    #     if seg.offset > segment.offset:
+    #         posSegMatch = sid
+    #         break
+    # posSegEnd = None  # last segment that ends after the recognized field
+    # for sid, seg in enumerate(trueSegmentedMessages[segment.message]):
+    #     if seg.nextOffset > segment.nextOffset:
+    #         posSegEnd = sid
+    #         break
+    # if posSegMatch is not None:
+    #     contextStart = max(posSegMatch - 2, 0)
+    #     if posSegEnd is None:
+    #         posSegEnd = posSegMatch
+    #     contextEnd = min(posSegEnd + 1, len(trueSegmentedMessages))
+
+
+def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
+    return next(msegs for msegs in inferredSegmentedMessages if msegs[0].message == segment.message)
+
+def inferredFEs4segment(segment: MessageSegment) -> List[int]:
+    return [infs.nextOffset for infs in inferred4segment(segment)]
 
 
 
@@ -79,7 +132,9 @@ if __name__ == '__main__':
                 clusters.append(noise.pop(idx).baseSegments)
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
     for cLabel, segments in enumerate(clusters):
         ftype = FieldTypeTemplate(segments)
@@ -120,6 +175,39 @@ if __name__ == '__main__':
 
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO mark (at least) exact segment matches with the true data type
+    typedMatchSegs = list()
+    for seg in dc.segments:
+        if isinstance(seg, MessageSegment):
+            typedMatchSegs.append(comparator.segment2typed(seg))
+        elif isinstance(seg, Template):
+            machingType = None
+            typedBasesegments = list()
+            for bs in seg.baseSegments:
+                tempTyped = comparator.segment2typed(bs)
+                if not isinstance(tempTyped, TypedSegment):
+                    # print("At least one segment in template is not a field match.")
+                    # markSegNearMatch(tempTyped)
+                    machingType = None
+                    break
+                elif machingType == tempTyped.fieldtype or machingType is None:
+                    machingType = tempTyped.fieldtype
+                    typedBasesegments.append(tempTyped)
+                else:
+                    # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
+                    #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
+                    # ))
+                    machingType = None
+                    break
+            if machingType is None:
+                typedMatchSegs.append(seg)
+            else:
+                typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots:
@@ -127,19 +215,53 @@ if __name__ == '__main__':
         sdp = DistancesPlotter(specimens,
                                'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
                                    clusterer.eps, int(clusterer.min_samples)), False)
+
         clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        sdp.plotSegmentDistances(dc, numpy.array([clustermask[segid] for segid in range(len(dc.segments))]))
+        labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
+        # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
+        sdp.plotSegmentDistances(dc, labels)
         sdp.writeOrShowFigure()
         del sdp
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # The following is strictly speaking not clustering relevant:
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+    # # show position of each segment individually.
+    # for seg in dc.segments:
+    #     markSegNearMatch(seg)
+
+    # comparator.pprint2Interleaved(dc.segments[6].message, inferredFEs4segment(dc.segments[6]),
+    #                               (dc.segments[6].offset-2, dc.segments[6].nextOffset+1))
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Count and compare the most common segment values
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    from collections import Counter
+    infsegvalcnt = Counter(seg.bytes for seg in dc.rawSegments)
+    truesegvalcnt = Counter(seg.bytes for seg in chain.from_iterable(trueSegmentedMessages.values()))
 
+    most10true = [(val.hex(), tcnt, infsegvalcnt[val]) for val, tcnt in truesegvalcnt.most_common(10)]
+    most10inf = [(val.hex(), truesegvalcnt[val], icnt) for val, icnt in infsegvalcnt.most_common(10)
+                          if val.hex() not in (v for v, t, i in most10true)]
+    print(tabulate(most10true + most10inf, headers=["value and count for...", "true", "inferred"]))
+
+    for mofreqhex, *cnts in most10inf:
+        print("# "*10, mofreqhex, "# "*10)
+        for m in specimens.messagePool.keys():
+            pos = m.data.find(bytes.fromhex(mofreqhex))
+            if pos > -1:
+                comparator.pprint2Interleaved(m, [infs.nextOffset for infs in next(
+                    msegs for msegs in inferredSegmentedMessages if msegs[0].message == m)],
+                                              mark=(pos, pos+len(mofreqhex)//2))
+    # now see how well NEMESYS infers common fields (to use for correcting boundaries by replacing segments of less
+    #                                                frequent values with more of those of the most frequent values)
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
     if args.interactive:

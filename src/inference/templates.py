@@ -2023,22 +2023,24 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         sigma = log(len(self.segments)) / 2
         min_samples = sigma * 2
-        minD = 1
-        minK = None
-        minX = None
-        for curvK in range(0, ceil(log(len(self.segments) ** 2))):
-            neighdists = self._knearestdistance(curvK)
-            knncdf = ecdf(neighdists, True)
-            smoothknn = gaussian_filter1d(knncdf[1], sigma)
-            diff2smooth = numpy.diff(smoothknn, 2) / numpy.diff(knncdf[0])[1:]
-            mX = diff2smooth.argmin()
-            if minD > diff2smooth[mX]:
-                print(curvK, minD)
-                minD = diff2smooth[mX]
-                minK = curvK
-                minX = knncdf[0][mX+1]
-        k = minK
-        # epsilon = minX
+        # minD = 1
+        # minK = None
+        # # minX = None
+        # for curvK in range(0, ceil(log(len(self.segments) ** 2))):
+        #     neighdists = self._knearestdistance(curvK)
+        #     knncdf = ecdf(neighdists, True)
+        #     smoothknn = gaussian_filter1d(knncdf[1], sigma)
+        #     diff2smooth = numpy.diff(smoothknn, 2) / numpy.diff(knncdf[0])[1:]
+        #     mX = diff2smooth.argmin()
+        #     if minD > diff2smooth[mX]:
+        #         print(curvK, minD)
+        #         minD = diff2smooth[mX]
+        #         minK = curvK
+        #         # minX = knncdf[0][mX+1]
+        # # epsilon = minX
+        # k = minK
+
+        k = 0
 
         neighdists = self._knearestdistance(k)
         knncdf = ecdf(neighdists, True)
@@ -2099,7 +2101,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         neighdists = self._knearestdistance(k)
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
-        kneel = KneeLocator(knncdf[0], smoothknn, curve='concave', direction='increasing')
+        kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
         epsilon = kneel.knee * 0.8
 
         print("selected k = {}; epsilon = {:.3f}; min_samples = {:.0f}".format(k, epsilon, min_samples))

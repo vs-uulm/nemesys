@@ -13,14 +13,10 @@ import IPython
 from inference.segmentHandler import symbolsFromSegments
 from nemesys_fms import mapQualities2Messages
 from validation import reportWriter
-from validation.dissectorMatcher import MessageComparator, DissectorMatcher
-from utils.loader import SpecimenLoader
-from inference.analyzers import *
-from inference.segments import TypedSegment
+from validation.dissectorMatcher import DissectorMatcher
 from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
-from visualization.simplePrint import segmentFieldTypes, tabuSeqOfSeg, printFieldContext
+from visualization.simplePrint import printFieldContext, printMarkedBytesInMessage
 from utils.evaluationHelpers import *
-import visualization.bcolors as bcolors
 
 # fix the analysis method to VALUE
 analysisTitle = 'value'
@@ -276,24 +272,6 @@ def evaluateCharIDOverlaps(ftQueries: [FieldTypeQuery]):
     print(charOverlappingIds)
     print("=================")
     print(nococharpos)
-
-
-def printMarkedBytesInMessage(message: AbstractMessage, markStart, markEnd, subStart=0, subEnd=None):
-    if subEnd is None:
-        subEnd = len(message.data)
-    assert markStart >= subStart
-    assert markEnd <= subEnd
-    sub = message.data[subStart:subEnd]
-    relMarkStart = markStart-subStart
-    relMarkEnd = markEnd-subStart
-    colored = \
-        sub[:relMarkStart].hex() + \
-        bcolors.colorizeStr(
-            sub[relMarkStart:relMarkEnd].hex(),
-            10
-        ) + \
-        sub[relMarkEnd:].hex()
-    print(colored)
 
 
 def printRecogInSeg(recSegTup: Tuple[RecognizedField, TypedSegment]):

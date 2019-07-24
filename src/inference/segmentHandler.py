@@ -45,7 +45,7 @@ def segmentStdevs(segmentsPerMsg: List[List[MessageSegment]]):
     return meanSegments
 
 
-def symbolsFromSegments(segmentsPerMsg: Iterable[List[MessageSegment]]) -> List[Symbol]:
+def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> List[Symbol]:
     """
     Generate a list of Netzob Symbols from the given lists of segments for each message.
 

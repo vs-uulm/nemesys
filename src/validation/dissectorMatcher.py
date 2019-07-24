@@ -195,6 +195,58 @@ class MessageComparator(object):
         return distinctFormats
 
 
+    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int], mark: Tuple[int,int]=None):
+        import visualization.bcolors as bc
+
+        l2msg = self.messages[message]
+        tformat = self.dissections[l2msg]
+        tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
+
+        msglen = len(message.data)
+        ife = [0] + sorted(inferredFieldEnds)
+        ife += [msglen] if ife[-1] < msglen else []
+
+        if mark is not None:
+            assert mark[0] >= 0
+            assert mark[1] <= msglen
+
+        hexdata = list()  # type: List[str]
+        lastcolor = None
+        for po, by in enumerate(message.data):
+            # end mark
+            if mark is not None and po == mark[1]:
+                hexdata.append(bc.ENDC)
+                # restart color after mark end
+                if lastcolor is not None and lastcolor < po and po not in ife:
+                    hexdata.append(bc.eightBitColor(lastcolor % 231 + 1))
+
+            # have a space in place of each true field end in the hex data.
+            if po in tfe:
+                hexdata.append(' ')
+
+            # have a different color per each inferred field
+            if po in ife:
+                if po > 0:
+                    lastcolor = None
+                    hexdata.append(bc.ENDC)
+                    # restart mark after color change
+                    if mark is not None and mark[0] < po < mark[1]:
+                        hexdata.append(bc.UNDERLINE)
+                if po < msglen:
+                    lastcolor = po
+                    hexdata.append(bc.eightBitColor(po % 231 + 1))
+
+            # start mark
+            if mark is not None and po == mark[0]:
+                hexdata.append(bc.UNDERLINE)
+
+            # add the actual value
+            hexdata.append('{:02x}'.format(by))
+        hexdata.append(bc.ENDC)
+
+        print(''.join(hexdata))
+
+
     def __prepareMessagesForPPrint(self, symbols: Iterable[netzob.Symbol]) \
             -> List[List[Tuple[AbstractMessage, List[int], List[int]]]]:
         """
@@ -338,9 +390,32 @@ class MessageComparator(object):
         return texcode
 
 
+    def segment2typed(self, segment: MessageSegment):
+        from inference.segments import TypedSegment
+
+        pm = self.parsedMessages[self.messages[segment.message]]
+        fs = pm.getFieldSequence()
+        fsnum, offset = 0, 0
+        while offset < segment.offset:
+            offset += fs[fsnum][1]
+            fsnum += 1
+        if offset != segment.offset:
+            # no true field with matching offset exists
+            return segment
+        if fs[fsnum][1] != segment.length:
+            # no true field at this offset with matching length exists
+            return segment
+        # exact matching segment: return a typed version of the segment
+        return TypedSegment(segment.analyzer, offset, segment.length, pm.getTypeSequence()[fsnum][0])
+
+
     def lookupField(self, segment: MessageSegment):
         """
         Look up the field name for a segment.
+
+        TODO caveat: returns "close matches" without any notification,
+            i. e., the first offset of the segment's message fields that is not less than the segment's offset,
+            regardless of its length.
 
         :param segment: The segment to look up
         :return: Message type (from MessageTypeIdentifiers in messageParser.py),
