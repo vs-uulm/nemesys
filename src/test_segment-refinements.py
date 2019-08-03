@@ -23,13 +23,16 @@ from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import DistanceCalculator, DBSCANsegmentClusterer
-from validation.dissectorMatcher import MessageComparator
+from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
+from validation import reportWriter
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
 from characterize_fieldtypes import analyses, labelForSegment
 from utils.evaluationHelpers import plotMultiSegmentLines, sigmapertrace
-from inference.segmentHandler import segments2clusteredTypes, filterSegments
+from inference.segmentHandler import segments2clusteredTypes, filterSegments, symbolsFromSegments
+
+
 
 
 def removeIdenticalLabels(plt):
@@ -150,14 +153,82 @@ if __name__ == '__main__':
             thre += 1
         moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
     else:
-        moco = CropDistinct.countCommonValues(segmentedMessages)
 
-        # split segment to reinforce most common values
         newstuff = list()
+        counts = {
+                "0t":0, "0f":0, "-1tr":0, "-1fr":0, "-1tl":0, "-1fl":0, "+1tr":0, "+1fr":0, "+1tl":0, "+1fl":0,
+                "-1.0":0, "+1.0":0
+            }  # key: boundary offset change + true/false
         for msg in segmentedMessages:
-            crop = CropDistinct(msg, moco)
-            newmsg = crop.split()
-            newstuff.append(newmsg)
+            pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+            trueFieldEnds = MessageComparator.fieldEndsFromLength([l for t, l in pm.getFieldSequence()])
+
+            doprint = False
+
+            newmsg = msg[0:1]
+            for segr in msg[1:]:
+                segl = newmsg[-1]
+                # exactly one zero right before or after boundary: no change
+                if segl.bytes[-1] == 0 and segr.bytes[0] != 0 or segr.bytes[0] == 0 and segl.bytes[-1] != 0:
+                    if segr.offset in trueFieldEnds:
+                        counts["0t"] += 1
+                    else:
+                        counts["0f"] += 1
+                    newmsg.append(segr)
+                else:
+                    # prio 1: zero to the right of boundary
+                    if segr.length > 2 and segr.bytes[1] == 0 and segr.bytes[0] != 0 and segr.bytes[2] == 0:
+                        # shift right
+                        newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length+1)
+                        newmsg.append(MessageSegment(segr.analyzer, segr.offset+1, segr.length-1))
+                        if newmsg[-1].offset in trueFieldEnds:
+                            counts["+1tr"] += 1
+                        else:
+                            counts["+1fr"] += 1
+                            if segr.offset in trueFieldEnds:
+                                counts["+1.0"] += 1
+                                doprint = True
+                    elif segl.length > 1 and segl.bytes[-1] == 0 and segl.bytes[-2] != 0:
+                        # shift left (never happens)
+                        newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length-1)
+                        newmsg.append(MessageSegment(segr.analyzer, segr.offset-1, segr.length+1))
+                        if newmsg[-1].offset in trueFieldEnds:
+                            counts["-1tr"] += 1
+                        else:
+                            counts["-1fr"] += 1
+                            if segr.offset in trueFieldEnds:
+                                counts["-1.0"] += 1
+                                doprint = True
+                    # prio 2: 2 zeros to the left of boundary
+                    elif segr.length > 1 and segr.bytes[0] == 0 and segr.bytes[1] != 0 and \
+                            segl.length > 1 and segl.bytes[-1] == 0:
+                        # shift right (never happens)
+                        newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length+1)
+                        newmsg.append(MessageSegment(segr.analyzer, segr.offset+1, segr.length-1))
+                        if newmsg[-1].offset in trueFieldEnds:
+                            counts["+1tl"] += 1
+                        else:
+                            counts["+1fl"] += 1
+                            if segr.offset in trueFieldEnds:
+                                counts["+1.0"] += 1
+                                doprint = True
+                    elif segl.length > 2 and segl.bytes[-2] == 0 and segl.bytes[-1] != 0 and \
+                            segl.bytes[-3] == 0:
+                        # shift left
+                        newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length - 1)
+                        newmsg.append(MessageSegment(segr.analyzer, segr.offset - 1, segr.length + 1))
+                        if newmsg[-1].offset in trueFieldEnds:
+                            counts["-1tl"] += 1
+                        else:
+                            counts["-1fl"] += 1
+                            if segr.offset in trueFieldEnds:
+                                counts["-1.0"] += 1
+                                doprint = True
+                    else:
+                        # no zeros at boundary
+                        newmsg.append(segr)
+                    assert len(newmsg) > 1 and newmsg[-2].nextOffset == newmsg[-1].offset or newmsg[-1].offset == 0
+                newstuff.append(newmsg)
 
             if newmsg != msg:
                 if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
@@ -166,11 +237,34 @@ if __name__ == '__main__':
                     print(" ".join([seg.bytes.hex() for seg in newmsg]))
                     print()
 
-                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
-                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
-                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
-                print("CRPDSTC ", " ".join([seg.bytes.hex() for seg in newmsg]))
-                print()
+                # pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                if doprint:
+                    print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+                    print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+                    print("ZEROBND ", " ".join([seg.bytes.hex() for seg in newmsg]))
+                    print()
+
+
+        # # split segment to reinforce most common values
+        # moco = CropDistinct.countCommonValues(segmentedMessages)
+        # newstuff = list()
+        # for msg in segmentedMessages:
+        #     crop = CropDistinct(msg, moco)
+        #     newmsg = crop.split()
+        #     newstuff.append(newmsg)
+        #
+        #     if newmsg != msg:
+        #         if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+        #             print("\nINCORRECT SPLIT!\n")
+        #             print(" ".join([seg.bytes.hex() for seg in msg]))
+        #             print(" ".join([seg.bytes.hex() for seg in newmsg]))
+        #             print()
+        #
+        #         pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+        #         print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+        #         print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+        #         print("CRPDSTC ", " ".join([seg.bytes.hex() for seg in newmsg]))
+        #         print()
 
 
         # cumulatively merge consecutive clusters that together fulfill the char condition
@@ -184,34 +278,63 @@ if __name__ == '__main__':
                 if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
                     print("\nINCORRECT SPLIT!\n")
 
-                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
-                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
-                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
-                print("CHRMRGE ", " ".join([seg.bytes.hex() for seg in newmsg]))
-                print()
-                # if newmsg[0].length > 2:
-                #     from inference.segmentHandler import isExtendedCharSeq
-                #     IPython.embed()
+                # pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                # print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+                # print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+                # print("CHRMRGE ", " ".join([seg.bytes.hex() for seg in newmsg]))
+                # print()
+                # # if newmsg[0].length > 2:
+                # #     from inference.segmentHandler import isExtendedCharSeq
+                # #     IPython.embed()
 
-        # As a last resort, split the first segment into chunks of equal length. The assumption is, that the
-        #   message type is only dependent on the first bytes if not structural difference is prevalent enough be found.
-        # Can be applied to most protocols without negative side effects, except nbns.
-        # Mostly required a lowered eps for clustering (e.g. factor 0.8)
-        newstuff3 = list()
-        for msg in newstuff2:
-            splitfixed = SplitFixed(msg)
-            newmsg = splitfixed.split(0, 2)
-            newstuff3.append(newmsg)
-            if newmsg != msg:
-                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
-                    print("\nINCORRECT SPLIT!\n")
+        # # As a last resort, split the first segment into chunks of equal length. The assumption is, that the
+        # #   message type is only dependent on the first bytes if not structural difference is prevalent enough be found.
+        # # Can be applied to most protocols without negative side effects, except nbns.
+        # # Mostly required a lowered eps for clustering (e.g. factor 0.8)
+        # newstuff3 = list()
+        # for msg in newstuff2:
+        #     splitfixed = SplitFixed(msg)
+        #     newmsg = splitfixed.split(0, 2)
+        #     newstuff3.append(newmsg)
+        #     if newmsg != msg:
+        #         if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+        #             print("\nINCORRECT SPLIT!\n")
+        #
+        #         pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+        #         print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
+        #         print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
+        #         print("SPLTFXD ", " ".join([seg.bytes.hex() for seg in newmsg]))
+        #         print()
 
-                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
-                print("DISSECT ", " ".join([field for field in pm.getFieldValues()]))
-                print("NEMESYS ", " ".join([seg.bytes.hex() for seg in msg]))
-                print("SPLTFXD ", " ".join([seg.bytes.hex() for seg in newmsg]))
-                print()
+        # raw_message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(segmentedMessages))
+        # raw_minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in raw_message2quality.values()])
+        #
+        # refined_message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(newstuff))
+        # refined_minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in refined_message2quality.values()])
+        #
+        # for amsg, rawfms in raw_message2quality.items():
+        #     reffms = refined_message2quality[amsg]
+        #     if rawfms.score > reffms.score:  # if FMS of refined message is worse
+        #         pm = comparator.parsedMessages[comparator.messages[amsg]]
+        #         print("DISSECT ", " "*7, " ".join([field for field in pm.getFieldValues()]))
+        #         print("NEMESYS ", "({:.3f})".format(rawfms.score),
+        #               " ".join([seg.bytes.hex() for seg in
+        #                         next(m for m in segmentedMessages if m[0].message == amsg) ]))
+        #         print("ZEROBND ", "({:.3f})".format(reffms.score),
+        #               " ".join([seg.bytes.hex() for seg in
+        #                         next(m for m in newstuff if m[0].message == amsg) ]))
+        #         # IPython.embed()
+        #         print()
 
+        print(tabulate(
+            [(*b, c, d) for b, c, d in zip(
+                [(a, counts[a]) for a in sorted(counts.keys()) if "t" in a],
+                [counts[a] for a in sorted(counts.keys()) if "f" in a],
+                [counts["-1.0"] if a == "-1tl" else counts["+1.0"] if a == "+1tr" else ""
+                 for a in sorted(counts.keys()) if "t" in a]
+            )],
+            headers=["", "t", "f", "±0"]))
+        # print(tabulate())
 
     if args.interactive:
         import visualization.simplePrint as sp

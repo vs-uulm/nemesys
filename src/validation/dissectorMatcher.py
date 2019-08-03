@@ -746,6 +746,7 @@ class DissectorMatcher(object):
             fms.nearCount = nearcount
             fms.specificy = fieldcount - inferredcount
             fms.exactMatches = exactmatches
+            fms.nearMatches = nearmatches
 
             fmslist.append(fms)
         return fmslist

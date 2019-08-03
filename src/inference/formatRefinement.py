@@ -141,10 +141,12 @@ class RelocateSplits(MessageModifier, ABC):
                 segc = segmentStack.pop()
                 # TODO: this is char specific only!
                 if not isPrintable(segc.bytes):
+                    # cancel split relocation
                     mangledSegments.append(segc)
                     continue
 
                 if mangledSegments:
+                    # integrate segment to the left into center
                     segl = mangledSegments[-1]
                     if segl.offset + segl.length == segc.offset:
                         splitpos = self.toTheLeft(segl)
@@ -164,6 +166,7 @@ class RelocateSplits(MessageModifier, ABC):
                                 print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
 
                 if segmentStack:
+                    # integrate segment to the right into center
                     segr = segmentStack[-1]
                     if segc.offset + segc.length == segr.offset:
                         splitpos = self.toTheRight(segr)
