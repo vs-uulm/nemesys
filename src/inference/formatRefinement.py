@@ -1,7 +1,8 @@
-from typing import List
+from typing import List, Dict
 from abc import ABC, abstractmethod, ABCMeta
 
 from inference.segments import MessageSegment
+from validation.dissectorMatcher import MessageComparator
 
 def isPrintableChar(char: int):
     if 0x20 <= char <= 0x7e or char in ['\t', '\n', '\r']:
@@ -553,5 +554,92 @@ class SplitFixed(MessageModifier):
 
 
 
+class RelocateZeros(MessageModifier):
 
+    def __init__(self, segments: List[MessageSegment], comparator: MessageComparator):
+        super().__init__(segments)
+        self._parsedMessage = comparator.parsedMessages[comparator.messages[segments[0].message]]
+        self.counts = None
+        self.doprint = False
 
+    def split(self):
+        trueFieldEnds = MessageComparator.fieldEndsFromLength([l for t, l in self._parsedMessage.getFieldSequence()])
+
+        newmsg = self.segments[0:1]
+        for segr in self.segments[1:]:
+            segl = newmsg[-1]
+            # exactly one zero right before or after boundary: no change
+            if segl.bytes[-1] == 0 and segr.bytes[0] != 0 or segr.bytes[0] == 0 and segl.bytes[-1] != 0:
+                if segr.offset in trueFieldEnds:
+                    self.counts["0t"] += 1
+                else:
+                    self.counts["0f"] += 1
+                newmsg.append(segr)
+            else:
+                # prio 1: zero to the right of boundary
+                if segr.length > 2 and segr.bytes[1] == 0 and segr.bytes[0] != 0 and segr.bytes[2] == 0:
+                    # shift right
+                    newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length + 1)
+                    newmsg.append(MessageSegment(segr.analyzer, segr.offset + 1, segr.length - 1))
+                    if newmsg[-1].offset in trueFieldEnds:
+                        self.counts["+1tr"] += 1
+                    else:
+                        self.counts["+1fr"] += 1
+                        if segr.offset in trueFieldEnds:
+                            self.counts["+1.0"] += 1
+                            self.doprint = True
+                elif segl.length > 1 and segl.bytes[-1] == 0 and segl.bytes[-2] != 0:
+                    # shift left (never happens)
+                    newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length - 1)
+                    newmsg.append(MessageSegment(segr.analyzer, segr.offset - 1, segr.length + 1))
+                    if newmsg[-1].offset in trueFieldEnds:
+                        self.counts["-1tr"] += 1
+                    else:
+                        self.counts["-1fr"] += 1
+                        if segr.offset in trueFieldEnds:
+                            self.counts["-1.0"] += 1
+                            self.doprint = True
+                # prio 2: 2 zeros to the left of boundary
+                elif segr.length > 1 and segr.bytes[0] == 0 and segr.bytes[1] != 0 and \
+                        segl.length > 1 and segl.bytes[-1] == 0:
+                    # shift right (never happens)
+                    newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length + 1)
+                    newmsg.append(MessageSegment(segr.analyzer, segr.offset + 1, segr.length - 1))
+                    if newmsg[-1].offset in trueFieldEnds:
+                        self.counts["+1tl"] += 1
+                    else:
+                        self.counts["+1fl"] += 1
+                        if segr.offset in trueFieldEnds:
+                            self.counts["+1.0"] += 1
+                            self.doprint = True
+                elif segl.length > 2 and segl.bytes[-2] == 0 and segl.bytes[-1] != 0 and \
+                        segl.bytes[-3] == 0:
+                    # shift left
+                    newmsg[-1] = MessageSegment(segl.analyzer, segl.offset, segl.length - 1)
+                    newmsg.append(MessageSegment(segr.analyzer, segr.offset - 1, segr.length + 1))
+                    if newmsg[-1].offset in trueFieldEnds:
+                        self.counts["-1tl"] += 1
+                    else:
+                        self.counts["-1fl"] += 1
+                        if segr.offset in trueFieldEnds:
+                            self.counts["-1.0"] += 1
+                            self.doprint = True
+                else:
+                    # no zeros at boundary
+                    newmsg.append(segr)
+                assert len(newmsg) > 1 and newmsg[-2].nextOffset == newmsg[-1].offset or newmsg[-1].offset == 0
+        return newmsg
+
+    def initCounts(self, amounts: Dict[str, int] = None):
+        """
+        Counts of different kinds of off-by-one situations for zeros
+
+        :return:
+        """
+        if amounts is None:
+            self.counts = {
+                "0t":0, "0f":0, "-1tr":0, "-1fr":0, "-1tl":0, "-1fl":0, "+1tr":0, "+1fr":0, "+1tl":0, "+1fl":0,
+                "-1.0":0, "+1.0":0
+            }  # key: boundary offset change + true/false
+        else:
+            self.counts = amounts
