@@ -81,6 +81,10 @@ def inferredFEs4segment(segment: MessageSegment) -> List[int]:
 
 
 
+
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Cluster NEMESYS segments of messages according to similarity.')
@@ -109,7 +113,7 @@ if __name__ == '__main__':
     #
     # noinspection PyUnboundLocalVariable
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True  # , True
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True, True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -118,6 +122,24 @@ if __name__ == '__main__':
                          }
     # tabuSeqOfSeg(trueSegmentedMessages)
     # print(trueSegmentedMessages.values())
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Determine the amount of off-by-one errors
+    from validation.dissectorMatcher import DissectorMatcher
+    message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(inferredSegmentedMessages))
+    offbyonecount = 0
+    offbymorecount = 0
+    for fms in message2quality.values():
+        offbyonecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) == 1)
+        offbymorecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) > 1)
+    print("near matches")
+    print("off-by-one:", offbyonecount)
+    print("off-by-more:", offbymorecount)
+    exit()
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     clusterer = DBSCANsegmentClusterer(dc)
@@ -239,29 +261,32 @@ if __name__ == '__main__':
     #                               (dc.segments[6].offset-2, dc.segments[6].nextOffset+1))
 
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # Count and compare the most common segment values
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    from collections import Counter
-    infsegvalcnt = Counter(seg.bytes for seg in dc.rawSegments)
-    truesegvalcnt = Counter(seg.bytes for seg in chain.from_iterable(trueSegmentedMessages.values()))
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # Count and compare the most common segment values
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # from collections import Counter
+    # infsegvalcnt = Counter(seg.bytes for seg in dc.rawSegments)
+    # truesegvalcnt = Counter(seg.bytes for seg in chain.from_iterable(trueSegmentedMessages.values()))
+    #
+    # most10true = [(val.hex(), tcnt, infsegvalcnt[val]) for val, tcnt in truesegvalcnt.most_common(10)]
+    # most10inf = [(val.hex(), truesegvalcnt[val], icnt) for val, icnt in infsegvalcnt.most_common(10)
+    #                       if val.hex() not in (v for v, t, i in most10true)]
+    # print(tabulate(most10true + most10inf, headers=["value and count for...", "true", "inferred"]))
+    #
+    # for mofreqhex, *cnts in most10inf:
+    #     print("# "*10, mofreqhex, "# "*10)
+    #     for m in specimens.messagePool.keys():
+    #         pos = m.data.find(bytes.fromhex(mofreqhex))
+    #         if pos > -1:
+    #             comparator.pprint2Interleaved(m, [infs.nextOffset for infs in next(
+    #                 msegs for msegs in inferredSegmentedMessages if msegs[0].message == m)],
+    #                                           mark=(pos, pos+len(mofreqhex)//2))
+    # # now see how well NEMESYS infers common fields (to use for correcting boundaries by replacing segments of less
+    # #                                                frequent values with more of those of the most frequent values)
+    # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    most10true = [(val.hex(), tcnt, infsegvalcnt[val]) for val, tcnt in truesegvalcnt.most_common(10)]
-    most10inf = [(val.hex(), truesegvalcnt[val], icnt) for val, icnt in infsegvalcnt.most_common(10)
-                          if val.hex() not in (v for v, t, i in most10true)]
-    print(tabulate(most10true + most10inf, headers=["value and count for...", "true", "inferred"]))
 
-    for mofreqhex, *cnts in most10inf:
-        print("# "*10, mofreqhex, "# "*10)
-        for m in specimens.messagePool.keys():
-            pos = m.data.find(bytes.fromhex(mofreqhex))
-            if pos > -1:
-                comparator.pprint2Interleaved(m, [infs.nextOffset for infs in next(
-                    msegs for msegs in inferredSegmentedMessages if msegs[0].message == m)],
-                                              mark=(pos, pos+len(mofreqhex)//2))
-    # now see how well NEMESYS infers common fields (to use for correcting boundaries by replacing segments of less
-    #                                                frequent values with more of those of the most frequent values)
-    # # # # # # # # # # # # # # # # # # # # # # # #
+
 
 
     if args.interactive:

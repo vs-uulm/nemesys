@@ -10,7 +10,8 @@ import os, csv, pickle, time
 from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator, ParsedMessage
 from inference.analyzers import *
-from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, segmentsFixed
+from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
+    refinements, charRefinements, segmentsFixed
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC
 from visualization.multiPlotter import MultiMessagePlotter
@@ -516,7 +517,8 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         elif tokenizer == "nemesys":
             # 3. segment messages by NEMESYS
             segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-            segmentedMessages = refinements(segmentsPerMsg)
+            # segmentedMessages = refinements(segmentsPerMsg)
+            segmentedMessages = charRefinements(segmentsPerMsg)
             segmentedMessages = [[
                 MessageSegment(MessageAnalyzer.findExistingAnalysis(
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)

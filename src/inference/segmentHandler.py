@@ -220,6 +220,41 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Message
     return newstuff
 
 
+def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    Copy of inference.segmentHandler.refinements without
+        * frequency reinforced segments (CropDistinct) and
+        * splitting of first segment (SplitFixed)
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :return: refined segments in list per message
+    """
+    import inference.formatRefinement as refine
+
+    print("Refine segmentation...")
+
+    refinedPerMsg = list()
+    for msg in segmentsPerMsg:
+        # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
+        charsMerged = refine.MergeConsecutiveChars(msg).merge()
+        charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
+        refinedPerMsg.append(charSplited)
+
+    # for tests use test_segment-refinements.py
+    # moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
+    newstuff = list()
+    for msg in refinedPerMsg:
+        # croppedMsg = refine.CropDistinct(msg, moco).split()
+        charmerged = refine.CumulativeCharMerger(msg).merge()
+        # splitfixed = refine.SplitFixed(charmerged).split(0, 1)
+        newstuff.append(charmerged)
+
+    return newstuff
+
+
 T = TypeVar('T')
 def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T], identity=0, incomparable=1) -> numpy.ndarray:
     """
