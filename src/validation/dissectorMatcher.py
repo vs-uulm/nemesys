@@ -9,6 +9,8 @@ from typing import List, Tuple, Dict, Iterable, Generator
 from collections import OrderedDict
 import copy
 
+from numpy import argmin
+
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
@@ -528,11 +530,8 @@ class DissectorMatcher(object):
             ininscope = [infe for infe in self.__inferredFields if piv[0] <= infe <= piv[1]]
             if len(ininscope) == 0:
                 continue
-            inmindist = ininscope[0]
-            if len(ininscope) > 1:
-                for infe in ininscope:
-                    inmindist = min(abs(dife - infe), inmindist)
-            nearmatches[dife] = inmindist
+            closest = argmin([abs(dife - infe) for infe in ininscope]).astype(int)
+            nearmatches[dife] = ininscope[closest]
         return nearmatches
 
 
