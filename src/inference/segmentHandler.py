@@ -441,3 +441,23 @@ def filterChars(segments: Iterable[MessageSegment], meanCorridor=(50, 115), minL
                 if isExtendedCharSeq(seg.bytes, meanCorridor, minLen)
                 ]
     return filtered
+
+
+def wobbleSegmentInMessage(segment: MessageSegment):
+    """
+    At start for now.
+
+    For end if would be, e. g.: if segment.nextOffset < len(segment.message.data):  segment.nextOffset + 1
+
+    :param segment:
+    :return:
+    """
+    wobbles = [segment]
+
+    if segment.offset > 0:
+        wobbles.append(MessageSegment(segment.analyzer, segment.offset - 1, segment.length + 1))
+    if segment.length > 1:
+        wobbles.append(MessageSegment(segment.analyzer, segment.offset + 1, segment.length - 1))
+
+    return wobbles
+

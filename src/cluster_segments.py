@@ -6,11 +6,14 @@ import argparse, IPython
 from os.path import isfile, basename, join, splitext
 from math import log
 from typing import Union
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate
+from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext
 from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
 from inference.segments import TypedSegment, HelperSegment
-from inference.segmentHandler import symbolsFromSegments
+from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage
 from inference.analyzers import *
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.multiPlotter import MultiMessagePlotter, PlotGroups
@@ -136,13 +139,13 @@ if __name__ == '__main__':
     print("near matches")
     print("off-by-one:", offbyonecount)
     print("off-by-more:", offbymorecount)
-    exit()
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     clusterer = DBSCANsegmentClusterer(dc)
+    clusterer.eps = clusterer.eps * 0.8
     # noise: List[MessageSegment]
     # clusters: List[List[MessageSegment]]
     noise, *clusters = clusterer.clusterSimilarSegments(False)
@@ -158,6 +161,7 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
+    fTypeContext = list()
     for cLabel, segments in enumerate(clusters):
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
@@ -172,6 +176,19 @@ if __name__ == '__main__':
             segcsv.writerows(
                 {(seg.bytes.hex(), seg.bytes) for seg in segments}
             )
+
+        # instead of nan-padded offset alignment, fill shorter segments with the values of the message
+        # at the respective position
+        resolvedSegments = list()
+        for seg in segments:
+            if isinstance(seg, Template):
+                resolvedSegments.extend(seg.baseSegments)
+            else:
+                resolvedSegments.append(seg)
+        fcontext = FieldTypeContext(resolvedSegments)
+        fcontext.fieldtype = ftype.fieldtype
+        fTypeContext.append(fcontext)
+
         # print("\nCluster", cLabel, "Segments", len(segments))
         # print({seg.bytes for seg in segments})
 
@@ -194,39 +211,210 @@ if __name__ == '__main__':
         #         printFieldContext(trueSegmentedMessages, recog)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-
+    doWobble = False
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # TODO mark (at least) exact segment matches with the true data type
-    typedMatchSegs = list()
-    for seg in dc.segments:
-        if isinstance(seg, MessageSegment):
-            typedMatchSegs.append(comparator.segment2typed(seg))
-        elif isinstance(seg, Template):
-            machingType = None
-            typedBasesegments = list()
-            for bs in seg.baseSegments:
-                tempTyped = comparator.segment2typed(bs)
-                if not isinstance(tempTyped, TypedSegment):
-                    # print("At least one segment in template is not a field match.")
-                    # markSegNearMatch(tempTyped)
-                    machingType = None
-                    break
-                elif machingType == tempTyped.fieldtype or machingType is None:
-                    machingType = tempTyped.fieldtype
-                    typedBasesegments.append(tempTyped)
+    # determine cluster contents in message context
+    # interestingClusters = [1]  # this is thought to be ntp.c1 (4-byte floats)
+    # interestingClusters = [0]  # this is thought to be ntp.c0
+    interestingClusters = range(len(clusters))  # all
+    for iC in interestingClusters:
+        print("# # Cluster", iC)
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # Evaluation of Factor Analysis, see: https://www.datacamp.com/community/tutorials/introduction-factor-analysis
+        # from factor_analyzer import FactorAnalyzer
+        # from factor_analyzer.factor_analyzer import calculate_bartlett_sphericity, calculate_kmo
+        # # test sphericity (Bartlett’s test)
+        # paddedValues = fTypeContext[iC].paddedValues()
+        # nonConstPVals = paddedValues[:,fTypeContext[iC].stdev > 0]
+        # if nonConstPVals.shape[1] > 1:
+        #     chi_square_value, p_value = calculate_bartlett_sphericity(nonConstPVals)
+        #     print("p-Value (Bartlett’s test): {:.6f} "
+        #           "(should be very close to zero to pass the significance check)".format(p_value))
+        #     # Kaiser-Meyer-Olkin (KMO) Test
+        #     kmo_all, kmo_model = calculate_kmo(nonConstPVals)
+        #     print("KMO model: {:.3f} (should be at least above .6, better above .8)".format(kmo_model))
+        # else:
+        #     print("Bartlett’s and KMO tests impossible: only one factor is non-constant.")
+        # # ==> Factor Analysis not feasible for our use case
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        for bs in clusters[iC]:
+            markSegNearMatch(bs)
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        if doWobble:
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # wobble segments in one cluster
+            # start test with only one cluster: this is thought to be ntp.c1
+
+            # templates must be resolved into segments before wobbling
+            wobbles = list()
+            for element in clusters[iC]:
+                if isinstance(element, Template):
+                    segments = element.baseSegments
                 else:
-                    # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
-                    #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
-                    # ))
-                    machingType = None
-                    break
-            if machingType is None:
-                typedMatchSegs.append(seg)
-            else:
-                typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
-    # # # # # # # # # # # # # # # # # # # # # # # #
+                    segments = [element]
+                for seg in segments:
+                    wobbles.extend(wobbleSegmentInMessage(seg))
+            wobDC = DelegatingDC(wobbles)
+            wobClusterer = DBSCANsegmentClusterer(wobDC)
+            # wobClusterer.autoconfigureEvaluation(join(reportFolder, "wobble-epsautoconfig.pdf"))
+            wobClusterer.eps = wobClusterer.eps * 0.8
+            wobNoise, *wobClusters = wobClusterer.clusterSimilarSegments(False)
+
+            from utils.baseAlgorithms import tril
+            print("Wobbled cluster distances:")
+            print(tabulate([(clunu, wobDC.distancesSubset(wobclu).max(), tril(wobDC.distancesSubset(wobclu)).mean())
+                            for clunu, wobclu in enumerate(wobClusters)],
+                           headers=["Cluster", "max", "mean"]))
+            # nothing very interesting in here. Wobble-clusters of true boundaries are not denser or smaller than others.
+
+            for clunu, wobclu in enumerate(wobClusters):
+                print("\n# # Wobbled Cluster", clunu)
+                for seg in wobclu:
+                    markSegNearMatch(seg)
+
+
+            # interestingWobbles = [0, 1]  # in ntp.c1
+            interestingWobbles = [0, 1]  # in ntp.c0
+            wc = dict()
+            wceig = dict()
+            for iW in interestingWobbles:
+                wc[iW] = FieldTypeTemplate(wobClusters[iW])
+                wceig[iW] = numpy.linalg.eig(wc[iW].cov)
+                print("Eigenvalues wc {}".format(iW))
+                print(tabulate([wceig[iW][0]]))
+
+            if withPlots:
+                # # "component-analysis"
+                import matplotlib.pyplot as plt
+                # import matplotlib.colors as colors
+                #
+                # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix need to be towards the end
+                # for floats. The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
+                # TODO Does this make sense mathematically?
+                fig, ax = plt.subplots(1, len(interestingWobbles))  # type: plt.Figure, Sequence[plt.Axes]
+                for axI, iW in enumerate(interestingWobbles):
+                    principalComponents = wceig[iW][0] > 1
+                    lines = ax[axI].plot(wceig[iW][1][:, principalComponents])  # type: List[plt.Line2D]
+                    for i, l in enumerate(lines):
+                        l.set_label(repr(i + 1))
+                    ax[axI].legend()
+                    ax[axI].set_title("Wobbled Cluster " + repr(iW))
+                fig.suptitle("Principal (with Eigenvalue > 1) Eigenvectors - Cluster " + repr(iC))
+                plt.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
+                plt.close('all')
+
+            if withPlots:
+                # TODO plot heatmaps for covariance matrices of all wobclusters and clusters: mark correct boundaries
+                # plot heatmaps of cov matrices "cov-test-heatmap"
+                fig, ax = plt.subplots(1, len(interestingWobbles))  # type: plt.Figure, Sequence[plt.Axes]
+                # im = list()
+                for axI, iW in enumerate(interestingWobbles):
+                    # logcolors = colors.SymLogNorm(min(wc00.cov.min(), wc01.cov.min()), max(wc00.cov.max(), wc01.cov.max()))
+                    ax[axI].imshow(wc[iW].cov)  # , norm=logcolors)  im[axI]
+                    # ax[axI].pcolormesh()
+                # fig.colorbar(im[0], ax=ax[1], extend='max')
+                plt.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
+                plt.close('all')
+
+            if withPlots:
+                print("Plot distances...")
+                sdp = DistancesPlotter(specimens,
+                                       'distances-wobble-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}-cluster{}".format(
+                                           wobClusterer.eps, int(wobClusterer.min_samples), iC), False)
+
+                clustermask = {segid: cluN for cluN, segL in enumerate(wobClusters) for segid in wobDC.segments2index(segL)}
+                clustermask.update({segid: "Noise" for segid in wobDC.segments2index(wobNoise)})
+                labels = numpy.array([clustermask[segid] for segid in range(len(wobDC.segments))])
+                # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
+                sdp.plotSegmentDistances(wobDC, labels)
+                sdp.writeOrShowFigure()
+                del sdp
+        else:
+            try:
+                eigen = numpy.linalg.eig(fTypeContext[iC].cov)
+                if withPlots:
+                    # "component-analysis"
+                    # Count true boundaries for the segments' relative positions
+                    trueOffsets = list()
+                    for bs in fTypeContext[iC].baseSegments:
+                        fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
+                        offs, nxtOffs = fTypeContext[iC].paddedPosition(bs)
+                        trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
+                    truOffCnt = Counter(trueOffsets)
+
+                    # import matplotlib.colors as colors
+                    #
+                    # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
+                    # towards the end for counting numbers.
+                    # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
+                    principalComponents = eigen[0] > 1
+                    lines = plt.plot(eigen[1][:, principalComponents])  # type: List[plt.Line2D]
+                    for i, (l, ev) in enumerate(zip(lines, eigen[0][principalComponents])):
+                        l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
+                    # mark correct boundaries with the intensity (alpha) of the relative offset
+                    for offs, cnt in truOffCnt.most_common():
+                        plt.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
+                    plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(1))
+                    plt.legend()
+                    plt.suptitle("Principal Eigenvectors (with Eigenvalue > 1) - Cluster " + repr(iC))
+                                 # "\nEigenvalues: " +  ", ".join(["{:.1f}".format(ev) for ev in eigen[0]]))
+                    plt.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
+                    plt.close('all')
+
+                    # TODO have a colormap that shows where zero is
+                    # plot heatmaps of covariance matrices "cov-test-heatmap"
+                    plt.imshow(fTypeContext[iC].cov)
+                    # mark correct boundaries with the intensity (alpha) of the relative offset
+                    for offs, cnt in truOffCnt.most_common():
+                        plt.axvline(offs - 0.5, color="white", linewidth=.5,
+                                    alpha=cnt / max(truOffCnt.values()))
+                        plt.axhline(offs - 0.5, color="white", linewidth=.5,
+                                    alpha=cnt / max(truOffCnt.values()))
+                    plt.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
+                    plt.close('all')
+            except numpy.linalg.linalg.LinAlgError as e:
+                print("nan in cov")
+                IPython.embed()
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # TODO mark (at least) exact segment matches with the true data type
+    # # currently marks only very few segments. Improve boundaries first!
+    # typedMatchSegs = list()
+    # for seg in dc.segments:
+    #     if isinstance(seg, MessageSegment):
+    #         typedMatchSegs.append(comparator.segment2typed(seg))
+    #     elif isinstance(seg, Template):
+    #         machingType = None
+    #         typedBasesegments = list()
+    #         for bs in seg.baseSegments:
+    #             tempTyped = comparator.segment2typed(bs)
+    #             if not isinstance(tempTyped, TypedSegment):
+    #                 # print("At least one segment in template is not a field match.")
+    #                 # markSegNearMatch(tempTyped)
+    #                 machingType = None
+    #                 break
+    #             elif machingType == tempTyped.fieldtype or machingType is None:
+    #                 machingType = tempTyped.fieldtype
+    #                 typedBasesegments.append(tempTyped)
+    #             else:
+    #                 # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
+    #                 #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
+    #                 # ))
+    #                 machingType = None
+    #                 break
+    #         if machingType is None:
+    #             typedMatchSegs.append(seg)
+    #         else:
+    #             typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+
 
 
 

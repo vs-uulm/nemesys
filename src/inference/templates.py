@@ -1442,6 +1442,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         if len(segLens) == 1:
             # all segments have equal length, so we simply can create an array from all of them
             segV = numpy.array([seg.values for seg in relevantSegs])
+            self._maxLen = next(iter(segLens))
         elif len(segLens) > 1:
             # find the optimal shift/offset of each shorter segment to match the longest ones
             #   with shortest distance according to the method
@@ -1506,16 +1507,86 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         super().__init__(self._mean, self.baseSegments, method)
 
 
-    def paddedValues(self, segment: AbstractSegment):
+    def paddedValues(self, segment: AbstractSegment=None):
         """
-        :param segment: The base segment to get the padded values for
+        :param segment: The base segment to get the padded values for,
+            or None to return an array of all padded values of this Template
         :return: The values of the given base segment padded with nans to the length of the
             longest segment represented by this template.
         """
+        if segment is None:
+            return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
+
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
         return vals
 
+    @property
+    def baseOffsetCounts(self):
+        """
+        :return: The amounts of relative offset values.
+        """
+        return Counter([o for o in self._baseOffsets.values()])
+
+    def paddedPosition(self, segment: MessageSegment):
+        """
+        Only works with MessageSegments, i.e. Templates need to be resolved into their base segments
+        when creating the FieldTypeTemplate.
+
+        :return: The absolute positions (analog to offset and nextOffset) of the padded values for the given segment.
+            The values may be before the message start or after the message end!
+        """
+        offset = segment.offset - self._baseOffsets.get(segment, 0)
+        nextOffset = offset + self._maxLen
+        return offset, nextOffset
+
+
+class FieldTypeContext(FieldTypeTemplate):
+
+    def __init__(self, baseSegments: Iterable[MessageSegment], method='canberra'):
+        """
+        FieldTypeTemplate-subclass which, instead of a nan-padded offset alignment,
+        fills shorter segments with the values of the message at the respective position
+
+        :param baseSegments: Requires a List of MessageSegment not AbstractSegment!
+            Templates must therefore be resolved beforehand!
+        :param method: see :py:class:`FieldTypeTemplate`
+        """
+        super().__init__(baseSegments, method)
+
+    def paddedValues(self, segment: MessageSegment=None):
+        """
+        :param segment: The base segment to get the padded values for,
+            or None to return an array of all padded values of this Template
+        :return: The values of the given base segment padded with values of the original message to the length of the
+            longest segment represented by this template. If a padding would exceed the message data, padd with nans
+        """
+        if segment is None:
+            # noinspection PyTypeChecker
+            return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
+
+        shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
+        paddedOffset = segment.offset - shift
+        if paddedOffset < 0:
+            toPrepend = [numpy.nan] * -paddedOffset
+        else:
+            toPrepend = []
+        paddedNext = paddedOffset + self._maxLen
+        if paddedNext > len(segment.analyzer.values):
+            toAppend = [numpy.nan] * (paddedNext - len(segment.analyzer.values))
+        else:
+            toAppend = []
+        values = toPrepend + \
+                 segment.analyzer.values[max(0, paddedOffset):min(len(segment.analyzer.values), paddedNext)] + \
+                 toAppend
+
+        # if not values[shift:shift+segment.length] == segment.values or not len(values) == self._maxLen:
+        #     import IPython
+        #     IPython.embed()
+
+        assert len(values) == self._maxLen, "value padding failed"
+        assert values[shift:shift+segment.length] == segment.values, "value padding failed"
+        return values
 
 
 class TemplateGenerator(object):
