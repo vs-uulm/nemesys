@@ -8,15 +8,14 @@ from math import log
 from typing import Union
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.colors as colors
 from collections import Counter
 
+from kneed import KneeLocator
+
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext
-from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
-from inference.segments import TypedSegment, HelperSegment
-from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage
-from inference.analyzers import *
+from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
 from visualization.distancesPlotter import DistancesPlotter
-from visualization.multiPlotter import MultiMessagePlotter, PlotGroups
 from visualization.simplePrint import *
 from utils.evaluationHelpers import *
 
@@ -116,7 +115,7 @@ if __name__ == '__main__':
     #
     # noinspection PyUnboundLocalVariable
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True, True
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True#, True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -213,13 +212,47 @@ if __name__ == '__main__':
 
     doWobble = False
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # determine cluster contents in message context
+    # PCA conditions parameters
+    minSegLen = 3  # minimum length of the largest cluster member
+    screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
+    principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
+            # interpreted as fraction of the component count as dynamic determination.
+    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
+
+    eigenVnV = dict()
+    screeKnees = dict()
+
     # interestingClusters = [1]  # this is thought to be ntp.c1 (4-byte floats)
     # interestingClusters = [0]  # this is thought to be ntp.c0
-    interestingClusters = range(len(clusters))  # all
+    # interestingClusters = range(len(clusters))  # all
+    # interestingClusters = [cid for cid, clu in enumerate(clusters)
+    #                        if any([isExtendedCharSeq(seg.bytes) for seg in clu])] # all not-chars
+    interestingClusters = [
+        cid for cid, clu in enumerate(fTypeContext)
+        if not clu.length < minSegLen
+           and not any([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments])
+           and not all(clu.stdev == 0)
+           and not all(numpy.linalg.eig(clu.cov)[0] <= screeMinThresh)   # TODO move to second stage
+    ]
+    for cid in interestingClusters.copy():
+        try:
+            eigen = numpy.linalg.eig(fTypeContext[cid].cov)
+            scree = list(reversed(sorted(eigen[0].tolist())))
+            kl = KneeLocator(
+                list(range(eigen[0].shape[0])),
+                scree,
+                S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
+                                                                # delta sets the knee before this point.
+            eigenVnV[cid] = eigen
+            screeKnees[cid] = scree[kl.knee]
+        except Exception as e:
+            print(e)
+            IPython.embed()
+        # if all(eigen[0] <= scree[kl.knee]):
+            # TODO interestingClusters.remove(cid)
     for iC in interestingClusters:
         print("# # Cluster", iC)
+
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # # Evaluation of Factor Analysis, see: https://www.datacamp.com/community/tutorials/introduction-factor-analysis
         # from factor_analyzer import FactorAnalyzer
@@ -240,12 +273,15 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # # #
 
         # # # # # # # # # # # # # # # # # # # # # # # #
+        # determine cluster contents in message context
         for bs in clusters[iC]:
             markSegNearMatch(bs)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
+    for iC in interestingClusters:
         # # # # # # # # # # # # # # # # # # # # # # # #
         if doWobble:
+            print("# # Cluster", iC)
             # # # # # # # # # # # # # # # # # # # # # # # #
             # wobble segments in one cluster
             # start test with only one cluster: this is thought to be ntp.c1
@@ -335,51 +371,107 @@ if __name__ == '__main__':
                 sdp.writeOrShowFigure()
                 del sdp
         else:
-            try:
-                eigen = numpy.linalg.eig(fTypeContext[iC].cov)
-                if withPlots:
-                    # "component-analysis"
-                    # Count true boundaries for the segments' relative positions
-                    trueOffsets = list()
-                    for bs in fTypeContext[iC].baseSegments:
-                        fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
-                        offs, nxtOffs = fTypeContext[iC].paddedPosition(bs)
-                        trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
-                    truOffCnt = Counter(trueOffsets)
+            if withPlots:
+                eigen = eigenVnV[iC]
+                screeThresh = max(screeKnees[iC], screeMinThresh)  # TODO define absolute minimum?
+                principalComponents = eigen[0] > screeThresh
+                # # # # # # # # # # # # # # # # # # # # # # # # #
+                # Re-Cluster
+                # count if principal components
+                if sum(eigen[0] > screeThresh) > eigen[0].shape[0] * principalCountThresh:
+                    print("Cluster {} needs reclustering: too many principal components.".format(iC))
+                    continue
+                    # TODO re-cluster instead of skip
 
-                    # import matplotlib.colors as colors
-                    #
-                    # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
-                    # towards the end for counting numbers.
-                    # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
-                    principalComponents = eigen[0] > 1
-                    lines = plt.plot(eigen[1][:, principalComponents])  # type: List[plt.Line2D]
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # Count true boundaries for the segments' relative positions
+                trueOffsets = list()
+                for bs in fTypeContext[iC].baseSegments:
+                    fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
+                    offs, nxtOffs = fTypeContext[iC].paddedPosition(bs)
+                    trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
+                truOffCnt = Counter(trueOffsets)
+
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # "component-analysis"
+                #
+                # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
+                # towards the end of varying fields with similar content (e.g. counting numbers).
+                # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
+                contribution = eigen[1][:, principalComponents]  # type: numpy.ndarray
+                relocateFromEnd = list()    # new boundaries found: relocate the next end to this relative offset
+                relocateFromStart = list()  # new boundaries found: relocate the previous start to this relative offset
+
+                # # Condition a: Covariance ~0 after non-0
+                # at which eigenvector component does any of the principal components have a relevant contribution
+                contributingLoadingComponents = (abs(contribution) > contributionRelevant).any(1)
+
+                for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
+                    if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc-1]:
+                        relocateFromEnd.append(lc)
+                        # break  # TODO do this just once for a cluster?
+
+                # # Condition b:
+
+                # # Condition c:
+
+                # # Condition d:
+
+
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # plotting stuff
+                compFig = plt.figure()
+                compAx = compFig.add_subplot(1,1,1)
+                try:
+                    if not any(principalComponents):
+                        # if there is no principal component, plot all vectors for investigation
+                        principalComponents = numpy.array([True]*eigen[0].shape[0])
+                        noPrinComps = True
+                    else:
+                        noPrinComps = False
+                    lines = compAx.plot(contribution)  # type: List[plt.Line2D]
                     for i, (l, ev) in enumerate(zip(lines, eigen[0][principalComponents])):
                         l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
                     # mark correct boundaries with the intensity (alpha) of the relative offset
                     for offs, cnt in truOffCnt.most_common():
-                        plt.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
-                    plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(1))
-                    plt.legend()
-                    plt.suptitle("Principal Eigenvectors (with Eigenvalue > 1) - Cluster " + repr(iC))
-                                 # "\nEigenvalues: " +  ", ".join(["{:.1f}".format(ev) for ev in eigen[0]]))
-                    plt.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
-                    plt.close('all')
+                        compAx.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
+                    # mark reallocations
+                    for rfe in relocateFromEnd:
+                        compAx.scatter(rfe-0.5, 0, c="red")
+                    compAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
+                    compAx.legend()
+                    if noPrinComps:
+                        compFig.suptitle("All Eigenvectors (NO Eigenvalue is > {:.0f}) - Cluster ".format(screeThresh) + repr(iC))
+                    else:
+                        compFig.suptitle("Principal Eigenvectors (with Eigenvalue > {:.0f}) - Cluster ".format(screeThresh) + repr(iC))
+                    compFig.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
+                except Exception as e:
+                    print("\n\n### {} ###\n\n".format(e))
+                    IPython.embed()
+                plt.close(compFig)
 
-                    # TODO have a colormap that shows where zero is
-                    # plot heatmaps of covariance matrices "cov-test-heatmap"
-                    plt.imshow(fTypeContext[iC].cov)
-                    # mark correct boundaries with the intensity (alpha) of the relative offset
-                    for offs, cnt in truOffCnt.most_common():
-                        plt.axvline(offs - 0.5, color="white", linewidth=.5,
-                                    alpha=cnt / max(truOffCnt.values()))
-                        plt.axhline(offs - 0.5, color="white", linewidth=.5,
-                                    alpha=cnt / max(truOffCnt.values()))
-                    plt.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
-                    plt.close('all')
-            except numpy.linalg.linalg.LinAlgError as e:
-                print("nan in cov")
-                IPython.embed()
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # plot heatmaps of covariance matrices "cov-test-heatmap"
+                heatFig = plt.figure()
+                heatAx = heatFig.add_subplot(1,1,1)
+
+                # make the colormap symmetric around zero
+                vmax = max(abs(fTypeContext[iC].cov.min()), abs(fTypeContext[iC].cov.max()))
+                heatMap = heatAx.imshow(fTypeContext[iC].cov, cmap='PuOr', norm=colors.Normalize(-vmax, vmax))
+                # logarithmic scale hides the interesting variance differences. For reference on how to do it:
+                #   norm=colors.SymLogNorm(100, vmin=-vmax, vmax=vmax)
+
+                # mark correct boundaries with the intensity (alpha) of the relative offset
+                for offs, cnt in truOffCnt.most_common():
+                    heatAx.axvline(offs - 0.5, color="white", linewidth=1.5,
+                                alpha=cnt / max(truOffCnt.values()))
+                    heatAx.axhline(offs - 0.5, color="white", linewidth=1.5,
+                                alpha=cnt / max(truOffCnt.values()))
+                heatAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
+                heatFig.colorbar(heatMap)
+                heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
+                plt.close(heatFig)
+
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
