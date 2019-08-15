@@ -3,7 +3,7 @@ segment messages by NEMESYS and cluster
 """
 
 import argparse, IPython
-from os.path import isfile, basename, join, splitext
+from os.path import isfile, basename, join, splitext, exists
 from math import log
 from typing import Union
 import matplotlib.pyplot as plt
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     #
     # noinspection PyUnboundLocalVariable
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True#, True
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True, True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -232,21 +232,21 @@ if __name__ == '__main__':
         if not clu.length < minSegLen
            and not any([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments])
            and not all(clu.stdev == 0)
-           and not all(numpy.linalg.eig(clu.cov)[0] <= screeMinThresh)   # TODO move to second stage
+           and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)   # TODO move to second stage
     ]
     for cid in interestingClusters.copy():
         try:
-            eigen = numpy.linalg.eig(fTypeContext[cid].cov)
+            eigen = numpy.linalg.eigh(fTypeContext[cid].cov)
             scree = list(reversed(sorted(eigen[0].tolist())))
             kl = KneeLocator(
                 list(range(eigen[0].shape[0])),
                 scree,
                 S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
-                                                                # delta sets the knee before this point.
+                                                               # delta sets the knee before this point.
             eigenVnV[cid] = eigen
             screeKnees[cid] = scree[kl.knee]
         except Exception as e:
-            print(e)
+            print("\n\n### {} ###\n\n".format(e))
             IPython.embed()
         # if all(eigen[0] <= scree[kl.knee]):
             # TODO interestingClusters.remove(cid)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
             wceig = dict()
             for iW in interestingWobbles:
                 wc[iW] = FieldTypeTemplate(wobClusters[iW])
-                wceig[iW] = numpy.linalg.eig(wc[iW].cov)
+                wceig[iW] = numpy.linalg.eigh(wc[iW].cov)
                 print("Eigenvalues wc {}".format(iW))
                 print(tabulate([wceig[iW][0]]))
 
@@ -409,14 +409,37 @@ if __name__ == '__main__':
                 for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
                     if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc-1]:
                         relocateFromEnd.append(lc)
+                        # IPython.embed()
+                        fn = join(reportFolder, "pca-conditions-a.csv")
+                        writeheader = not exists(fn)
+                        with open(fn, "a") as segfile:
+                            segcsv = csv.writer(segfile)
+                            if writeheader:
+                                segcsv.writerow(
+                                    ["trace", "# cluster", "offset", "contribution high", "contribution low"]
+                                )
+                            segcsv.writerow( [
+                                splitext(pcapbasename)[0], iC, lc,
+                                abs(contribution[lc-1]).max(),
+                                abs(contribution[lc]).max()
+                            ] )
                         # break  # TODO do this just once for a cluster?
 
-                # # Condition b:
+                # # # Condition b: Loadings peak in the middle a segment
+                # principalLoadingPeak = abs(eigen[1][:, eigen[0].argmax()]).argmax()
+                # if principalLoadingPeak < eigen[0].shape[0] - 1:
+                #     relocateFromEnd.append(principalLoadingPeak+1)
 
-                # # Condition c:
+                # # # Condition c:
+                # tailSize = 1
+                # if not contributingLoadingComponents[:-tailSize].any():
+                #     for tailP in range(tailSize, 0, -1):
+                #         if contributingLoadingComponents[-tailP]:
+                #             relocateFromEnd.append(eigen[0].shape[0] - tailSize)
+                #             break
 
                 # # Condition d:
-
+                # cancelled
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # plotting stuff
@@ -429,6 +452,7 @@ if __name__ == '__main__':
                         noPrinComps = True
                     else:
                         noPrinComps = False
+                    compAx.axhline(0, color="black", linewidth=1, alpha=.4)
                     lines = compAx.plot(contribution)  # type: List[plt.Line2D]
                     for i, (l, ev) in enumerate(zip(lines, eigen[0][principalComponents])):
                         l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
