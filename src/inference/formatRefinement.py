@@ -1,7 +1,11 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple, Sequence
 from abc import ABC, abstractmethod, ABCMeta
+import numpy
+
+from kneed import KneeLocator
 
 from inference.segments import MessageSegment
+from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template
 from validation.dissectorMatcher import MessageComparator
 
 def isPrintableChar(char: int):
@@ -46,7 +50,7 @@ class MessageModifier(ABC):
 
     def __init__(self, segments: List[MessageSegment]):
         """
-        :param segments: in offset order
+        :param segments: The segments of one message in offset order
         """
         self.segments = segments
 
@@ -553,7 +557,6 @@ class SplitFixed(MessageModifier):
             return self.segments
 
 
-
 class RelocateZeros(MessageModifier):
 
     def __init__(self, segments: List[MessageSegment], comparator: MessageComparator):
@@ -643,3 +646,187 @@ class RelocateZeros(MessageModifier):
             }  # key: boundary offset change + true/false
         else:
             self.counts = amounts
+
+
+
+
+class RelocatePCA(object):
+
+    # PCA conditions parameters
+    minSegLen = 3  # minimum length of the largest cluster member
+    screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
+    principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
+            # interpreted as fraction of the component count as dynamic determination.
+    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
+
+    def __init__(self, similarSegments: FieldTypeContext,
+                 eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
+                 screeKnee: float=None):
+        self._similarSegments = similarSegments
+        self._eigen = eigenValuesAndVectors if eigenValuesAndVectors is not None \
+            else numpy.linalg.eigh(similarSegments.cov)
+        self._screeKnee = screeKnee if screeKnee is not None \
+            else RelocatePCA.screeKneedle(self._eigen)
+        # defines an absolute minimum
+        self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh)
+        self._principalComponents = self._eigen[0] > self._screeThresh
+        self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
+
+
+    @staticmethod
+    def screeKneedle(eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]) -> float:
+        scree = list(reversed(sorted(eigenValuesAndVectors[0].tolist())))
+        kl = KneeLocator(
+            list(range(eigenValuesAndVectors[0].shape[0])),
+            scree,
+            S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
+                                                           # delta sets the knee before this point.
+        return scree[kl.knee]
+
+
+    @staticmethod
+    def filterRelevantClusters(fTypeContext: Sequence[FieldTypeContext]):
+        """
+
+        :param fTypeContext:
+        :return: tuple containing:
+            * list of indices of the given fTypeContext that are relevant.
+            * dict of eigenvalues and vectors with the fTypeContext indices as keys
+            * dict of scree-knee values with the fTypeContext indices as keys
+        """
+        from inference.segmentHandler import isExtendedCharSeq
+
+        interestingClusters = [
+            cid for cid, clu in enumerate(fTypeContext)
+            if not clu.length < RelocatePCA.minSegLen
+               and not any([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments])
+               and not all(clu.stdev == 0)
+            # # moved to second iteration below to make it dynamically dependent on the scree-knee:
+            # and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)
+        ]
+
+        eigenVnV = dict()
+        screeKnees = dict()
+        for cid in interestingClusters.copy():
+            eigen = numpy.linalg.eigh(fTypeContext[cid].cov)  # type: Tuple[numpy.ndarray, numpy.ndarray]
+            eigenVnV[cid] = eigen
+            screeKnees[cid] = RelocatePCA.screeKneedle(eigen)
+            if all(eigen[0] <= screeKnees[cid]):
+                interestingClusters.remove(cid)
+
+        return interestingClusters, eigenVnV, screeKnees
+
+
+    @property
+    def principalComponents(self):
+        return self._principalComponents
+
+
+    @property
+    def screeThresh(self):
+        return self._screeThresh
+
+
+    @property
+    def contribution(self):
+        return self._contribution
+
+
+    def relocateBoundaries(self, dc: DistanceCalculator=None, reportFolder:str = None, trace:str = None):
+        from os.path import join, exists
+        import csv
+
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+        # Re-Cluster
+        # number of principal components
+        if sum(self._eigen[0] > self._screeThresh) > self._eigen[0].shape[0] * RelocatePCA.principalCountThresh:
+            print("Cluster {} needs reclustering: too many principal components.".format(
+                self._similarSegments.fieldtype))
+            if dc is None:
+                print("No dissimilarities available. Ignoring cluster.")
+                return list()
+            else:
+                # TODO add some kind of reliable exit condition
+                # Re-Cluster
+                clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
+                noise, *clusters = clusterer.clusterSimilarSegments(False)
+                # Generate suitable FieldTypeContext objects from the sub-clusters
+                fTypeContext = list()
+                for cLabel, segments in enumerate(clusters):
+                    resolvedSegments = list()
+                    for seg in segments:
+                        if isinstance(seg, Template):
+                            resolvedSegments.extend(seg.baseSegments)
+                        else:
+                            resolvedSegments.append(seg)
+                    fcontext = FieldTypeContext(resolvedSegments)
+                    fcontext.fieldtype = self._similarSegments.fieldtype + "." + cLabel
+                    fTypeContext.append(fcontext)
+                # Determine clusters with relevant properties for further analysis
+                interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+                # Do PCA on all interesting clusters
+                retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
+                for iC in interestingClusters:
+                    print("# # Cluster", iC)
+                    subRpca = RelocatePCA(fTypeContext[iC])
+                    relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
+                    retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC]]
+                return retValCollection
+
+            # TODO test re-clustering
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # "component-analysis"
+        #
+        # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
+        # towards the end of varying fields with similar content (e.g. counting numbers).
+        # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
+
+        relocateFromEnd = list()  # new boundaries found: relocate the next end to this relative offset
+        # relocateFromStart = list()  # new boundaries found: relocate the previous start to this relative offset
+
+        # # Condition a: Covariance ~0 after non-0
+        # at which eigenvector component does any of the principal components have a relevant contribution
+        contributingLoadingComponents = (abs(self._contribution) > RelocatePCA.contributionRelevant).any(1)
+
+        for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
+            if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1]:
+                relocateFromEnd.append(lc)
+
+                if reportFolder is not None and trace is not None:
+                    fn = join(reportFolder, "pca-conditions-a.csv")
+                    writeheader = not exists(fn)
+                    with open(fn, "a") as segfile:
+                        segcsv = csv.writer(segfile)
+                        if writeheader:
+                            segcsv.writerow(
+                                ["trace", "# cluster", "offset", "contribution high", "contribution low"]
+                            )
+                        segcsv.writerow([
+                            trace, self._similarSegments.fieldtype, lc,
+                            abs(self._contribution[lc - 1]).max(),
+                            abs(self._contribution[lc]).max()
+                        ])
+
+                # break
+
+        # # # Condition b: Loadings peak in the middle a segment
+        # principalLoadingPeak = abs(self._eigen[1][:, self._eigen[0].argmax()]).argmax()
+        # if principalLoadingPeak < self._eigen[0].shape[0] - 1:
+        #     relocateFromEnd.append(principalLoadingPeak+1)
+
+        # # # Condition c:
+        # tailSize = 1
+        # if not contributingLoadingComponents[:-tailSize].any():
+        #     for tailP in range(tailSize, 0, -1):
+        #         if contributingLoadingComponents[-tailP]:
+        #             relocateFromEnd.append(self._eigen[0].shape[0] - tailSize)
+        #             break
+
+        # # Condition d:
+        # cancelled
+
+        return relocateFromEnd
+
+
+

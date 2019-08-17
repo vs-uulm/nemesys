@@ -779,6 +779,7 @@ class DistanceCalculator(object):
             maxOffset = longSegment[1] - shortSegment[1]
 
         subsets = list()
+        # TODO overlapping offset from -1
         for offset in range(0, maxOffset + 1):
             offSegment = longSegment[2][offset:offset + shortSegment[1]]
             subsets.append((-1, shortSegment[1], offSegment))
@@ -1430,6 +1431,10 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             * zero-only segments are ignored
             * nans are used for shorter segments at don't-care positions
 
+        CAVEAT: components with a standard deviation of 0 are "scintillated" to slightly deviate from 0. Thus we do not
+                fail to calculate a covariance matrix for linearly dependent entries at the price of a minor loss of
+                numeric precision.
+
         :param baseSegments:
         :param method:
         """
@@ -1442,10 +1447,12 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         if len(segLens) == 1:
             # all segments have equal length, so we simply can create an array from all of them
             segV = numpy.array([seg.values for seg in relevantSegs])
+            # TODO overlapping offset from -1
             self._maxLen = next(iter(segLens))
         elif len(segLens) > 1:
             # find the optimal shift/offset of each shorter segment to match the longest ones
             #   with shortest distance according to the method
+            # TODO overlapping offset from -1
             self._maxLen = max(segLens)
             # Better than the longest would be the most common length, but that would increase complexity a lot and
             #   we assume that for most use cases the longest segments will be the most frequent length.
@@ -1457,6 +1464,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
                     continue
                 if seg.length < self._maxLen:
                     shortSeg = (0, seg.length, tuple(seg.values))
+                    # TODO overlapping offset from -1
                     offsets = [DistanceCalculator.embedSegment(shortSeg, longSeg, method)[1] for longSeg in maxLenSegs]
                     offCount = Counter(offsets)
                     self._baseOffsets[seg] = offCount.most_common(1)[0][0]
@@ -1470,6 +1478,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             segV = numpy.array(segE)
         else:
             # handle situation when no base segment is relevant (all are zeros)
+            # TODO overlapping offset from -1
             self._maxLen = max({seg.length for seg in self.baseSegments})
             for bs in self.baseSegments:
                 if bs.length == self._maxLen:
@@ -1486,7 +1495,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         self._mean = numpy.nanmean(segV, 0)
         self._stdev = numpy.nanstd(segV, 0)
 
-        # for all components that have a stdev of 0 we need to wobble the values (randomly) to derive a
+        # for all components that have a stdev of 0 we need to scintillate the values (randomly) to derive a
         #   covariance matrix that shows no linear dependent entries ("don't care positions")
         assert segV.shape == (len(relevantSegs), len(self._stdev))
         if any(self._stdev == 0):
@@ -1518,6 +1527,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
 
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
+        # TODO overlapping offset from -1
         vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
         return vals
 
@@ -1537,6 +1547,7 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             The values may be before the message start or after the message end!
         """
         offset = segment.offset - self._baseOffsets.get(segment, 0)
+        # TODO overlapping offset from -1
         nextOffset = offset + self._maxLen
         return offset, nextOffset
 
@@ -1565,6 +1576,7 @@ class FieldTypeContext(FieldTypeTemplate):
             # noinspection PyTypeChecker
             return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
 
+        # TODO overlapping offset from -1
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         paddedOffset = segment.offset - shift
         if paddedOffset < 0:
@@ -1968,13 +1980,13 @@ class DBSCANsegmentClusterer(AbstractClusterer):
     Wrapper for DBSCAN from the sklearn.cluster module including autoconfiguration of the parameters.
     """
 
-    def __init__(self, dc: DistanceCalculator, **kwargs):
+    def __init__(self, dc: DistanceCalculator, segments: Sequence[MessageSegment] = None, **kwargs):
         """
         :param dc:
         :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
             If not given (None), it is autoconfigured.
         """
-        super().__init__(dc)
+        super().__init__(dc, segments)
         if len(kwargs) == 0:
             self.min_samples, self.eps = self._autoconfigure()
         else:

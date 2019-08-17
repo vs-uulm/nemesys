@@ -11,10 +11,9 @@ import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
 
-from kneed import KneeLocator
-
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
+from inference.formatRefinement import RelocatePCA
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
 from utils.evaluationHelpers import *
@@ -212,44 +211,16 @@ if __name__ == '__main__':
 
     doWobble = False
 
-    # PCA conditions parameters
-    minSegLen = 3  # minimum length of the largest cluster member
-    screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
-    principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
-            # interpreted as fraction of the component count as dynamic determination.
-    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
 
-    eigenVnV = dict()
-    screeKnees = dict()
+
 
     # interestingClusters = [1]  # this is thought to be ntp.c1 (4-byte floats)
     # interestingClusters = [0]  # this is thought to be ntp.c0
     # interestingClusters = range(len(clusters))  # all
     # interestingClusters = [cid for cid, clu in enumerate(clusters)
     #                        if any([isExtendedCharSeq(seg.bytes) for seg in clu])] # all not-chars
-    interestingClusters = [
-        cid for cid, clu in enumerate(fTypeContext)
-        if not clu.length < minSegLen
-           and not any([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments])
-           and not all(clu.stdev == 0)
-           and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)   # TODO move to second stage
-    ]
-    for cid in interestingClusters.copy():
-        try:
-            eigen = numpy.linalg.eigh(fTypeContext[cid].cov)
-            scree = list(reversed(sorted(eigen[0].tolist())))
-            kl = KneeLocator(
-                list(range(eigen[0].shape[0])),
-                scree,
-                S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
-                                                               # delta sets the knee before this point.
-            eigenVnV[cid] = eigen
-            screeKnees[cid] = scree[kl.knee]
-        except Exception as e:
-            print("\n\n### {} ###\n\n".format(e))
-            IPython.embed()
-        # if all(eigen[0] <= scree[kl.knee]):
-            # TODO interestingClusters.remove(cid)
+    interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+
     for iC in interestingClusters:
         print("# # Cluster", iC)
 
@@ -372,16 +343,11 @@ if __name__ == '__main__':
                 del sdp
         else:
             if withPlots:
-                eigen = eigenVnV[iC]
-                screeThresh = max(screeKnees[iC], screeMinThresh)  # TODO define absolute minimum?
-                principalComponents = eigen[0] > screeThresh
-                # # # # # # # # # # # # # # # # # # # # # # # # #
-                # Re-Cluster
-                # count if principal components
-                if sum(eigen[0] > screeThresh) > eigen[0].shape[0] * principalCountThresh:
-                    print("Cluster {} needs reclustering: too many principal components.".format(iC))
+                pcaRelocator = RelocatePCA(fTypeContext[iC], eigenVnV[iC])
+                relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
+                if isinstance(relocateFromEnd, dict):
+                    # TODO add support for subclustering, where the method returns a dict of relecant information about each subcluster
                     continue
-                    # TODO re-cluster instead of skip
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # Count true boundaries for the segments' relative positions
@@ -393,68 +359,19 @@ if __name__ == '__main__':
                 truOffCnt = Counter(trueOffsets)
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
-                # "component-analysis"
-                #
-                # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
-                # towards the end of varying fields with similar content (e.g. counting numbers).
-                # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
-                contribution = eigen[1][:, principalComponents]  # type: numpy.ndarray
-                relocateFromEnd = list()    # new boundaries found: relocate the next end to this relative offset
-                relocateFromStart = list()  # new boundaries found: relocate the previous start to this relative offset
-
-                # # Condition a: Covariance ~0 after non-0
-                # at which eigenvector component does any of the principal components have a relevant contribution
-                contributingLoadingComponents = (abs(contribution) > contributionRelevant).any(1)
-
-                for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
-                    if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc-1]:
-                        relocateFromEnd.append(lc)
-                        # IPython.embed()
-                        fn = join(reportFolder, "pca-conditions-a.csv")
-                        writeheader = not exists(fn)
-                        with open(fn, "a") as segfile:
-                            segcsv = csv.writer(segfile)
-                            if writeheader:
-                                segcsv.writerow(
-                                    ["trace", "# cluster", "offset", "contribution high", "contribution low"]
-                                )
-                            segcsv.writerow( [
-                                splitext(pcapbasename)[0], iC, lc,
-                                abs(contribution[lc-1]).max(),
-                                abs(contribution[lc]).max()
-                            ] )
-                        # break  # TODO do this just once for a cluster?
-
-                # # # Condition b: Loadings peak in the middle a segment
-                # principalLoadingPeak = abs(eigen[1][:, eigen[0].argmax()]).argmax()
-                # if principalLoadingPeak < eigen[0].shape[0] - 1:
-                #     relocateFromEnd.append(principalLoadingPeak+1)
-
-                # # # Condition c:
-                # tailSize = 1
-                # if not contributingLoadingComponents[:-tailSize].any():
-                #     for tailP in range(tailSize, 0, -1):
-                #         if contributingLoadingComponents[-tailP]:
-                #             relocateFromEnd.append(eigen[0].shape[0] - tailSize)
-                #             break
-
-                # # Condition d:
-                # cancelled
-
-                # # # # # # # # # # # # # # # # # # # # # # # #
                 # plotting stuff
                 compFig = plt.figure()
                 compAx = compFig.add_subplot(1,1,1)
                 try:
-                    if not any(principalComponents):
+                    if not any(pcaRelocator.principalComponents):
                         # if there is no principal component, plot all vectors for investigation
-                        principalComponents = numpy.array([True]*eigen[0].shape[0])
+                        principalComponents = numpy.array([True]*eigenVnV[iC][0].shape[0])
                         noPrinComps = True
                     else:
                         noPrinComps = False
                     compAx.axhline(0, color="black", linewidth=1, alpha=.4)
-                    lines = compAx.plot(contribution)  # type: List[plt.Line2D]
-                    for i, (l, ev) in enumerate(zip(lines, eigen[0][principalComponents])):
+                    lines = compAx.plot(pcaRelocator.contribution)  # type: List[plt.Line2D]
+                    for i, (l, ev) in enumerate(zip(lines, eigenVnV[iC][0][pcaRelocator.principalComponents])):
                         l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
                     # mark correct boundaries with the intensity (alpha) of the relative offset
                     for offs, cnt in truOffCnt.most_common():
@@ -465,9 +382,11 @@ if __name__ == '__main__':
                     compAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
                     compAx.legend()
                     if noPrinComps:
-                        compFig.suptitle("All Eigenvectors (NO Eigenvalue is > {:.0f}) - Cluster ".format(screeThresh) + repr(iC))
+                        compFig.suptitle("All Eigenvectors (NO Eigenvalue is > {:.0f}) - Cluster ".format(
+                            pcaRelocator.screeThresh) + repr(iC))
                     else:
-                        compFig.suptitle("Principal Eigenvectors (with Eigenvalue > {:.0f}) - Cluster ".format(screeThresh) + repr(iC))
+                        compFig.suptitle("Principal Eigenvectors (with Eigenvalue > {:.0f}) - Cluster ".format(
+                            pcaRelocator.screeThresh) + repr(iC))
                     compFig.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
                 except Exception as e:
                     print("\n\n### {} ###\n\n".format(e))
