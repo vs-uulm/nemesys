@@ -668,7 +668,9 @@ class RelocatePCA(object):
         self._screeKnee = screeKnee if screeKnee is not None \
             else RelocatePCA.screeKneedle(self._eigen)
         # defines an absolute minimum
-        self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh)
+        self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh) \
+            if any(self._eigen[0] < RelocatePCA.screeMinThresh) \
+            else RelocatePCA.screeMinThresh
         self._principalComponents = self._eigen[0] > self._screeThresh
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
 
@@ -699,7 +701,7 @@ class RelocatePCA(object):
         interestingClusters = [
             cid for cid, clu in enumerate(fTypeContext)
             if not clu.length < RelocatePCA.minSegLen
-               and not any([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments])
+               and not sum([isExtendedCharSeq(seg.bytes) for seg in clu.baseSegments]) > .5 * len(clu.baseSegments)
                and not all(clu.stdev == 0)
             # # moved to second iteration below to make it dynamically dependent on the scree-knee:
             # and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)
@@ -713,6 +715,13 @@ class RelocatePCA(object):
             screeKnees[cid] = RelocatePCA.screeKneedle(eigen)
             if all(eigen[0] <= screeKnees[cid]):
                 interestingClusters.remove(cid)
+
+        # for cid, clu in enumerate(fTypeContext):
+        #     if cid not in interestingClusters:
+        #         eigen = numpy.linalg.eigh(fTypeContext[cid].cov)
+        #         print(eigen[0])
+        #         import IPython
+        #         IPython.embed()
 
         return interestingClusters, eigenVnV, screeKnees
 
@@ -740,14 +749,16 @@ class RelocatePCA(object):
         # Re-Cluster
         # number of principal components
         if sum(self._eigen[0] > self._screeThresh) > self._eigen[0].shape[0] * RelocatePCA.principalCountThresh:
+                # and any(self._eigen[0] < RelocatePCA.screeMinThresh):
             print("Cluster {} needs reclustering: too many principal components.".format(
                 self._similarSegments.fieldtype))
             if dc is None:
                 print("No dissimilarities available. Ignoring cluster.")
                 return list()
             else:
-                # TODO add some kind of reliable exit condition
                 # Re-Cluster
+                import IPython
+                IPython.embed()
                 clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
                 noise, *clusters = clusterer.clusterSimilarSegments(False)
                 # Generate suitable FieldTypeContext objects from the sub-clusters
@@ -770,6 +781,7 @@ class RelocatePCA(object):
                     print("# # Cluster", iC)
                     subRpca = RelocatePCA(fTypeContext[iC])
                     relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
+                    # TODO add some kind of reliable exit condition
                     retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC]]
                 return retValCollection
 

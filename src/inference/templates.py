@@ -587,7 +587,7 @@ class DistanceCalculator(object):
 
 
     @staticmethod
-    def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
+    def calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
         Tuple[int, int, float]
     ]:
         # noinspection PyProtectedMember,PyTypeChecker
@@ -601,7 +601,7 @@ class DistanceCalculator(object):
         ...              (2, 4, (0, 0, 0, 0)),
         ...              (3, 4, (1, 2, 3, 4)),
         ...              (4, 4, (3, 2, 3, 4))]
-        >>> pprint(DistanceCalculator._calcDistances(testdata, 'canberra'))
+        >>> pprint(DistanceCalculator.calcDistances(testdata, 'canberra'))
         [(0, 1, 3.4467338608183682),
          (0, 2, 4.0),
          (0, 3, 0.0),
@@ -903,8 +903,8 @@ class DistanceCalculator(object):
         if DistanceCalculator.debug:
             print("    outersegs, length {}, segments {}".format(outerlen, len(outersegs)))
         # a) for segments of identical length: call _calcDistancesPerLen()
-        # TODO something outside of _calcDistances takes a lot longer to return during the embedding loop. Investigate.
-        ilDist = DistanceCalculator._calcDistances(outersegs, method=self._method)
+        # TODO something outside of calcDistances takes a lot longer to return during the embedding loop. Investigate.
+        ilDist = DistanceCalculator.calcDistances(outersegs, method=self._method)
         # # # # # # # # # # # # # # # # # # # # # # # #
         distance.extend([(i, l,
                           self.thresholdFunction(
@@ -1191,7 +1191,11 @@ class Template(AbstractSegment):
 
     @property
     def bytes(self):
-        return bytes(self._values) if isinstance(self._values, Iterable) else None
+        if isinstance(self._values, numpy.ndarray):
+            return bytes(self._values.astype(int).tolist())
+        if isinstance(self._values, Iterable):
+            return bytes(self._values)
+        return None
 
 
     @property
@@ -1456,25 +1460,99 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             self._maxLen = max(segLens)
             # Better than the longest would be the most common length, but that would increase complexity a lot and
             #   we assume that for most use cases the longest segments will be the most frequent length.
+            # TODO -1 shift could also be necessary for comparing two max-long segments
             maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(relevantSegs, 1)
                           if seg.length == self._maxLen]
             segE = list()
-            for seg in baseSegments:
-                if set(seg.values) == {0}:
+            for seg in relevantSegs:
+                if seg.length == self._maxLen:
+                    # only-zero segments are irrelevant and maxLenSegs are processed afterwards.
                     continue
-                if seg.length < self._maxLen:
-                    shortSeg = (0, seg.length, tuple(seg.values))
-                    # TODO overlapping offset from -1
-                    offsets = [DistanceCalculator.embedSegment(shortSeg, longSeg, method)[1] for longSeg in maxLenSegs]
-                    offCount = Counter(offsets)
-                    self._baseOffsets[seg] = offCount.most_common(1)[0][0]
-                    paddedVals = self.paddedValues(seg)
-                    if debug:
-                        from tabulate import tabulate
-                        print(tabulate((maxLenSegs[0][2], paddedVals)))
-                    segE.append(paddedVals)
+                shortSeg = (0, seg.length, tuple(seg.values))
+                # offsets = [DistanceCalculator.embedSegment(shortSeg, longSeg, method)[1] for longSeg in maxLenSegs]
+
+                embeddingsStraight = [DistanceCalculator.embedSegment(shortSeg, longSeg, method) for longSeg in
+                                      maxLenSegs]
+                if seg.length > 2:
+                    evenShorter = (0, seg.length - 1, tuple(seg.values[1:]))
+                    embeddingsTrunc = [DistanceCalculator.embedSegment(evenShorter, longSeg, method) for longSeg in
+                                          maxLenSegs]
+                    # method, shift, (shortSegment[0], longSegment[0], distance)
+                    longStraightDistLookup = { es[2][1]: es[2][2] for es in embeddingsStraight }
+                    longTruncDistLookup = { et[2][1]: et[2][2] for et in embeddingsTrunc }
+                    truncMatchDists = [(longTruncDistLookup[longSeg[2][1]],
+                                        longStraightDistLookup[longSeg[2][1]])
+                                       for longSeg in embeddingsStraight]
+                    if all(list(map(lambda x: x[0]<x[1]-1, truncMatchDists))) \
+                            and all([es[1] == 0 for es in embeddingsTrunc]):
+                        offsets = [-1] * len(embeddingsStraight)
+                    else:
+                        offsets = [es[1] for es in embeddingsStraight]
                 else:
-                    segE.append(list(seg.values))
+                    offsets = [es[1] for es in embeddingsStraight]
+
+                offCount = Counter(offsets)
+                self._baseOffsets[seg] = offCount.most_common(1)[0][0]
+                paddedVals = self.paddedValues(seg)
+                if debug:
+                    from tabulate import tabulate
+                    print(tabulate((maxLenSegs[0][2], paddedVals)))
+                segE.append(paddedVals)
+
+            if len(maxLenSegs) > 1 and self._maxLen > 2:
+                embeddingsStraight = DistanceCalculator.calcDistances(maxLenSegs)
+                longStraightDistLookup = {(es[0], es[1]): es[2] for es in embeddingsStraight}
+
+                for segIdx, segLen, segVals in maxLenSegs:
+
+                    seg = relevantSegs[segIdx - 1]
+                    assert seg.values == segVals, "Wrong segment selected during maxLenSegs truncation."
+
+                    evenShorter = (0, segLen - 1, tuple(segVals[1:]))
+                    embeddingsTrunc = [DistanceCalculator.embedSegment(evenShorter, longSeg, method) for longSeg in
+                                       maxLenSegs if longSeg[0] != segIdx]
+                    longTruncDistLookup = { et[2][1]: et[2][2] for et in embeddingsTrunc }
+                    truncMatchDists = [(longTruncDistLookup[longSeg[2][1]],
+                                        longStraightDistLookup[
+                                            (longSeg[2][1], segIdx) if (longSeg[2][1], segIdx) in longStraightDistLookup
+                                            else (segIdx, longSeg[2][1])
+                                        ],
+                                        longSeg[2][1])
+                                       for longSeg in embeddingsTrunc]
+
+                    if method != 'canberra':
+                        # TODO this "-1" is canberra specific. Other methods need different values.
+                        raise NotImplementedError("Threshold for non-caberra dissimilarity improvement is not yet"
+                                                  "defined.")
+
+                    # DEBUG
+                    if debug:
+                        for truncD, straightD, longIdx in truncMatchDists:
+                            if truncD < straightD - 1:
+                                longSeg = next(mls for mls in maxLenSegs if mls[0] == longIdx)
+                                offset = next(et[1] for et in embeddingsTrunc if et[2][1] == longIdx)
+                                comp = [["({})".format(segVals[0])] + list(evenShorter[2]), [""] + list(longSeg[2])]
+                                from tabulate import tabulate
+                                print("Offset", offset, "- truncD", truncD, "- straightD", straightD)
+                                print(tabulate(comp))
+                                # import IPython
+                                # IPython.embed()
+
+                    if all(map(lambda x: x[0]<x[1]-1, truncMatchDists)) \
+                            and all([es[1] == 0 for es in embeddingsTrunc]):
+                        # offsets = [-1] * len(embeddingsStraight)
+                        # offCount = Counter(offsets)
+                        # self._baseOffsets[seg] = offCount.most_common(1)[0][0]
+                        self._baseOffsets[seg] = -1
+                        paddedVals = self.paddedValues(seg)
+                        segE.append(paddedVals)
+                    else:
+                        segE.append(list(segVals))
+
+            else:
+                segE.extend([list(segT[2]) for segT in maxLenSegs])
+
+
             segV = numpy.array(segE)
         else:
             # handle situation when no base segment is relevant (all are zeros)
@@ -1527,8 +1605,9 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
 
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
-        # TODO overlapping offset from -1
-        vals = [numpy.nan] * shift + list(segment.values) + [numpy.nan] * (self._maxLen - shift - segment.length)
+        # overlapping offset from -1
+        segvals = list(segment.values) if shift >= 0 else list(segment.values)[-shift:]
+        vals = [numpy.nan] * shift + segvals + [numpy.nan] * (self._maxLen - shift - segment.length)
         return vals
 
     @property
@@ -1576,7 +1655,7 @@ class FieldTypeContext(FieldTypeTemplate):
             # noinspection PyTypeChecker
             return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
 
-        # TODO overlapping offset from -1
+
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         paddedOffset = segment.offset - shift
         if paddedOffset < 0:
@@ -1597,7 +1676,11 @@ class FieldTypeContext(FieldTypeTemplate):
         #     IPython.embed()
 
         assert len(values) == self._maxLen, "value padding failed"
-        assert values[shift:shift+segment.length] == segment.values, "value padding failed"
+        # overlapping offset from -1
+        if shift >= 0:
+            assert values[shift:shift + segment.length] == segment.values, "value padding failed (positive shift)"
+        else:
+            assert values[0:shift + segment.length] == segment.values[-shift:], "value padding failed (negative shift)"
         return values
 
 

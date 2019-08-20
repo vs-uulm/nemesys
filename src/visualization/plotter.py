@@ -1,8 +1,9 @@
 from os.path import splitext, basename, join, exists
 from typing import List
 
-
 import matplotlib.pyplot as plt
+
+from utils.evaluationHelpers import reportFolder
 
 
 class MessagePlotter(object):
@@ -50,7 +51,7 @@ class MessagePlotter(object):
         if none of the same name already exists. Closes all figures afterwards.
         """
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
-        plotfile = join('reports', '{}_{}.pdf'.format(self._title, pcapName))
+        plotfile = join(reportFolder, '{}_{}.pdf'.format(self._title, pcapName))
 
         plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))

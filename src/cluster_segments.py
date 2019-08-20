@@ -4,6 +4,7 @@ segment messages by NEMESYS and cluster
 
 import argparse, IPython
 from os.path import isfile, basename, join, splitext, exists
+from os import makedirs
 from math import log
 from typing import Union
 import matplotlib.pyplot as plt
@@ -124,6 +125,8 @@ if __name__ == '__main__':
     # tabuSeqOfSeg(trueSegmentedMessages)
     # print(trueSegmentedMessages.values())
 
+    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
+    makedirs(reportFolder)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Determine the amount of off-by-one errors
@@ -241,6 +244,14 @@ if __name__ == '__main__':
         # else:
         #     print("Bartlett’s and KMO tests impossible: only one factor is non-constant.")
         # # ==> Factor Analysis not feasible for our use case
+        #
+        # import sklearn
+        # fa = sklearn.decomposition.FactorAnalysis(2)
+        # fa.fit(fTypeContext[5].paddedValues())
+        # plt.plot(abs(fa.components_.T))
+        # plt.show()
+        # plt.imshow(abs(fa.components_.T))
+        # plt.show()
         # # # # # # # # # # # # # # # # # # # # # # # # #
 
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -342,13 +353,18 @@ if __name__ == '__main__':
                 sdp.writeOrShowFigure()
                 del sdp
         else:
-            if withPlots:
-                pcaRelocator = RelocatePCA(fTypeContext[iC], eigenVnV[iC])
-                relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
-                if isinstance(relocateFromEnd, dict):
-                    # TODO add support for subclustering, where the method returns a dict of relecant information about each subcluster
-                    continue
+            pcaRelocator = RelocatePCA(fTypeContext[iC], eigenVnV[iC])
+            relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
+            # TODO evaluate:
+            #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+            #  values [0, len] as bounds for all segments in the cluster.
+            if isinstance(relocateFromEnd, dict):
+                # TODO add support for subclustering, where the method returns a dict of relecant information about each subcluster
+                print("Subclustering result in relocateFromEnd...")
+                IPython.embed()
+                continue
 
+            if withPlots:
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # Count true boundaries for the segments' relative positions
                 trueOffsets = list()
@@ -363,16 +379,31 @@ if __name__ == '__main__':
                 compFig = plt.figure()
                 compAx = compFig.add_subplot(1,1,1)
                 try:
+                    compAx.axhline(0, color="black", linewidth=1, alpha=.4)
                     if not any(pcaRelocator.principalComponents):
                         # if there is no principal component, plot all vectors for investigation
                         principalComponents = numpy.array([True]*eigenVnV[iC][0].shape[0])
+
+                        eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(eigenVnV[iC][0], eigenVnV[iC][1].T)],
+                                            key=lambda x: x[0])))
+                        eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
+
                         noPrinComps = True
                     else:
+                        eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(
+                            eigenVnV[iC][0][pcaRelocator.principalComponents], pcaRelocator.contribution.T)],
+                                            key=lambda x: x[0])))
+                        eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
+
+                        # lines = compAx.plot(pcaRelocator.contribution)  # type: List[plt.Line2D]
+                        # for i, (l, ev) in enumerate(zip(lines, eigenVnV[iC][0][pcaRelocator.principalComponents])):
+                        #     l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
                         noPrinComps = False
-                    compAx.axhline(0, color="black", linewidth=1, alpha=.4)
-                    lines = compAx.plot(pcaRelocator.contribution)  # type: List[plt.Line2D]
-                    for i, (l, ev) in enumerate(zip(lines, eigenVnV[iC][0][pcaRelocator.principalComponents])):
+                    # IPython.embed()
+                    lines = compAx.plot(eigVecS)  # type: List[plt.Line2D]
+                    for i, (l, ev) in enumerate(zip(lines, [eigVal[0] for eigVal in eigVsorted])):
                         l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
+
                     # mark correct boundaries with the intensity (alpha) of the relative offset
                     for offs, cnt in truOffCnt.most_common():
                         compAx.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
@@ -411,6 +442,7 @@ if __name__ == '__main__':
                     heatAx.axhline(offs - 0.5, color="white", linewidth=1.5,
                                 alpha=cnt / max(truOffCnt.values()))
                 heatAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
+                heatAx.yaxis.set_major_locator(ticker.MultipleLocator(1))
                 heatFig.colorbar(heatMap)
                 heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
                 plt.close(heatFig)

@@ -14,8 +14,6 @@ from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegm
     refinements, charRefinements, segmentsFixed
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC
-from visualization.multiPlotter import MultiMessagePlotter
-
 
 # available analysis methods
 analyses = {
@@ -256,6 +254,8 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     :param isInteractive:
     :return:
     """
+    from visualization.multiPlotter import MultiMessagePlotter
+
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
 
