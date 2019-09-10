@@ -1057,7 +1057,7 @@ class DistanceCalculator(object):
                 * the index of the neigbor (from self.segments or the subset list, respectively) and
                 * the distance to this neighbor
         """
-        home = self._seg2idx[segment]
+        home = self.segments2index([segment])[0]
         if subset:
             mask = self.segments2index(subset)
             assert len(mask) == len(subset)

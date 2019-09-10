@@ -677,13 +677,18 @@ class RelocatePCA(object):
 
     @staticmethod
     def screeKneedle(eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]) -> float:
+        """
+
+        :param eigenValuesAndVectors:
+        :return: y-value of the knee, 0 if there is no knee.
+        """
         scree = list(reversed(sorted(eigenValuesAndVectors[0].tolist())))
         kl = KneeLocator(
             list(range(eigenValuesAndVectors[0].shape[0])),
             scree,
             S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
                                                            # delta sets the knee before this point.
-        return scree[kl.knee]
+        return scree[kl.knee] if isinstance(kl.knee, int) else 0.0
 
 
     @staticmethod
@@ -745,6 +750,8 @@ class RelocatePCA(object):
         from os.path import join, exists
         import csv
 
+        import IPython
+
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # Re-Cluster
         # number of principal components
@@ -756,36 +763,50 @@ class RelocatePCA(object):
                 print("No dissimilarities available. Ignoring cluster.")
                 return list()
             else:
-                # Re-Cluster
-                import IPython
-                IPython.embed()
-                clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
-                noise, *clusters = clusterer.clusterSimilarSegments(False)
-                # Generate suitable FieldTypeContext objects from the sub-clusters
-                fTypeContext = list()
-                for cLabel, segments in enumerate(clusters):
-                    resolvedSegments = list()
-                    for seg in segments:
-                        if isinstance(seg, Template):
-                            resolvedSegments.extend(seg.baseSegments)
-                        else:
-                            resolvedSegments.append(seg)
-                    fcontext = FieldTypeContext(resolvedSegments)
-                    fcontext.fieldtype = self._similarSegments.fieldtype + "." + cLabel
-                    fTypeContext.append(fcontext)
-                # Determine clusters with relevant properties for further analysis
-                interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
-                # Do PCA on all interesting clusters
-                retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
-                for iC in interestingClusters:
-                    print("# # Cluster", iC)
-                    subRpca = RelocatePCA(fTypeContext[iC])
-                    relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
-                    # TODO add some kind of reliable exit condition
-                    retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC]]
-                return retValCollection
+                # if there remain too few segments to cluster, continue and try to do the analysis for the whole FieldTypeContext
+                if len(self._similarSegments.baseSegments) > 3:  # TODO this is not working sufficiently!
+                    # Re-Cluster
+                    try:
+                        clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
+                        noise, *clusters = clusterer.clusterSimilarSegments(False)
+                    except Exception as e:
+                        print()
+                        print(e)
+                        print()
+                        IPython.embed()
 
-            # TODO test re-clustering
+                    # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
+                    if len(clusters) > 0:
+                        # Generate suitable FieldTypeContext objects from the sub-clusters
+                        fTypeContext = list()
+                        for cLabel, segments in enumerate(clusters):
+                            resolvedSegments = list()
+                            for seg in segments:
+                                if isinstance(seg, Template):
+                                    resolvedSegments.extend(seg.baseSegments)
+                                else:
+                                    resolvedSegments.append(seg)
+                            fcontext = FieldTypeContext(resolvedSegments)
+                            fcontext.fieldtype = "{}.{}".format(self._similarSegments.fieldtype, cLabel)
+                            fTypeContext.append(fcontext)
+                        # Determine clusters with relevant properties for further analysis
+                        interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+                        print(interestingClusters, "from", len(clusters), "clusters")
+                        #
+                        # IPython.embed()
+                        # Do PCA on all interesting clusters
+                        retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
+                        for iC in interestingClusters:
+                            print("# # Cluster", fTypeContext[iC].fieldtype)
+                            subRpca = RelocatePCA(fTypeContext[iC])
+                            relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
+                            # TODO add some kind of reliable exit condition
+
+                            retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC]]
+                        return retValCollection
+                    # TODO test re-clustering
+
+
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # "component-analysis"
