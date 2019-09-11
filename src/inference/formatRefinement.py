@@ -5,7 +5,8 @@ import numpy
 from kneed import KneeLocator
 
 from inference.segments import MessageSegment
-from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template
+from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template, \
+    ClusterAutoconfException
 from validation.dissectorMatcher import MessageComparator
 
 def isPrintableChar(char: int):
@@ -674,6 +675,13 @@ class RelocatePCA(object):
         self._principalComponents = self._eigen[0] > self._screeThresh
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
 
+        self._testSubclusters = None
+
+
+    @property
+    def similarSegments(self):
+        return self._similarSegments
+
 
     @staticmethod
     def screeKneedle(eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]) -> float:
@@ -691,16 +699,9 @@ class RelocatePCA(object):
         return scree[kl.knee] if isinstance(kl.knee, int) else 0.0
 
 
-    @staticmethod
-    def filterRelevantClusters(fTypeContext: Sequence[FieldTypeContext]):
-        """
 
-        :param fTypeContext:
-        :return: tuple containing:
-            * list of indices of the given fTypeContext that are relevant.
-            * dict of eigenvalues and vectors with the fTypeContext indices as keys
-            * dict of scree-knee values with the fTypeContext indices as keys
-        """
+    @staticmethod
+    def filterForSubclustering(fTypeContext: Sequence[FieldTypeContext]):
         from inference.segmentHandler import isExtendedCharSeq
 
         interestingClusters = [
@@ -711,6 +712,22 @@ class RelocatePCA(object):
             # # moved to second iteration below to make it dynamically dependent on the scree-knee:
             # and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)
         ]
+        return interestingClusters
+
+
+    @staticmethod
+    def filterRelevantClusters(fTypeContext: Sequence[FieldTypeContext]):
+        """
+        Filteres clusters that have the required properties to be subclustered. Ensures that the kneedle algorithm
+        can be run on each cluster of the resulting subset of clusters.
+
+        :param fTypeContext:
+        :return: tuple containing:
+            * list of indices of the given fTypeContext that are relevant.
+            * dict of eigenvalues and vectors with the fTypeContext indices as keys
+            * dict of scree-knee values with the fTypeContext indices as keys
+        """
+        interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
 
         eigenVnV = dict()
         screeKnees = dict()
@@ -746,16 +763,17 @@ class RelocatePCA(object):
         return self._contribution
 
 
-    def relocateBoundaries(self, dc: DistanceCalculator=None, reportFolder:str = None, trace:str = None):
-        from os.path import join, exists
-        import csv
-
+    def getSubclusters(self, dc: DistanceCalculator=None):
+        # TODO test re-clustering
         import IPython
+
+        maxAbsolutePrincipals = 4
 
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # Re-Cluster
         # number of principal components
-        if sum(self._eigen[0] > self._screeThresh) > self._eigen[0].shape[0] * RelocatePCA.principalCountThresh:
+        if sum(self._eigen[0] > self._screeThresh) > min(maxAbsolutePrincipals,
+                                                         self._eigen[0].shape[0] * RelocatePCA.principalCountThresh):
                 # and any(self._eigen[0] < RelocatePCA.screeMinThresh):
             print("Cluster {} needs reclustering: too many principal components.".format(
                 self._similarSegments.fieldtype))
@@ -765,48 +783,73 @@ class RelocatePCA(object):
             else:
                 # if there remain too few segments to cluster, continue and try to do the analysis for the whole FieldTypeContext
                 if len(self._similarSegments.baseSegments) > 3:  # TODO this is not working sufficiently!
-                    # Re-Cluster
                     try:
+                        # Re-Cluster
                         clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
                         noise, *clusters = clusterer.clusterSimilarSegments(False)
-                    except Exception as e:
-                        print()
-                        print(e)
-                        print()
-                        IPython.embed()
+                        print(self._similarSegments.fieldtype,
+                              clusterer, "- cluster sizes:", [len(s) for s in clusters], "- noise:", len(noise))
 
-                    # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
-                    if len(clusters) > 0:
-                        # Generate suitable FieldTypeContext objects from the sub-clusters
-                        fTypeContext = list()
-                        for cLabel, segments in enumerate(clusters):
-                            resolvedSegments = list()
-                            for seg in segments:
-                                if isinstance(seg, Template):
-                                    resolvedSegments.extend(seg.baseSegments)
+                        if self._similarSegments.fieldtype == "tf09.0":
+                            IPython.embed()
+
+                        # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
+                        if len(clusters) > 0:
+                            # Generate suitable FieldTypeContext objects from the sub-clusters
+                            fTypeContext = list()
+                            for cLabel, segments in enumerate(clusters):
+                                resolvedSegments = list()
+                                for seg in segments:
+                                    if isinstance(seg, Template):
+                                        resolvedSegments.extend(seg.baseSegments)
+                                    else:
+                                        resolvedSegments.append(seg)
+                                fcontext = FieldTypeContext(resolvedSegments)
+                                fcontext.fieldtype = "{}.{}".format(self._similarSegments.fieldtype, cLabel)
+                                fTypeContext.append(fcontext)
+                            # self._testSubclusters = fTypeContext
+                            # Determine clusters with relevant properties for further analysis
+                            # interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+                            # print(interestingClusters, "from", len(clusters), "clusters")
+
+                            # Do PCA on all interesting clusters
+                            # retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
+                            # for iC in interestingClusters:
+                            #     print("Analyzing sub-cluster", fTypeContext[iC].fieldtype)
+                            #     subRpca = RelocatePCA(fTypeContext[iC])
+                            #     relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
+                            #
+                            #     retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
+                            # return retValCollection
+
+                            interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
+                            subclusters = list()
+                            for cid, subcluster in enumerate(fTypeContext):
+                                print("Analyzing sub-cluster", subcluster.fieldtype)
+                                subRpca = RelocatePCA(subcluster)
+                                if cid in interestingClusters:
+                                    subclusters.extend(subRpca.getSubclusters(dc))
                                 else:
-                                    resolvedSegments.append(seg)
-                            fcontext = FieldTypeContext(resolvedSegments)
-                            fcontext.fieldtype = "{}.{}".format(self._similarSegments.fieldtype, cLabel)
-                            fTypeContext.append(fcontext)
-                        # Determine clusters with relevant properties for further analysis
-                        interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
-                        print(interestingClusters, "from", len(clusters), "clusters")
-                        #
-                        # IPython.embed()
-                        # Do PCA on all interesting clusters
-                        retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
-                        for iC in interestingClusters:
-                            print("# # Cluster", fTypeContext[iC].fieldtype)
-                            subRpca = RelocatePCA(fTypeContext[iC])
-                            relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
-                            # TODO add some kind of reliable exit condition
+                                    subclusters.append(subRpca)
+                            return subclusters
+                    except ClusterAutoconfException as e:
+                        print(e)
+                        return [self]
 
-                            retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC]]
-                        return retValCollection
-                    # TODO test re-clustering
+        return [self]
 
 
+
+    def relocateBoundaries(self, reportFolder:str = None, trace:str = None):
+        """
+
+        :param reportFolder:
+        :param trace:
+        :return: positions to be relocated if the PCA for the current cluster has meaningful result,
+            otherwise sub-cluster and return the PCA and relocation positions for each sub-cluster.
+        """
+        from os.path import join, exists
+        import csv
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # "component-analysis"

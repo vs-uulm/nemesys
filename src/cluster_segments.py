@@ -6,7 +6,7 @@ import argparse, IPython
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
 from math import log
-from typing import Union
+from typing import Union, Any
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.colors as colors
@@ -32,14 +32,19 @@ tokenizer = 'nemesys'
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
+    """
+    Print messages with the given segment in each message marked.
+    Supports Templates by resolving them to their base segments.
 
-    # TODO support Templates
+    :param segment: list of segments that should be printed, i. e.,
+        marked within the print of the message it is originated from.
+    """
     if isinstance(segment, Template):
         segs = segment.baseSegments
     else:
         segs = [segment]
 
-    print()  # one blank line for structure
+    print()  # one blank line for visual structure
     for seg in segs:
         inf4seg = inferred4segment(seg)
         comparator.pprint2Interleaved(seg.message, [infs.nextOffset for infs in inf4seg],
@@ -79,6 +84,128 @@ def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
 
 def inferredFEs4segment(segment: MessageSegment) -> List[int]:
     return [infs.nextOffset for infs in inferred4segment(segment)]
+
+
+
+def plotComponentAnalysis(pcaRelocator: RelocatePCA, eigValnVec: Tuple[numpy.ndarray], relocateFromEnd: List[int]):
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Count true boundaries for the segments' relative positions
+    trueOffsets = list()
+    for bs in pcaRelocator.similarSegments.baseSegments:
+        fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
+        offs, nxtOffs = pcaRelocator.similarSegments.paddedPosition(bs)
+        trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
+    truOffCnt = Counter(trueOffsets)
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # plotting stuff
+    compFig = plt.figure()
+    compAx = compFig.add_subplot(1, 1, 1)
+    try:
+        compAx.axhline(0, color="black", linewidth=1, alpha=.4)
+        if not any(pcaRelocator.principalComponents):
+            # if there is no principal component, plot all vectors for investigation
+            principalComponents = numpy.array([True] * eigValnVec[0].shape[0])
+
+            eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(eigValnVec[0], eigValnVec[1].T)],
+                                              key=lambda x: x[0])))
+            eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
+
+            noPrinComps = True
+        else:
+            eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(
+                eigValnVec[0][pcaRelocator.principalComponents], pcaRelocator.contribution.T)],
+                                              key=lambda x: x[0])))
+            eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
+
+            # lines = compAx.plot(pcaRelocator.contribution)  # type: List[plt.Line2D]
+            # for i, (l, ev) in enumerate(zip(lines, eigValnVec[0][pcaRelocator.principalComponents])):
+            #     l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
+            noPrinComps = False
+        # IPython.embed()
+        lines = compAx.plot(eigVecS)  # type: List[plt.Line2D]
+        for i, (l, ev) in enumerate(zip(lines, [eigVal[0] for eigVal in eigVsorted])):
+            l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
+
+        # mark correct boundaries with the intensity (alpha) of the relative offset
+        for offs, cnt in truOffCnt.most_common():
+            compAx.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
+        # mark reallocations
+        for rfe in relocateFromEnd:
+            compAx.scatter(rfe - 0.5, 0, c="red")
+        compAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
+        compAx.legend()
+        if noPrinComps:
+            compFig.suptitle("All Eigenvectors (NO Eigenvalue is > {:.0f}) - Cluster ".format(
+                pcaRelocator.screeThresh) + pcaRelocator.similarSegments.fieldtype)
+        else:
+            compFig.suptitle("Principal Eigenvectors (with Eigenvalue > {:.0f}) - Cluster ".format(
+                pcaRelocator.screeThresh) + pcaRelocator.similarSegments.fieldtype)
+        compFig.savefig(join(reportFolder, "component-analysis_{}.pdf".format(pcaRelocator.similarSegments.fieldtype)))
+    except Exception as e:
+        print("\n\n### {} ###\n\n".format(e))
+        IPython.embed()
+    plt.close(compFig)
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # plot heatmaps of covariance matrices "cov-test-heatmap"
+    heatFig = plt.figure()
+    heatAx = heatFig.add_subplot(1, 1, 1)
+
+    # make the colormap symmetric around zero
+    vmax = max(abs(pcaRelocator.similarSegments.cov.min()), abs(pcaRelocator.similarSegments.cov.max()))
+    heatMap = heatAx.imshow(pcaRelocator.similarSegments.cov, cmap='PuOr', norm=colors.Normalize(-vmax, vmax))
+    # logarithmic scale hides the interesting variance differences. For reference on how to do it:
+    #   norm=colors.SymLogNorm(100, vmin=-vmax, vmax=vmax)
+
+    # mark correct boundaries with the intensity (alpha) of the relative offset
+    for offs, cnt in truOffCnt.most_common():
+        heatAx.axvline(offs - 0.5, color="white", linewidth=1.5,
+                       alpha=cnt / max(truOffCnt.values()))
+        heatAx.axhline(offs - 0.5, color="white", linewidth=1.5,
+                       alpha=cnt / max(truOffCnt.values()))
+    heatAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
+    heatAx.yaxis.set_major_locator(ticker.MultipleLocator(1))
+    heatFig.colorbar(heatMap)
+    heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
+    plt.close(heatFig)
+
+
+def plotRecursiveComponentAnalysis(relocateFromEnd: Union[Dict, Any]):
+    """
+    Support for subclustering, where the method returns a dict of relevant information about each subcluster
+
+    :param relocateFromEnd:
+    :return: True if recursion occured, False otherwise
+    """
+    if isinstance(relocateFromEnd, dict):
+        # print("\n\nSubclustering result in relocateFromEnd...\n\n")
+        # IPython.embed()
+        for sc in relocateFromEnd.values():
+            if not plotRecursiveComponentAnalysis(sc[0]):
+                if withPlots:
+                    plotComponentAnalysis(sc[3], sc[1], sc[0])
+        return True
+    else:
+        return False
+
+
+def collectRecursiveComponentAnalysis(relocateFromEnd: List):
+    # relocateFromEnd is either: a list of new boundaries [int]
+    #   or a dict from the (sub-)cluster ID to [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
+
+    collected = list()
+    # print(relocateFromEnd)
+    # IPython.embed()
+    if len(relocateFromEnd) > 0 and isinstance(relocateFromEnd[0], dict):
+        for subcluster in relocateFromEnd[0].values():
+            # IPython.embed()
+            collected.extend(collectRecursiveComponentAnalysis(subcluster))
+        # if relocateFromEnd._testSubclusters:
+        #     print([a.fieldtype for a in sc[3]._testSubclusters])
+    else:
+        collected.append(relocateFromEnd)
+    return collected
 
 
 
@@ -222,7 +349,8 @@ if __name__ == '__main__':
     # interestingClusters = range(len(clusters))  # all
     # interestingClusters = [cid for cid, clu in enumerate(clusters)
     #                        if any([isExtendedCharSeq(seg.bytes) for seg in clu])] # all not-chars
-    interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+    # interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+    interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
 
     for iC in interestingClusters:
         print("# # Cluster", iC)
@@ -260,10 +388,11 @@ if __name__ == '__main__':
             markSegNearMatch(bs)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
+    collectedSubclusters = list()
     for iC in interestingClusters:
         # # # # # # # # # # # # # # # # # # # # # # # #
         if doWobble:
-            print("# # Cluster", iC)
+            print("Cluster", iC)
             # # # # # # # # # # # # # # # # # # # # # # # #
             # wobble segments in one cluster
             # start test with only one cluster: this is thought to be ntp.c1
@@ -353,100 +482,44 @@ if __name__ == '__main__':
                 sdp.writeOrShowFigure()
                 del sdp
         else:
-            pcaRelocator = RelocatePCA(fTypeContext[iC], eigenVnV[iC])
-            relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
-            # TODO evaluate:
-            #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-            #  values [0, len] as bounds for all segments in the cluster.
-            if isinstance(relocateFromEnd, dict):
-                # TODO add support for subclustering, where the method returns a dict of relecant information about each subcluster
-                print("Subclustering result in relocateFromEnd...")
-                IPython.embed()
-                continue
+            pcaRelocator = RelocatePCA(fTypeContext[iC])  # , eigenVnV[iC]
+            collectedSubclusters.extend(pcaRelocator.getSubclusters(dc))
 
-            if withPlots:
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # Count true boundaries for the segments' relative positions
-                trueOffsets = list()
-                for bs in fTypeContext[iC].baseSegments:
-                    fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
-                    offs, nxtOffs = fTypeContext[iC].paddedPosition(bs)
-                    trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
-                truOffCnt = Counter(trueOffsets)
 
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # plotting stuff
-                compFig = plt.figure()
-                compAx = compFig.add_subplot(1,1,1)
-                try:
-                    compAx.axhline(0, color="black", linewidth=1, alpha=.4)
-                    if not any(pcaRelocator.principalComponents):
-                        # if there is no principal component, plot all vectors for investigation
-                        principalComponents = numpy.array([True]*eigenVnV[iC][0].shape[0])
+            # relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
+            # # relocateFromEnd is either: a list of new boundaries (ints)
+            # #   or a dict from the (sub-)cluster ID to [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
+            # # IPython.embed()
+            #
+            # if len(relocateFromEnd) < 1 or not isinstance(relocateFromEnd[0], dict):
+            #     collectedSubclusters.append([relocateFromEnd, eigenVnV[iC], screeKnees[iC], None])
+            # else:
+            #     collectedSubclusters.extend(collectRecursiveComponentAnalysis(relocateFromEnd))
+            #
+            # # TODO evaluate:
+            # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+            # #  values [0, len] as bounds for all segments in the cluster.
+            # if plotRecursiveComponentAnalysis(relocateFromEnd):
+            #     # support for subclustering
+            #     # print("\n\nSubclustering result in relocateFromEnd...\n\n")
+            #     # IPython.embed()
+            #     # for sc in relocateFromEnd.values():
+            #     #     if withPlots:
+            #     #         plotComponentAnalysis(sc[3], sc[1], sc[0])
+            #     continue
+            #
+            # if withPlots:
+            #     plotComponentAnalysis(pcaRelocator, eigenVnV[iC], relocateFromEnd)
 
-                        eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(eigenVnV[iC][0], eigenVnV[iC][1].T)],
-                                            key=lambda x: x[0])))
-                        eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
-
-                        noPrinComps = True
-                    else:
-                        eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(
-                            eigenVnV[iC][0][pcaRelocator.principalComponents], pcaRelocator.contribution.T)],
-                                            key=lambda x: x[0])))
-                        eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
-
-                        # lines = compAx.plot(pcaRelocator.contribution)  # type: List[plt.Line2D]
-                        # for i, (l, ev) in enumerate(zip(lines, eigenVnV[iC][0][pcaRelocator.principalComponents])):
-                        #     l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
-                        noPrinComps = False
-                    # IPython.embed()
-                    lines = compAx.plot(eigVecS)  # type: List[plt.Line2D]
-                    for i, (l, ev) in enumerate(zip(lines, [eigVal[0] for eigVal in eigVsorted])):
-                        l.set_label(repr(i + 1) + ", $\lambda=$" + "{:.1f}".format(ev))
-
-                    # mark correct boundaries with the intensity (alpha) of the relative offset
-                    for offs, cnt in truOffCnt.most_common():
-                        compAx.axvline(offs - 0.5, color="black", linewidth=.5, alpha=cnt / max(truOffCnt.values()))
-                    # mark reallocations
-                    for rfe in relocateFromEnd:
-                        compAx.scatter(rfe-0.5, 0, c="red")
-                    compAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
-                    compAx.legend()
-                    if noPrinComps:
-                        compFig.suptitle("All Eigenvectors (NO Eigenvalue is > {:.0f}) - Cluster ".format(
-                            pcaRelocator.screeThresh) + repr(iC))
-                    else:
-                        compFig.suptitle("Principal Eigenvectors (with Eigenvalue > {:.0f}) - Cluster ".format(
-                            pcaRelocator.screeThresh) + repr(iC))
-                    compFig.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(iC)))
-                except Exception as e:
-                    print("\n\n### {} ###\n\n".format(e))
-                    IPython.embed()
-                plt.close(compFig)
-
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # plot heatmaps of covariance matrices "cov-test-heatmap"
-                heatFig = plt.figure()
-                heatAx = heatFig.add_subplot(1,1,1)
-
-                # make the colormap symmetric around zero
-                vmax = max(abs(fTypeContext[iC].cov.min()), abs(fTypeContext[iC].cov.max()))
-                heatMap = heatAx.imshow(fTypeContext[iC].cov, cmap='PuOr', norm=colors.Normalize(-vmax, vmax))
-                # logarithmic scale hides the interesting variance differences. For reference on how to do it:
-                #   norm=colors.SymLogNorm(100, vmin=-vmax, vmax=vmax)
-
-                # mark correct boundaries with the intensity (alpha) of the relative offset
-                for offs, cnt in truOffCnt.most_common():
-                    heatAx.axvline(offs - 0.5, color="white", linewidth=1.5,
-                                alpha=cnt / max(truOffCnt.values()))
-                    heatAx.axhline(offs - 0.5, color="white", linewidth=1.5,
-                                alpha=cnt / max(truOffCnt.values()))
-                heatAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
-                heatAx.yaxis.set_major_locator(ticker.MultipleLocator(1))
-                heatFig.colorbar(heatMap)
-                heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
-                plt.close(heatFig)
-
+    relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
+        [a.similarSegments for a in collectedSubclusters])
+    for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+        print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
+        if withPlots:
+            relocateFromEnd = sc.relocateBoundaries(reportFolder, splitext(pcapbasename)[0])
+            plotComponentAnalysis(sc,
+                                  eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
+                                  relocateFromEnd)
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
 

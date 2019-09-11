@@ -14,6 +14,12 @@ from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegmen
 debug = False
 
 
+class ClusterAutoconfException(Exception):
+    def __init__(self, description: str):
+        super().__init__(description)
+
+
+
 class InterSegment(object):
     """
     Two segments and their similarity resp. distance.
@@ -2212,7 +2218,9 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
-        epsilon = kneel.knee * 0.8
+        if kneel.knee is None:
+            raise ClusterAutoconfException("No knee could be found.")
+        epsilon = kneel.knee * 0.8  # TODO use KneeLocator's parameter "S" instead.
 
         print("eps {:0.3f} autoconfigured (Kneedle on ECDF) from k {}".format(epsilon, k))
         return min_samples, epsilon
