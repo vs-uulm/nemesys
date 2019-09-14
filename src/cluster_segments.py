@@ -384,8 +384,8 @@ if __name__ == '__main__':
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # determine cluster contents in message context
-        for bs in clusters[iC]:
-            markSegNearMatch(bs)
+        # for bs in clusters[iC]:
+        #     markSegNearMatch(bs)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
     collectedSubclusters = list()
@@ -515,11 +515,13 @@ if __name__ == '__main__':
         [a.similarSegments for a in collectedSubclusters])
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
-        if withPlots:
-            relocateFromEnd = sc.relocateBoundaries(reportFolder, splitext(pcapbasename)[0])
+        if withPlots and cid in relevantSubclusters:
+            relocateFromEnd = sc.relocateBoundaries(reportFolder, splitext(pcapbasename)[0], comparator)
             plotComponentAnalysis(sc,
                                   eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
                                   relocateFromEnd)
+            for bs in sc.similarSegments.baseSegments:
+                markSegNearMatch(bs)
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
 

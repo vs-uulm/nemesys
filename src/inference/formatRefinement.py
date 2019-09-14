@@ -790,8 +790,8 @@ class RelocatePCA(object):
                         print(self._similarSegments.fieldtype,
                               clusterer, "- cluster sizes:", [len(s) for s in clusters], "- noise:", len(noise))
 
-                        if self._similarSegments.fieldtype == "tf09.0":
-                            IPython.embed()
+                        # if self._similarSegments.fieldtype == "tf09.0":
+                        #     IPython.embed()
 
                         # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
                         if len(clusters) > 0:
@@ -840,16 +840,30 @@ class RelocatePCA(object):
 
 
 
-    def relocateBoundaries(self, reportFolder:str = None, trace:str = None):
+    def relocateBoundaries(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None):
         """
 
         :param reportFolder:
         :param trace:
+        :param comparator:
         :return: positions to be relocated if the PCA for the current cluster has meaningful result,
             otherwise sub-cluster and return the PCA and relocation positions for each sub-cluster.
         """
         from os.path import join, exists
         import csv
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # Count true boundaries for the segments' relative positions
+        if comparator:
+            from collections import Counter
+            trueOffsets = list()
+            for bs in self.similarSegments.baseSegments:
+                fe = comparator.fieldEndsPerMessage(bs.analyzer.message)
+                offs, nxtOffs = self.similarSegments.paddedPosition(bs)
+                trueOffsets.extend(o - offs for o in fe if offs <= o <= nxtOffs)
+            truOffCnt = Counter(trueOffsets)
+            mostCommonTrueBounds = [offs for offs, cnt in truOffCnt.most_common()
+                                    if cnt > 0.5 * len(self.similarSegments.baseSegments)]
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         # "component-analysis"
@@ -861,14 +875,21 @@ class RelocatePCA(object):
         relocateFromEnd = list()  # new boundaries found: relocate the next end to this relative offset
         # relocateFromStart = list()  # new boundaries found: relocate the previous start to this relative offset
 
+        # continue only if we have some principal components
+        if not self.principalComponents.any():
+            return relocateFromEnd
+
         # # Condition a: Covariance ~0 after non-0
         # at which eigenvector component does any of the principal components have a relevant contribution
         contributingLoadingComponents = (abs(self._contribution) > RelocatePCA.contributionRelevant).any(1)
+
 
         for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
             if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1]:
                 relocateFromEnd.append(lc)
 
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # write statistics
                 if reportFolder is not None and trace is not None:
                     fn = join(reportFolder, "pca-conditions-a.csv")
                     writeheader = not exists(fn)
@@ -876,12 +897,22 @@ class RelocatePCA(object):
                         segcsv = csv.writer(segfile)
                         if writeheader:
                             segcsv.writerow(
-                                ["trace", "# cluster", "offset", "contribution high", "contribution low"]
+                                ["trace", "cluster label", "cluster size",
+                                 "max segment length", "# principals",
+                                 "max principal value",
+                                 "is FP",
+                                 "first boundary true",
+                                 "final boundary true",
+                                 "offset", "max contribution before offset", "max contribution at offset"]
                             )
                         segcsv.writerow([
-                            trace, self._similarSegments.fieldtype, lc,
-                            abs(self._contribution[lc - 1]).max(),
-                            abs(self._contribution[lc]).max()
+                            trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                            self.similarSegments.length, sum(self.principalComponents),
+                            self._eigen[0][self._principalComponents].max(),
+                            repr(lc not in mostCommonTrueBounds) if comparator else "",
+                            repr(0 in mostCommonTrueBounds) if comparator else "",
+                            repr(self.similarSegments.length in mostCommonTrueBounds) if comparator else "",
+                            lc, abs(self._contribution[lc - 1]).max(), abs(self._contribution[lc]).max()
                         ])
 
                 # break
@@ -901,6 +932,43 @@ class RelocatePCA(object):
 
         # # Condition d:
         # cancelled
+
+        eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(
+            self._eigen[0][self.principalComponents], self.contribution.T)],
+                                          key=lambda x: x[0])))
+        eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
+
+        # # Condition e: Loading peak of principal component rising from (near) 0.0
+        # that is away more than 1 position from another new cut (see smb tf03)
+        nearZero = 0.01
+        notableContrib = 0.5
+
+        pcLoadings = eigVecS[:, 0]
+        # import IPython
+        # IPython.embed()
+
+        for lc in range(1, pcLoadings.shape[0]):
+            if abs(pcLoadings[lc - 1]) < nearZero and abs(pcLoadings[lc]) > notableContrib:
+                    # and lc not in relocateFromEnd and lc - 1 not in relocateFromEnd and lc + 1 not in relocateFromEnd:
+                relocateFromEnd.append(lc)
+
+        # TODO peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf05 and smb tf04,
+        #   but has false positive dhcp tf01 and smb tf00.4
+
+        # TODO: check if applicable to multiple PCs to get multiple cuts, see smb tf01
+
+        # TODO: check if applicable to higher nearZero or lower notableContrib if longer (> 4?) sequence of nearZero
+        #   precedes notableContrib
+
+        # TODO write csv to evaluate parameters
+        #  columns: near other new bound?, is FP, offset, "principal contribution before offset", "principal contribution at offset"
+
+
+        # # Condition f: inversion of loading of the first principal component if it has a "notable" loading, i. e.,
+        # transition from/to: -0.5 <  --|--  > 0.5
+        # TODO implement
+
+        # TODO write csv to evaluate parameters
 
         return relocateFromEnd
 
