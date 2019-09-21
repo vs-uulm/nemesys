@@ -659,6 +659,7 @@ class RelocatePCA(object):
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
             # interpreted as fraction of the component count as dynamic determination.
     contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
+    maxLengthDelta = 10
 
     def __init__(self, similarSegments: FieldTypeContext,
                  eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
@@ -668,10 +669,13 @@ class RelocatePCA(object):
             else numpy.linalg.eigh(similarSegments.cov)
         self._screeKnee = screeKnee if screeKnee is not None \
             else RelocatePCA.screeKneedle(self._eigen)
-        # defines an absolute minimum
-        self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh) \
-            if any(self._eigen[0] < RelocatePCA.screeMinThresh) \
-            else RelocatePCA.screeMinThresh
+        # defines an minimum for any principal component, that is
+        #       at least the knee in scree,
+        #       not less than one magnitude smaller then the first PC,
+        #       and larger than the absolute minimum.
+        self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh, max(self._eigen[0]) / 10) \
+                                if any(self._eigen[0] < RelocatePCA.screeMinThresh) \
+                                else RelocatePCA.screeMinThresh
         self._principalComponents = self._eigen[0] > self._screeThresh
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
 
@@ -691,12 +695,24 @@ class RelocatePCA(object):
         :return: y-value of the knee, 0 if there is no knee.
         """
         scree = list(reversed(sorted(eigenValuesAndVectors[0].tolist())))
-        kl = KneeLocator(
-            list(range(eigenValuesAndVectors[0].shape[0])),
-            scree,
-            S=.5, curve='convex', direction='decreasing')  # We needed to decrease S (slightly), otherwise an increasing
-                                                           # delta sets the knee before this point.
-        return scree[kl.knee] if isinstance(kl.knee, int) else 0.0
+        try:
+            kl = KneeLocator(
+                list(range(eigenValuesAndVectors[0].shape[0])),
+                scree, curve='convex', direction='decreasing')
+        except ValueError:
+            return 0.0
+        if not isinstance(kl.knee, int):
+            return 0.0
+
+        # if kl.knee > 1:
+        #     print(scree)
+        #     import matplotlib.pyplot as plt
+        #     kl.plot_knee_normalized()
+        #     plt.show()
+        #     # import IPython
+        #     # IPython.embed()
+
+        return scree[kl.knee]
 
 
 
@@ -712,6 +728,7 @@ class RelocatePCA(object):
             # # moved to second iteration below to make it dynamically dependent on the scree-knee:
             # and not all(numpy.linalg.eigh(clu.cov)[0] <= screeMinThresh)
         ]
+
         return interestingClusters
 
 
@@ -729,6 +746,13 @@ class RelocatePCA(object):
         """
         interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
 
+        # leave only clusters of at least minSegLen * 2 (=6)
+        minClusterSize = RelocatePCA.minSegLen * 2
+        for cid in interestingClusters.copy():
+            if len(fTypeContext[cid].baseSegments) < minClusterSize:
+                interestingClusters.remove(cid)
+
+        # remove all clusters that have no knees in scree
         eigenVnV = dict()
         screeKnees = dict()
         for cid in interestingClusters.copy():
@@ -744,6 +768,16 @@ class RelocatePCA(object):
         #         print(eigen[0])
         #         import IPython
         #         IPython.embed()
+
+        # remove all clusters having a segment length difference of more than maxLengthDelta
+        for cid in interestingClusters.copy():
+            bslen = {bs.length for bs in fTypeContext[cid].baseSegments}
+            if max(bslen) - min(bslen) > RelocatePCA.maxLengthDelta:
+                interestingClusters.remove(cid)
+                print("Removed cluster {} for too high segment length difference of {}".format(
+                    fTypeContext[cid].fieldtype,
+                    max(bslen) - min(bslen)
+                ))
 
         return interestingClusters, eigenVnV, screeKnees
 
@@ -763,9 +797,11 @@ class RelocatePCA(object):
         return self._contribution
 
 
-    def getSubclusters(self, dc: DistanceCalculator=None):
-        # TODO test re-clustering
-        import IPython
+    def getSubclusters(self, dc: DistanceCalculator = None, S:float = None, reportFolder:str = None, trace:str = None):
+
+        if reportFolder is not None and trace is not None:
+            from os.path import join, exists
+            import csv
 
         maxAbsolutePrincipals = 4
 
@@ -782,16 +818,36 @@ class RelocatePCA(object):
                 return list()
             else:
                 # if there remain too few segments to cluster, continue and try to do the analysis for the whole FieldTypeContext
-                if len(self._similarSegments.baseSegments) > 3:  # TODO this is not working sufficiently!
+                if len(self._similarSegments.baseSegments) > RelocatePCA.minSegLen:
                     try:
                         # Re-Cluster
-                        clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments)
+                        clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments, S=S)
                         noise, *clusters = clusterer.clusterSimilarSegments(False)
                         print(self._similarSegments.fieldtype,
                               clusterer, "- cluster sizes:", [len(s) for s in clusters], "- noise:", len(noise))
 
-                        # if self._similarSegments.fieldtype == "tf09.0":
-                        #     IPython.embed()
+                        # # # # # # # # # # # # # # # # # # # # # # # #
+                        # write statistics
+                        if reportFolder is not None and trace is not None:
+                            fn = join(reportFolder, "subcluster-parameters.csv")
+                            writeheader = not exists(fn)
+                            with open(fn, "a") as segfile:
+                                segcsv = csv.writer(segfile)
+                                if writeheader:
+                                    segcsv.writerow(
+                                        ["trace", "cluster label", "cluster size",
+                                         "max segment length", "# principals",
+                                         "max principal value",
+                                         "# subclusters", "noise", "Kneedle S", "DBSCAN eps", "DBSCAN min_samples"
+                                         ]
+                                    )
+                                segcsv.writerow([
+                                    trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                                    self.similarSegments.length, sum(self.principalComponents),
+                                    self._eigen[0][self._principalComponents].max(),
+                                    len(clusters), len(noise), clusterer.S, clusterer.eps, clusterer.min_samples
+                                ])
+
 
                         # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
                         if len(clusters) > 0:
@@ -817,9 +873,9 @@ class RelocatePCA(object):
                             # for iC in interestingClusters:
                             #     print("Analyzing sub-cluster", fTypeContext[iC].fieldtype)
                             #     subRpca = RelocatePCA(fTypeContext[iC])
-                            #     relocateFromEnd = subRpca.relocateBoundaries(dc, reportFolder, trace)
+                            #     relocate = subRpca.relocateOffsets(dc, reportFolder, trace)
                             #
-                            #     retValCollection[iC] = [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
+                            #     retValCollection[iC] = [relocate, eigenVnV[iC], screeKnees[iC], subRpca]
                             # return retValCollection
 
                             interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
@@ -828,7 +884,7 @@ class RelocatePCA(object):
                                 print("Analyzing sub-cluster", subcluster.fieldtype)
                                 subRpca = RelocatePCA(subcluster)
                                 if cid in interestingClusters:
-                                    subclusters.extend(subRpca.getSubclusters(dc))
+                                    subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
                                 else:
                                     subclusters.append(subRpca)
                             return subclusters
@@ -839,8 +895,9 @@ class RelocatePCA(object):
         return [self]
 
 
-
-    def relocateBoundaries(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None):
+    def relocateOffsets(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None,
+                        conditionA = True, conditionE1 = True, conditionE2 = True, conditionF = False,
+                        conditionG = False):
         """
 
         :param reportFolder:
@@ -872,62 +929,61 @@ class RelocatePCA(object):
         # towards the end of varying fields with similar content (e.g. counting numbers).
         # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
 
-        relocateFromEnd = list()  # new boundaries found: relocate the next end to this relative offset
+        relocate = list()  # new boundaries found: relocate the next end to this relative offset
         # relocateFromStart = list()  # new boundaries found: relocate the previous start to this relative offset
 
         # continue only if we have some principal components
         if not self.principalComponents.any():
-            return relocateFromEnd
+            return relocate
 
         # # Condition a: Covariance ~0 after non-0
         # at which eigenvector component does any of the principal components have a relevant contribution
         contributingLoadingComponents = (abs(self._contribution) > RelocatePCA.contributionRelevant).any(1)
 
 
-        for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
-            if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1]:
-                relocateFromEnd.append(lc)
+        if conditionA:
+            for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
+                if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1]:
+                    relocate.append(lc)
 
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # write statistics
-                if reportFolder is not None and trace is not None:
-                    fn = join(reportFolder, "pca-conditions-a.csv")
-                    writeheader = not exists(fn)
-                    with open(fn, "a") as segfile:
-                        segcsv = csv.writer(segfile)
-                        if writeheader:
-                            segcsv.writerow(
-                                ["trace", "cluster label", "cluster size",
-                                 "max segment length", "# principals",
-                                 "max principal value",
-                                 "is FP",
-                                 "first boundary true",
-                                 "final boundary true",
-                                 "offset", "max contribution before offset", "max contribution at offset"]
-                            )
-                        segcsv.writerow([
-                            trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
-                            self.similarSegments.length, sum(self.principalComponents),
-                            self._eigen[0][self._principalComponents].max(),
-                            repr(lc not in mostCommonTrueBounds) if comparator else "",
-                            repr(0 in mostCommonTrueBounds) if comparator else "",
-                            repr(self.similarSegments.length in mostCommonTrueBounds) if comparator else "",
-                            lc, abs(self._contribution[lc - 1]).max(), abs(self._contribution[lc]).max()
-                        ])
-
-                # break
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # write statistics
+                    if reportFolder is not None and trace is not None:
+                        fn = join(reportFolder, "pca-conditions-a.csv")
+                        writeheader = not exists(fn)
+                        with open(fn, "a") as segfile:
+                            segcsv = csv.writer(segfile)
+                            if writeheader:
+                                segcsv.writerow(
+                                    ["trace", "cluster label", "cluster size",
+                                     "max segment length", "# principals",
+                                     "max principal value",
+                                     "is FP",
+                                     "first boundary true",
+                                     "final boundary true",
+                                     "offset", "max contribution before offset", "max contribution at offset"]
+                                )
+                            segcsv.writerow([
+                                trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                                self.similarSegments.length, sum(self.principalComponents),
+                                self._eigen[0][self._principalComponents].max(),
+                                repr(lc not in mostCommonTrueBounds) if comparator else "",
+                                repr(0 in mostCommonTrueBounds) if comparator else "",
+                                repr(self.similarSegments.length in mostCommonTrueBounds) if comparator else "",
+                                lc, abs(self._contribution[lc - 1]).max(), abs(self._contribution[lc]).max()
+                            ])
 
         # # # Condition b: Loadings peak in the middle a segment
         # principalLoadingPeak = abs(self._eigen[1][:, self._eigen[0].argmax()]).argmax()
         # if principalLoadingPeak < self._eigen[0].shape[0] - 1:
-        #     relocateFromEnd.append(principalLoadingPeak+1)
+        #     relocate.append(principalLoadingPeak+1)
 
         # # # Condition c:
         # tailSize = 1
         # if not contributingLoadingComponents[:-tailSize].any():
         #     for tailP in range(tailSize, 0, -1):
         #         if contributingLoadingComponents[-tailP]:
-        #             relocateFromEnd.append(self._eigen[0].shape[0] - tailSize)
+        #             relocate.append(self._eigen[0].shape[0] - tailSize)
         #             break
 
         # # Condition d:
@@ -939,38 +995,211 @@ class RelocatePCA(object):
         eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
 
         # # Condition e: Loading peak of principal component rising from (near) 0.0
-        # that is away more than 1 position from another new cut (see smb tf03)
-        nearZero = 0.01
-        notableContrib = 0.5
+        #
+        # e1 parameters
+        nearZero = 0.003
+        notableContrib = 0.66  # or 0.7 (see smb tf04)
+        # peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf06 and smb tf04,
+        #   however, it has false positive dhcp tf01 and smb tf00.4
 
-        pcLoadings = eigVecS[:, 0]
-        # import IPython
-        # IPython.embed()
-
-        for lc in range(1, pcLoadings.shape[0]):
-            if abs(pcLoadings[lc - 1]) < nearZero and abs(pcLoadings[lc]) > notableContrib:
-                    # and lc not in relocateFromEnd and lc - 1 not in relocateFromEnd and lc + 1 not in relocateFromEnd:
-                relocateFromEnd.append(lc)
-
-        # TODO peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf05 and smb tf04,
-        #   but has false positive dhcp tf01 and smb tf00.4
-
-        # TODO: check if applicable to multiple PCs to get multiple cuts, see smb tf01
-
-        # TODO: check if applicable to higher nearZero or lower notableContrib if longer (> 4?) sequence of nearZero
+        # e2 parameters
+        # also apply to higher nearZero and lower notableContrib if longer (>= 4) sequence of nearZero
         #   precedes notableContrib
+        relaxedNearZero = 0.004
+        relaxedNZlength = 4
+        relaxedNotableContrib = 0.05
+        relaxedMaxContrib = 0.66
 
-        # TODO write csv to evaluate parameters
-        #  columns: near other new bound?, is FP, offset, "principal contribution before offset", "principal contribution at offset"
+
+        # if self.similarSegments.fieldtype == "tf01":
+        #     import IPython
+        #     IPython.embed()
+
+        # apply to multiple PCs to get multiple cuts, see smb tf01
+        #   leads to only one improvement and one FP in 100s traces. Removed again.
+        # for rank in range(eigVecS.shape[1]):
+        # rank = 0
+
+        rnzCount = 0
+        for lc in range(1, eigVecS.shape[0]):
+            # import IPython
+            # IPython.embed()
+
+            # just one PC
+            # pcLoadings = eigVecS[:, rank]
+
+            pcLoadings = eigVecS
+
+            if all(abs(pcLoadings[lc - 1]) < relaxedNearZero):
+                rnzCount += 1
+            else:
+                rnzCount = 0
+
+            if conditionE1 and all(abs(pcLoadings[lc - 1]) < nearZero) and any(abs(pcLoadings[lc]) > notableContrib):
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # write statistics
+                if reportFolder is not None and trace is not None:
+                    fn = join(reportFolder, "pca-conditions-e1.csv")
+                    writeheader = not exists(fn)
+                    with open(fn, "a") as segfile:
+                        segcsv = csv.writer(segfile)
+                        if writeheader:
+                            segcsv.writerow(
+                                ["trace", "cluster label", "cluster size",
+                                 "max segment length", "# principals",
+                                 "rank", "rank principal value",
+                                 "is FP",
+                                 "near new bound",
+                                 "offset", "principal contribution before offset", "principal contribution at offset"]
+                            )
+                        segcsv.writerow([
+                            trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                            self.similarSegments.length, sum(self.principalComponents),
+                            # rank, eigVsorted[rank][0],
+                            "all", "-",
+                            repr(lc not in mostCommonTrueBounds) if comparator else "",
+                            repr(any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1])),
+                            lc, max(abs(pcLoadings[lc - 1])), max(abs(pcLoadings[lc]))
+                        ])
+
+                relocate.append(lc)
+
+            elif conditionE2 and rnzCount >= relaxedNZlength and any(abs(pcLoadings[lc]) > relaxedNotableContrib) \
+                    and all(abs(pcLoadings[lc]) < relaxedMaxContrib):
+                    # # that is away more than 1 position from another new cut (see smb tf03), leads to only one FP
+                    # not any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1]):
+
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # write statistics
+                if reportFolder is not None and trace is not None:
+                    fn = join(reportFolder, "pca-conditions-e2.csv")
+                    writeheader = not exists(fn)
+                    with open(fn, "a") as segfile:
+                        segcsv = csv.writer(segfile)
+                        if writeheader:
+                            segcsv.writerow(
+                                ["trace", "cluster label", "cluster size",
+                                 "max segment length", "# principals",
+                                 "rank", "rnzCount",
+                                 "is FP",
+                                 "near new bound",
+                                 "offset", "principal contribution before offset", "principal contribution at offset"]
+                            )
+                        segcsv.writerow([
+                            trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                            self.similarSegments.length, sum(self.principalComponents),
+                            "all", rnzCount,
+                            repr(lc not in mostCommonTrueBounds) if comparator else "",
+                            repr(any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1])),
+                            lc, max(abs(pcLoadings[lc - 1])), max(abs(pcLoadings[lc]))
+                        ])
+
+                relocate.append(lc)
 
 
         # # Condition f: inversion of loading of the first principal component if it has a "notable" loading, i. e.,
         # transition from/to: -0.5 <  --|--  > 0.5
-        # TODO implement
+        # just concerns ntp tf01
+        if conditionF:
+            for lc in range(1, eigVecS.shape[0]):
+                pcLoadings = eigVecS[:, 0]
+                if pcLoadings[lc - 1] < -relaxedNotableContrib and pcLoadings[lc] > relaxedNotableContrib or \
+                        pcLoadings[lc - 1] > relaxedNotableContrib and pcLoadings[lc] < -relaxedNotableContrib:
 
-        # TODO write csv to evaluate parameters
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # write statistics
+                    if reportFolder is not None and trace is not None:
+                        fn = join(reportFolder, "pca-conditions-f.csv")
+                        writeheader = not exists(fn)
+                        with open(fn, "a") as segfile:
+                            segcsv = csv.writer(segfile)
+                            if writeheader:
+                                segcsv.writerow(
+                                    ["trace", "cluster label", "cluster size",
+                                     "max segment length", "# principals",
+                                     "rank principal value",
+                                     "is FP",
+                                     "near new bound",
+                                     "offset", "principal contribution before offset",
+                                     "principal contribution at offset"]
+                                )
+                            segcsv.writerow([
+                                trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                                self.similarSegments.length, sum(self.principalComponents),
+                                eigVsorted[0][0],
+                                repr(lc not in mostCommonTrueBounds) if comparator else "",
+                                repr(any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1])),
+                                lc, abs(pcLoadings[lc - 1]), abs(pcLoadings[lc])
+                            ])
 
-        return relocateFromEnd
+                    relocate.append(lc)
+
+        # # Condition g:
+        if conditionG and eigVecS.shape[1] > 1:
+            smallLoadingDelta = 0.5
+
+            for lc in range(1, eigVecS.shape[0]):
+                pcLoadings = eigVecS
+
+                if max(pcLoadings[lc - 1]) - min(pcLoadings[lc - 1]) < smallLoadingDelta \
+                        < pcLoadings[lc - 1].mean() - pcLoadings[lc].mean() \
+                        and max(pcLoadings[lc]) - min(pcLoadings[lc]) < smallLoadingDelta:
+
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # write statistics
+                    if reportFolder is not None and trace is not None:
+                        fn = join(reportFolder, "pca-conditions-g.csv")
+                        writeheader = not exists(fn)
+                        with open(fn, "a") as segfile:
+                            segcsv = csv.writer(segfile)
+                            if writeheader:
+                                segcsv.writerow(
+                                    ["trace", "cluster label", "cluster size",
+                                     "max segment length", "# principals",
+                                     "is FP",
+                                     "near new bound",
+                                     "offset",
+                                     "contribution delta before offset",
+                                     "contribution delta at offset",
+                                     "contribution shift at offset",
+                                     ]
+                                )
+                            segcsv.writerow([
+                                trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                                self.similarSegments.length, sum(self.principalComponents),
+                                repr(lc not in mostCommonTrueBounds) if comparator else "",
+                                repr(any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1])),
+                                lc,
+                                max(pcLoadings[lc - 1]) - min(pcLoadings[lc - 1]),
+                                max(pcLoadings[lc]) - min(pcLoadings[lc]),
+                                pcLoadings[lc - 1].mean() - pcLoadings[lc].mean()
+                            ])
+
+                    relocate.append(lc)
+
+
+        return relocate
+
+    def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0):
+        collectedSubclusters = list()
+        collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
+        relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
+            [a.similarSegments for a in collectedSubclusters])
+        for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+            if cid in relevantSubclusters:
+                relocate = self.relocateOffsets()
+
+                # TODO relocate boundaries (create new segments)
+
+                import IPython
+                IPython.embed()
+
+
+                # # TODO evaluate:
+                # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+                # #  values [0, len] as bounds for all segments in the cluster.D
+
+
 
 
 

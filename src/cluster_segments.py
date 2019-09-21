@@ -12,7 +12,8 @@ import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext
+from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
+    ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
 from inference.formatRefinement import RelocatePCA
 from visualization.distancesPlotter import DistancesPlotter
@@ -167,7 +168,7 @@ def plotComponentAnalysis(pcaRelocator: RelocatePCA, eigValnVec: Tuple[numpy.nda
     heatAx.xaxis.set_major_locator(ticker.MultipleLocator(1))
     heatAx.yaxis.set_major_locator(ticker.MultipleLocator(1))
     heatFig.colorbar(heatMap)
-    heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(iC)))
+    heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(pcaRelocator.similarSegments.fieldtype)))
     plt.close(heatFig)
 
 
@@ -179,7 +180,7 @@ def plotRecursiveComponentAnalysis(relocateFromEnd: Union[Dict, Any]):
     :return: True if recursion occured, False otherwise
     """
     if isinstance(relocateFromEnd, dict):
-        # print("\n\nSubclustering result in relocateFromEnd...\n\n")
+        # print("\n\nSubclustering result in relocate...\n\n")
         # IPython.embed()
         for sc in relocateFromEnd.values():
             if not plotRecursiveComponentAnalysis(sc[0]):
@@ -190,26 +191,9 @@ def plotRecursiveComponentAnalysis(relocateFromEnd: Union[Dict, Any]):
         return False
 
 
-def collectRecursiveComponentAnalysis(relocateFromEnd: List):
-    # relocateFromEnd is either: a list of new boundaries [int]
-    #   or a dict from the (sub-)cluster ID to [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
-
-    collected = list()
-    # print(relocateFromEnd)
-    # IPython.embed()
-    if len(relocateFromEnd) > 0 and isinstance(relocateFromEnd[0], dict):
-        for subcluster in relocateFromEnd[0].values():
-            # IPython.embed()
-            collected.extend(collectRecursiveComponentAnalysis(subcluster))
-        # if relocateFromEnd._testSubclusters:
-        #     print([a.fieldtype for a in sc[3]._testSubclusters])
-    else:
-        collected.append(relocateFromEnd)
-    return collected
 
 
-
-
+kneedleSensitivity=12.0
 
 
 
@@ -272,8 +256,8 @@ if __name__ == '__main__':
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    clusterer = DBSCANsegmentClusterer(dc)
-    clusterer.eps = clusterer.eps * 0.8
+    clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+    # clusterer.eps = clusterer.eps * 0.8
     # noise: List[MessageSegment]
     # clusters: List[List[MessageSegment]]
     noise, *clusters = clusterer.clusterSimilarSegments(False)
@@ -483,46 +467,32 @@ if __name__ == '__main__':
                 del sdp
         else:
             pcaRelocator = RelocatePCA(fTypeContext[iC])  # , eigenVnV[iC]
-            collectedSubclusters.extend(pcaRelocator.getSubclusters(dc))
-
-
-            # relocateFromEnd = pcaRelocator.relocateBoundaries(dc, reportFolder, splitext(pcapbasename)[0])
-            # # relocateFromEnd is either: a list of new boundaries (ints)
-            # #   or a dict from the (sub-)cluster ID to [relocateFromEnd, eigenVnV[iC], screeKnees[iC], subRpca]
-            # # IPython.embed()
-            #
-            # if len(relocateFromEnd) < 1 or not isinstance(relocateFromEnd[0], dict):
-            #     collectedSubclusters.append([relocateFromEnd, eigenVnV[iC], screeKnees[iC], None])
-            # else:
-            #     collectedSubclusters.extend(collectRecursiveComponentAnalysis(relocateFromEnd))
-            #
-            # # TODO evaluate:
-            # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-            # #  values [0, len] as bounds for all segments in the cluster.
-            # if plotRecursiveComponentAnalysis(relocateFromEnd):
-            #     # support for subclustering
-            #     # print("\n\nSubclustering result in relocateFromEnd...\n\n")
-            #     # IPython.embed()
-            #     # for sc in relocateFromEnd.values():
-            #     #     if withPlots:
-            #     #         plotComponentAnalysis(sc[3], sc[1], sc[0])
-            #     continue
-            #
-            # if withPlots:
-            #     plotComponentAnalysis(pcaRelocator, eigenVnV[iC], relocateFromEnd)
-
+            collectedSubclusters.extend(pcaRelocator.getSubclusters(dc, kneedleSensitivity,
+                                                                    reportFolder, splitext(pcapbasename)[0]))
+    # plot stuff
     relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
         [a.similarSegments for a in collectedSubclusters])
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
         if withPlots and cid in relevantSubclusters:
-            relocateFromEnd = sc.relocateBoundaries(reportFolder, splitext(pcapbasename)[0], comparator)
+            relocate = sc.relocateOffsets(reportFolder, splitext(pcapbasename)[0], comparator)
             plotComponentAnalysis(sc,
                                   eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
-                                  relocateFromEnd)
+                                  relocate)
             for bs in sc.similarSegments.baseSegments:
                 markSegNearMatch(bs)
+
+    # # actually do stuff
+    # for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+    #     if cid in relevantSubclusters:
+    #         newSegments = sc.relocateBoundaries()
+
+
+    # # select one tf
+    # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
     # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
 
 
     # # # # # # # # # # # # # # # # # # # # # # # # #

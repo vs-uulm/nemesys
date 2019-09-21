@@ -2074,15 +2074,20 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         :param dc:
         :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
             If not given (None), it is autoconfigured.
+            For autoconfiguration with Kneedle based on the ECDF, S is Kneedle's sensitivity parameter
+            with a default of 0.8.
         """
         super().__init__(dc, segments)
-        if len(kwargs) == 0:
+
+        self.S = kwargs["S"] if "S" in kwargs else 0.8
+        if len(kwargs) == 0 or len(kwargs) == 1 and "S" in kwargs:
             self.min_samples, self.eps = self._autoconfigure()
         else:
             if not 'eps' in kwargs or not 'min_samples' in kwargs:
                 raise ValueError("Parameters for DBSCAN without autoconfiguration missing. "
                                  "Requires epsilon and min_cluster_size.")
             self.min_samples, self.eps = kwargs['min_samples'], kwargs['eps']
+
 
     def getClusterLabels(self) -> numpy.ndarray:
         """
@@ -2108,7 +2113,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             else 'DBSCAN unconfigured (need to set epsilon and min_samples)'
 
 
-    def _autoconfigure(self):
+    def _autoconfigure(self, **kwargs):
         """
         Auto configure the clustering parameters epsilon and minPts regarding the input data
 
@@ -2187,7 +2192,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         return min_samples, epsilon
 
 
-    def _autoconfigureECDFKneedle(self):
+    def _autoconfigureECDFKneedle(self, plot = False):
         from math import log, ceil
         from scipy.ndimage.filters import gaussian_filter1d
         from kneed import KneeLocator
@@ -2217,12 +2222,25 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         neighdists = self._knearestdistance(k)
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
-        kneel = KneeLocator(knncdf[0], knncdf[1], curve='concave', direction='increasing')
-        if kneel.knee is None:
-            raise ClusterAutoconfException("No knee could be found.")
-        epsilon = kneel.knee * 0.8  # TODO use KneeLocator's parameter "S" instead.
+        try:
+            kneel = KneeLocator(knncdf[0], knncdf[1], S=self.S, curve='concave', direction='increasing')
+                                # interp_method='polynomial')  # interp1d
+            if kneel.knee is None or kneel.knee <= 0.0:
+                raise ClusterAutoconfException("No knee could be found.")
+        except ValueError as e:
+            raise ClusterAutoconfException("No knee could be found. Original exception was:\n" + repr(e))
+        epsilon = kneel.knee  #  * 0.8 use KneeLocator's parameter "S" instead of a factor here.
 
-        print("eps {:0.3f} autoconfigured (Kneedle on ECDF) from k {}".format(epsilon, k))
+        # import IPython
+        # IPython.embed()
+        if plot:
+            import matplotlib.pyplot as plt
+            kneel.plot_knee_normalized()
+            # TODO write plot to file
+            # self.distanceCalculator
+            # plt.savefig()
+
+        print("eps {:0.3f} autoconfigured (Kneedle on ECDF with S {}) from k {}".format(epsilon, self.S, k))
         return min_samples, epsilon
 
 

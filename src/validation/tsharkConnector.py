@@ -205,7 +205,7 @@ class TsharkConnector(object):
             raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
                             'dissection parsing. Found tshark version {}. '
                             'Upgrade!\”'.format(versionlist[2].decode()))
-        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5'):
+        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5', b'2.6.8'):
             print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning of faulty. "
                   "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
             return versionlist[2], False
