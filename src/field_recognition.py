@@ -16,6 +16,7 @@ from validation import reportWriter
 from validation.dissectorMatcher import DissectorMatcher
 from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
 from visualization.simplePrint import printFieldContext, printMarkedBytesInMessage
+from visualization.multiPlotter import MultiMessagePlotter
 from utils.evaluationHelpers import *
 
 # fix the analysis method to VALUE

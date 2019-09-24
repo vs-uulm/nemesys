@@ -798,6 +798,14 @@ class RelocatePCA(object):
 
 
     def getSubclusters(self, dc: DistanceCalculator = None, S:float = None, reportFolder:str = None, trace:str = None):
+        """
+
+        :param dc:
+        :param S:
+        :param reportFolder:
+        :param trace:
+        :return: A flat list of subclusters. If no subclustering was necessary or possible, returns itself.
+        """
 
         if reportFolder is not None and trace is not None:
             from os.path import join, exists
@@ -1185,12 +1193,25 @@ class RelocatePCA(object):
         collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
             [a.similarSegments for a in collectedSubclusters])
+        # TODO what to do with multiple overlapping/contradicting relocations?
+        relocatedSegments = list()
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
-                relocate = self.relocateOffsets()
+                relocate = sc.relocateOffsets()
+                # TODO we need the relative offsets!
+                paddOffs = { bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments }
+
+                # move vs. add
+                for bs in sc.similarSegments.baseSegments:
+                    for rel in relocate:
+                        # TODO first need to translate padded offsets to "local bs offsets"
+                        if bs.length - 1 == rel:
+                            pass
+
+
+
 
                 # TODO relocate boundaries (create new segments)
-
                 import IPython
                 IPython.embed()
 
@@ -1199,7 +1220,7 @@ class RelocatePCA(object):
                 # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
                 # #  values [0, len] as bounds for all segments in the cluster.D
 
-
+        return relocatedSegments
 
 
 

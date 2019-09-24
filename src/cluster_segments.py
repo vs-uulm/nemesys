@@ -482,10 +482,11 @@ if __name__ == '__main__':
             for bs in sc.similarSegments.baseSegments:
                 markSegNearMatch(bs)
 
-    # # actually do stuff
-    # for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
-    #     if cid in relevantSubclusters:
-    #         newSegments = sc.relocateBoundaries()
+    # actually do stuff
+    for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+        if cid in relevantSubclusters:
+            newSegments = sc.relocateBoundaries()
+            # TODO here is the segment refinement
 
 
     # # select one tf

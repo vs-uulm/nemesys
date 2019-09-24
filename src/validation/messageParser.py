@@ -50,6 +50,7 @@ class ParsingConstants226(ParsingConstants):
         'bootp.option.type_raw', 'bootp.option.value_raw', 'bootp.option.end_raw',
 
         'dns.qry.name.len_raw', 'dns.count.labels_raw',
+
         'irc.response_raw', 'irc.request_raw', 'irc.response.num_command_raw', 'irc.ctcp_raw',
         'smtp.command_line_raw', 'smtp.response_raw', 'smb.max_raw',
         'lanman.server_raw', 'dcerpc.cn_ctx_item_raw', 'dcerpc.cn_bind_abstract_syntax_raw', 'dcerpc.cn_bind_trans_raw',
@@ -80,7 +81,7 @@ class ParsingConstants226(ParsingConstants):
     INCLUDE_SUBFIELDS = [
         'bootp.option.type_tree',
 
-        'Queries', 'Answers', 'Additional records',
+        'Queries', 'Answers', 'Additional records', 'Authoritative nameservers',
 
         'irc.request_tree', 'irc.response_tree', 'Command parameters', 'irc',
 
@@ -110,8 +111,9 @@ class ParsingConstants226(ParsingConstants):
         ]
 
     # names of field nodes in the json that have a record structure (list[list[tuples], not list[tuples[str, tuple]]).
-    RECORD_STRUCTURE = ['Queries', 'Answers',  # in dns, nbns
-                        'Additional records']  # in nbns
+    RECORD_STRUCTURE = ['Queries', 'Answers',           # in dns, nbns
+                        'Authoritative nameservers',    # in dns
+                        'Additional records']           # in nbns
 
     # mapping of field names to general value types.
     # see also Wireshark dissector reference: https://www.wireshark.org/docs/dfref/
@@ -204,6 +206,8 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.resp.ttl'] = 'int'  # has value: 0000003c: unsigned
     TYPELOOKUP['dns.resp.len'] = 'int'  # has value: 0004
     TYPELOOKUP['dns.a'] = 'ipv4'  # has value: 0a10000a
+    TYPELOOKUP['dns.ns'] = 'chars'  # has value: 012a00
+    TYPELOOKUP['dns.ptr.domain_name'] = 'chars'  # has value: 0369726300
 
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'
