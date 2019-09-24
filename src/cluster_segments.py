@@ -372,6 +372,9 @@ if __name__ == '__main__':
         #     markSegNearMatch(bs)
         # # # # # # # # # # # # # # # # # # # # # # # #
 
+    # TODO reduced from 12 to 6 due to large dissimilarities in clusters (more checks!)
+    kneedleSensitivity = 6.0
+
     collectedSubclusters = list()
     for iC in interestingClusters:
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -485,8 +488,8 @@ if __name__ == '__main__':
     # actually do stuff
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         if cid in relevantSubclusters:
-            newSegments = sc.relocateBoundaries()
-            # TODO here is the segment refinement
+            newSegments = sc.relocateBoundaries(dc, kneedleSensitivity)
+            # TODO here happens the segment refinement
 
 
     # # select one tf

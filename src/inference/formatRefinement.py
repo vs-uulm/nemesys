@@ -1189,6 +1189,8 @@ class RelocatePCA(object):
         return relocate
 
     def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0):
+        from collections import Counter
+
         collectedSubclusters = list()
         collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
@@ -1199,19 +1201,51 @@ class RelocatePCA(object):
             if cid in relevantSubclusters:
                 relocate = sc.relocateOffsets()
                 # TODO we need the relative offsets!
-                paddOffs = { bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments }
+                paddOffs = {bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments}
+                baseOffs = {bs: sc.similarSegments.baseOffset(bs) for bs in sc.similarSegments.baseSegments}
+                fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
+                           for bs in sc.similarSegments.baseSegments}
 
-                # move vs. add
-                for bs in sc.similarSegments.baseSegments:
-                    for rel in relocate:
-                        # TODO first need to translate padded offsets to "local bs offsets"
-                        if bs.length - 1 == rel:
-                            pass
+                commonStarts = Counter(baseOffs.values())
+                commonEnds = Counter(fromEnd.values())
 
+                # TODO first need to translate padded offsets to "local bs offsets"
+                segSpecificRel = {bs: sorted({rel - baseOffs[bs] for rel in relocate})
+                                  for bs in sc.similarSegments.baseSegments}
 
+                valMtrx = list()
+                for seg, rel in segSpecificRel.items():
+                    segVal = [seg.bytes.hex()]
 
+                    # move vs. add first segment
+                    if len(rel) > 0 and rel[0] == 1:
+                        segVal.append("*")
+                    else:
+                        segVal.append("")
+
+                    # determine translated start and end of new boundaries per segment and cut bytes accordingly.
+                    for rstart, rend in zip([0] + rel, rel + [seg.length]):
+                        # values of new segment
+                        segVal.append(seg.bytes[rstart:rend].hex())
+
+                    # move vs. add last segment
+                    if len(rel) > 0 and rel[-1] == seg.length - 1:
+                        segVal.append("*")
+                    else:
+                        segVal.append("")
+
+                    valMtrx.append(segVal)
 
                 # TODO relocate boundaries (create new segments)
+                from tabulate import tabulate
+                print()
+                print(sc.similarSegments.fieldtype)
+                print()
+                print(tabulate(valMtrx, headers=["original"] + ["move |"] + ["new"]*(len(valMtrx[0])-3) + ["| move"] ))
+                print()
+                print(commonStarts.most_common())
+                print(commonEnds.most_common())
+
                 import IPython
                 IPython.embed()
 

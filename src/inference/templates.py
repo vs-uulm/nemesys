@@ -1636,6 +1636,10 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
         nextOffset = offset + self._maxLen
         return offset, nextOffset
 
+    @property
+    def maxLen(self):
+        return self._maxLen
+
 
 class FieldTypeContext(FieldTypeTemplate):
 
@@ -1688,6 +1692,9 @@ class FieldTypeContext(FieldTypeTemplate):
         else:
             assert values[0:shift + segment.length] == segment.values[-shift:], "value padding failed (negative shift)"
         return values
+
+    def baseOffset(self, segment: MessageSegment):
+        return self._baseOffsets[segment] if segment in self._baseOffsets else 0
 
 
 class TemplateGenerator(object):

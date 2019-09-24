@@ -614,6 +614,10 @@ class MessageSegment(AbstractSegment):
         """byte count of the segment this object represents in the originating message"""
 
 
+    def __len__(self):
+        return self.length
+
+
     @property
     def analyzer(self):
         return self._analyzer
