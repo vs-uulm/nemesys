@@ -325,7 +325,7 @@ if __name__ == '__main__':
 
     doWobble = False
 
-
+    trace = splitext(pcapbasename)[0]
 
 
     # interestingClusters = [1]  # this is thought to be ntp.c1 (4-byte floats)
@@ -471,24 +471,81 @@ if __name__ == '__main__':
         else:
             pcaRelocator = RelocatePCA(fTypeContext[iC])  # , eigenVnV[iC]
             collectedSubclusters.extend(pcaRelocator.getSubclusters(dc, kneedleSensitivity,
-                                                                    reportFolder, splitext(pcapbasename)[0]))
+                                                                    reportFolder, trace))
     # plot stuff
     relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
         [a.similarSegments for a in collectedSubclusters])
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
         if withPlots and cid in relevantSubclusters:
-            relocate = sc.relocateOffsets(reportFolder, splitext(pcapbasename)[0], comparator)
+            relocate = sc.relocateOffsets(reportFolder, trace, comparator)
             plotComponentAnalysis(sc,
                                   eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
                                   relocate)
             for bs in sc.similarSegments.baseSegments:
                 markSegNearMatch(bs)
 
+    # print clusters filtered out, for confirmation.
+    scoFile = "subcluster-overview.csv"
+    scoHeader = ["trace", "cluster label", "cluster size", "max segment length",
+                 "interesting", "length diff", "# unique", "is char",
+                 "min dissimilarity", "max dissimilarity", "mean dissimilarity"]
+    for cid, ftc in enumerate(fTypeContext):
+        bslen = {bs.length for bs in ftc.baseSegments}
+        lendiff = max(bslen) - min(bslen)
+
+        uniqvals = {bs.bytes for bs in ftc.baseSegments}
+        internDis = [dis for dis, idx in ftc.distancesToMixedLength()]
+        ischar = sum([isExtendedCharSeq(seg.bytes) for seg in ftc.baseSegments]) > .5 * len(ftc.baseSegments)
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # write statistics
+        fn = join(reportFolder, scoFile)
+        writeheader = not exists(fn)
+        with open(fn, "a") as segfile:
+            segcsv = csv.writer(segfile)
+            if writeheader:
+                segcsv.writerow(scoHeader)
+            segcsv.writerow([
+                trace, ftc.fieldtype, len(ftc.baseSegments), ftc.length,
+                repr(cid in interestingClusters), lendiff, len(uniqvals), ischar,
+                min(internDis), max(internDis), numpy.mean(internDis),
+            ])
+    #     if cid not in interestingClusters:
+    #         print("Cluster filtered out early: " + ftc.fieldtype)
+    #         for bs in ftc.baseSegments:
+    #             markSegNearMatch(bs)
+    for cid, sc in enumerate(collectedSubclusters):
+        bslen = {bs.length for bs in sc.similarSegments.baseSegments}
+        lendiff = max(bslen) - min(bslen)
+
+        uniqvals = {bs.bytes for bs in sc.similarSegments.baseSegments}
+        internDis = [dis for dis, idx in sc.similarSegments.distancesToMixedLength()]
+        ischar = sum([isExtendedCharSeq(seg.bytes)
+                      for seg in sc.similarSegments.baseSegments]) > .5 * len(sc.similarSegments.baseSegments)
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # write statistics
+        fn = join(reportFolder, scoFile)
+        writeheader = not exists(fn)
+        with open(fn, "a") as segfile:
+            segcsv = csv.writer(segfile)
+            if writeheader:
+                segcsv.writerow(scoHeader)
+            segcsv.writerow([
+                trace, sc.similarSegments.fieldtype, len(sc.similarSegments.baseSegments), sc.similarSegments.length,
+                repr(cid in interestingClusters), lendiff, len(uniqvals), ischar,
+                min(internDis), max(internDis), numpy.mean(internDis)
+            ])
+        # if cid not in relevantSubclusters:
+        #     print("Cluster filtered out: " + sc.similarSegments.fieldtype)
+        #     for bs in sc.similarSegments.baseSegments:
+        #         markSegNearMatch(bs)
+
     # actually do stuff
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         if cid in relevantSubclusters:
-            newSegments = sc.relocateBoundaries(dc, kneedleSensitivity)
+            newSegments = sc.relocateBoundaries(dc, kneedleSensitivity, comparator, reportFolder)
             # TODO here happens the segment refinement
 
 

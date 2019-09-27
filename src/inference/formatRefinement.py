@@ -659,7 +659,7 @@ class RelocatePCA(object):
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
             # interpreted as fraction of the component count as dynamic determination.
     contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
-    maxLengthDelta = 10
+    maxLengthDelta = 7  # (max true: 6 in dns-new, min false 9 in dhcp)
 
     def __init__(self, similarSegments: FieldTypeContext,
                  eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
@@ -696,9 +696,12 @@ class RelocatePCA(object):
         """
         scree = list(reversed(sorted(eigenValuesAndVectors[0].tolist())))
         try:
-            kl = KneeLocator(
-                list(range(eigenValuesAndVectors[0].shape[0])),
-                scree, curve='convex', direction='decreasing')
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                kl = KneeLocator(
+                    list(range(eigenValuesAndVectors[0].shape[0])),
+                    scree, curve='convex', direction='decreasing')
         except ValueError:
             return 0.0
         if not isinstance(kl.knee, int):
@@ -799,6 +802,7 @@ class RelocatePCA(object):
 
     def getSubclusters(self, dc: DistanceCalculator = None, S:float = None, reportFolder:str = None, trace:str = None):
         """
+        Re-Cluster
 
         :param dc:
         :param S:
@@ -813,92 +817,101 @@ class RelocatePCA(object):
 
         maxAbsolutePrincipals = 4
 
-        # # # # # # # # # # # # # # # # # # # # # # # # #
-        # Re-Cluster
         # number of principal components
-        if sum(self._eigen[0] > self._screeThresh) > min(maxAbsolutePrincipals,
-                                                         self._eigen[0].shape[0] * RelocatePCA.principalCountThresh):
-                # and any(self._eigen[0] < RelocatePCA.screeMinThresh):
+        tooManyPCs = sum(self._eigen[0] > self._screeThresh) > \
+            min(maxAbsolutePrincipals, self._eigen[0].shape[0] * RelocatePCA.principalCountThresh)
+            # and any(self._eigen[0] < RelocatePCA.screeMinThresh)
+        # if there remain too few segments to sub-cluster, return the whole FieldTypeContext for analysis
+        enoughSegments = len(self._similarSegments.baseSegments) > RelocatePCA.minSegLen
+        # segment length difference is too high
+        bslen = {bs.length for bs in self.similarSegments.baseSegments}
+        tooHighLenDiff = max(bslen) - min(bslen) > RelocatePCA.maxLengthDelta
+
+        if tooManyPCs:
             print("Cluster {} needs reclustering: too many principal components.".format(
                 self._similarSegments.fieldtype))
+        if tooHighLenDiff:
+            print("Cluster {} needs reclustering: length difference too high.".format(
+                self._similarSegments.fieldtype))
+
+
+        if (tooManyPCs or tooHighLenDiff) and enoughSegments:
             if dc is None:
                 print("No dissimilarities available. Ignoring cluster.")
                 return list()
             else:
-                # if there remain too few segments to cluster, continue and try to do the analysis for the whole FieldTypeContext
-                if len(self._similarSegments.baseSegments) > RelocatePCA.minSegLen:
-                    try:
-                        # Re-Cluster
-                        clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments, S=S)
-                        noise, *clusters = clusterer.clusterSimilarSegments(False)
-                        print(self._similarSegments.fieldtype,
-                              clusterer, "- cluster sizes:", [len(s) for s in clusters], "- noise:", len(noise))
+                try:
+                    # Re-Cluster
+                    clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments, S=S)
+                    noise, *clusters = clusterer.clusterSimilarSegments(False)
+                    print(self._similarSegments.fieldtype,
+                          clusterer, "- cluster sizes:", [len(s) for s in clusters], "- noise:", len(noise))
 
-                        # # # # # # # # # # # # # # # # # # # # # # # #
-                        # write statistics
-                        if reportFolder is not None and trace is not None:
-                            fn = join(reportFolder, "subcluster-parameters.csv")
-                            writeheader = not exists(fn)
-                            with open(fn, "a") as segfile:
-                                segcsv = csv.writer(segfile)
-                                if writeheader:
-                                    segcsv.writerow(
-                                        ["trace", "cluster label", "cluster size",
-                                         "max segment length", "# principals",
-                                         "max principal value",
-                                         "# subclusters", "noise", "Kneedle S", "DBSCAN eps", "DBSCAN min_samples"
-                                         ]
-                                    )
-                                segcsv.writerow([
-                                    trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
-                                    self.similarSegments.length, sum(self.principalComponents),
-                                    self._eigen[0][self._principalComponents].max(),
-                                    len(clusters), len(noise), clusterer.S, clusterer.eps, clusterer.min_samples
-                                ])
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # write statistics
+                    if reportFolder is not None and trace is not None:
+                        fn = join(reportFolder, "subcluster-parameters.csv")
+                        writeheader = not exists(fn)
+                        with open(fn, "a") as segfile:
+                            segcsv = csv.writer(segfile)
+                            if writeheader:
+                                segcsv.writerow(
+                                    ["trace", "cluster label", "cluster size",
+                                     "max segment length", "# principals",
+                                     "max principal value",
+                                     "# subclusters", "noise", "Kneedle S", "DBSCAN eps", "DBSCAN min_samples"
+                                     ]
+                                )
+                            segcsv.writerow([
+                                trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
+                                self.similarSegments.length, sum(self.principalComponents),
+                                self._eigen[0][self._principalComponents].max(),
+                                len(clusters), len(noise), clusterer.S, clusterer.eps, clusterer.min_samples
+                            ])
 
 
-                        # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
-                        if len(clusters) > 0:
-                            # Generate suitable FieldTypeContext objects from the sub-clusters
-                            fTypeContext = list()
-                            for cLabel, segments in enumerate(clusters):
-                                resolvedSegments = list()
-                                for seg in segments:
-                                    if isinstance(seg, Template):
-                                        resolvedSegments.extend(seg.baseSegments)
-                                    else:
-                                        resolvedSegments.append(seg)
-                                fcontext = FieldTypeContext(resolvedSegments)
-                                fcontext.fieldtype = "{}.{}".format(self._similarSegments.fieldtype, cLabel)
-                                fTypeContext.append(fcontext)
-                            # self._testSubclusters = fTypeContext
-                            # Determine clusters with relevant properties for further analysis
-                            # interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
-                            # print(interestingClusters, "from", len(clusters), "clusters")
-
-                            # Do PCA on all interesting clusters
-                            # retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
-                            # for iC in interestingClusters:
-                            #     print("Analyzing sub-cluster", fTypeContext[iC].fieldtype)
-                            #     subRpca = RelocatePCA(fTypeContext[iC])
-                            #     relocate = subRpca.relocateOffsets(dc, reportFolder, trace)
-                            #
-                            #     retValCollection[iC] = [relocate, eigenVnV[iC], screeKnees[iC], subRpca]
-                            # return retValCollection
-
-                            interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
-                            subclusters = list()
-                            for cid, subcluster in enumerate(fTypeContext):
-                                print("Analyzing sub-cluster", subcluster.fieldtype)
-                                subRpca = RelocatePCA(subcluster)
-                                if cid in interestingClusters:
-                                    subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
+                    # if there remains only noise, continue and try to do the analysis for the whole FieldTypeContext
+                    if len(clusters) > 0:
+                        # Generate suitable FieldTypeContext objects from the sub-clusters
+                        fTypeContext = list()
+                        for cLabel, segments in enumerate(clusters):
+                            resolvedSegments = list()
+                            for seg in segments:
+                                if isinstance(seg, Template):
+                                    resolvedSegments.extend(seg.baseSegments)
                                 else:
-                                    subclusters.append(subRpca)
-                            return subclusters
-                    except ClusterAutoconfException as e:
-                        print(e)
-                        return [self]
+                                    resolvedSegments.append(seg)
+                            fcontext = FieldTypeContext(resolvedSegments)
+                            fcontext.fieldtype = "{}.{}".format(self._similarSegments.fieldtype, cLabel)
+                            fTypeContext.append(fcontext)
+                        # self._testSubclusters = fTypeContext
+                        # Determine clusters with relevant properties for further analysis
+                        # interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
+                        # print(interestingClusters, "from", len(clusters), "clusters")
+
+                        # Do PCA on all interesting clusters
+                        # retValCollection = dict.fromkeys(interestingClusters, None)  # type: Dict[int, List[List[int], Tuple[numpy.ndarray, numpy.ndarray], float]]
+                        # for iC in interestingClusters:
+                        #     print("Analyzing sub-cluster", fTypeContext[iC].fieldtype)
+                        #     subRpca = RelocatePCA(fTypeContext[iC])
+                        #     relocate = subRpca.relocateOffsets(dc, reportFolder, trace)
+                        #
+                        #     retValCollection[iC] = [relocate, eigenVnV[iC], screeKnees[iC], subRpca]
+                        # return retValCollection
+
+                        interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
+                        subclusters = list()
+                        for cid, subcluster in enumerate(fTypeContext):
+                            print("Analyzing sub-cluster", subcluster.fieldtype)
+                            subRpca = RelocatePCA(subcluster)
+                            if cid in interestingClusters:
+                                subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
+                            else:
+                                subclusters.append(subRpca)
+                        return subclusters
+                except ClusterAutoconfException as e:
+                    print(e)
+                    return [self]
 
         return [self]
 
@@ -1188,60 +1201,144 @@ class RelocatePCA(object):
 
         return relocate
 
-    def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0):
+
+
+    def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0,
+                           comparator: MessageComparator = None, reportFolder:str = None):
         from collections import Counter
+        import tabulate
+        tabulate.PRESERVE_WHITESPACE = True
 
         collectedSubclusters = list()
         collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
             [a.similarSegments for a in collectedSubclusters])
-        # TODO what to do with multiple overlapping/contradicting relocations?
         relocatedSegments = list()
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
                 relocate = sc.relocateOffsets()
-                # TODO we need the relative offsets!
                 paddOffs = {bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments}
+
+                # we need the relative offsets
                 baseOffs = {bs: sc.similarSegments.baseOffset(bs) for bs in sc.similarSegments.baseSegments}
+                endOffs = {bs: sc.similarSegments.baseOffset(bs) + bs.length
+                           for bs in sc.similarSegments.baseSegments}
                 fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
                            for bs in sc.similarSegments.baseSegments}
 
-                commonStarts = Counter(baseOffs.values())
-                commonEnds = Counter(fromEnd.values())
+                minBase = min(baseOffs.values())
 
-                # TODO first need to translate padded offsets to "local bs offsets"
+                commonStarts = Counter(baseOffs.values())
+                commonEnds = Counter(endOffs.values())
+
+                # translate padded offsets to "local bs offsets"
                 segSpecificRel = {bs: sorted({rel - baseOffs[bs] for rel in relocate})
                                   for bs in sc.similarSegments.baseSegments}
+
+                newRelativeBounds = dict()  # without the baseOffs!
 
                 valMtrx = list()
                 for seg, rel in segSpecificRel.items():
                     segVal = [seg.bytes.hex()]
+                    newBounds = list()
 
                     # move vs. add first segment
-                    if len(rel) > 0 and rel[0] == 1:
+                    if len(rel) > 0 and abs(rel[0]) == 1:
                         segVal.append("*")
                     else:
                         segVal.append("")
+                    if len(rel) == 0 or rel[0] > 1:  # not abs(rel[0]) == 1 and not rel[0] == 0:  # do not regard overhang: rel[0] > 1
+                        newBounds.append(0)
+
+                    # visualize offset
+                    if minBase < 0:
+                        prepend = "  " * (-minBase + baseOffs[seg])
+                    else:
+                        prepend = "  " * baseOffs[seg]
 
                     # determine translated start and end of new boundaries per segment and cut bytes accordingly.
                     for rstart, rend in zip([0] + rel, rel + [seg.length]):
+                        if rend < 0:
+                            segVal.append("")
+                            prepend = ""
+                            continue
+                        if rstart < 0:
+                            prepend += "  " * -rstart
+                            rstart = 0
+
                         # values of new segment
-                        segVal.append(seg.bytes[rstart:rend].hex())
+                        segVal.append(prepend + seg.bytes[rstart:rend].hex())
+                        prepend = ""
+
+                    for rend in rel:
+                        newBounds.append(rend)
 
                     # move vs. add last segment
-                    if len(rel) > 0 and rel[-1] == seg.length - 1:
+                    if len(rel) > 0 and abs(rel[-1]) == seg.length - 1:
                         segVal.append("*")
                     else:
                         segVal.append("")
+                    if len(rel) == 0 or rel[-1] < seg.length - 1:  # not abs(rel[-1]) == seg.length - 1 and newBounds[-1] < seg.length:  # do not regard overhang: rel[-1] < seg.length - 1
+                        newBounds.append(seg.length)
 
-                    valMtrx.append(segVal)
+                    valMtrx.append(segVal + [newBounds])
+                    newRelativeBounds[seg] = newBounds
+
+                    # TODO write statistics for padded range cutting
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # True boundaries for the segments' relative positions
+                    if comparator and reportFolder:
+                        from os.path import join, exists, basename, splitext
+                        import csv
+
+                        scoFile = "padded-range-cutting.csv"
+                        scoHeader = ["trace", "cluster label", "segment", "base offset", "length",
+                                     "relocate offset", "relocate offset frequency", "max rel off freq",
+                                     "shorter than max len",
+                                     "start/end", "true bound", "relocate",
+                                     "move", "off-by-one from new bound"]
+                        scoTrace = splitext(basename(comparator.specimens.pcapFileName))[0]
+                        fn = join(reportFolder, scoFile)
+                        writeheader = not exists(fn)
+
+                        fe = comparator.fieldEndsPerMessage(seg.analyzer.message)
+                        offs, nxtOffs = self.similarSegments.paddedPosition(seg)
+                        trueOffsets = [o - offs for o in fe if offs <= o <= nxtOffs]
+
+                        if writeheader:
+                            with open(fn, "a") as segfile:
+                                segcsv = csv.writer(segfile)
+                                segcsv.writerow(scoHeader)
+                        for com, cnt in commonStarts.most_common():
+                            with open(fn, "a") as segfile:
+                                segcsv = csv.writer(segfile)
+                                segcsv.writerow([
+                                    scoTrace, sc.similarSegments.fieldtype, len(valMtrx), baseOffs[seg], seg.length,
+                                    com, cnt, commonStarts.most_common(1)[0][1],
+                                    "({})".format(sc.similarSegments.maxLen - com),
+                                    "start", repr(com in trueOffsets),
+                                    repr(com in rel), repr(len(rel) > 0 and abs(rel[0]) == 1),
+                                    repr(com in rel + [r+1 for r in rel] + [r-1 for r in rel])
+                                ])
+                        for com, cnt in commonEnds.most_common():
+                            with open(fn, "a") as segfile:
+                                segcsv = csv.writer(segfile)
+                                segcsv.writerow([
+                                    scoTrace, sc.similarSegments.fieldtype, len(valMtrx), baseOffs[seg], seg.length,
+                                    com, cnt, commonEnds.most_common(1)[0][1],
+                                    sc.similarSegments.maxLen - com,
+                                    "end", repr(com in trueOffsets),
+                                    repr(com in rel), repr(len(rel) > 0 and rel[-1] == seg.length - 1),
+                                    repr(com in rel + [r + 1 for r in rel] + [r - 1 for r in rel])
+                                ])
+
 
                 # TODO relocate boundaries (create new segments)
                 from tabulate import tabulate
                 print()
                 print(sc.similarSegments.fieldtype)
                 print()
-                print(tabulate(valMtrx, headers=["original"] + ["move |"] + ["new"]*(len(valMtrx[0])-3) + ["| move"] ))
+                print(tabulate(valMtrx, headers=["original"] + ["move |"] + ["new"]*(len(valMtrx[0])-4) + ["| move"] + ["newBounds"] ))
                 print()
                 print(commonStarts.most_common())
                 print(commonEnds.most_common())
@@ -1253,6 +1350,10 @@ class RelocatePCA(object):
                 # # TODO evaluate:
                 # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
                 # #  values [0, len] as bounds for all segments in the cluster.D
+
+        # TODO what to do with multiple overlapping/contradicting relocations?
+
+        tabulate.PRESERVE_WHITESPACE = False
 
         return relocatedSegments
 
