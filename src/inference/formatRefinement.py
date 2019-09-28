@@ -1237,18 +1237,31 @@ class RelocatePCA(object):
 
                 newRelativeBounds = dict()  # without the baseOffs!
 
-                valMtrx = list()
+
                 for seg, rel in segSpecificRel.items():
-                    segVal = [seg.bytes.hex()]
                     newBounds = list()
 
                     # move vs. add first segment
-                    if len(rel) > 0 and abs(rel[0]) == 1:
-                        segVal.append("*")
-                    else:
-                        segVal.append("")
-                    if len(rel) == 0 or rel[0] > 1:  # not abs(rel[0]) == 1 and not rel[0] == 0:  # do not regard overhang: rel[0] > 1
+                    if len(rel) == 0 or rel[0] > 1:
                         newBounds.append(0)
+
+                    # new boundaries
+                    for rend in rel:
+                        newBounds.append(rend)
+
+                    # move vs. add last segment
+                    if len(rel) == 0 or rel[-1] < seg.length - 1:
+                        newBounds.append(seg.length)
+
+                    newRelativeBounds[seg] = newBounds
+
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # padded range refinement
+                newSegSpecRel = {bs: [rbound for rbound in newRelativeBounds[bs]]  #  - baseOffs[bs]
+                                  for bs in sc.similarSegments.baseSegments}
+                valMtrx = list()
+                for seg, rel in newSegSpecRel.items():
+                    segVal = [seg.bytes.hex()]
 
                     # visualize offset
                     if minBase < 0:
@@ -1256,8 +1269,17 @@ class RelocatePCA(object):
                     else:
                         prepend = "  " * baseOffs[seg]
 
+                    # segment continues
+                    if rel[0] > 0:
+                        segVal.append(prepend[:-2] + " ~" + seg.bytes[:rel[0]].hex())
+                        prepend = ""
+                    elif rel[0] + baseOffs[seg] > 0:
+                        segVal.append("")
+                        prepend = ""
+                    # TODO (double) check visualization for errors
+
                     # determine translated start and end of new boundaries per segment and cut bytes accordingly.
-                    for rstart, rend in zip([0] + rel, rel + [seg.length]):
+                    for rstart, rend in zip(rel[:-1], rel[1:]):
                         if rend < 0:
                             segVal.append("")
                             prepend = ""
@@ -1270,19 +1292,13 @@ class RelocatePCA(object):
                         segVal.append(prepend + seg.bytes[rstart:rend].hex())
                         prepend = ""
 
-                    for rend in rel:
-                        newBounds.append(rend)
-
-                    # move vs. add last segment
-                    if len(rel) > 0 and abs(rel[-1]) == seg.length - 1:
-                        segVal.append("*")
-                    else:
+                    # segment continues
+                    if rel[-1] < seg.length:
+                        segVal.append(seg.bytes[rel[-1]:].hex() + "~ ")
+                    elif fromEnd[seg] > 0:
                         segVal.append("")
-                    if len(rel) == 0 or rel[-1] < seg.length - 1:  # not abs(rel[-1]) == seg.length - 1 and newBounds[-1] < seg.length:  # do not regard overhang: rel[-1] < seg.length - 1
-                        newBounds.append(seg.length)
 
-                    valMtrx.append(segVal + [newBounds])
-                    newRelativeBounds[seg] = newBounds
+                    valMtrx.append(segVal + [rel])
 
                     # TODO write statistics for padded range cutting
                     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1338,7 +1354,11 @@ class RelocatePCA(object):
                 print()
                 print(sc.similarSegments.fieldtype)
                 print()
-                print(tabulate(valMtrx, headers=["original"] + ["move |"] + ["new"]*(len(valMtrx[0])-4) + ["| move"] + ["newBounds"] ))
+                print(tabulate(valMtrx, headers=["original"]
+                                                # + ["continues |"]
+                                                + ["new"]*(len(valMtrx[0])-2)
+                                                # + ["| continues"]
+                                                + ["newBounds"] ))
                 print()
                 print(commonStarts.most_common())
                 print(commonEnds.most_common())
