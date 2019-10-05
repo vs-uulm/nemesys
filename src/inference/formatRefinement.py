@@ -1223,10 +1223,6 @@ class RelocatePCA(object):
                 baseOffs = {bs: sc.similarSegments.baseOffset(bs) for bs in sc.similarSegments.baseSegments}
                 endOffs = {bs: sc.similarSegments.baseOffset(bs) + bs.length
                            for bs in sc.similarSegments.baseSegments}
-                fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
-                           for bs in sc.similarSegments.baseSegments}
-
-                minBase = min(baseOffs.values())
 
                 commonStarts = Counter(baseOffs.values())
                 commonEnds = Counter(endOffs.values())
@@ -1261,22 +1257,26 @@ class RelocatePCA(object):
                                   for bs in sc.similarSegments.baseSegments}
                 valMtrx = list()
                 for seg, rel in newSegSpecRel.items():
+                    fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
+                               for bs in sc.similarSegments.baseSegments}
+                    minBase = min(baseOffs.values())
+
                     segVal = [seg.bytes.hex()]
 
-                    # visualize offset
-                    if minBase < 0:
-                        prepend = "  " * (-minBase + baseOffs[seg])
-                    else:
-                        prepend = "  " * baseOffs[seg]
+                    emptyRelStart = sum(globRel <= baseOffs[seg] for globRel in relocate)
+                    emptyRelStart -= 1 if rel[0] > 0 else 0
+                    segVal.extend([""]*emptyRelStart)
 
-                    # segment continues
+                    # prepend = "  " * (rel[0] - ((min(relocate) - baseOffs[seg]) if len(relocate) > 0 else 0))
+                    if rel[0] >= 0 and (len(relocate) == 0 or min(relocate) - baseOffs[seg] > 0):
+                        prepend = "  " * (baseOffs[seg] - minBase)
+                    else:
+                        prepend = ""
+
+                        # segment continues
                     if rel[0] > 0:
                         segVal.append(prepend[:-2] + " ~" + seg.bytes[:rel[0]].hex())
                         prepend = ""
-                    elif rel[0] + baseOffs[seg] > 0:
-                        segVal.append("")
-                        prepend = ""
-                    # TODO (double) check visualization for errors
 
                     # determine translated start and end of new boundaries per segment and cut bytes accordingly.
                     for rstart, rend in zip(rel[:-1], rel[1:]):
@@ -1295,12 +1295,14 @@ class RelocatePCA(object):
                     # segment continues
                     if rel[-1] < seg.length:
                         segVal.append(seg.bytes[rel[-1]:].hex() + "~ ")
-                    elif fromEnd[seg] > 0:
-                        segVal.append("")
+
+                    emptyRelEnd = sum(fromEnd[seg] >= sc.similarSegments.maxLen - globRel for globRel in relocate)
+                    segVal.extend([""] * emptyRelEnd)
 
                     valMtrx.append(segVal + [rel])
 
-                    # TODO write statistics for padded range cutting
+                # write statistics for padded range cutting
+                for seg, rel in newSegSpecRel.items():
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # True boundaries for the segments' relative positions
                     if comparator and reportFolder:

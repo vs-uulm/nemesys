@@ -2230,12 +2230,15 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         try:
-            kneel = KneeLocator(knncdf[0], knncdf[1], S=self.S, curve='concave', direction='increasing')
-                                # interp_method='polynomial')  # interp1d
-            if kneel.knee is None or kneel.knee <= 0.0:
-                raise ClusterAutoconfException("No knee could be found.")
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                kneel = KneeLocator(knncdf[0], knncdf[1], S=self.S, curve='concave', direction='increasing')
+                                    # interp_method='polynomial')  # interp1d
+                if kneel.knee is None or kneel.knee <= 0.0:
+                    raise ClusterAutoconfException("No knee could be found.")
         except ValueError as e:
-            raise ClusterAutoconfException("No knee could be found. Original exception was:\n" + repr(e))
+            raise ClusterAutoconfException("No knee could be found.")  # Original exception was:\n" + repr(e))
         epsilon = kneel.knee  #  * 0.8 use KneeLocator's parameter "S" instead of a factor here.
 
         # import IPython
