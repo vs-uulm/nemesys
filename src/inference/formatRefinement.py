@@ -1217,23 +1217,25 @@ class RelocatePCA(object):
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
                 relocate = sc.relocateOffsets()
-                paddOffs = {bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments}
 
-                # we need the relative offsets
+                # prepare different views on the newly proposed offsets
+                paddOffs = {bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments}
                 baseOffs = {bs: sc.similarSegments.baseOffset(bs) for bs in sc.similarSegments.baseSegments}
                 endOffs = {bs: sc.similarSegments.baseOffset(bs) + bs.length
                            for bs in sc.similarSegments.baseSegments}
-
+                fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
+                           for bs in sc.similarSegments.baseSegments}
+                minBase = min(baseOffs.values())
                 commonStarts = Counter(baseOffs.values())
                 commonEnds = Counter(endOffs.values())
 
-                # translate padded offsets to "local bs offsets"
+                # translate padded offsets to "local segment-wise offsets"
                 segSpecificRel = {bs: sorted({rel - baseOffs[bs] for rel in relocate})
                                   for bs in sc.similarSegments.baseSegments}
 
-                newRelativeBounds = dict()  # without the baseOffs!
-
-
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # generate the new cuts from the proposed bounds
+                newRelativeBounds = dict()
                 for seg, rel in segSpecificRel.items():
                     newBounds = list()
 
@@ -1250,30 +1252,25 @@ class RelocatePCA(object):
                         newBounds.append(seg.length)
 
                     newRelativeBounds[seg] = newBounds
+                newPaddingRelative = {bs: [rbound + baseOffs[bs] for rbound in newRelativeBounds[bs]]
+                                  for bs in sc.similarSegments.baseSegments}
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
-                # padded range refinement
-                newSegSpecRel = {bs: [rbound for rbound in newRelativeBounds[bs]]  #  - baseOffs[bs]
-                                  for bs in sc.similarSegments.baseSegments}
+                # generate value matrix for visualization
                 valMtrx = list()
-                for seg, rel in newSegSpecRel.items():
-                    fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
-                               for bs in sc.similarSegments.baseSegments}
-                    minBase = min(baseOffs.values())
-
+                for seg, rel in newRelativeBounds.items():
                     segVal = [seg.bytes.hex()]
 
                     emptyRelStart = sum(globRel <= baseOffs[seg] for globRel in relocate)
                     emptyRelStart -= 1 if rel[0] > 0 else 0
                     segVal.extend([""]*emptyRelStart)
 
-                    # prepend = "  " * (rel[0] - ((min(relocate) - baseOffs[seg]) if len(relocate) > 0 else 0))
                     if rel[0] >= 0 and (len(relocate) == 0 or min(relocate) - baseOffs[seg] > 0):
                         prepend = "  " * (baseOffs[seg] - minBase)
                     else:
                         prepend = ""
 
-                        # segment continues
+                    # segment continues
                     if rel[0] > 0:
                         segVal.append(prepend[:-2] + " ~" + seg.bytes[:rel[0]].hex())
                         prepend = ""
@@ -1301,11 +1298,10 @@ class RelocatePCA(object):
 
                     valMtrx.append(segVal + [rel])
 
+                # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics for padded range cutting
-                for seg, rel in newSegSpecRel.items():
-                    # # # # # # # # # # # # # # # # # # # # # # # #
-                    # True boundaries for the segments' relative positions
-                    if comparator and reportFolder:
+                if comparator and reportFolder:
+                    for num, (seg, rel) in enumerate(newPaddingRelative.items()):
                         from os.path import join, exists, basename, splitext
                         import csv
 
@@ -1319,8 +1315,13 @@ class RelocatePCA(object):
                         fn = join(reportFolder, scoFile)
                         writeheader = not exists(fn)
 
-                        fe = comparator.fieldEndsPerMessage(seg.analyzer.message)
-                        offs, nxtOffs = self.similarSegments.paddedPosition(seg)
+                        relocWmargin = sorted(set([r - 1 for r in rel] +
+                                                  [r for r in rel] +
+                                                  [r + 1 for r in rel]))
+
+                        # True boundaries for the segments' relative positions
+                        fe = [0] + comparator.fieldEndsPerMessage(seg.analyzer.message)
+                        offs, nxtOffs = paddOffs[seg]
                         trueOffsets = [o - offs for o in fe if offs <= o <= nxtOffs]
 
                         if writeheader:
@@ -1331,52 +1332,70 @@ class RelocatePCA(object):
                             with open(fn, "a") as segfile:
                                 segcsv = csv.writer(segfile)
                                 segcsv.writerow([
-                                    scoTrace, sc.similarSegments.fieldtype, len(valMtrx), baseOffs[seg], seg.length,
+                                    scoTrace, sc.similarSegments.fieldtype, num, baseOffs[seg], seg.length,
                                     com, cnt, commonStarts.most_common(1)[0][1],
                                     "({})".format(sc.similarSegments.maxLen - com),
                                     "start", repr(com in trueOffsets),
-                                    repr(com in rel), repr(len(rel) > 0 and abs(rel[0]) == 1),
-                                    repr(com in rel + [r+1 for r in rel] + [r-1 for r in rel])
+                                    repr(com in rel), repr(len(rel) > 0 and abs(com - baseOffs[seg]) == 1),
+                                    repr(com in relocWmargin)
                                 ])
                         for com, cnt in commonEnds.most_common():
                             with open(fn, "a") as segfile:
                                 segcsv = csv.writer(segfile)
                                 segcsv.writerow([
-                                    scoTrace, sc.similarSegments.fieldtype, len(valMtrx), baseOffs[seg], seg.length,
+                                    scoTrace, sc.similarSegments.fieldtype, num, baseOffs[seg], seg.length,
                                     com, cnt, commonEnds.most_common(1)[0][1],
                                     sc.similarSegments.maxLen - com,
                                     "end", repr(com in trueOffsets),
-                                    repr(com in rel), repr(len(rel) > 0 and rel[-1] == seg.length - 1),
-                                    repr(com in rel + [r + 1 for r in rel] + [r - 1 for r in rel])
+                                    repr(com in rel), repr(len(rel) > 0 and abs(com - baseOffs[seg] - seg.length) == 1),
+                                    repr(com in relocWmargin)
                                 ])
 
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # padded range refinement
+                for (seg, reloc), valRow in zip(newPaddingRelative.items(), valMtrx):
+                    # to determine more than off-by-one from new bound,
+                    #  includes: is not a move and not a relocation
+                    relocWmargin = sorted(set([r - 1 for r in reloc] + [r for r in reloc] + [r + 1 for r in reloc]))
 
-                # TODO relocate boundaries (create new segments)
+                    cutsExtStart = sorted(common for common in commonStarts
+                                          if common not in relocWmargin
+                                          )
+                                # TODO add conditions here
+                    valRow += [cutsExtStart]
+                    cutsExtEnd = sorted(common for common in commonEnds
+                                        if common not in relocWmargin
+                                        )
+                                # TODO add conditions here
+                    valRow += [cutsExtEnd]
+
+                    # # TODO evaluate:
+                    # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+                    # #  values [0, len] as bounds for all segments in the cluster.D
+
+
+
                 from tabulate import tabulate
                 print()
                 print(sc.similarSegments.fieldtype)
                 print()
-                print(tabulate(valMtrx, headers=["original"]
-                                                # + ["continues |"]
+                print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
                                                 + ["new"]*(len(valMtrx[0])-2)
-                                                # + ["| continues"]
-                                                + ["newBounds"] ))
+                                                + ["newBounds", "extStart", "extEnd"]
+                               ))
                 print()
                 print(commonStarts.most_common())
                 print(commonEnds.most_common())
 
-                import IPython
-                IPython.embed()
+                # import IPython
+                # IPython.embed()
 
-
-                # # TODO evaluate:
-                # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-                # #  values [0, len] as bounds for all segments in the cluster.D
-
-        # TODO what to do with multiple overlapping/contradicting relocations?
+                # TODO relocate boundaries (create new segments)
+                #  and place in relocatedSegments
 
         tabulate.PRESERVE_WHITESPACE = False
 
+        # TODO what to do with multiple overlapping/contradicting relocations?
         return relocatedSegments
 
 
