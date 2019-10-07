@@ -1056,6 +1056,7 @@ class RelocatePCA(object):
             else:
                 rnzCount = 0
 
+            # TODO there is one bug somewhere that's preventing positive loadings to be considered correctly
             if conditionE1 and all(abs(pcLoadings[lc - 1]) < nearZero) and any(abs(pcLoadings[lc]) > notableContrib):
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics
@@ -1117,6 +1118,11 @@ class RelocatePCA(object):
 
                 relocate.append(lc)
 
+        # TODO for conditionE1-bug (see above)
+        if trace == "dns_ictf2010_deduped-100" and self.similarSegments.fieldtype == "tf03" and 7 not in relocate:
+            print("#"*40 + "\nThis is the conditionE1-bug!\n" + "#"*40)
+            import IPython
+            IPython.embed()
 
         # # Condition f: inversion of loading of the first principal component if it has a "notable" loading, i. e.,
         # transition from/to: -0.5 <  --|--  > 0.5
@@ -1296,7 +1302,7 @@ class RelocatePCA(object):
                     emptyRelEnd = sum(fromEnd[seg] >= sc.similarSegments.maxLen - globRel for globRel in relocate)
                     segVal.extend([""] * emptyRelEnd)
 
-                    valMtrx.append(segVal + [rel])
+                    valMtrx.append(segVal + [newPaddingRelative[seg]])  # [rel]
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics for padded range cutting
@@ -1307,17 +1313,59 @@ class RelocatePCA(object):
 
                         scoFile = "padded-range-cutting.csv"
                         scoHeader = ["trace", "cluster label", "segment", "base offset", "length",
-                                     "relocate offset", "relocate offset frequency", "max rel off freq",
+                                     "common offset", "common offset frequency", "max com off freq",
                                      "shorter than max len",
                                      "start/end", "true bound", "relocate",
-                                     "move", "off-by-one from new bound"]
+                                     "move", "off-by-one from bound", "in range", "sole or more common than neigbor",
+                                     "relative frequency",
+                                     "commonUnchangedOffbyone"]
                         scoTrace = splitext(basename(comparator.specimens.pcapFileName))[0]
                         fn = join(reportFolder, scoFile)
                         writeheader = not exists(fn)
 
-                        relocWmargin = sorted(set([r - 1 for r in rel] +
-                                                  [r for r in rel] +
-                                                  [r + 1 for r in rel]))
+
+
+                        # TODO: if all original bounds that constitute a commonStart/End are moved away in all segments of the type,
+                        #  remove from common bounds. ==> eval!
+
+
+
+                        # do not filter out unchanged bounds for "off-by-one", see dns tf03
+                        oboRel = rel.copy()
+                        # TODO the following four lines create more problems than they solve.
+                        #  The adverse effect could be reduced by additional conditions adding a lot of complexity.
+                        # if baseOffs[seg] in oboRel:
+                        #     oboRel.remove(baseOffs[seg])
+                        # if endOffs[seg] in oboRel:
+                        #     oboRel.remove(endOffs[seg])
+                        relocWmargin = sorted(set([r - 1 for r in oboRel] +
+                                                  [r for r in oboRel] +
+                                                  [r + 1 for r in oboRel]))
+
+                        # resolve adjacent most common starts/ends (use more common bound)
+                        moCoReSt = [cS for cS, cnt in commonStarts.most_common()
+                                    if (cS+1 not in set(commonStarts.keys()).difference(relocWmargin) or cnt > commonStarts[cS+1])  # cS+1 in relocWmargin or
+                                    and (cS-1 not in set(commonStarts.keys()).difference(relocWmargin) or cnt > commonStarts[cS-1])]  # cS-1 in relocWmargin or
+                        moCoReEn = [cS for cS, cnt in commonEnds.most_common()
+                                    if (cS+1 not in set(commonEnds.keys()).difference(relocWmargin) or cnt > commonEnds[cS+1])  # cS+1 in relocWmargin or
+                                    and (cS-1 not in set(commonEnds.keys()).difference(relocWmargin) or cnt > commonEnds[cS-1])]  # cS-1 in relocWmargin or
+                        # TODO really annoying FP after this change in ntp_SMIA-20111010_deduped-100 tf02
+                        #  (i.e. 4 line ends commented out above)
+                        # set(common[...].keys()).difference(relocWmargin) solves more common neigbor that is filtered by
+                        # closeness to new bound (dns-new tf01/6 1,2,4,6,...)
+
+                        unchangedBounds = list()
+                        if baseOffs[seg] in rel:
+                            unchangedBounds.append(baseOffs[seg])
+                        if endOffs[seg] in rel:
+                            unchangedBounds.append(endOffs[seg])
+                        unchangedOffbyone = [ub-1 for ub in unchangedBounds] + [ub+1 for ub in unchangedBounds]
+                        commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
+                                                   if (uobo in commonStarts and
+                                                       commonStarts[uobo] > 0.4 * sum(commonStarts.values()))
+                                                   or (uobo in commonEnds and
+                                                       commonEnds[uobo] > 0.4 * sum(commonEnds.values())
+                                                       )]
 
                         # True boundaries for the segments' relative positions
                         fe = [0] + comparator.fieldEndsPerMessage(seg.analyzer.message)
@@ -1336,8 +1384,13 @@ class RelocatePCA(object):
                                     com, cnt, commonStarts.most_common(1)[0][1],
                                     "({})".format(sc.similarSegments.maxLen - com),
                                     "start", repr(com in trueOffsets),
-                                    repr(com in rel), repr(len(rel) > 0 and abs(com - baseOffs[seg]) == 1),
-                                    repr(com in relocWmargin)
+                                    # TODO move does not reflect what actually is a move
+                                    repr(com in rel), repr(len(rel) > 0 and com == baseOffs[seg] and com+1 in rel),
+                                    repr(com in relocWmargin),
+                                    repr(com > min(rel)),
+                                    repr(com in moCoReSt),
+                                    commonStarts[com] / sum(commonStarts.values()),
+                                    repr(com in commonUnchangedOffbyone)
                                 ])
                         for com, cnt in commonEnds.most_common():
                             with open(fn, "a") as segfile:
@@ -1347,8 +1400,13 @@ class RelocatePCA(object):
                                     com, cnt, commonEnds.most_common(1)[0][1],
                                     sc.similarSegments.maxLen - com,
                                     "end", repr(com in trueOffsets),
-                                    repr(com in rel), repr(len(rel) > 0 and abs(com - baseOffs[seg] - seg.length) == 1),
-                                    repr(com in relocWmargin)
+                                    # TODO move does not reflect what actually is a move
+                                    repr(com in rel), repr(len(rel) > 0 and com == endOffs[seg] and com-1 in rel),
+                                    repr(com in relocWmargin),
+                                    repr(com < max(rel)),
+                                    repr(com in moCoReEn),
+                                    commonEnds[com]/sum(commonEnds.values()),
+                                    repr(com in commonUnchangedOffbyone)
                                 ])
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1380,7 +1438,7 @@ class RelocatePCA(object):
                 print(sc.similarSegments.fieldtype)
                 print()
                 print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
-                                                + ["new"]*(len(valMtrx[0])-2)
+                                                + ["new"] * (len(valMtrx[0]) - 4)
                                                 + ["newBounds", "extStart", "extEnd"]
                                ))
                 print()
