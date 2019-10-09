@@ -9,6 +9,16 @@ from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, Distan
     ClusterAutoconfException
 from validation.dissectorMatcher import MessageComparator
 
+
+
+
+from tabulate import tabulate
+import IPython
+
+
+
+
+
 def isPrintableChar(char: int):
     if 0x20 <= char <= 0x7e or char in ['\t', '\n', '\r']:
         return True
@@ -712,7 +722,6 @@ class RelocatePCA(object):
         #     import matplotlib.pyplot as plt
         #     kl.plot_knee_normalized()
         #     plt.show()
-        #     # import IPython
         #     # IPython.embed()
 
         return scree[kl.knee]
@@ -769,7 +778,6 @@ class RelocatePCA(object):
         #     if cid not in interestingClusters:
         #         eigen = numpy.linalg.eigh(fTypeContext[cid].cov)
         #         print(eigen[0])
-        #         import IPython
         #         IPython.embed()
 
         # remove all clusters having a segment length difference of more than maxLengthDelta
@@ -1015,6 +1023,11 @@ class RelocatePCA(object):
                                           key=lambda x: x[0])))
         eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
 
+
+        # TODO caveat: precision of numerical method for cov or eigen does not suffice for near zero resolution
+        #  in all cases. e. g. setting nearZero to 0.003 indeterministically results in a false negative for the
+        #  condition. Setting it higher, might introduce more false positives.
+
         # # Condition e: Loading peak of principal component rising from (near) 0.0
         #
         # e1 parameters
@@ -1033,7 +1046,6 @@ class RelocatePCA(object):
 
 
         # if self.similarSegments.fieldtype == "tf01":
-        #     import IPython
         #     IPython.embed()
 
         # apply to multiple PCs to get multiple cuts, see smb tf01
@@ -1043,7 +1055,6 @@ class RelocatePCA(object):
 
         rnzCount = 0
         for lc in range(1, eigVecS.shape[0]):
-            # import IPython
             # IPython.embed()
 
             # just one PC
@@ -1056,7 +1067,6 @@ class RelocatePCA(object):
             else:
                 rnzCount = 0
 
-            # TODO there is one bug somewhere that's preventing positive loadings to be considered correctly
             if conditionE1 and all(abs(pcLoadings[lc - 1]) < nearZero) and any(abs(pcLoadings[lc]) > notableContrib):
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics
@@ -1118,11 +1128,10 @@ class RelocatePCA(object):
 
                 relocate.append(lc)
 
-        # TODO for conditionE1-bug (see above)
-        if trace == "dns_ictf2010_deduped-100" and self.similarSegments.fieldtype == "tf03" and 7 not in relocate:
-            print("#"*40 + "\nThis is the conditionE1-bug!\n" + "#"*40)
-            import IPython
-            IPython.embed()
+        # # To search for a case of the "caveat: precision of numerical method" (see above):
+        # if trace == "dns_ictf2010_deduped-100" and self.similarSegments.fieldtype == "tf03" and 7 not in relocate:
+        #     print("#"*40 + "\nThis is the conditionE1-bug!\n" + "#"*40)
+        #     IPython.embed()
 
         # # Condition f: inversion of loading of the first principal component if it has a "notable" loading, i. e.,
         # transition from/to: -0.5 <  --|--  > 0.5
@@ -1212,8 +1221,8 @@ class RelocatePCA(object):
     def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0,
                            comparator: MessageComparator = None, reportFolder:str = None):
         from collections import Counter
-        import tabulate
-        tabulate.PRESERVE_WHITESPACE = True
+        import tabulate as tabmod
+        tabmod.PRESERVE_WHITESPACE = True
 
         collectedSubclusters = list()
         collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
@@ -1232,34 +1241,45 @@ class RelocatePCA(object):
                 fromEnd = {bs: sc.similarSegments.maxLen - sc.similarSegments.baseOffset(bs) - bs.length
                            for bs in sc.similarSegments.baseSegments}
                 minBase = min(baseOffs.values())
-                commonStarts = Counter(baseOffs.values())
-                commonEnds = Counter(endOffs.values())
 
                 # translate padded offsets to "local segment-wise offsets"
                 segSpecificRel = {bs: sorted({rel - baseOffs[bs] for rel in relocate})
                                   for bs in sc.similarSegments.baseSegments}
+
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # generate the new cuts from the proposed bounds
                 newRelativeBounds = dict()
                 for seg, rel in segSpecificRel.items():
                     newBounds = list()
-
                     # move vs. add first segment
                     if len(rel) == 0 or rel[0] > 1:
                         newBounds.append(0)
-
                     # new boundaries
                     for rend in rel:
                         newBounds.append(rend)
-
                     # move vs. add last segment
                     if len(rel) == 0 or rel[-1] < seg.length - 1:
                         newBounds.append(seg.length)
-
                     newRelativeBounds[seg] = newBounds
                 newPaddingRelative = {bs: [rbound + baseOffs[bs] for rbound in newRelativeBounds[bs]]
-                                  for bs in sc.similarSegments.baseSegments}
+                                      for bs in sc.similarSegments.baseSegments}
+                moveAtStart = {seg: rel[0] > 0 for seg, rel in newRelativeBounds.items()}
+                moveAtEnd = {seg: rel[-1] < seg.length for seg, rel in newRelativeBounds.items()}
+
+                moveFrom = dict()
+                moveTo = dict()
+                for seg, rel in newRelativeBounds.items():
+                    moveFrom[seg] = list()
+                    moveTo[seg] = list()
+                    if rel[0] > 0:
+                        moveFrom[seg].append(baseOffs[seg])
+                        moveTo[seg].append(newPaddingRelative[seg][0])
+                    if rel[-1] < seg.length:
+                        moveFrom[seg].append(endOffs[seg])
+                        moveTo[seg].append(newPaddingRelative[seg][-1])
+                # # # # # # # # # # # # # # # # # # # # # # # #
+
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # generate value matrix for visualization
@@ -1304,6 +1324,23 @@ class RelocatePCA(object):
 
                     valMtrx.append(segVal + [newPaddingRelative[seg]])  # [rel]
 
+                valTable = tabulate(valMtrx, showindex=True, tablefmt="orgtbl").splitlines()
+
+
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # padded range refinement (preparation)
+                commonStarts = Counter(baseOffs.values())
+                commonEnds = Counter(endOffs.values())
+                allAreMoved = [globrel for globrel in commonStarts.keys()
+                               if all(moveAtStart[seg] for seg, sstart in baseOffs.items() if globrel == sstart)
+                               ] + \
+                              [globrel for globrel in commonEnds.keys()
+                               if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)]
+                # commonStarts = Counter(baseOffs.values())
+                # commonEnds = Counter(endOffs.values())
+                # TODO: if all original bounds that constitute a commonStart/End are moved away in all segments of the type,
+                #  remove from common bounds. ==> eval!
+
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics for padded range cutting
                 if comparator and reportFolder:
@@ -1313,22 +1350,19 @@ class RelocatePCA(object):
 
                         scoFile = "padded-range-cutting.csv"
                         scoHeader = ["trace", "cluster label", "segment", "base offset", "length",
-                                     "common offset", "common offset frequency", "max com off freq",
+                                     "common offset", "com off freq", "max com off freq", # "com off freq" = "common offset frequency"
                                      "shorter than max len",
                                      "start/end", "true bound", "relocate",
-                                     "move", "off-by-one from bound", "in range", "sole or more common than neigbor",
+                                     "moved away", "moved to", "all moved", "off-by-one...", # ... from bound
+                                     "in range",
+                                     "sole...", # ... or more common than neigbor
                                      "relative frequency",
-                                     "commonUnchangedOffbyone"]
+                                     "commonUnchangedOffbyone", # a Common that is unchanged and Offbyone
+                                     "vals"
+                                     ]
                         scoTrace = splitext(basename(comparator.specimens.pcapFileName))[0]
                         fn = join(reportFolder, scoFile)
                         writeheader = not exists(fn)
-
-
-
-                        # TODO: if all original bounds that constitute a commonStart/End are moved away in all segments of the type,
-                        #  remove from common bounds. ==> eval!
-
-
 
                         # do not filter out unchanged bounds for "off-by-one", see dns tf03
                         oboRel = rel.copy()
@@ -1354,7 +1388,7 @@ class RelocatePCA(object):
                         # set(common[...].keys()).difference(relocWmargin) solves more common neigbor that is filtered by
                         # closeness to new bound (dns-new tf01/6 1,2,4,6,...)
 
-                        unchangedBounds = list()
+                        unchangedBounds = list()  # TODO inverse of moveAt*?
                         if baseOffs[seg] in rel:
                             unchangedBounds.append(baseOffs[seg])
                         if endOffs[seg] in rel:
@@ -1384,13 +1418,16 @@ class RelocatePCA(object):
                                     com, cnt, commonStarts.most_common(1)[0][1],
                                     "({})".format(sc.similarSegments.maxLen - com),
                                     "start", repr(com in trueOffsets),
-                                    # TODO move does not reflect what actually is a move
-                                    repr(com in rel), repr(len(rel) > 0 and com == baseOffs[seg] and com+1 in rel),
+                                    repr(com in rel),
+                                    repr(com in moveFrom[seg]),
+                                    repr(com in moveTo[seg]),
+                                    repr(com in allAreMoved),
                                     repr(com in relocWmargin),
                                     repr(com > min(rel)),
                                     repr(com in moCoReSt),
                                     commonStarts[com] / sum(commonStarts.values()),
-                                    repr(com in commonUnchangedOffbyone)
+                                    repr(com in commonUnchangedOffbyone),
+                                    valTable[num],
                                 ])
                         for com, cnt in commonEnds.most_common():
                             with open(fn, "a") as segfile:
@@ -1400,13 +1437,16 @@ class RelocatePCA(object):
                                     com, cnt, commonEnds.most_common(1)[0][1],
                                     sc.similarSegments.maxLen - com,
                                     "end", repr(com in trueOffsets),
-                                    # TODO move does not reflect what actually is a move
-                                    repr(com in rel), repr(len(rel) > 0 and com == endOffs[seg] and com-1 in rel),
+                                    repr(com in rel),
+                                    repr(com in moveFrom[seg]),
+                                    repr(com in moveTo[seg]),
+                                    repr(com in allAreMoved),
                                     repr(com in relocWmargin),
                                     repr(com < max(rel)),
                                     repr(com in moCoReEn),
                                     commonEnds[com]/sum(commonEnds.values()),
-                                    repr(com in commonUnchangedOffbyone)
+                                    repr(com in commonUnchangedOffbyone),
+                                    valTable[num],
                                 ])
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1431,9 +1471,6 @@ class RelocatePCA(object):
                     # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
                     # #  values [0, len] as bounds for all segments in the cluster.D
 
-
-
-                from tabulate import tabulate
                 print()
                 print(sc.similarSegments.fieldtype)
                 print()
@@ -1445,13 +1482,12 @@ class RelocatePCA(object):
                 print(commonStarts.most_common())
                 print(commonEnds.most_common())
 
-                # import IPython
                 # IPython.embed()
 
                 # TODO relocate boundaries (create new segments)
                 #  and place in relocatedSegments
 
-        tabulate.PRESERVE_WHITESPACE = False
+        tabmod.PRESERVE_WHITESPACE = False
 
         # TODO what to do with multiple overlapping/contradicting relocations?
         return relocatedSegments
