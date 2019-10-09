@@ -1358,6 +1358,7 @@ class RelocatePCA(object):
                                      "sole...", # ... or more common than neigbor
                                      "relative frequency",
                                      "commonUnchangedOffbyone", # a Common that is unchanged and Offbyone
+                                     "uobofreq",
                                      "vals"
                                      ]
                         scoTrace = splitext(basename(comparator.specimens.pcapFileName))[0]
@@ -1388,6 +1389,7 @@ class RelocatePCA(object):
                         # set(common[...].keys()).difference(relocWmargin) solves more common neigbor that is filtered by
                         # closeness to new bound (dns-new tf01/6 1,2,4,6,...)
 
+                        uoboFreqThresh = 0.4
                         unchangedBounds = list()  # TODO inverse of moveAt*?
                         if baseOffs[seg] in rel:
                             unchangedBounds.append(baseOffs[seg])
@@ -1396,10 +1398,16 @@ class RelocatePCA(object):
                         unchangedOffbyone = [ub-1 for ub in unchangedBounds] + [ub+1 for ub in unchangedBounds]
                         commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
                                                    if (uobo in commonStarts and
-                                                       commonStarts[uobo] > 0.4 * sum(commonStarts.values()))
+                                                       commonStarts[uobo] > uoboFreqThresh * sum(commonStarts.values()))
                                                    or (uobo in commonEnds and
-                                                       commonEnds[uobo] > 0.4 * sum(commonEnds.values())
+                                                       commonEnds[uobo] > uoboFreqThresh * sum(commonEnds.values())
                                                        )]
+
+                        uoboFreq = {uobo: max(commonStarts[uobo] / sum(commonStarts.values()),
+                                        commonEnds[uobo] / sum(commonEnds.values())) for uobo in unchangedOffbyone
+                                    if (uobo in commonStarts)
+                                    or (uobo in commonEnds)}
+
 
                         # True boundaries for the segments' relative positions
                         fe = [0] + comparator.fieldEndsPerMessage(seg.analyzer.message)
@@ -1427,6 +1435,7 @@ class RelocatePCA(object):
                                     repr(com in moCoReSt),
                                     commonStarts[com] / sum(commonStarts.values()),
                                     repr(com in commonUnchangedOffbyone),
+                                    uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
                         for com, cnt in commonEnds.most_common():
@@ -1446,6 +1455,7 @@ class RelocatePCA(object):
                                     repr(com in moCoReEn),
                                     commonEnds[com]/sum(commonEnds.values()),
                                     repr(com in commonUnchangedOffbyone),
+                                    uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
 
