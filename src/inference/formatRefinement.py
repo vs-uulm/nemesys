@@ -1336,8 +1336,9 @@ class RelocatePCA(object):
                                ] + \
                               [globrel for globrel in commonEnds.keys()
                                if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)]
-                # commonStarts = Counter(baseOffs.values())
-                # commonEnds = Counter(endOffs.values())
+                # TODO modify counter to consider moved bounds as actual bases and ends
+                commonStarts = Counter(base if base not in moveFrom[seg] else moveTo[seg] for seg, base in baseOffs.items())
+                commonEnds = Counter(end if end not in moveFrom[seg] else moveTo[seg] for seg, end in endOffs.items())
                 # TODO: if all original bounds that constitute a commonStart/End are moved away in all segments of the type,
                 #  remove from common bounds. ==> eval!
 
