@@ -80,7 +80,7 @@ def autoconfigureDBSCAN(neighbors: List[List[Tuple[int, float]]]):
     smoothknearest = dict()
     seconddiff = dict()
     seconddiffMax = (0, 0, 0)
-    for k in range(0, ceil(log(len(neighbors)**2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
+    for k in range(0, ceil(log(len(neighbors)**2))):  # first log(n^2)   alt.: // 10 first 10% of k-neighbors
         knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
         smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
         # max of second difference (maximum positive curvature) as knee (this not actually the knee!)
@@ -94,7 +94,7 @@ def autoconfigureDBSCAN(neighbors: List[List[Tuple[int, float]]]):
     k = seconddiffMax[0]
     x = seconddiffMax[1] + 1
 
-    # if epsilon is 0, i.e. there is no slope in the change of the neigbor distances whatsoever, most probably all
+    # if epsilon is 0, i.e. there is no slope in the change of the neighbor distances whatsoever, most probably all
     #   samples are evenly distributed and we either have only evenly distributed noise, or - much more reasonable -
     #   all the samples are the same. A very low epsilon is appropriate for both situations.
     epsilon = smoothknearest[k][x] if smoothknearest[k][x] > 0 else 0.001

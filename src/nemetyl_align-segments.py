@@ -57,6 +57,8 @@ def relign(segseqA, segseqB):
 def columnOfAlignment(alignedSegments: List[List[MessageSegment]], colnum: int):
     return [msg[colnum] for msg in alignedSegments]
 
+
+# noinspection PyShadowingNames
 def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]], colnum: int):
     """
     Similarities of entries 1 to n of one column to its first (not None) entry.
@@ -86,6 +88,8 @@ def printSegDist(d2ft: List[Tuple[MessageSegment, float]]):
     print(tabulate([(s.bytes.hex() if isinstance(s, MessageSegment) else "-", d) for s, d in d2ft],
                    headers=['Seg (hex)', 'Distance'], floatfmt=".4f"))
 
+
+# noinspection PyShadowingNames
 def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
             coordA: Tuple[int, int], coordB: Tuple[int, int]):
     """
@@ -103,6 +107,8 @@ def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
     print(segB)
     return dc.pairDistance(segA, segB)
 
+
+# noinspection PyShadowingNames
 def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
     return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
 
@@ -230,7 +236,7 @@ def epsautoconfeval(epsilon):
         # ksteepeststats.append((k, seconddiff[k].max(), diffrelmax))
     # print(tabulate(ksteepeststats, headers=("k", "max(f'')", "max(f'')/f")))
 
-    # prepare to plot the smoothed nearest neigbor distribution and its second derivative
+    # prepare to plot the smoothed nearest neighbor distribution and its second derivative
     k = seconddiffMax[0]
     x = seconddiffMax[1] + 1
 

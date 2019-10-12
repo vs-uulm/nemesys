@@ -1,22 +1,17 @@
+import csv
+from abc import ABC, abstractmethod
+from os.path import join, exists
 from typing import List, Dict, Tuple, Sequence
-from abc import ABC, abstractmethod, ABCMeta
-import numpy
 
+import numpy
 from kneed import KneeLocator
+from tabulate import tabulate
+import IPython
 
 from inference.segments import MessageSegment
 from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template, \
     ClusterAutoconfException
 from validation.dissectorMatcher import MessageComparator
-
-
-
-
-from tabulate import tabulate
-import IPython
-
-
-
 
 
 def isPrintableChar(char: int):
@@ -819,9 +814,9 @@ class RelocatePCA(object):
         :return: A flat list of subclusters. If no subclustering was necessary or possible, returns itself.
         """
 
-        if reportFolder is not None and trace is not None:
-            from os.path import join, exists
-            import csv
+        # if reportFolder is not None and trace is not None:
+        #     from os.path import join, exists
+        #     import csv
 
         maxAbsolutePrincipals = 4
 
@@ -929,13 +924,17 @@ class RelocatePCA(object):
                         conditionG = False):
         """
 
-        :param reportFolder:
-        :param trace:
-        :param comparator:
+        :param conditionA: Enable Condition A
+        :param conditionE1: Enable Condition E1
+        :param conditionE2: Enable Condition E2
+        :param conditionF:  Enable Condition F
+        :param conditionG:  Enable Condition G
+        :param reportFolder: For debugging
+        :param trace: For debugging
+        :param comparator: For debugging
         :return: positions to be relocated if the PCA for the current cluster has meaningful result,
             otherwise sub-cluster and return the PCA and relocation positions for each sub-cluster.
         """
-        from os.path import join, exists
         import csv
 
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -992,6 +991,7 @@ class RelocatePCA(object):
                                      "final boundary true",
                                      "offset", "max contribution before offset", "max contribution at offset"]
                                 )
+                            # noinspection PyUnboundLocalVariable
                             segcsv.writerow([
                                 trace, self.similarSegments.fieldtype, len(self.similarSegments.baseSegments),
                                 self.similarSegments.length, sum(self.principalComponents),
@@ -1220,7 +1220,6 @@ class RelocatePCA(object):
 
     def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0,
                            comparator: MessageComparator = None, reportFolder:str = None):
-        from collections import Counter
         import tabulate as tabmod
         tabmod.PRESERVE_WHITESPACE = True
 
@@ -1228,8 +1227,14 @@ class RelocatePCA(object):
         collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
             [a.similarSegments for a in collectedSubclusters])
-        relocatedSegments = list()
+        relocatedBounds = dict()
+        relocatedCommons = dict()
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+
+            # # TODO evaluate:
+            # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+            # #  values [0, len] as bounds for all segments in the cluster.D
+
             if cid in relevantSubclusters:
                 relocate = sc.relocateOffsets()
 
@@ -1264,9 +1269,9 @@ class RelocatePCA(object):
                     newRelativeBounds[seg] = newBounds
                 newPaddingRelative = {bs: [rbound + baseOffs[bs] for rbound in newRelativeBounds[bs]]
                                       for bs in sc.similarSegments.baseSegments}
-                moveAtStart = {seg: rel[0] > 0 for seg, rel in newRelativeBounds.items()}
-                moveAtEnd = {seg: rel[-1] < seg.length for seg, rel in newRelativeBounds.items()}
 
+                # padding-relative positions of boundary moves from that position and moves to that position
+                # based on the starts and ends of the original segment bounds.
                 moveFrom = dict()
                 moveTo = dict()
                 for seg, rel in newRelativeBounds.items():
@@ -1282,69 +1287,59 @@ class RelocatePCA(object):
 
 
                 # # # # # # # # # # # # # # # # # # # # # # # #
-                # generate value matrix for visualization
-                valMtrx = list()
-                for seg, rel in newRelativeBounds.items():
-                    segVal = [seg.bytes.hex()]
+                # padded range refinement (+ preparation)
+                commonBounds = RelocatePCA.CommonBoundUtil(baseOffs, endOffs, moveFrom, moveTo)
+                cutsExt = commonBounds.frequentBoundReframing(newPaddingRelative, relocate)
+                relocatedCommons.update(cutsExt)
 
-                    emptyRelStart = sum(globRel <= baseOffs[seg] for globRel in relocate)
-                    emptyRelStart -= 1 if rel[0] > 0 else 0
-                    segVal.extend([""]*emptyRelStart)
-
-                    if rel[0] >= 0 and (len(relocate) == 0 or min(relocate) - baseOffs[seg] > 0):
-                        prepend = "  " * (baseOffs[seg] - minBase)
-                    else:
-                        prepend = ""
-
-                    # segment continues
-                    if rel[0] > 0:
-                        segVal.append(prepend[:-2] + " ~" + seg.bytes[:rel[0]].hex())
-                        prepend = ""
-
-                    # determine translated start and end of new boundaries per segment and cut bytes accordingly.
-                    for rstart, rend in zip(rel[:-1], rel[1:]):
-                        if rend < 0:
-                            segVal.append("")
-                            prepend = ""
-                            continue
-                        if rstart < 0:
-                            prepend += "  " * -rstart
-                            rstart = 0
-
-                        # values of new segment
-                        segVal.append(prepend + seg.bytes[rstart:rend].hex())
-                        prepend = ""
-
-                    # segment continues
-                    if rel[-1] < seg.length:
-                        segVal.append(seg.bytes[rel[-1]:].hex() + "~ ")
-
-                    emptyRelEnd = sum(fromEnd[seg] >= sc.similarSegments.maxLen - globRel for globRel in relocate)
-                    segVal.extend([""] * emptyRelEnd)
-
-                    valMtrx.append(segVal + [newPaddingRelative[seg]])  # [rel]
-
-                valTable = tabulate(valMtrx, showindex=True, tablefmt="orgtbl").splitlines()
-
-
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # padded range refinement (preparation)
-                commonStarts = Counter(baseOffs.values())
-                commonEnds = Counter(endOffs.values())
-                allAreMoved = [globrel for globrel in commonStarts.keys()
-                               if all(moveAtStart[seg] for seg, sstart in baseOffs.items() if globrel == sstart)
-                               ] + \
-                              [globrel for globrel in commonEnds.keys()
-                               if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)]
-                # TODO modify counter to consider moved bounds as actual bases and ends
-                commonStarts = Counter(base if base not in moveFrom[seg] else moveTo[seg] for seg, base in baseOffs.items())
-                commonEnds = Counter(end if end not in moveFrom[seg] else moveTo[seg] for seg, end in endOffs.items())
-                # TODO: if all original bounds that constitute a commonStart/End are moved away in all segments of the type,
-                #  remove from common bounds. ==> eval!
-
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # write statistics for padded range cutting
                 if comparator and reportFolder:
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # generate value matrix for visualization
+                    valMtrx = list()
+                    for seg, rel in newRelativeBounds.items():
+                        segVal = [seg.bytes.hex()]
+
+                        emptyRelStart = sum(globRel <= baseOffs[seg] for globRel in relocate)
+                        emptyRelStart -= 1 if rel[0] > 0 else 0
+                        segVal.extend([""]*emptyRelStart)
+
+                        if rel[0] >= 0 and (len(relocate) == 0 or min(relocate) - baseOffs[seg] > 0):
+                            prepend = "  " * (baseOffs[seg] - minBase)
+                        else:
+                            prepend = ""
+
+                        # segment continues
+                        if rel[0] > 0:
+                            segVal.append(prepend[:-2] + " ~" + seg.bytes[:rel[0]].hex())
+                            prepend = ""
+
+                        # determine translated start and end of new boundaries per segment and cut bytes accordingly.
+                        for rstart, rend in zip(rel[:-1], rel[1:]):
+                            if rend < 0:
+                                segVal.append("")
+                                prepend = ""
+                                continue
+                            if rstart < 0:
+                                prepend += "  " * -rstart
+                                rstart = 0
+
+                            # values of new segment
+                            segVal.append(prepend + seg.bytes[rstart:rend].hex())
+                            prepend = ""
+
+                        # segment continues
+                        if rel[-1] < seg.length:
+                            segVal.append(seg.bytes[rel[-1]:].hex() + "~ ")
+
+                        emptyRelEnd = sum(fromEnd[seg] >= sc.similarSegments.maxLen - globRel for globRel in relocate)
+                        segVal.extend([""] * emptyRelEnd)
+
+                        valMtrx.append(segVal + [newPaddingRelative[seg]] + [cutsExt[seg]])
+
+                    valTable = tabulate(valMtrx, showindex=True, tablefmt="orgtbl").splitlines()
+
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # write statistics for padded range cutting
                     for num, (seg, rel) in enumerate(newPaddingRelative.items()):
                         from os.path import join, exists, basename, splitext
                         import csv
@@ -1356,7 +1351,7 @@ class RelocatePCA(object):
                                      "start/end", "true bound", "relocate",
                                      "moved away", "moved to", "all moved", "off-by-one...", # ... from bound
                                      "in range",
-                                     "sole...", # ... or more common than neigbor
+                                     "sole...", # ... or more common than neighbor
                                      "relative frequency",
                                      "commonUnchangedOffbyone", # a Common that is unchanged and Offbyone
                                      "uobofreq",
@@ -1374,40 +1369,39 @@ class RelocatePCA(object):
                         #     oboRel.remove(baseOffs[seg])
                         # if endOffs[seg] in oboRel:
                         #     oboRel.remove(endOffs[seg])
-                        relocWmargin = sorted(set([r - 1 for r in oboRel] +
-                                                  [r for r in oboRel] +
-                                                  [r + 1 for r in oboRel]))
+                        # COPY IN frequentBoundReframing
+                        relocWmargin = RelocatePCA._offbyone(oboRel)
 
                         # resolve adjacent most common starts/ends (use more common bound)
-                        moCoReSt = [cS for cS, cnt in commonStarts.most_common()
-                                    if (cS+1 not in set(commonStarts.keys()).difference(relocWmargin) or cnt > commonStarts[cS+1])  # cS+1 in relocWmargin or
-                                    and (cS-1 not in set(commonStarts.keys()).difference(relocWmargin) or cnt > commonStarts[cS-1])]  # cS-1 in relocWmargin or
-                        moCoReEn = [cS for cS, cnt in commonEnds.most_common()
-                                    if (cS+1 not in set(commonEnds.keys()).difference(relocWmargin) or cnt > commonEnds[cS+1])  # cS+1 in relocWmargin or
-                                    and (cS-1 not in set(commonEnds.keys()).difference(relocWmargin) or cnt > commonEnds[cS-1])]  # cS-1 in relocWmargin or
-                        # TODO really annoying FP after this change in ntp_SMIA-20111010_deduped-100 tf02
-                        #  (i.e. 4 line ends commented out above)
-                        # set(common[...].keys()).difference(relocWmargin) solves more common neigbor that is filtered by
-                        # closeness to new bound (dns-new tf01/6 1,2,4,6,...)
+                        moCoReSt, moCoReEn = commonBounds.filterOutMoreCommonNeighbors(relocWmargin)
 
-                        uoboFreqThresh = 0.4
-                        unchangedBounds = list()  # TODO inverse of moveAt*?
-                        if baseOffs[seg] in rel:
-                            unchangedBounds.append(baseOffs[seg])
-                        if endOffs[seg] in rel:
-                            unchangedBounds.append(endOffs[seg])
-                        unchangedOffbyone = [ub-1 for ub in unchangedBounds] + [ub+1 for ub in unchangedBounds]
-                        commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
-                                                   if (uobo in commonStarts and
-                                                       commonStarts[uobo] > uoboFreqThresh * sum(commonStarts.values()))
-                                                   or (uobo in commonEnds and
-                                                       commonEnds[uobo] > uoboFreqThresh * sum(commonEnds.values())
-                                                       )]
+                        # resolve adjacent most common starts/ends (use more common bound)
+                        commonUnchangedOffbyone = commonBounds.commonUnchangedOffByOne(seg, relocate) # TODO uobo
+                        commonUnchanged = commonBounds.commonUnchanged(seg, relocate) # TODO uobo
 
-                        uoboFreq = {uobo: max(commonStarts[uobo] / sum(commonStarts.values()),
-                                        commonEnds[uobo] / sum(commonEnds.values())) for uobo in unchangedOffbyone
-                                    if (uobo in commonStarts)
-                                    or (uobo in commonEnds)}
+
+                        # TODO validate to be inverse of moveAt*
+                        # unchangedBounds = list()
+                        # if baseOffs[seg] in rel:
+                        #     unchangedBounds.append(baseOffs[seg])
+                        # if endOffs[seg] in rel:
+                        #     unchangedBounds.append(endOffs[seg])
+                        # if not commonBounds.unchangedBounds(seg) == unchangedBounds:
+                        #     print(commonBounds.unchangedBounds(seg))
+                        #     print(unchangedBounds)
+                        #     IPython.embed()
+                        # assert commonBounds.unchangedBounds(seg) == unchangedBounds
+                        unchangedBounds = commonBounds.unchangedBounds(seg, relocate) # TODO uobo
+
+
+                        # Separately calculate frequency of off-by-one positions of unchanged bounds
+                        # (copy of commonBounds.commonUnchangedOffByOne(seg) internals)
+                        unchangedOffbyone = [ub - 1 for ub in unchangedBounds] + [ub + 1 for ub in unchangedBounds]
+                        uoboFreq = {uobo: max(commonBounds.commonStarts[uobo] / sum(commonBounds.commonStarts.values()),
+                                        commonBounds.commonEnds[uobo] / sum(commonBounds.commonEnds.values()))
+                                    for uobo in unchangedOffbyone
+                                    if (uobo in commonBounds.commonStarts)
+                                    or (uobo in commonBounds.commonEnds)}
 
 
                         # True boundaries for the segments' relative positions
@@ -1419,89 +1413,301 @@ class RelocatePCA(object):
                             with open(fn, "a") as segfile:
                                 segcsv = csv.writer(segfile)
                                 segcsv.writerow(scoHeader)
-                        for com, cnt in commonStarts.most_common():
+                        for com, cnt in commonBounds.commonStarts.most_common():
                             with open(fn, "a") as segfile:
                                 segcsv = csv.writer(segfile)
                                 segcsv.writerow([
                                     scoTrace, sc.similarSegments.fieldtype, num, baseOffs[seg], seg.length,
-                                    com, cnt, commonStarts.most_common(1)[0][1],
+                                    com, cnt, commonBounds.commonStarts.most_common(1)[0][1],
                                     "({})".format(sc.similarSegments.maxLen - com),
                                     "start", repr(com in trueOffsets),
                                     repr(com in rel),
                                     repr(com in moveFrom[seg]),
                                     repr(com in moveTo[seg]),
-                                    repr(com in allAreMoved),
+                                    repr(com in commonBounds.allAreMoved),
                                     repr(com in relocWmargin),
                                     repr(com > min(rel)),
                                     repr(com in moCoReSt),
-                                    commonStarts[com] / sum(commonStarts.values()),
-                                    repr(com in commonUnchangedOffbyone),
+                                    commonBounds.commonStarts[com] / sum(commonBounds.commonStarts.values()),
+                                    repr(com in commonUnchanged), # TODO uobo
                                     uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
-                        for com, cnt in commonEnds.most_common():
+                        for com, cnt in commonBounds.commonEnds.most_common():
                             with open(fn, "a") as segfile:
                                 segcsv = csv.writer(segfile)
                                 segcsv.writerow([
                                     scoTrace, sc.similarSegments.fieldtype, num, baseOffs[seg], seg.length,
-                                    com, cnt, commonEnds.most_common(1)[0][1],
+                                    com, cnt, commonBounds.commonEnds.most_common(1)[0][1],
                                     sc.similarSegments.maxLen - com,
                                     "end", repr(com in trueOffsets),
                                     repr(com in rel),
                                     repr(com in moveFrom[seg]),
                                     repr(com in moveTo[seg]),
-                                    repr(com in allAreMoved),
+                                    repr(com in commonBounds.allAreMoved),
                                     repr(com in relocWmargin),
                                     repr(com < max(rel)),
                                     repr(com in moCoReEn),
-                                    commonEnds[com]/sum(commonEnds.values()),
-                                    repr(com in commonUnchangedOffbyone),
+                                    commonBounds.commonEnds[com]/sum(commonBounds.commonEnds.values()),
+                                    repr(com in commonUnchanged), # TODO uobo
                                     uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
 
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # padded range refinement
-                for (seg, reloc), valRow in zip(newPaddingRelative.items(), valMtrx):
-                    # to determine more than off-by-one from new bound,
-                    #  includes: is not a move and not a relocation
-                    relocWmargin = sorted(set([r - 1 for r in reloc] + [r for r in reloc] + [r + 1 for r in reloc]))
 
-                    cutsExtStart = sorted(common for common in commonStarts
-                                          if common not in relocWmargin
-                                          )
-                                # TODO add conditions here
-                    valRow += [cutsExtStart]
-                    cutsExtEnd = sorted(common for common in commonEnds
-                                        if common not in relocWmargin
-                                        )
-                                # TODO add conditions here
-                    valRow += [cutsExtEnd]
+                    print()
+                    print(sc.similarSegments.fieldtype)
+                    print()
+                    print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
+                                                    + ["new"] * (len(valMtrx[0]) - 3)
+                                                    + ["newBounds", "cutsExt"]
+                                   ))
+                    print()
+                    print(commonBounds.commonStarts.most_common())
+                    print(commonBounds.commonEnds.most_common())
 
-                    # # TODO evaluate:
-                    # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-                    # #  values [0, len] as bounds for all segments in the cluster.D
+                # if comparator.specimens.pcapFileName == "input/dhcp_SMIA2011101X_deduped-100.pcap" \
+                #         and sc.similarSegments.fieldtype == "tf09":
+                #     IPython.embed()
 
-                print()
-                print(sc.similarSegments.fieldtype)
-                print()
-                print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
-                                                + ["new"] * (len(valMtrx[0]) - 4)
-                                                + ["newBounds", "extStart", "extEnd"]
-                               ))
-                print()
-                print(commonStarts.most_common())
-                print(commonEnds.most_common())
+                # collect new bounds
+                relocatedBounds.update(newRelativeBounds)
 
-                # IPython.embed()
 
-                # TODO relocate boundaries (create new segments)
-                #  and place in relocatedSegments
 
         tabmod.PRESERVE_WHITESPACE = False
 
+
+
+
+
+        # TODO relocate boundaries (create new segments)
+        #  and place in relocatedSegments
+        relocatedSegments = list()
         # TODO what to do with multiple overlapping/contradicting relocations?
+        # relocatedBounds
+        # relocatedCommons
         return relocatedSegments
+
+
+
+
+    @staticmethod
+    def _offbyone(reloc: List[int]):
+        """
+        :param reloc: A list of integer values.
+        :return: A list of integer values with their direct off by one neighbors. Sorted and deduplicated.
+        """
+        return sorted(set([r - 1 for r in reloc] + [r for r in reloc] + [r + 1 for r in reloc]))
+
+
+
+
+
+    class CommonBoundUtil(object):
+
+        __uoboFreqThresh = 0.4
+
+        """
+        ...
+
+        Modify counter to treat moved bounds as actual bases and ends
+        """
+        def __init__(self, baseOffs: Dict[MessageSegment, int], endOffs: Dict[MessageSegment, int],
+                     moveFrom: Dict[MessageSegment, List[int]], moveTo: Dict[MessageSegment, List[int]]):
+            from collections import Counter
+
+            self._baseOffs = baseOffs
+            self._endOffs = endOffs
+            self._moveFrom = moveFrom
+            self._moveTo = moveTo
+
+            moveAtStart = {seg: baseOffs[seg] in mofro for seg, mofro in moveFrom.items()}  # mofro[0] == baseOffs[seg]
+            moveAtEnd = {seg: endOffs[seg] in mofro for seg, mofro in moveFrom.items()}  # mofro[-1] == endOffs[seg]
+            commonStarts = Counter(baseOffs.values())
+            commonEnds = Counter(endOffs.values())
+
+            self.allAreMoved = [globrel for globrel in commonStarts.keys()
+                           if all(moveAtStart[seg] for seg, sstart in baseOffs.items() if globrel == sstart)
+                           ] + \
+                          [globrel for globrel in commonEnds.keys()
+                           if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)]
+
+            # if all original bounds that constitute a commonStart/End are moved away in all segments of the
+            # type, remove from common bounds.
+            self.commonStarts = Counter(base if base not in moveFrom[seg] else moveTo[seg][moveFrom[seg].index(base)]
+                                        for seg, base in baseOffs.items())
+            self.commonEnds   = Counter(end if end not in moveFrom[seg] else moveTo[seg][moveFrom[seg].index(end)]
+                                        for seg, end in endOffs.items())
+
+
+        def filterOutMoreCommonNeighbors(self, relocWmargin: List[int]) -> Tuple[List[int], List[int]]:
+            """
+            resolve adjacent most common starts/ends (use more common bound)
+
+            :param relocWmargin:
+            :return: More common starts and ends, than their neighboring common starts or ends.
+            """
+            moCoReSt = [cS for cS, cnt in self.commonStarts.most_common()
+                        if (cS + 1 not in set(self.commonStarts.keys()).difference(relocWmargin)
+                            or cnt > self.commonStarts[cS + 1])  # cS+1 in relocWmargin or
+                        and (cS - 1 not in set(self.commonStarts.keys()).difference(relocWmargin)
+                             or cnt > self.commonStarts[cS - 1])]  # cS-1 in relocWmargin or
+            moCoReEn = [cS for cS, cnt in self.commonEnds.most_common()
+                        if (cS + 1 not in set(self.commonEnds.keys()).difference(relocWmargin)
+                            or cnt > self.commonEnds[cS + 1])  # cS+1 in relocWmargin or
+                        and (cS - 1 not in set(self.commonEnds.keys()).difference(relocWmargin)
+                             or cnt > self.commonEnds[cS - 1])]  # cS-1 in relocWmargin or
+            # TODO really annoying FP after this change (i. e., the 4 line ends commented out above)
+            #  in ntp_SMIA-20111010_deduped-100 tf02
+            # set(common[...].keys()).difference(relocWmargin) solves more common neighbor that is filtered by
+            # closeness to new bound (dns-new tf01/6 1,2,4,6,...)
+
+            return moCoReSt, moCoReEn
+
+
+        def unchangedBounds(self, seg: MessageSegment, reloc: List[int]):
+            """
+            inverse of moveAt*
+
+            :param seg:
+            :param reloc: here we need the padding-global raw "relocate" without the added 0 and length
+            :return:
+            """
+            unchangedBounds = [off for off in (self._baseOffs[seg], self._endOffs[seg])
+                               if off not in reloc]
+            return unchangedBounds
+
+
+        def commonUnchangedOffByOne(self, seg: MessageSegment, reloc: List[int]):
+            """
+            Consider only common bounds that are off-by-one from the original bound
+
+            :param seg:
+            :return: List of direct neighbors of the unchanged bounds of seg that are common bounds themselves and are
+                more frequent than __uoboFreqThresh.
+            """
+            unchangedBounds = self.unchangedBounds(seg, reloc)
+
+            commonUnchangedOffbyone = [
+                    ub + 1 for ub in unchangedBounds
+                        if ub + 1 in self.commonStarts
+                           and self.commonStarts[ub + 1] >
+                           RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonStarts.values())
+                ] + [
+                    ub - 1 for ub in unchangedBounds
+                        if ub - 1 in self.commonEnds
+                           and self.commonEnds[ub - 1] >
+                           RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonEnds.values())
+                ]
+
+            # unchangedOffbyone = [ub - 1 for ub in unchangedBounds] + [ub + 1 for ub in unchangedBounds]
+            # commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
+            #                            if (uobo in self.commonStarts and
+            #                                self.commonStarts[uobo] >
+            #                                RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonStarts.values()))
+            #                            or (uobo in self.commonEnds and
+            #                                self.commonEnds[uobo] >
+            #                                RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonEnds.values())
+            #                            )]
+
+            # if any(cb for cb in (self.commonStarts, self.commonEnds)
+            #         if uobo in cb and
+            #         cb[uobo] > RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(cb.values())
+            #        )
+            # ]
+
+            return commonUnchangedOffbyone
+
+
+        def commonUnchanged(self, seg: MessageSegment, reloc: List[int]):
+            """
+            Consider all common bounds between the start and the outermost (first/last) relocated bound for a segment.
+
+            :param seg:
+            :param reloc: here we need the padding-global raw "relocate" without the added 0 and length
+            :return:
+            """
+            commonUnchanged = \
+                  [cs for cs in self.commonStarts.keys()
+                   if len(reloc) == 0 or cs < min(reloc) > self._baseOffs[seg]] \
+                + [ce for ce in self.commonEnds.keys()
+                   if len(reloc) == 0 or self._endOffs[seg] > max(reloc) < ce]
+            return [cu for cu in commonUnchanged
+                    if (cu + 1 > self._endOffs[seg]
+                        or ((cu+1 not in self.commonStarts or self.commonStarts[cu+1] < self.commonStarts[cu])
+                        and (cu+1 not in self.commonEnds or self.commonEnds[cu+1] < self.commonEnds[cu])))
+                    and (cu - 1 < self._baseOffs[seg]
+                         or ((cu-1 not in self.commonStarts or self.commonStarts[cu-1] < self.commonStarts[cu])
+                         and (cu-1 not in self.commonEnds or self.commonEnds[cu-1] < self.commonEnds[cu])))
+                    ]
+
+
+        def frequentBoundReframing(self, newPaddingRelative: Dict[MessageSegment, List[int]], relocate: List[int]) \
+                -> Dict[MessageSegment, List[int]]:
+            """
+            Frequent raw segment bound reframing:
+            Refine boundaries within the padded range of all segments in the cluster considering frequent common offsets
+            and end positions.
+
+            :return: The proposed cut positions per segment based on frequent common raw segment bounds in the cluster.
+            """
+            cutsExt = dict()
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # padded range refinement
+            for seg, reloc in newPaddingRelative.items():
+                # resolve adjacent most common starts/ends (use more common bound)
+                commonUnchanged = self.commonUnchanged(seg, relocate) # TODO uobo
+                commonUnchangedOffbyone = self.commonUnchangedOffByOne(seg, relocate)  # TODO uobo
+
+                # Used to determine positions that are more than off-by-one from new bound,
+                #  naturally includes: is not a move and not a relocation
+                relocWmargin = RelocatePCA._offbyone(reloc + commonUnchangedOffbyone) # TODO uobo   + commonUnchanged
+                moCoReSt, moCoReEn = self.filterOutMoreCommonNeighbors(relocWmargin)
+
+                cutsExtStart = sorted(common for common in self.commonStarts
+                                      # conditions for reframing by common segment starts
+                                      if common > min(reloc) and (
+                                              common not in relocWmargin and common in moCoReSt
+                                              or common in commonUnchangedOffbyone # TODO uobo
+                                      )
+                                      )
+                cutsExtEnd = sorted(common for common in self.commonEnds
+                                    # conditions for reframing by common segment ends
+                                    if common < max(reloc) and (
+                                            common not in relocWmargin and common in moCoReEn
+                                            or common in commonUnchangedOffbyone # TODO uobo
+                                    )
+                                    )
+                cutsExt[seg] = cutsExtStart + cutsExtEnd
+            return cutsExt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
