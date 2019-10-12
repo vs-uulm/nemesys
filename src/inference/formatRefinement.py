@@ -1396,12 +1396,20 @@ class RelocatePCA(object):
 
                         # Separately calculate frequency of off-by-one positions of unchanged bounds
                         # (copy of commonBounds.commonUnchangedOffByOne(seg) internals)
-                        unchangedOffbyone = [ub - 1 for ub in unchangedBounds] + [ub + 1 for ub in unchangedBounds]
-                        uoboFreq = {uobo: max(commonBounds.commonStarts[uobo] / sum(commonBounds.commonStarts.values()),
-                                        commonBounds.commonEnds[uobo] / sum(commonBounds.commonEnds.values()))
-                                    for uobo in unchangedOffbyone
-                                    if (uobo in commonBounds.commonStarts)
-                                    or (uobo in commonBounds.commonEnds)}
+                        uoboFreq = {
+                            ub + 1:
+                                commonBounds.commonStarts[ub + 1] / sum(commonBounds.commonStarts.values())
+                            for ub in unchangedBounds if ub + 1 in commonBounds.commonStarts }
+                        uoboFreq.update({
+                            ub - 1:
+                                max(commonBounds.commonEnds[ub - 1] / sum(commonBounds.commonEnds.values()),
+                                    uoboFreq[ub - 1] if ub - 1 in uoboFreq else -1)
+                            for ub in unchangedBounds if ub - 1 in commonBounds.commonEnds })
+                        # uoboFreq = {uobo: max(commonBounds.commonStarts[uobo] / sum(commonBounds.commonStarts.values()),
+                        #                 commonBounds.commonEnds[uobo] / sum(commonBounds.commonEnds.values()))
+                        #         for uobo in unchangedOffbyone
+                        #         if (uobo in commonBounds.commonStarts)
+                        #         or (uobo in commonBounds.commonEnds)}
 
 
                         # True boundaries for the segments' relative positions
@@ -1473,13 +1481,7 @@ class RelocatePCA(object):
                 # collect new bounds
                 relocatedBounds.update(newRelativeBounds)
 
-
-
         tabmod.PRESERVE_WHITESPACE = False
-
-
-
-
 
         # TODO relocate boundaries (create new segments)
         #  and place in relocatedSegments
@@ -1487,6 +1489,27 @@ class RelocatePCA(object):
         # TODO what to do with multiple overlapping/contradicting relocations?
         # relocatedBounds
         # relocatedCommons
+        from itertools import chain
+        messageBounds = {seg.message: [[], []] for seg in chain(relocatedBounds.keys(), relocatedCommons.keys())}
+        for seg in chain(relocatedBounds.keys(), relocatedCommons.keys()):  # type: MessageSegment
+            origBounds, newBounds = messageBounds[seg.message]
+            origBounds.append(seg.offset)
+            origBounds.append(seg.nextOffset)
+            newBounds.extend([rb + seg.offset for rb in relocatedBounds[seg]])
+            newBounds.extend([rc + seg.offset for rc in relocatedCommons[seg]])
+
+        for msg, (origBounds, newBounds) in messageBounds.items():
+            print("\n")
+            for off in range(len(msg.data)):
+                print("v ", end="") if off in origBounds else print("  ", end="")
+            print("\n" + msg.data.hex())
+            for off in range(len(msg.data)):
+                print("^ ", end="") if off in newBounds else print("  ", end="")
+
+        print("\n")
+
+        IPython.embed()
+
         return relocatedSegments
 
 
@@ -1506,7 +1529,7 @@ class RelocatePCA(object):
 
     class CommonBoundUtil(object):
 
-        __uoboFreqThresh = 0.4
+        uoboFreqThresh = 0.4
 
         """
         ...
@@ -1585,35 +1608,35 @@ class RelocatePCA(object):
 
             :param seg:
             :return: List of direct neighbors of the unchanged bounds of seg that are common bounds themselves and are
-                more frequent than __uoboFreqThresh.
+                more frequent than uoboFreqThresh.
             """
             unchangedBounds = self.unchangedBounds(seg, reloc)
 
             commonUnchangedOffbyone = [
-                    ub + 1 for ub in unchangedBounds
+                                          ub + 1 for ub in unchangedBounds
                         if ub + 1 in self.commonStarts
-                           and self.commonStarts[ub + 1] >
-                           RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonStarts.values())
+                                          and self.commonStarts[ub + 1] >
+                                          RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonStarts.values())
                 ] + [
-                    ub - 1 for ub in unchangedBounds
+                                          ub - 1 for ub in unchangedBounds
                         if ub - 1 in self.commonEnds
-                           and self.commonEnds[ub - 1] >
-                           RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonEnds.values())
+                                          and self.commonEnds[ub - 1] >
+                                          RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonEnds.values())
                 ]
 
             # unchangedOffbyone = [ub - 1 for ub in unchangedBounds] + [ub + 1 for ub in unchangedBounds]
             # commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
             #                            if (uobo in self.commonStarts and
             #                                self.commonStarts[uobo] >
-            #                                RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonStarts.values()))
+            #                                RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonStarts.values()))
             #                            or (uobo in self.commonEnds and
             #                                self.commonEnds[uobo] >
-            #                                RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(self.commonEnds.values())
+            #                                RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonEnds.values())
             #                            )]
 
             # if any(cb for cb in (self.commonStarts, self.commonEnds)
             #         if uobo in cb and
-            #         cb[uobo] > RelocatePCA.CommonBoundUtil.__uoboFreqThresh * sum(cb.values())
+            #         cb[uobo] > RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(cb.values())
             #        )
             # ]
 
