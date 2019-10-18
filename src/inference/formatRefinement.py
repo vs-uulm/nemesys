@@ -429,7 +429,7 @@ class CropDistinct(MessageModifier):
         segFreq = segcnt.most_common()
         freqThre = .2 * len(segmentedMessages)
         thre = 0
-        while segFreq[thre][1] > freqThre:
+        while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
         moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
         return moco
@@ -1219,7 +1219,8 @@ class RelocatePCA(object):
 
 
     def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0,
-                           comparator: MessageComparator = None, reportFolder:str = None):
+                           comparator: MessageComparator = None, reportFolder:str = None) \
+            -> Dict[MessageSegment, List[int]]:
         import tabulate as tabmod
         tabmod.PRESERVE_WHITESPACE = True
 
@@ -1485,30 +1486,34 @@ class RelocatePCA(object):
 
         # TODO relocate boundaries (create new segments)
         #  and place in relocatedSegments
-        relocatedSegments = list()
+        relocatedSegments = {seg: list() for seg in self.similarSegments.baseSegments}
         # TODO what to do with multiple overlapping/contradicting relocations?
         # relocatedBounds
         # relocatedCommons
-        from itertools import chain
-        messageBounds = {seg.message: [[], []] for seg in chain(relocatedBounds.keys(), relocatedCommons.keys())}
-        for seg in chain(relocatedBounds.keys(), relocatedCommons.keys()):  # type: MessageSegment
-            origBounds, newBounds = messageBounds[seg.message]
-            origBounds.append(seg.offset)
-            origBounds.append(seg.nextOffset)
-            newBounds.extend([rb + seg.offset for rb in relocatedBounds[seg]])
-            newBounds.extend([rc + seg.offset for rc in relocatedCommons[seg]])
 
-        for msg, (origBounds, newBounds) in messageBounds.items():
-            print("\n")
-            for off in range(len(msg.data)):
-                print("v ", end="") if off in origBounds else print("  ", end="")
-            print("\n" + msg.data.hex())
-            for off in range(len(msg.data)):
-                print("^ ", end="") if off in newBounds else print("  ", end="")
+        for segment, newBounds in relocatedBounds.items():
+            relocatedSegments[segment].extend([int(rb + segment.offset) for rb in newBounds])
+        for segment, newCommons in relocatedCommons.items():
+            relocatedSegments[segment].extend([int(rc + segment.offset) for rc in newCommons])
 
-        print("\n")
-
-        IPython.embed()
+        # from itertools import chain
+        # messageBounds = {seg.message: [[], []] for seg in chain(relocatedBounds.keys(), relocatedCommons.keys())}
+        # for seg in chain(relocatedBounds.keys(), relocatedCommons.keys()):  # type: MessageSegment
+        #     origBounds, newBounds = messageBounds[seg.message]
+        #     origBounds.append(seg.offset)
+        #     origBounds.append(seg.nextOffset)
+        #     newBounds.extend([rb + seg.offset for rb in relocatedBounds[seg]])
+        #     newBounds.extend([rc + seg.offset for rc in relocatedCommons[seg]])
+        #
+        # for msg, (origBounds, newBounds) in messageBounds.items():
+        #     print("\n")
+        #     for off in range(len(msg.data)):
+        #         print("v ", end="") if off in origBounds else print("  ", end="")
+        #     print("\n" + msg.data.hex())
+        #     for off in range(len(msg.data)):
+        #          print("^ ", end="") if off in newBounds else print("  ", end="")
+        # print("\n")
+        # IPython.embed()
 
         return relocatedSegments
 

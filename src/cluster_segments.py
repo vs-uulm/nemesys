@@ -81,6 +81,10 @@ def markSegNearMatch(segment: Union[MessageSegment, Template]):
 
 
 def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
+    """
+    :param segment: The input segment.
+    :return: All inferred segments for the message which the input segment is from.
+    """
     return next(msegs for msegs in inferredSegmentedMessages if msegs[0].message == segment.message)
 
 def inferredFEs4segment(segment: MessageSegment) -> List[int]:
@@ -256,10 +260,18 @@ if __name__ == '__main__':
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+    try:
+        clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+    except ClusterAutoconfException as e:
+        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+              "The original exception message was:\n", e)
+        exit(10)
+
     # clusterer.eps = clusterer.eps * 0.8
     # noise: List[MessageSegment]
     # clusters: List[List[MessageSegment]]
+
+    # noinspection PyUnboundLocalVariable
     noise, *clusters = clusterer.clusterSimilarSegments(False)
     # extract "large" templates from noise that should rather be its own cluster
     for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
@@ -542,16 +554,271 @@ if __name__ == '__main__':
         #     for bs in sc.similarSegments.baseSegments:
         #         markSegNearMatch(bs)
 
-    # actually do stuff
+
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO from here on the segment refinement happens
+
+    # collect new bounds for each segment and group them by message
+    newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]
     for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
         if cid in relevantSubclusters:
-            newSegments = sc.relocateBoundaries(dc, kneedleSensitivity, comparator, reportFolder)
-            # TODO here happens the segment refinement
+            clusterBounds = sc.relocateBoundaries(dc, kneedleSensitivity, comparator, reportFolder)
+            for segment, bounds in clusterBounds.items():
+                if segment.message not in newBounds:
+                    newBounds[segment.message] = dict()
+                elif segment in newBounds[segment.message]:
+                    print("\nSame segment was refined (PCA) multiple times. Needs resolving. Segment is:\n", segment)
+                    print()
+                    IPython.embed()
+                newBounds[segment.message][segment] = bounds
+
+    compareBounds = {m: {s: b.copy() for s, b in sb.items()} for m, sb in newBounds.items()}
+
+    def segs4bound(segs2bounds: Dict[MessageSegment, List[int]], bound: int) -> List[MessageSegment]:
+        """
+        helper for iterating bounds
+
+        :param segs2bounds:
+        :param bound:
+        :return: Yields the segment that is a key in segs2bounds,
+            if it has bound in its value list. Yields the same segment for each time bound is in its list.
+        """
+        for seg, bounds in segs2bounds.items():
+            for b in bounds.copy():
+                if b == bound:
+                    yield seg
+
+    # iterate new bounds per message, remove superfluous ones
+    for message, segsbounds in newBounds.items():
+
+        # # create lookup "bound position" : "segment list"
+        # boundSegsLookup = dict()  # type: Dict[int, List[MessageSegment]]
+        # for seg, bounds in segsbounds.items():
+        #     for bound in bounds:
+        #         if bound not in boundSegsLookup:
+        #             boundSegsLookup[bound] = list()
+        #         boundSegsLookup[bound].append(seg)
+
+        # Below, by list(chain(...)) create a copy to iterate, so we can delete stuff in the original bound lists.
+
+        # if bound in segment offsets or nextOffsets:
+        #   remove bound (also resolves some off-by-one conflicts, giving precedence to moves)
+        for bound in list(chain(*segsbounds.values())):
+            if bound in (segA.offset for segA in segsbounds.keys()) \
+                    or bound in (segA.nextOffset for segA in segsbounds.keys()) \
+                    or 0 <= bound >= len(message.data):
+                for lookedupSeg in segs4bound(segsbounds, bound):
+                    segsbounds[lookedupSeg].remove(bound)  # calls remove as often as there is bound in the list
+                    # while bound in segsbounds[lookedupSeg]:
+
+        # if bound in other segment is as close as one position away: resolve
+        flatSegsboundsCopy = [(seg, bound) for seg, bounds in segsbounds.items() for bound in bounds]
+        for seg, bound in flatSegsboundsCopy:
+            for neighbor in [bound - 1, bound + 1]:
+                if neighbor in (b for segA, bounds in segsbounds.items() if segA != seg for b in bounds):
+                    print("There are off-by-one neighbors:")
+                    for lookedupSeg in segs4bound(segsbounds, bound):
+                        markSegmentInMessage(lookedupSeg)
+                        print("bound: {} - neighbor: {}".format(bound, neighbor))
+                    print("Needs resolving!")
+                    print()
+                    IPython.embed()
+
+        # if bound in scope of more than one segment: resolve
+        for bound in list(chain(*segsbounds.values())):
+            lookedupSegs = list(segs4bound(segsbounds, bound))
+            if len(lookedupSegs) > 1:
+                segsNotHavingBoundInScope = [seg for seg in lookedupSegs if seg.offset > bound or bound < seg.nextOffset]
+                if len(lookedupSegs) - len(segsNotHavingBoundInScope) == 1:
+                    for segOutScope in segsNotHavingBoundInScope:
+                        while bound in segsbounds[segOutScope]:
+                            segsbounds[segOutScope].remove(bound)
+                elif len(lookedupSegs) - len(segsNotHavingBoundInScope) == 0:
+                    # just leave one arbitrary reference to the bound.
+                    for segOutScope in segsNotHavingBoundInScope[1:]:
+                        while bound in segsbounds[segOutScope]:
+                            segsbounds[segOutScope].remove(bound)
+                else:
+                    # multiple segments truly have bound in scope
+                    print("Bound {} is in scope of multiple segments:".format(bound))
+                    for lookedupSeg in segs4bound(segsbounds, bound):
+                        markSegmentInMessage(lookedupSeg)
+                    print("Needs resolving!")
+                    print()
+                    IPython.embed()
+
+
+    # # make some development output
+    # for msg, segs in newBounds.items():
+    #     # [[ min(outbounds) < min(inbounds) < max(outbounds) or min(outbounds) < max(inbounds) < max(outbounds)
+    #     #    for inbounds in segs.values()] for outbounds in segs.values()]
+    #     minmaxBounds = [(min(bounds), max(bounds)) for bounds in segs.values() if len(bounds) > 0]
+    #     if any(any(outbmin < inbmin < outbmax or outbmin < inbmax < outbmax
+    #             for inbmin, inbmax in minmaxBounds) for outbmin, outbmax in minmaxBounds):
+    #         print("#### Conflicting bounds!")
+    #     msgSegs = next(msegs for msegs in inferredSegmentedMessages if msegs[0].message == msg)
+    #     for seg, bounds in segs.items():
+    #         markSegmentInMessage(seg)
+    #         if len(bounds) > 0 and (min(bounds) < seg.offset or seg.nextOffset < max(bounds)):
+    #             print("needs neigbor change.")
+    #     for off in range(len(msg.data)):
+    #         print("^ ", end="") if off in chain(*segs.values()) else print("  ", end="")
+    #     print("\noriginal new bounds: ")
+    #     # list(chain(*compareBounds[msg].values())))
+    #     for off in range(len(msg.data)):
+    #         print("^ ", end="") if off in chain(*compareBounds[msg].values()) else print("  ", end="")
+    #     print()
+
+    # IPython.embed()
+
+    # iterate sorted message segments
+    refinedSegmentedMessages = list()  # type: List[List[MessageSegment]]
+    for msgsegs in inferredSegmentedMessages:
+        msg = msgsegs[0].message
+        if msg not in newBounds:
+            refinedSegmentedMessages.append(msgsegs)
+            continue
+
+        newMsgBounds = sorted(set(chain(*newBounds[msg].values())))
+        lastBound = 0
+        currentBoundID = 0
+        refinedSegmentedMessages.append(list())
+        for segInf in sorted(msgsegs, key=lambda x: x.offset):
+            # add skipped bytes to next segment if next_segment.nextOffset < bound
+            # create segment from last bound to min(next_segment.nextOffset, bound);
+            if lastBound < segInf.offset:
+                assert len(newMsgBounds) > 0  # should never happen otherwise
+                if currentBoundID < len(newMsgBounds) and newMsgBounds[currentBoundID] < segInf.nextOffset:
+                    nextOffset = newMsgBounds[currentBoundID]
+                    currentBoundID += 1
+                else:
+                    nextOffset = segInf.nextOffset
+
+                # TODO Segment sequence error!
+                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
+                    print("Segment sequence error!", "add skipped bytes")
+                    IPython.embed()
+
+                refinedSegmentedMessages[-1].append(
+                    MessageSegment(segInf.analyzer, lastBound, nextOffset - lastBound)
+                )
+                lastBound = refinedSegmentedMessages[-1][-1].nextOffset
+                if nextOffset > segInf.nextOffset:
+                    continue
+
+            # if no bounds in scope of segment: add old segment and continue
+            if lastBound == segInf.offset and (
+                    len(newMsgBounds) == 0 or currentBoundID >= len(newMsgBounds)
+                    or newMsgBounds[currentBoundID] > segInf.nextOffset + 1):
+
+                # TODO Segment sequence error!
+                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == segInf.offset:
+                    print("Segment sequence error!", "if no bounds in scope of segment")
+                    IPython.embed()
+
+                refinedSegmentedMessages[-1].append(segInf)
+                lastBound = segInf.nextOffset
+                continue
+            # if bound in scope of segment:
+            #   create segment from segment offset or last bound (which is larger) to bound
+            # IPython.embed()
+            for bound in [nmb for nmb in newMsgBounds[currentBoundID:] if nmb < segInf.nextOffset]:
+                newOffset = max(segInf.offset, lastBound)
+
+                # TODO Segment sequence error!
+                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == newOffset:
+                    print("Segment sequence error!", "if bound in scope of segment")
+                    IPython.embed()
+
+                refinedSegmentedMessages[-1].append(
+                    MessageSegment(segInf.analyzer, newOffset, bound - newOffset)
+                )
+                lastBound = newMsgBounds[currentBoundID]
+                currentBoundID += 1
+
+            # no further bounds (at least until segment end)
+            if segInf.nextOffset - lastBound <= 1:
+                continue
+            #
+            # # TODO Segment sequence error!
+            # if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
+            #     print("Segment sequence error!", "if no further bounds")
+            #     IPython.embed()
+            #
+            # refinedSegmentedMessages[-1].append(
+            #     MessageSegment(segInf.analyzer, lastBound, segInf.nextOffset - lastBound)
+            # )
+            # lastBound = refinedSegmentedMessages[-1][-1].nextOffset
+
+            # if no further bounds for message or bound > segment next offset+1 and resulting segment longer than 1:
+            #   create segment from last bound to inferred segment's next offset;
+            if currentBoundID >= len(newMsgBounds) or (
+                    newMsgBounds[currentBoundID] > segInf.nextOffset + 1):
+
+                # TODO Segment sequence error!
+                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
+                    print("Segment sequence error!", "if no further bounds")
+                    IPython.embed()
+
+                refinedSegmentedMessages[-1].append(
+                    MessageSegment(segInf.analyzer, lastBound, segInf.nextOffset - lastBound)
+                )
+                lastBound = refinedSegmentedMessages[-1][-1].nextOffset
+                # do not advance currentBoundID bound (in case there is another bound
+                #   so we need to consider it in scope of a later segment)
+
+            # bound == next offset+1 and resulting segment longer than 1: create segment from last bound to bound
+            elif currentBoundID >= len(newMsgBounds) or (
+                    newMsgBounds[currentBoundID] == segInf.nextOffset + 1 and newMsgBounds[currentBoundID] - lastBound > 1):
+
+                # TODO Segment sequence error!
+                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
+                    print("Segment sequence error!", "bound == next offset+1")
+                    IPython.embed()
+
+                refinedSegmentedMessages[-1].append(
+                    MessageSegment(segInf.analyzer, lastBound, newMsgBounds[currentBoundID] - lastBound)
+                )
+                lastBound = refinedSegmentedMessages[-1][-1].nextOffset
+                currentBoundID += 1
+
+
+            # elif not lastBound < segInf.nextOffset:
+            #     print("\nI missed a condition!\n")
+            #     IPython.embed()
+
+            # if refinedSegmentedMessages[-1][-1].length < 2 and refinedSegmentedMessages[-1][-1] not in msgsegs:
+            #     print("there is a short segment.", refinedSegmentedMessages[-1][-1])
+            #     # IPython.embed()
+
+
+    for msgsegs in refinedSegmentedMessages:
+        infms = next(ms for ms in inferredSegmentedMessages if ms[0].message == msgsegs[0].message)
+        if msgsegs != infms:
+            comparator.pprint2Interleaved(infms[0].message, [infs.nextOffset for infs in infms])
+            comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
+            newMsgBounds = sorted(chain(*newBounds[msgsegs[0].message].values()))
+            print(newMsgBounds)
+            missedBound = [nmb for nmb in newMsgBounds if nmb not in (ref.offset for ref in msgsegs)]
+            if len(missedBound) > 0:
+                print("missedBounds", missedBound)
+
+            segseq = [ref1 for ref1, ref2 in zip(msgsegs[:-1], msgsegs[1:]) if ref1.nextOffset != ref2.offset]
+            if len(segseq) > 0:
+                print("Segment sequence error!\n", segseq)
+            shoseg = [ref for ref in msgsegs if ref.length < 2 and ref not in infms]
+            print("Short segments:\n", shoseg)
+            print()
 
 
     # # select one tf
     # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
     # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
 
 
 
