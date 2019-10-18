@@ -688,7 +688,7 @@ if __name__ == '__main__':
             # create segment from last bound to min(next_segment.nextOffset, bound);
             if lastBound < segInf.offset:
                 assert len(newMsgBounds) > 0  # should never happen otherwise
-                if currentBoundID < len(newMsgBounds) and newMsgBounds[currentBoundID] < segInf.nextOffset:
+                if currentBoundID < len(newMsgBounds) and newMsgBounds[currentBoundID] <= segInf.nextOffset + 1:
                     nextOffset = newMsgBounds[currentBoundID]
                     currentBoundID += 1
                 else:
@@ -806,8 +806,9 @@ if __name__ == '__main__':
             segseq = [ref1 for ref1, ref2 in zip(msgsegs[:-1], msgsegs[1:]) if ref1.nextOffset != ref2.offset]
             if len(segseq) > 0:
                 print("Segment sequence error!\n", segseq)
-            shoseg = [ref for ref in msgsegs if ref.length < 2 and ref not in infms]
-            print("Short segments:\n", shoseg)
+            shoseg = [ref for ref in msgsegs if ref.offset > 0 and ref.length < 2 and ref not in infms]
+            if len(shoseg) > 0:
+                print("Short segments:\n", shoseg)
             print()
 
 
