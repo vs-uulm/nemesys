@@ -1665,14 +1665,15 @@ class FieldTypeContext(FieldTypeTemplate):
             # noinspection PyTypeChecker
             return numpy.array([self.paddedValues(seg) for seg in self.baseSegments])
 
-
         shift = self._baseOffsets[segment] if segment in self._baseOffsets else 0
         paddedOffset = segment.offset - shift
+        # if padding reaches before the start of the message
         if paddedOffset < 0:
             toPrepend = [numpy.nan] * -paddedOffset
         else:
             toPrepend = []
         paddedNext = paddedOffset + self._maxLen
+        # if padding reaches after the end of the message
         if paddedNext > len(segment.analyzer.values):
             toAppend = [numpy.nan] * (paddedNext - len(segment.analyzer.values))
         else:
@@ -1680,10 +1681,6 @@ class FieldTypeContext(FieldTypeTemplate):
         values = toPrepend + \
                  segment.analyzer.values[max(0, paddedOffset):min(len(segment.analyzer.values), paddedNext)] + \
                  toAppend
-
-        # if not values[shift:shift+segment.length] == segment.values or not len(values) == self._maxLen:
-        #     import IPython
-        #     IPython.embed()
 
         assert len(values) == self._maxLen, "value padding failed"
         # overlapping offset from -1
