@@ -1464,16 +1464,17 @@ class RelocatePCA(object):
                                 ])
 
 
-                    print()
-                    print(sc.similarSegments.fieldtype)
-                    print()
-                    print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
-                                                    + ["new"] * (len(valMtrx[0]) - 3)
-                                                    + ["newBounds", "cutsExt"]
-                                   ))
-                    print()
-                    print(commonBounds.commonStarts.most_common())
-                    print(commonBounds.commonEnds.most_common())
+                    # # segment boundary change comparison tables
+                    # print()
+                    # print(sc.similarSegments.fieldtype)
+                    # print()
+                    # print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
+                    #                                 + ["new"] * (len(valMtrx[0]) - 3)
+                    #                                 + ["newBounds", "cutsExt"]
+                    #                ))
+                    # print()
+                    # print(commonBounds.commonStarts.most_common())
+                    # print(commonBounds.commonEnds.most_common())
 
                 # if comparator.specimens.pcapFileName == "input/dhcp_SMIA2011101X_deduped-100.pcap" \
                 #         and sc.similarSegments.fieldtype == "tf09":
@@ -1715,8 +1716,16 @@ class RelocatePCA(object):
 
 
 
+    @staticmethod
+    def refineSegments(dc: DistanceCalculator, kneedleSensitivity: float) -> List[List[MessageSegment]]:
+        """
+        Main method to condict PCA refinement for a set of segments.
 
-
+        :param dc: Distance calculator representing the segments to be analyzed and refined.
+        :return: List of segments grouped by the message they are from.
+        """
+        clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+        noise, *clusters = clusterer.clusterSimilarSegments(False)
 
 
 

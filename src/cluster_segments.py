@@ -16,9 +16,11 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
 from inference.formatRefinement import RelocatePCA
+from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
 from utils.evaluationHelpers import *
+from validation.dissectorMatcher import FormatMatchScore
 
 
 debug = False
@@ -79,7 +81,6 @@ def markSegNearMatch(segment: Union[MessageSegment, Template]):
     #         posSegEnd = posSegMatch
     #     contextEnd = min(posSegEnd + 1, len(trueSegmentedMessages))
 
-
 def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
     """
     :param segment: The input segment.
@@ -89,8 +90,6 @@ def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
 
 def inferredFEs4segment(segment: MessageSegment) -> List[int]:
     return [infs.nextOffset for infs in inferred4segment(segment)]
-
-
 
 def plotComponentAnalysis(pcaRelocator: RelocatePCA, eigValnVec: Tuple[numpy.ndarray], relocateFromEnd: List[int]):
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -175,7 +174,6 @@ def plotComponentAnalysis(pcaRelocator: RelocatePCA, eigValnVec: Tuple[numpy.nda
     heatFig.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(pcaRelocator.similarSegments.fieldtype)))
     plt.close(heatFig)
 
-
 def plotRecursiveComponentAnalysis(relocateFromEnd: Union[Dict, Any]):
     """
     Support for subclustering, where the method returns a dict of relevant information about each subcluster
@@ -247,19 +245,47 @@ if __name__ == '__main__':
     # Determine the amount of off-by-one errors
     from validation.dissectorMatcher import DissectorMatcher
     message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(inferredSegmentedMessages))
+    exactcount = 0
     offbyonecount = 0
     offbymorecount = 0
-    for fms in message2quality.values():
+    for fms in message2quality.values():  # type: FormatMatchScore
+        exactcount += fms.exactCount
         offbyonecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) == 1)
         offbymorecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) > 1)
+    minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
+    print("Format Match Scores")
+    print("  (min, mean, max): ", *minmeanmax)
     print("near matches")
-    print("off-by-one:", offbyonecount)
-    print("off-by-more:", offbymorecount)
+    print("  off-by-one:", offbyonecount)
+    print("  off-by-more:", offbymorecount)
+    print("exact matches:", exactcount)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # conduct PCA refinement
+    try:
+        refinedSegmentedMessages = RelocatePCA.refineSegments(dc, kneedleSensitivity)
+        # TODO needs recalculation of segment distances
+    except ClusterAutoconfException as e:
+        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+              "The original exception message was:\n", e)
+        exit(10)
+
+
+
+
+
+
+
+
+
+
+
+
 
     # # # # # # # # # # # # # # # # # # # # # # # #
+    # cluster segments to determine field types on commonality
     try:
         clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
     except ClusterAutoconfException as e:
@@ -267,12 +293,11 @@ if __name__ == '__main__':
               "The original exception message was:\n", e)
         exit(10)
 
-    # clusterer.eps = clusterer.eps * 0.8
+    # noinspection PyUnboundLocalVariable
+    noise, *clusters = clusterer.clusterSimilarSegments(False)
     # noise: List[MessageSegment]
     # clusters: List[List[MessageSegment]]
 
-    # noinspection PyUnboundLocalVariable
-    noise, *clusters = clusterer.clusterSimilarSegments(False)
     # extract "large" templates from noise that should rather be its own cluster
     for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
         freqThresh = log(len(dc.rawSegments))
@@ -282,6 +307,14 @@ if __name__ == '__main__':
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
     # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
+
+
+
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
@@ -334,6 +367,10 @@ if __name__ == '__main__':
         #         recog = RecognizedVariableLengthField(seg.message, ftype, seg.offset, seg.nextOffset, confidence)
         #         printFieldContext(trueSegmentedMessages, recog)
     # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
 
     doWobble = False
 
@@ -672,6 +709,7 @@ if __name__ == '__main__':
     # IPython.embed()
 
     # iterate sorted message segments
+    margin = 0
     refinedSegmentedMessages = list()  # type: List[List[MessageSegment]]
     for msgsegs in inferredSegmentedMessages:
         msg = msgsegs[0].message
@@ -688,16 +726,15 @@ if __name__ == '__main__':
             # create segment from last bound to min(next_segment.nextOffset, bound);
             if lastBound < segInf.offset:
                 assert len(newMsgBounds) > 0  # should never happen otherwise
-                if currentBoundID < len(newMsgBounds) and newMsgBounds[currentBoundID] <= segInf.nextOffset + 1:
+                if currentBoundID < len(newMsgBounds) and newMsgBounds[currentBoundID] <= segInf.nextOffset + margin:
                     nextOffset = newMsgBounds[currentBoundID]
                     currentBoundID += 1
                 else:
                     nextOffset = segInf.nextOffset
 
-                # TODO Segment sequence error!
-                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
-                    print("Segment sequence error!", "add skipped bytes")
-                    IPython.embed()
+                assert not len(refinedSegmentedMessages[-1]) > 0 or \
+                       refinedSegmentedMessages[-1][-1].nextOffset == lastBound, \
+                    "Segment sequence error: add skipped bytes"
 
                 refinedSegmentedMessages[-1].append(
                     MessageSegment(segInf.analyzer, lastBound, nextOffset - lastBound)
@@ -709,26 +746,23 @@ if __name__ == '__main__':
             # if no bounds in scope of segment: add old segment and continue
             if lastBound == segInf.offset and (
                     len(newMsgBounds) == 0 or currentBoundID >= len(newMsgBounds)
-                    or newMsgBounds[currentBoundID] > segInf.nextOffset + 1):
+                    or newMsgBounds[currentBoundID] > segInf.nextOffset + margin):
 
-                # TODO Segment sequence error!
-                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == segInf.offset:
-                    print("Segment sequence error!", "if no bounds in scope of segment")
-                    IPython.embed()
+                assert not len(refinedSegmentedMessages[-1]) > 0 \
+                        or refinedSegmentedMessages[-1][-1].nextOffset == segInf.offset, \
+                    "Segment sequence error: no bounds in scope of segment"
 
                 refinedSegmentedMessages[-1].append(segInf)
                 lastBound = segInf.nextOffset
                 continue
             # if bound in scope of segment:
             #   create segment from segment offset or last bound (which is larger) to bound
-            # IPython.embed()
             for bound in [nmb for nmb in newMsgBounds[currentBoundID:] if nmb < segInf.nextOffset]:
                 newOffset = max(segInf.offset, lastBound)
 
-                # TODO Segment sequence error!
-                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == newOffset:
-                    print("Segment sequence error!", "if bound in scope of segment")
-                    IPython.embed()
+                assert not len(refinedSegmentedMessages[-1]) > 0 or \
+                        refinedSegmentedMessages[-1][-1].nextOffset == newOffset, \
+                    "Segment sequence error: bound in scope of segment"
 
                 refinedSegmentedMessages[-1].append(
                     MessageSegment(segInf.analyzer, newOffset, bound - newOffset)
@@ -737,29 +771,17 @@ if __name__ == '__main__':
                 currentBoundID += 1
 
             # no further bounds (at least until segment end)
-            if segInf.nextOffset - lastBound <= 1:
+            if segInf.nextOffset - lastBound <= margin and len(msg.data) - segInf.nextOffset > 0:
                 continue
-            #
-            # # TODO Segment sequence error!
-            # if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
-            #     print("Segment sequence error!", "if no further bounds")
-            #     IPython.embed()
-            #
-            # refinedSegmentedMessages[-1].append(
-            #     MessageSegment(segInf.analyzer, lastBound, segInf.nextOffset - lastBound)
-            # )
-            # lastBound = refinedSegmentedMessages[-1][-1].nextOffset
 
             # if no further bounds for message or bound > segment next offset+1 and resulting segment longer than 1:
             #   create segment from last bound to inferred segment's next offset;
             if currentBoundID >= len(newMsgBounds) or (
                     newMsgBounds[currentBoundID] > segInf.nextOffset + 1):
 
-                # TODO Segment sequence error!
-                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
-                    print("Segment sequence error!", "if no further bounds")
-                    IPython.embed()
-
+                assert not len(refinedSegmentedMessages[-1]) > 0 or \
+                       refinedSegmentedMessages[-1][-1].nextOffset == lastBound, \
+                    "Segment sequence error: if no further bounds"
                 refinedSegmentedMessages[-1].append(
                     MessageSegment(segInf.analyzer, lastBound, segInf.nextOffset - lastBound)
                 )
@@ -768,13 +790,11 @@ if __name__ == '__main__':
                 #   so we need to consider it in scope of a later segment)
 
             # bound == next offset+1 and resulting segment longer than 1: create segment from last bound to bound
-            elif currentBoundID >= len(newMsgBounds) or (
-                    newMsgBounds[currentBoundID] == segInf.nextOffset + 1 and newMsgBounds[currentBoundID] - lastBound > 1):
+            elif newMsgBounds[currentBoundID] == segInf.nextOffset + 1 and newMsgBounds[currentBoundID] - lastBound > 1:
 
-                # TODO Segment sequence error!
-                if len(refinedSegmentedMessages[-1]) > 0 and not refinedSegmentedMessages[-1][-1].nextOffset == lastBound:
-                    print("Segment sequence error!", "bound == next offset+1")
-                    IPython.embed()
+                assert not len(refinedSegmentedMessages[-1]) > 0 or \
+                       refinedSegmentedMessages[-1][-1].nextOffset == lastBound, \
+                    "Segment sequence error: bound == next offset+1"
 
                 refinedSegmentedMessages[-1].append(
                     MessageSegment(segInf.analyzer, lastBound, newMsgBounds[currentBoundID] - lastBound)
@@ -782,39 +802,82 @@ if __name__ == '__main__':
                 lastBound = refinedSegmentedMessages[-1][-1].nextOffset
                 currentBoundID += 1
 
+        msgbytes = b"".join([seg.bytes for seg in refinedSegmentedMessages[-1]])
+        assert msgbytes == msg.data, "segment sequence does not match message bytes:"
+            # print(msg.data.hex())
+            # print(msgbytes.hex())
+            # print(msgsegs)
+            # IPython.embed()
 
-            # elif not lastBound < segInf.nextOffset:
-            #     print("\nI missed a condition!\n")
-            #     IPython.embed()
+    # for msgsegs in refinedSegmentedMessages:
+    #     infms = next(ms for ms in inferredSegmentedMessages if ms[0].message == msgsegs[0].message)
+    #     if msgsegs != infms:
+    #         comparator.pprint2Interleaved(infms[0].message, [infs.nextOffset for infs in infms])
+    #         comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
+    #         newMsgBounds = sorted(chain(*newBounds[msgsegs[0].message].values()))
+    #         print(newMsgBounds)
+    #         missedBound = [nmb for nmb in newMsgBounds if nmb not in (ref.offset for ref in msgsegs)]
+    #         if len(missedBound) > 0:
+    #             print("missedBounds", missedBound)
+    #
+    #         segseq = [ref1 for ref1, ref2 in zip(msgsegs[:-1], msgsegs[1:]) if ref1.nextOffset != ref2.offset]
+    #         if len(segseq) > 0:
+    #             print("Segment sequence error!\n", segseq)
+    #         shoseg = [ref for ref in msgsegs if ref.offset > 0 and ref.length < 2 and ref not in infms]
+    #         if len(shoseg) > 0:
+    #             print("Short segments:\n", shoseg)
+    #         print()
 
-            # if refinedSegmentedMessages[-1][-1].length < 2 and refinedSegmentedMessages[-1][-1] not in msgsegs:
-            #     print("there is a short segment.", refinedSegmentedMessages[-1][-1])
-            #     # IPython.embed()
-
-
-    for msgsegs in refinedSegmentedMessages:
-        infms = next(ms for ms in inferredSegmentedMessages if ms[0].message == msgsegs[0].message)
-        if msgsegs != infms:
-            comparator.pprint2Interleaved(infms[0].message, [infs.nextOffset for infs in infms])
-            comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
-            newMsgBounds = sorted(chain(*newBounds[msgsegs[0].message].values()))
-            print(newMsgBounds)
-            missedBound = [nmb for nmb in newMsgBounds if nmb not in (ref.offset for ref in msgsegs)]
-            if len(missedBound) > 0:
-                print("missedBounds", missedBound)
-
-            segseq = [ref1 for ref1, ref2 in zip(msgsegs[:-1], msgsegs[1:]) if ref1.nextOffset != ref2.offset]
-            if len(segseq) > 0:
-                print("Segment sequence error!\n", segseq)
-            shoseg = [ref for ref in msgsegs if ref.offset > 0 and ref.length < 2 and ref not in infms]
-            if len(shoseg) > 0:
-                print("Short segments:\n", shoseg)
-            print()
-
+    # # final validity check
+    # for msgsegs in refinedSegmentedMessages:
+    #     msg = msgsegs[0].message
+    #     msgbytes = b"".join([seg.bytes for seg in msgsegs])
+    #     if not msgbytes == msg.data:
+    #         print("segment sequence does not match message bytes:")
+    #         print(msg.data.hex())
+    #         print(msgbytes.hex())
+    #         print(msgsegs)
 
     # # select one tf
     # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
     # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Determine the amount of off-by-one errors in refined segmentation
+
+    from validation.dissectorMatcher import DissectorMatcher
+    message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(refinedSegmentedMessages))
+    exactcount = 0
+    offbyonecount = 0
+    offbymorecount = 0
+    for fms in message2quality.values():  # type: FormatMatchScore
+        exactcount += fms.exactCount
+        offbyonecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) == 1)
+        offbymorecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) > 1)
+    minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
+    print("Format Match Scores (refined)")
+    print("  (min, mean, max): ", *minmeanmax)
+    print("near matches")
+    print("  off-by-one:", offbyonecount)
+    print("  off-by-more:", offbymorecount)
+    print("exact matches:", exactcount)
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -913,6 +976,10 @@ if __name__ == '__main__':
     # # now see how well NEMESYS infers common fields (to use for correcting boundaries by replacing segments of less
     # #                                                frequent values with more of those of the most frequent values)
     # # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+
 
 
 
