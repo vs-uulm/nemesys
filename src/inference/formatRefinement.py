@@ -665,8 +665,23 @@ class RelocatePCA(object):
     screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
             # interpreted as fraction of the component count as dynamic determination.
-    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0 to consider a loading component in the eigenvector as contributing to the variance
+    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0
+            # to consider a loading component in the eigenvector as contributing to the variance
     maxLengthDelta = 7  # (max true: 6 in dns-new, min false 9 in dhcp)
+
+    # e1 parameters
+    nearZero = 0.003
+    notableContrib = 0.66  # or 0.7 (see smb tf04)
+    # peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf06 and smb tf04,
+    #   however, it has false positive dhcp tf01 and smb tf00.4
+
+    # e2 parameters
+    # also apply to higher nearZero and lower notableContrib if longer (>= 4) sequence of nearZero
+    #   precedes notableContrib
+    relaxedNearZero = 0.004
+    relaxedNZlength = 4
+    relaxedNotableContrib = 0.05
+    relaxedMaxContrib = 0.66
 
     def __init__(self, similarSegments: FieldTypeContext,
                  eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
@@ -922,18 +937,18 @@ class RelocatePCA(object):
 
 
     def relocateOffsets(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None,
-                        conditionA = True, conditionE1 = True, conditionE2 = True, conditionF = False,
-                        conditionG = False):
+                        conditionA = True, conditionE1 = True, conditionE2 = True,
+                        conditionF = False, conditionG = False):
         """
 
-        :param conditionA: Enable Condition A
+        :param conditionA:  Enable Condition A
         :param conditionE1: Enable Condition E1
         :param conditionE2: Enable Condition E2
         :param conditionF:  Enable Condition F
         :param conditionG:  Enable Condition G
         :param reportFolder: For debugging
-        :param trace: For debugging
-        :param comparator: For debugging
+        :param trace:        For debugging
+        :param comparator:   For debugging
         :return: positions to be relocated if the PCA for the current cluster has meaningful result,
             otherwise sub-cluster and return the PCA and relocation positions for each sub-cluster.
         """
@@ -1032,23 +1047,6 @@ class RelocatePCA(object):
 
         # # Condition e: Loading peak of principal component rising from (near) 0.0
         #
-        # e1 parameters
-        nearZero = 0.003
-        notableContrib = 0.66  # or 0.7 (see smb tf04)
-        # peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf06 and smb tf04,
-        #   however, it has false positive dhcp tf01 and smb tf00.4
-
-        # e2 parameters
-        # also apply to higher nearZero and lower notableContrib if longer (>= 4) sequence of nearZero
-        #   precedes notableContrib
-        relaxedNearZero = 0.004
-        relaxedNZlength = 4
-        relaxedNotableContrib = 0.05
-        relaxedMaxContrib = 0.66
-
-
-        # if self.similarSegments.fieldtype == "tf01":
-        #     IPython.embed()
 
         # apply to multiple PCs to get multiple cuts, see smb tf01
         #   leads to only one improvement and one FP in 100s traces. Removed again.
@@ -1064,12 +1062,14 @@ class RelocatePCA(object):
 
             pcLoadings = eigVecS
 
-            if all(abs(pcLoadings[lc - 1]) < relaxedNearZero):
+            if all(abs(pcLoadings[lc - 1]) < RelocatePCA.relaxedNearZero):
                 rnzCount += 1
             else:
                 rnzCount = 0
 
-            if conditionE1 and all(abs(pcLoadings[lc - 1]) < nearZero) and any(abs(pcLoadings[lc]) > notableContrib):
+            if conditionE1 \
+                    and all(abs(pcLoadings[lc - 1]) < RelocatePCA.nearZero) \
+                    and any(abs(pcLoadings[lc]) > RelocatePCA.notableContrib):
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # write statistics
                 if reportFolder is not None and trace is not None:
@@ -1098,8 +1098,10 @@ class RelocatePCA(object):
 
                 relocate.append(lc)
 
-            elif conditionE2 and rnzCount >= relaxedNZlength and any(abs(pcLoadings[lc]) > relaxedNotableContrib) \
-                    and all(abs(pcLoadings[lc]) < relaxedMaxContrib):
+            elif conditionE2 \
+                    and rnzCount >= RelocatePCA.relaxedNZlength \
+                    and any(abs(pcLoadings[lc]) > RelocatePCA.relaxedNotableContrib) \
+                    and all(abs(pcLoadings[lc]) < RelocatePCA.relaxedMaxContrib):
                     # # that is away more than 1 position from another new cut (see smb tf03), leads to only one FP
                     # not any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1]):
 
@@ -1141,8 +1143,10 @@ class RelocatePCA(object):
         if conditionF:
             for lc in range(1, eigVecS.shape[0]):
                 pcLoadings = eigVecS[:, 0]
-                if pcLoadings[lc - 1] < -relaxedNotableContrib and pcLoadings[lc] > relaxedNotableContrib or \
-                        pcLoadings[lc - 1] > relaxedNotableContrib and pcLoadings[lc] < -relaxedNotableContrib:
+                if pcLoadings[lc - 1] < -RelocatePCA.relaxedNotableContrib \
+                            and pcLoadings[lc] > RelocatePCA.relaxedNotableContrib \
+                        or pcLoadings[lc - 1] > RelocatePCA.relaxedNotableContrib \
+                            and pcLoadings[lc] < -RelocatePCA.relaxedNotableContrib:
 
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # write statistics
@@ -1221,7 +1225,8 @@ class RelocatePCA(object):
 
 
     def relocateBoundaries(self, dc: DistanceCalculator = None, kneedleSensitivity:float = 12.0,
-                           comparator: MessageComparator = None, reportFolder:str = None) \
+                           comparator: MessageComparator = None, reportFolder:str = None,
+                           collectEvaluationData: List['RelocatePCA'] = False) \
             -> Dict[MessageSegment, List[int]]:
         """
         Determine new boundaries for all segments in the RelocatePCA object.
@@ -1236,13 +1241,19 @@ class RelocatePCA(object):
         :param kneedleSensitivity: Kneedle sensitivity parameter for autodetection of DBSCAN clustering parameter.
         :param comparator: For evaluation: Encapsulated true field bounds to compare results to.
         :param reportFolder: For evaluation: Destination path to write results and statistics to.
+        :param collectEvaluationData: For evaluation: Collect the intermediate (sub-)clusters generated during
+            the analysis of the segments.
         :return: Relocated boundaries.
         """
+        from os.path import splitext, basename
         import tabulate as tabmod
         tabmod.PRESERVE_WHITESPACE = True
 
-        collectedSubclusters = list()
-        collectedSubclusters.extend(self.getSubclusters(dc, kneedleSensitivity))
+        trace = splitext(basename(comparator.specimens.pcapFileName))[0]
+
+        collectedSubclusters = self.getSubclusters(dc, kneedleSensitivity)
+        if isinstance(collectEvaluationData, list):
+            collectEvaluationData.extend(collectedSubclusters)
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
             [a.similarSegments for a in collectedSubclusters])
         relocatedBounds = dict()
@@ -1254,7 +1265,7 @@ class RelocatePCA(object):
             # #  values [0, len] as bounds for all segments in the cluster.D
 
             if cid in relevantSubclusters:
-                relocate = sc.relocateOffsets()
+                relocate = sc.relocateOffsets(reportFolder, trace, comparator)
 
                 # prepare different views on the newly proposed offsets
                 paddOffs = {bs: sc.similarSegments.paddedPosition(bs) for bs in sc.similarSegments.baseSegments}
@@ -1393,22 +1404,10 @@ class RelocatePCA(object):
                         moCoReSt, moCoReEn = commonBounds.filterOutMoreCommonNeighbors(relocWmargin)
 
                         # resolve adjacent most common starts/ends (use more common bound)
-                        commonUnchangedOffbyone = commonBounds.commonUnchangedOffByOne(seg, relocate) # TODO uobo
-                        commonUnchanged = commonBounds.commonUnchanged(seg, relocate) # TODO uobo
+                        # commonUnchangedOffbyone = commonBounds.commonUnchangedOffByOne(seg, relocate)
+                        commonUnchanged = commonBounds.commonUnchanged(seg, relocate)
 
-
-                        # TODO validate to be inverse of moveAt*
-                        # unchangedBounds = list()
-                        # if baseOffs[seg] in rel:
-                        #     unchangedBounds.append(baseOffs[seg])
-                        # if endOffs[seg] in rel:
-                        #     unchangedBounds.append(endOffs[seg])
-                        # if not commonBounds.unchangedBounds(seg) == unchangedBounds:
-                        #     print(commonBounds.unchangedBounds(seg))
-                        #     print(unchangedBounds)
-                        #     IPython.embed()
-                        # assert commonBounds.unchangedBounds(seg) == unchangedBounds
-                        unchangedBounds = commonBounds.unchangedBounds(seg, relocate) # TODO uobo
+                        unchangedBounds = commonBounds.unchangedBounds(seg, relocate)
 
 
                         # Separately calculate frequency of off-by-one positions of unchanged bounds
@@ -1454,7 +1453,7 @@ class RelocatePCA(object):
                                     repr(com > min(rel)),
                                     repr(com in moCoReSt),
                                     commonBounds.commonStarts[com] / sum(commonBounds.commonStarts.values()),
-                                    repr(com in commonUnchanged), # TODO uobo
+                                    repr(com in commonUnchanged),
                                     uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
@@ -1474,7 +1473,7 @@ class RelocatePCA(object):
                                     repr(com < max(rel)),
                                     repr(com in moCoReEn),
                                     commonBounds.commonEnds[com]/sum(commonBounds.commonEnds.values()),
-                                    repr(com in commonUnchanged), # TODO uobo
+                                    repr(com in commonUnchanged),
                                     uoboFreq[com] if com in uoboFreq else "",
                                     valTable[num],
                                 ])
@@ -1697,26 +1696,26 @@ class RelocatePCA(object):
             # padded range refinement
             for seg, reloc in newPaddingRelative.items():
                 # resolve adjacent most common starts/ends (use more common bound)
-                commonUnchanged = self.commonUnchanged(seg, relocate) # TODO uobo
-                commonUnchangedOffbyone = self.commonUnchangedOffByOne(seg, relocate)  # TODO uobo
+                # commonUnchanged = self.commonUnchanged(seg, relocate)
+                commonUnchangedOffbyone = self.commonUnchangedOffByOne(seg, relocate)
 
                 # Used to determine positions that are more than off-by-one from new bound,
                 #  naturally includes: is not a move and not a relocation
-                relocWmargin = RelocatePCA._offbyone(reloc + commonUnchangedOffbyone) # TODO uobo   + commonUnchanged
+                relocWmargin = RelocatePCA._offbyone(reloc + commonUnchangedOffbyone)
                 moCoReSt, moCoReEn = self.filterOutMoreCommonNeighbors(relocWmargin)
 
                 cutsExtStart = sorted(common for common in self.commonStarts
                                       # conditions for reframing by common segment starts
                                       if common > min(reloc) and (
                                               common not in relocWmargin and common in moCoReSt
-                                              or common in commonUnchangedOffbyone # TODO uobo
+                                              or common in commonUnchangedOffbyone
                                       )
                                       )
                 cutsExtEnd = sorted(common for common in self.commonEnds
                                     # conditions for reframing by common segment ends
                                     if common < max(reloc) and (
                                             common not in relocWmargin and common in moCoReEn
-                                            or common in commonUnchangedOffbyone # TODO uobo
+                                            or common in commonUnchangedOffbyone
                                     )
                                     )
                 cutsExt[seg] = cutsExtStart + cutsExtEnd
@@ -1769,20 +1768,6 @@ class RelocatePCA(object):
                         segsbounds[lookedupSeg].remove(bound)  # calls remove as often as there is bound in the list
                         # while bound in segsbounds[lookedupSeg]:
 
-            # if bound in other segment is as close as one position away: resolve
-            flatSegsboundsCopy = [(seg, bound) for seg, bounds in segsbounds.items() for bound in bounds]
-            for seg, bound in flatSegsboundsCopy:
-                for neighbor in [bound - 1, bound + 1]:
-                    if neighbor in (b for segA, bounds in segsbounds.items() if segA != seg for b in bounds):
-                        # TODO replace by exception
-                        print("There are off-by-one neighbors:")
-                        for lookedupSeg in RelocatePCA.segs4bound(segsbounds, bound):
-                            markSegmentInMessage(lookedupSeg)
-                            print("bound: {} - neighbor: {}".format(bound, neighbor))
-                        print("Needs resolving!")
-                        print()
-                        IPython.embed()
-
             # if bound in scope of more than one segment: resolve
             for bound in list(chain(*segsbounds.values())):
                 lookedupSegs = list(RelocatePCA.segs4bound(segsbounds, bound))
@@ -1807,6 +1792,37 @@ class RelocatePCA(object):
                         print("Needs resolving!")
                         print()
                         IPython.embed()
+
+            # if bound in other segment is as close as one position away: resolve
+            flatSegsboundsCopy = [(seg, bound) for seg, bounds in segsbounds.items() for bound in bounds]
+            for seg, bound in flatSegsboundsCopy:
+                for neighbor in [bound - 1, bound + 1]:
+                    if neighbor in (b for segA, bounds in segsbounds.items() if segA != seg for b in bounds):
+                        # retain seg/neighborSeg that has bound in scope, delete other(s)
+                        inScopeSeg = seg.offset <= bound < seg.nextOffset
+                        neiSeg = [segA for segA, bounds in segsbounds.items() if segA != seg and neighbor in bounds]
+                        inScopeNei = [segA.offset <= neighbor < segA.nextOffset for segA in neiSeg]
+
+                        if sum([inScopeSeg] + inScopeNei) <= 1:  # just one neighbor remains, good
+                            if not inScopeSeg:
+                                while bound in segsbounds[seg]:
+                                    segsbounds[seg].remove(bound)
+                            for segN, inScope in zip(neiSeg, inScopeNei):
+                                if not inScope:
+                                    while neighbor in segsbounds[segN]:
+                                        segsbounds[segN].remove(neighbor)
+                            continue
+
+                        # TODO replace by exception
+                        print("There are off-by-one neighbors:")
+                        for lookedupSeg in RelocatePCA.segs4bound(segsbounds, bound):
+                            markSegmentInMessage(lookedupSeg)
+                            print("bound: {} - neighbor: {}".format(bound, neighbor))
+                        print("Needs resolving!")
+                        print()
+                        IPython.embed()
+
+
         return newBounds
 
 
@@ -1915,7 +1931,7 @@ class RelocatePCA(object):
                     #     IPython.embed()
                     ifs.append("no further bounds")
 
-                    refinedSegmentedMessages[-1].append(  # TODO ValueError: Offset 43 too large for message of length 43.
+                    refinedSegmentedMessages[-1].append(
                         MessageSegment(segInf.analyzer, lastBound, segInf.nextOffset - lastBound)
                     )
                     lastBound = refinedSegmentedMessages[-1][-1].nextOffset
@@ -1950,8 +1966,9 @@ class RelocatePCA(object):
 
     @staticmethod
     def refineSegments(inferredSegmentedMessages: Iterable[Sequence[MessageSegment]], dc: DistanceCalculator,
-                       initialKneedleSensitivity: float=12.0,
-                       subclusterKneedleSensitivity: float=6.0) \
+                       initialKneedleSensitivity: float=10.0, subclusterKneedleSensitivity: float=5.0,
+                       comparator: MessageComparator = None, reportFolder: str = None,
+                       collectEvaluationData: List['RelocatePCA']=False) \
             -> List[List[MessageSegment]]:
         """
         Main method to condict PCA refinement for a set of segments.
@@ -1961,6 +1978,8 @@ class RelocatePCA(object):
         :param initialKneedleSensitivity: use reduced sensitivity (from 12 to 6)
             due to large dissimilarities in clusters (TODO more evaluation!).
         :param dc: Distance calculator representing the segments to be analyzed and refined.
+        :param collectEvaluationData: For evaluation: Collect the intermediate (sub-)clusters generated during
+            the analysis of the segments.
         :return: List of segments grouped by the message they are from.
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
@@ -1981,7 +2000,8 @@ class RelocatePCA(object):
             ftContext.fieldtype = "tf{:02d}".format(cLabel)
             ftRelocate = RelocatePCA(ftContext)
 
-            clusterBounds = ftRelocate.relocateBoundaries(dc, subclusterKneedleSensitivity)
+            clusterBounds = ftRelocate.relocateBoundaries(dc, subclusterKneedleSensitivity, comparator, reportFolder,
+                                                          collectEvaluationData=collectEvaluationData)
             for segment, bounds in clusterBounds.items():
                 if segment.message not in newBounds:
                     newBounds[segment.message] = dict()
@@ -1993,6 +2013,27 @@ class RelocatePCA(object):
                 newBounds[segment.message][segment] = bounds
         # remove from newBounds, in place
         RelocatePCA.removeSuperfluousBounds(newBounds)
+
+        # # make some development output about newBounds
+        # for msg, segs in newBounds.items():
+        #     # [[ min(outbounds) < min(inbounds) < max(outbounds) or min(outbounds) < max(inbounds) < max(outbounds)
+        #     #    for inbounds in segs.values()] for outbounds in segs.values()]
+        #     minmaxBounds = [(min(bounds), max(bounds)) for bounds in segs.values() if len(bounds) > 0]
+        #     if any(any(outbmin < inbmin < outbmax or outbmin < inbmax < outbmax
+        #             for inbmin, inbmax in minmaxBounds) for outbmin, outbmax in minmaxBounds):
+        #         print("#### Conflicting bounds!")
+        #     msgSegs = next(msegs for msegs in inferredSegmentedMessages if msegs[0].message == msg)
+        #     for seg, bounds in segs.items():
+        #         markSegmentInMessage(seg)
+        #         if len(bounds) > 0 and (min(bounds) < seg.offset or seg.nextOffset < max(bounds)):
+        #             print("needs neigbor change.")
+        #     for off in range(len(msg.data)):
+        #         print("^ ", end="") if off in chain(*segs.values()) else print("  ", end="")
+        #     print("\noriginal new bounds: ")
+        #     # list(chain(*compareBounds[msg].values())))
+        #     for off in range(len(msg.data)):
+        #         print("^ ", end="") if off in chain(*compareBounds[msg].values()) else print("  ", end="")
+        #     print()
 
         return RelocatePCA.refineSegmentedMessages(inferredSegmentedMessages, newBounds)
 

@@ -1268,7 +1268,7 @@ class Template(AbstractSegment):
         # noinspection PyTypeChecker
         """
         Get distances to the medoid of this template.
-        If no DistanceCalculator is given. does not support a threshold function.
+        If no DistanceCalculator is given, does not support a threshold function.
 
         >>> from tabulate import tabulate
         >>> from scipy.spatial.distance import cdist

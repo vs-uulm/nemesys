@@ -16,14 +16,16 @@ from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import FormatMatchScore, MessageComparator
 
 
-def getMinMeanMaxFMS(scores: Iterable) -> Tuple[float, float, float]:
+def calcScoreStats(scores: Iterable[float]) -> Tuple[float, float, float, float, float]:
     """
     :param scores: An Iterable of FMS values.
-    :return: min, meankey, and max of the scores,
-        where meankey is the value in scores closest to the means of its values.
+    :return: min, meankey, max, mediankey, standard deviation of the scores,
+        where meankey is the value in scores closest to the mean of its values,
+        and median is the value in scores closest to the mean of its values.
     """
     scores = sorted(scores)
-    fmsmin, fmsmean, fmsmax = numpy.min(scores), numpy.mean(scores), numpy.max(scores)
+    fmsmin, fmsmean, fmsmax, fmsmedian, fmsstd = \
+        numpy.min(scores), numpy.mean(scores), numpy.max(scores), numpy.median(scores), numpy.std(scores)
     # get quality key closest to mean
     fmsmeankey = 1
     if len(scores) > 2:
@@ -32,7 +34,31 @@ def getMinMeanMaxFMS(scores: Iterable) -> Tuple[float, float, float]:
                 continue
             fmsmeankey = b if fmsmean - b < a - fmsmean else a
             break
-    return float(fmsmin), float(fmsmeankey), float(fmsmax)
+    return float(fmsmin), float(fmsmeankey), float(fmsmax), float(fmsmedian), float(fmsstd)
+
+
+def getMinMeanMaxFMS(scores: Iterable[float]) -> Tuple[float, float, float]:
+    """
+    :param scores: An Iterable of FMS values.
+    :return: min, meankey, and max of the scores,
+        where meankey is the value in scores closest to the means of its values.
+    """
+    return calcScoreStats(scores)[:3]
+
+
+def countMatches(quality: Iterable[FormatMatchScore]):
+    """
+    :param quality: List of FormatMatchScores
+    :return: count of exact matches, off-by-one near matches, off-by-more-than-one matches
+    """
+    exactcount = 0
+    offbyonecount = 0
+    offbymorecount = 0
+    for fms in quality:  # type: FormatMatchScore
+        exactcount += fms.exactCount
+        offbyonecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) == 1)
+        offbymorecount += sum(1 for truf, inff in fms.nearMatches.items() if abs(truf - inff) > 1)
+    return exactcount, offbyonecount, offbymorecount
 
 
 def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
@@ -60,13 +86,15 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
              fms.inferredCount, fms.exactCount, fms.nearCount, fms.specificy, fms.matchGain, fms.specificyPenalty)
             for message, fms in formatmatchmetrics.items()] )
 
-    minmeanmax = getMinMeanMaxFMS([q.score for q in formatmatchmetrics.values()])
+    scoreStats = calcScoreStats([q.score for q in formatmatchmetrics.values()])
+    matchCounts = countMatches(formatmatchmetrics.values())
 
     with open(os.path.join(reportFolder, 'ScoreStatistics.csv'), 'w') as csvfile:
         fmmcsv = csv.writer(csvfile)
-        fmmcsv.writerow(["Inference", "min", "mean", "max", "runtime"])
+        fmmcsv.writerow(["inference", "min", "mean", "max", "median", "std",
+                         "exactcount", "offbyonecount", "offbymorecount", "runtime"])
         fmmcsv.writerow( [ inferenceTitle,
-                           *minmeanmax,
+                           *scoreStats, *matchCounts,
                            runtime] )
 
     # write Symbols to csvs
@@ -103,7 +131,7 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
     # FMS : Symbol
     score2symbol = {fms.score: fms.symbol for fms in formatmatchmetrics.values()}
 
-    tikzcode = comparator.tprintInterleaved(score2symbol[mmm] for mmm in minmeanmax)
+    tikzcode = comparator.tprintInterleaved(score2symbol[mmm] for mmm in scoreStats[:3])
 
     # write Format Match Score and Metrics to csv
     with open(join(reportFolder, 'example-inference-minmeanmax.tikz'), 'w') as tikzfile:
