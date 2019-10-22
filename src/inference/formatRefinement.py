@@ -665,23 +665,23 @@ class RelocatePCA(object):
     screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
             # interpreted as fraction of the component count as dynamic determination.
-    contributionRelevant = 0.1  # 0.01; threshold for the minimum difference from 0
+    contributionRelevant = 0.1  # 0.12; threshold for the minimum difference from 0
             # to consider a loading component in the eigenvector as contributing to the variance
     maxLengthDelta = 7  # (max true: 6 in dns-new, min false 9 in dhcp)
 
     # e1 parameters
-    nearZero = 0.003
-    notableContrib = 0.66  # or 0.7 (see smb tf04)
+    nearZero = 0.030  # 0.003
+    notableContrib = 0.75  # 0.66  # or 0.7 (see smb tf04)
     # peak may be (near) +/- 1.0 in most cases, but +/- 0.5 includes also ntp tf06 and smb tf04,
     #   however, it has false positive dhcp tf01 and smb tf00.4
 
     # e2 parameters
     # also apply to higher nearZero and lower notableContrib if longer (>= 4) sequence of nearZero
     #   precedes notableContrib
-    relaxedNearZero = 0.004
+    relaxedNearZero = 0.050 # 0.004
     relaxedNZlength = 4
-    relaxedNotableContrib = 0.05
-    relaxedMaxContrib = 0.66
+    relaxedNotableContrib = 0.005 # 0.003
+    relaxedMaxContrib = 1.0 # 0.66
 
     def __init__(self, similarSegments: FieldTypeContext,
                  eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
@@ -1545,7 +1545,7 @@ class RelocatePCA(object):
 
     class CommonBoundUtil(object):
 
-        uoboFreqThresh = 0.4
+        uoboFreqThresh = 0.8 # 0.4
 
         """
         ...

@@ -30,8 +30,7 @@ analysisTitle = 'value'
 distance_method = 'canberra'
 # use NEMESYS segments
 tokenizer = 'nemesys'
-
-kneedleSensitivity=12.0
+# tokenizer = '4bytesfixed'
 
 
 
@@ -386,21 +385,21 @@ if __name__ == '__main__':
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # cache/load the DistanceCalculator to the filesystem
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # cache/load the DistanceCalculator to the filesystem
+    # #
+    # # noinspection PyUnboundLocalVariable
+    # specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+    #     args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True#, True
+    # )  # Note!  When manipulating distances, deactivate caching by adding "True".
+    # # chainedSegments = dc.rawSegments
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # trueSegmentedMessages = {msgseg[0].message: msgseg
+    #                      for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
+    #                      }
+    # # tabuSeqOfSeg(trueSegmentedMessages)
+    # # print(trueSegmentedMessages.values())
     #
-    # noinspection PyUnboundLocalVariable
-    specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True#, True
-    )  # Note!  When manipulating distances, deactivate caching by adding "True".
-    # chainedSegments = dc.rawSegments
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    trueSegmentedMessages = {msgseg[0].message: msgseg
-                         for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
-                         }
-    # tabuSeqOfSeg(trueSegmentedMessages)
-    # print(trueSegmentedMessages.values())
-
     reportFolder = join(reportFolder, splitext(pcapbasename)[0])
     makedirs(reportFolder)
 
@@ -423,18 +422,54 @@ if __name__ == '__main__':
     #     exit(10)
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    for factor in [10, 5, 2, 1.6, 1.2, 1, 0.9, 0.7, 0.5, 0.2, 0.1]:
+    # for factor in [10, 5, 2, 1.6, 1.2, 1, 0.9, 0.7, 0.5, 0.2, 0.1]:  # 10 .. 0.1
+    # for factor in [2, 1.6, 1.2, 1, 0.9, 0.7, 0.5]:  # 2 .. 0.5
+    # for factor in [100, 60, 40, 20]:  # 100 .. 20
+    # for factor in [1]:
+    for factor in [1.2, 1.1, 1.0, 0.9, 0.8, 0.7, 0.6]:  # 1.2 .. 0.6
+    # for factor in [10, 5, 2, 1.8, 1.6, 1.4, 1.2, 1.1, 1, 0.9, 0.8]:  # 10 .. 0.8
+    # for factor in [1.20, 1.1, 1.08, 1.06, 1.04, 1.02, 1.01, 1, 0.99, 0.98, 0.96, 0.92, 0.9, 0.8]:  # 1.2 .. 0.8
         # sInit = 10.0*factor
         # evalLabel = "Sinit{:.3f}".format(sInit)
-        sSC = 5.0*factor
-        evalLabel = "Ssubcluster{:.3f}".format(sSC)
+        # # initialKneedleSensitivity = sInit
+        # sSC = 5.0*factor
+        # evalLabel = "Ssubcluster{:.3f}".format(sSC)
+        # # subclusterKneedleSensitivity = sSC
+
+        # RelocatePCA.contributionRelevant = 0.1*factor
+        # evalLabel = "contributionRelevant={:.3f}".format(RelocatePCA.contributionRelevant)
+
+        # RelocatePCA.nearZero = 0.030*factor
+        # evalLabel = "nearZero={:.3f}".format(RelocatePCA.nearZero)
+        # RelocatePCA.notableContrib = 0.75*factor  # 0.66
+        # evalLabel = "notableContrib={:.3f}".format(RelocatePCA.notableContrib)
+
+        # RelocatePCA.relaxedNearZero = 0.05*factor
+        # evalLabel = "relaxedNearZero={:.3f}".format(RelocatePCA.relaxedNearZero)
+        # RelocatePCA.relaxedNZlength = 4*factor
+        # evalLabel = "relaxedNZlength={:.3f}".format(RelocatePCA.relaxedNZlength)
+        # RelocatePCA.relaxedNotableContrib = 0.005*factor
+        # evalLabel = "relaxedNotableContrib={:.3f}".format(RelocatePCA.relaxedNotableContrib)
+        # RelocatePCA.relaxedMaxContrib = 1.00*factor
+        # evalLabel = "relaxedMaxContrib={:.3f}".format(RelocatePCA.relaxedMaxContrib)
+
+        # RelocatePCA.CommonBoundUtil.uoboFreqThresh = 0.8*factor
+        # evalLabel = "uoboFreqThresh={:.3f}".format(RelocatePCA.CommonBoundUtil.uoboFreqThresh)
+
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, factor, True#, True
+        )  # Note!  When manipulating distances, deactivate caching by adding "True".
+        trueSegmentedMessages = {msgseg[0].message: msgseg
+                         for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
+                         }
+        evalLabel = "nemesysSigma={:.3f}".format(factor)
+        # evalLabel = "4bytesfixed"
 
         print(evalLabel)
         try:
             collectedSubclusters = list()  # type: List[RelocatePCA]
             startRefinement = time.time()
             refinedSM = RelocatePCA.refineSegments(inferredSegmentedMessages, dc,
-                                                   subclusterKneedleSensitivity=sSC,
                                                    comparator=comparator, reportFolder=reportFolder,
                                                    collectEvaluationData=collectedSubclusters)
             runtimeRefinement = time.time() - startRefinement

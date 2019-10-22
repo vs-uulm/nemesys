@@ -35,8 +35,9 @@ analyses = {
 sigmapertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap" : 0.6,
     # "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8,
-    "smb_SMIA20111010-one_deduped-100.pcap" : 1.2,
+    "smb_SMIA20111010-one_deduped-100.pcap" : 0.7,
     "dns_ictf2010_deduped-100.pcap" : 0.6,
+    "dns_ictf2010-new-deduped-100.pcap" : 1.0,
     "ntp_SMIA-20111010_deduped-100.pcap" : 1.2,
     "dhcp_SMIA2011101X_deduped-1000.pcap": 0.6,
     # "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4,
