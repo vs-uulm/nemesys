@@ -3,6 +3,7 @@ Batch handling of multiple segments.
 """
 
 import numpy
+import copy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
@@ -74,11 +75,20 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
     return tuple(segments)
 
 
+# TODO replace parameter comparator by specimens
 def segmentsFixed(length: int, comparator,
-                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, zeropadded=False) \
+                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, padded=False) \
         -> List[Tuple[MessageSegment]]:
     """
     Segment messages into fixed size chunks.
+
+    >>> segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
+    >>> areIdentical = True
+    >>> for msgsegs in segmentedMessages:
+    >>>     msg = msgsegs[0].message
+    >>>     msgbytes = b"".join([seg.bytes for seg in ])
+    >>>     areIdentical = areIdentical and msgbytes == msg.data
+    True
 
     :param length: Fixed length for all segments. Overhanging segments at the end that are shorter than length
         will be padded with NANs.
@@ -86,41 +96,44 @@ def segmentsFixed(length: int, comparator,
     :param analyzerType: Type of the analysis. Subclass of inference.analyzers.MessageAnalyzer.
     :param analysisArgs: Arguments for the analysis method.
     :param unit: Base unit for the analysis. Either MessageAnalyzer.U_BYTE or MessageAnalyzer.U_NIBBLE.
-    :param zeropadded: Toggle to pad the last segment to the requested fixed length or leave the last segment to be
+    :param padded: Toggle to pad the last segment to the requested fixed length or leave the last segment to be
         shorter than length if the message length is not an exact multiple of the segment length.
     :return: Segments of the analyzer's message according to the true format.
     """
     segments = list()
     for l4msg, rmsg in comparator.messages.items():
-        if len(l4msg.data) % length == 0:  # exclude the overlap
+        if len(l4msg.data) % length == 0:
             lastOffset = len(l4msg.data)
         else:
             lastOffset = (len(l4msg.data) // length) * length
+
+        originalAnalyzer = MessageAnalyzer.findExistingAnalysis(analyzerType, unit, l4msg, analysisArgs)
         sequence = [
-            MessageSegment(
-                MessageAnalyzer.findExistingAnalysis(analyzerType, unit, l4msg, analysisArgs),
-                offset, length)
-            for offset in range(0, lastOffset, length)
+            MessageSegment(originalAnalyzer, offset, length) for offset in range(0, lastOffset, length)
         ]
-        if zeropadded and len(l4msg.data) > lastOffset:  # append the overlap
-            # TODO here are nasty hacks!
-            # Better define a new subclass of MessageSegment that internally padds values
-            # (and bytes? what are the guarantees?) to a given length that exceeds the message length
-            residuepadd = lastOffset + length - len(l4msg.data)
-            originalAnalyzer = MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
-                                                 l4msg, analysisArgs)
-            import copy
-            newMessage = copy.copy(originalAnalyzer.message)
-            newMessage.data = newMessage.data + b'\x00' * residuepadd
-            newAnalyzer = type(originalAnalyzer)(newMessage, originalAnalyzer.unit)  # type: MessageAnalyzer
-            newAnalyzer.setAnalysisParams(*originalAnalyzer.analysisParams)
-            padd = [numpy.nan] * residuepadd
-            newAnalyzer._values = originalAnalyzer.values + padd
-            newSegment = MessageSegment(newAnalyzer, lastOffset+1, length)
-            for seg in sequence:  # replace all previous analyzers to make the sequence homogeneous for this message
-                seg.analyzer = newAnalyzer
-            sequence.append(newSegment)
+
+        if len(l4msg.data) > lastOffset:  # append the overlap
+            if padded:
+                # here are nasty hacks!
+                # TODO Better define a new subclass of MessageSegment that internally padds values
+                #  (and bytes? what are the guarantees?) to a given length that exceeds the message length
+                residuepadd = lastOffset + length - len(l4msg.data)
+                newMessage = copy.copy(originalAnalyzer.message)
+                newMessage.data = newMessage.data + b'\x00' * residuepadd
+                newAnalyzer = type(originalAnalyzer)(newMessage, originalAnalyzer.unit)  # type: MessageAnalyzer
+                newAnalyzer.setAnalysisParams(*originalAnalyzer.analysisParams)
+                padd = [numpy.nan] * residuepadd
+                newAnalyzer._values = originalAnalyzer.values + padd
+                newSegment = MessageSegment(newAnalyzer, lastOffset, length)
+                for seg in sequence:  # replace all previous analyzers to make the sequence homogeneous for this message
+                    seg.analyzer = newAnalyzer
+                sequence.append(newSegment)
+            else:
+                newSegment = MessageSegment(originalAnalyzer, lastOffset, len(l4msg.data) - lastOffset)
+                sequence.append(newSegment)
+
         segments.append(tuple(sequence))
+
     return segments
 
 
