@@ -2,7 +2,7 @@
 Module encapsulating evaluation parameters and helper functions to validate aspects of the
 NEMESYS and NEMETYL approaches.
 """
-from typing import Union, Tuple, List, TypeVar, Hashable, Sequence
+from typing import Union, Tuple, List, TypeVar, Hashable, Sequence, Callable
 from netzob.all import RawMessage
 from itertools import chain
 import os, csv, pickle, time
@@ -80,6 +80,7 @@ message_epspertrace = {
 epsdefault = 2.4
 
 reportFolder = "reports"
+cacheFolder = "cache"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
 ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-clustering-statistics.csv')
 scStatsFile = os.path.join(reportFolder, 'segment-cluster-statistics.csv')
@@ -477,7 +478,9 @@ def calcHexDist(hexA, hexB):
 
 
 def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
-                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filter=False, disableCache=False) \
+                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filter=False,
+                   refinementCallback:Callable = refinements,
+                   disableCache=False) \
         -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
         float, float]:
     """
@@ -497,8 +500,8 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     # noinspection PyUnboundLocalVariable
     tokenparm = tokenizer if tokenizer != "nemesys" else \
         "{}{:.0f}".format(tokenizer, sigma * 10)
-    dccachefn = 'cache-dc-{}-{}-{}-{}.{}'.format(analysisTitle, tokenparm, "filtered" if filter else "all",
-                                                 pcapName, 'ddc')
+    dccachefn = os.path.join(cacheFolder, 'cache-dc-{}-{}-{}-{}-{}.{}'.format(
+        analysisTitle, tokenparm, "filtered" if filter else "all", refinementCallback.__name__, pcapName, 'ddc'))
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if disableCache or not os.path.exists(dccachefn):
         # dissect and label messages
@@ -518,12 +521,22 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         elif tokenizer == "nemesys":
             # 3. segment messages by NEMESYS
             segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-            # segmentedMessages = refinements(segmentsPerMsg)
-            segmentedMessages = charRefinements(segmentsPerMsg)
+
+            # get analyzer requested by analyzerType/analysisArgs
             segmentedMessages = [[
                 MessageSegment(MessageAnalyzer.findExistingAnalysis(
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in segmentedMessages]
+                for seg in msg] for msg in segmentsPerMsg]
+
+            if refinementCallback.__code__.co_argcount > 1:
+                # assume the second argument is expected to be a distance calculator
+                chainedSegments = list(chain.from_iterable(segmentedMessages))
+                print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
+                refinementDC = DelegatingDC(chainedSegments)
+                segmentedMessages = refinementCallback(segmentedMessages, refinementDC)
+            else:
+                segmentedMessages = refinementCallback(segmentedMessages)
+
             # segments = list(chain.from_iterable(segmentedMessages))
 
         segmentationTime = time.time() - segmentationTime

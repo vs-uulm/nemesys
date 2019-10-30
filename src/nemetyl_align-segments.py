@@ -334,7 +334,7 @@ if __name__ == '__main__':
     # TODO when manipulating distances, deactivate caching! by adding "True"
     # noinspection PyUnboundLocalVariable
     specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma   # , True
+        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma   # , disableCache=True
     )
     chainedSegments = dc.rawSegments
 

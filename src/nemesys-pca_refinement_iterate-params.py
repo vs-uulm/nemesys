@@ -14,7 +14,7 @@ from collections import Counter
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
-from inference.formatRefinement import RelocatePCA, CropDistinct
+from inference.formatRefinement import RelocatePCA
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -29,8 +29,8 @@ analysisTitle = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 # use NEMESYS segments
-tokenizer = 'nemesys'
-# tokenizer = '4bytesfixed'
+# tokenizer = 'nemesys'
+tokenizer = '4bytesfixed'
 
 
 
@@ -385,320 +385,95 @@ if __name__ == '__main__':
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # cache/load the DistanceCalculator to the filesystem
-    #
-    # noinspection PyUnboundLocalVariable
-    specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
-        refinementCallback=charRefinements
-        #, disableCache=True
-    )  # Note!  When manipulating distances, deactivate caching by adding "True".
-    # chainedSegments = dc.rawSegments
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    trueSegmentedMessages = {msgseg[0].message: msgseg
+    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
+    makedirs(reportFolder)
+
+
+
+    # for factor in [10, 5, 2, 1.6, 1.2, 1, 0.9, 0.7, 0.5, 0.2, 0.1]:  # 10 .. 0.1
+    # for factor in [2, 1.6, 1.2, 1, 0.9, 0.7, 0.5]:  # 2 .. 0.5
+    # for factor in [100, 60, 40, 20]:  # 100 .. 20
+    # for factor in [1]:
+    # for factor in [1.2, 1.1, 1.0, 0.9, 0.8, 0.7, 0.6]:  # 1.2 .. 0.6
+    # for factor in [10, 5, 2, 1.8, 1.6, 1.4, 1.2, 1.1, 1, 0.9, 0.8]:  # 10 .. 0.8
+    for factor in [1.20, 1.1, 1.08, 1.06, 1.04, 1.02, 1.01, 1, 0.99, 0.98, 0.96, 0.92, 0.9, 0.8]:  # 1.2 .. 0.8
+        # sInit = 10.0*factor
+        # evalLabel = "Sinit{:.3f}".format(sInit)
+        # # initialKneedleSensitivity = sInit
+        # sSC = 5.0*factor
+        # evalLabel = "Ssubcluster{:.3f}".format(sSC)
+        # # subclusterKneedleSensitivity = sSC
+
+        # RelocatePCA.contributionRelevant = 0.1*factor
+        # evalLabel = "contributionRelevant={:.3f}".format(RelocatePCA.contributionRelevant)
+
+        # RelocatePCA.nearZero = 0.030*factor
+        # evalLabel = "nearZero={:.3f}".format(RelocatePCA.nearZero)
+        # RelocatePCA.notableContrib = 0.75*factor  # 0.66
+        # evalLabel = "notableContrib={:.3f}".format(RelocatePCA.notableContrib)
+
+        # RelocatePCA.relaxedNearZero = 0.05*factor
+        # evalLabel = "relaxedNearZero={:.3f}".format(RelocatePCA.relaxedNearZero)
+        # RelocatePCA.relaxedNZlength = 4*factor
+        # evalLabel = "relaxedNZlength={:.3f}".format(RelocatePCA.relaxedNZlength)
+        # RelocatePCA.relaxedNotableContrib = 0.005*factor
+        # evalLabel = "relaxedNotableContrib={:.3f}".format(RelocatePCA.relaxedNotableContrib)
+        # RelocatePCA.relaxedMaxContrib = 1.00*factor
+        # evalLabel = "relaxedMaxContrib={:.3f}".format(RelocatePCA.relaxedMaxContrib)
+
+        # RelocatePCA.CommonBoundUtil.uoboFreqThresh = 0.8*factor
+        # evalLabel = "uoboFreqThresh={:.3f}".format(RelocatePCA.CommonBoundUtil.uoboFreqThresh)
+
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, factor, True,
+            refinementCallback=charRefinements,
+            disableCache=True
+        )  # Note!  When manipulating distances, deactivate caching by adding "True".
+        trueSegmentedMessages = {msgseg[0].message: msgseg
                          for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
                          }
-    # tabuSeqOfSeg(trueSegmentedMessages)
-    # print(trueSegmentedMessages.values())
+        # evalLabel = "nemesysSigma={:.3f}".format(factor)
+        evalLabel = "segments" # 4bytesfixed
 
-    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
-    if not exists(reportFolder):
-        makedirs(reportFolder)
-    # TODO add exit() on else
+        # IPython.embed()
 
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # conduct PCA refinement
-    collectedSubclusters = list()  # type: List[RelocatePCA]
-    try:
-        startRefinement = time.time()
-
-        # # first perform most common values refinement
-        # moco = CropDistinct.countCommonValues(inferredSegmentedMessages)
-        # print([m.hex() for m in moco])
-        # refinedSegmentedMessages = list()
-        # for msg in inferredSegmentedMessages:
-        #     croppedMsg = CropDistinct(msg, moco).split()
-        #     refinedSegmentedMessages.append(croppedMsg)
-        # refinedSM = RelocatePCA.refineSegments(refinedSegmentedMessages, dc,
-        #                                        collectEvaluationData=collectedSubclusters)
-
-        refinedSegmentedMessages = RelocatePCA.refineSegments(inferredSegmentedMessages, dc,
-                                               collectEvaluationData=collectedSubclusters)
-
-        # additionally perform most common values refinement
-        moco = CropDistinct.countCommonValues(refinedSegmentedMessages)
-        print([m.hex() for m in moco])
-        refinedSM = list()
-        for msg in refinedSegmentedMessages:
-            croppedMsg = CropDistinct(msg, moco).split()
-            refinedSM.append(croppedMsg)
-
-        # refinedSM = refinedSegmentedMessages
-
-        runtimeRefinement = time.time() - startRefinement
+        print(evalLabel)
+        try:
+            collectedSubclusters = list()  # type: List[RelocatePCA]
+            startRefinement = time.time()
+            refinedSM = RelocatePCA.refineSegments(inferredSegmentedMessages, dc,
+                                                   comparator=comparator, reportFolder=reportFolder,
+                                                   collectEvaluationData=collectedSubclusters)
+            runtimeRefinement = time.time() - startRefinement
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # Write FMS statistics
+            inferenceTitle = "4bytesfixed"
+            # # # # # # # # # # # # # # # # # # # # # # # #
+            # Determine the amount of off-by-one errors in refined segmentation
+            message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(refinedSM))
+            reportWriter.writeReport(message2quality, -1.0, specimens, comparator,
+                                     inferenceTitle + '_pcaRefined_' + evalLabel,
+                                     reportFolder)
+            exactcount, offbyonecount, offbymorecount = reportWriter.countMatches(message2quality.values())
+            minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
+            print("Format Match Scores (refined)")
+            print("  (min, mean, max): ", *minmeanmax)
+            print("near matches")
+            print("  off-by-one:", offbyonecount)
+            print("  off-by-more:", offbymorecount)
+            print("exact matches:", exactcount)
+            # # # # # # # # # # # # # # # # # # # # # # # #
+        except ClusterAutoconfException as e:
+            print("Initial clustering of the segments in the trace failed. "
+                  "The protocol in this trace cannot be inferred. "
+                  "The original exception message was:\n", e)
 
 
-        # TODO now needs recalculation of segment distances
-    except ClusterAutoconfException as e:
-        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
-              "The original exception message was:\n", e)
-        exit(10)
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # some parameters
-    trace = splitext(pcapbasename)[0]
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-    for msgsegs in refinedSM:
-        comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # cluster segments to determine field types on commonality
-    # try:
-    #     clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
-    # except ClusterAutoconfException as e:
-    #     print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
-    #           "The original exception message was:\n", e)
-    #     exit(10)
-    #
-    # # noinspection PyUnboundLocalVariable
-    # noise, *clusters = clusterer.clusterSimilarSegments(False)
-    # # noise: List[MessageSegment]
-    # # clusters: List[List[MessageSegment]]
-    #
-    # # extract "large" templates from noise that should rather be its own cluster
-    # for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
-    #     freqThresh = log(len(dc.rawSegments))
-    #     if isinstance(seg, Template):
-    #         if len(seg.baseSegments) > freqThresh:
-    #             clusters.append(noise.pop(idx).baseSegments)
-    #
-    # print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # fTypeTemplates = list()
-    # fTypeContext = list()
-    # for cLabel, segments in enumerate(clusters):
-    #     # generate FieldTypeTemplates (padded nans)
-    #     ftype = FieldTypeTemplate(segments)
-    #     ftype.fieldtype = "tf{:02d}".format(cLabel)
-    #     fTypeTemplates.append(ftype)
-    #     with open(join(reportFolder, "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"), "a") as segfile:
-    #         segcsv = csv.writer(segfile)
-    #         segcsv.writerows([
-    #             [],
-    #             ["# Cluster", cLabel, "Segments", len(segments)],
-    #             ["-"*10]*4,
-    #         ])
-    #         segcsv.writerows(
-    #             {(seg.bytes.hex(), seg.bytes) for seg in segments}
-    #         )
-    #
-    #     # generate FieldTypeContexts (padded values)
-    #     resolvedSegments = list()
-    #     for seg in segments:
-    #         if isinstance(seg, Template):
-    #             resolvedSegments.extend(seg.baseSegments)
-    #         else:
-    #             resolvedSegments.append(seg)
-    #     fcontext = FieldTypeContext(resolvedSegments)
-    #     fcontext.fieldtype = ftype.fieldtype
-    #     fTypeContext.append(fcontext)
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    # interestingClusters = [1]  # this is thought to be ntp.c1 (4-byte floats)
-    # interestingClusters = [0]  # this is thought to be ntp.c0
-    # interestingClusters = range(len(clusters))  # all
-    # interestingClusters = [cid for cid, clu in enumerate(clusters)
-    #                        if any([isExtendedCharSeq(seg.bytes) for seg in clu])] # all not-chars
-    # interestingClusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(fTypeContext)
-    # interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # ==> Factor Analysis not feasible for our use case
-    # factorAnalysis(fTypeContext[iC] for iC in interestingClusters)
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    relevantSubclusters, eigenVnV, screeKnees = \
-        RelocatePCA.filterRelevantClusters([a.similarSegments for a in collectedSubclusters])
-    # # select one tf
-    # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # single segment refinement component calls
-    # #
-    # # collect new bounds for each segment and group them by message
-    # newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]
-    # for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
-    #     if cid in relevantSubclusters:
-    #         clusterBounds = sc.relocateBoundaries(dc, kneedleSensitivity, comparator, reportFolder)
-    #         for segment, bounds in clusterBounds.items():
-    #             if segment.message not in newBounds:
-    #                 newBounds[segment.message] = dict()
-    #             elif segment in newBounds[segment.message]:
-    #                 print("\nSame segment was refined (PCA) multiple times. Needs resolving. Segment is:\n", segment)
-    #                 print()
-    #                 IPython.embed()
-    #             newBounds[segment.message][segment] = bounds
-    #
-    # compareBounds = {m: {s: b.copy() for s, b in sb.items()} for m, sb in newBounds.items()}
-    #
-    # # remove from newBounds, in place
-    # RelocatePCA.removeSuperfluousBounds(newBounds)
-    #
-    # # apply refinement to segmented messages
-    # refinedSegmentedMessages = RelocatePCA.refineSegmentedMessages(inferredSegmentedMessages, newBounds)
-
-    # # make some development output about refinedSegmentedMessages
-    # for msgsegs in refinedSM:
-    #     infms = next(ms for ms in inferredSegmentedMessages if ms[0].message == msgsegs[0].message)
-    #     if msgsegs != infms:
-    #         # comparator.pprint2Interleaved(infms[0].message, [infs.nextOffset for infs in infms])
-    #         comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
-
-    # #         newMsgBounds = sorted(chain(*newBounds[msgsegs[0].message].values()))
-    # #         print(newMsgBounds)
-    # #         missedBound = [nmb for nmb in newMsgBounds if nmb not in (ref.offset for ref in msgsegs)]
-    # #         if len(missedBound) > 0:
-    # #             print("missedBounds", missedBound)
-    # #
-    # #         segseq = [ref1 for ref1, ref2 in zip(msgsegs[:-1], msgsegs[1:]) if ref1.nextOffset != ref2.offset]
-    # #         if len(segseq) > 0:
-    # #             print("Segment sequence error!\n", segseq)
-    # #         shoseg = [ref for ref in msgsegs if ref.offset > 0 and ref.length < 2 and ref not in infms]
-    # #         if len(shoseg) > 0:
-    # #             print("Short segments:\n", shoseg)
-    # #         print()
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    #
-    # print("\n# # # # # # # # # # # # # # # # # # # # # # # #")
-    # if [[rsm.nextOffset for rsm in msg] for msg in refinedSM] \
-    #         == [[rsm.nextOffset for rsm in msg] for msg in refinedSegmentedMessages]:
-    #     print("Static wrapper function for PCA is valid!")
-    # else:
-    #     print("Static wrapper function for PCA is invalid!")
-    # print("# # # # # # # # # # # # # # # # # # # # # # # #\n")
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-    # # show position of each segment individually.
-    # for seg in dc.segments:
-    #     markSegNearMatch(seg)
-
-    # comparator.pprint2Interleaved(dc.segments[6].message, inferredFEs4segment(dc.segments[6]),
-    #                               (dc.segments[6].offset-2, dc.segments[6].nextOffset+1))
-
-
-
-
-
-
-
-
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    if withPlots:
-        print("Plot component analyses...")
-        for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
-            if cid in relevantSubclusters:
-                # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
-                relocate = sc.relocateOffsets(reportFolder, trace, comparator)
-                plotComponentAnalysis(sc,
-                                      eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
-                                      relocate)
-                for bs in sc.similarSegments.baseSegments:
-                    markSegNearMatch(bs)
-        # # # # # # # # # # # # # # # # # # # # # # # # #
-        # print("Plot distances...")
-        # sdp = DistancesPlotter(specimens,
-        #                        'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-        #                            clusterer.eps, int(clusterer.min_samples)), False)
-        # clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
-        # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        # labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
-        # # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
-        # sdp.plotSegmentDistances(dc, labels)
-        # sdp.writeOrShowFigure()
-        # del sdp
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # write statistics ...
-    scoFile = "subcluster-overview.csv"
-    scoHeader = ["trace", "cluster label", "cluster size", "max segment length",
-                 "interesting", "length diff", "# unique", "is char",
-                 "min dissimilarity", "max dissimilarity", "mean dissimilarity"]
-
-    #   ... for all subclusters, including the ones filtered out, for confirmation.
-    for cid, sc in enumerate(collectedSubclusters):
-        # if cid not in relevantSubclusters:
-        #     print("Cluster filtered out: " + sc.similarSegments.fieldtype)
-        #     for bs in sc.similarSegments.baseSegments:
-        #         markSegNearMatch(bs)
-
-        bslen = {bs.length for bs in sc.similarSegments.baseSegments}
-        lendiff = max(bslen) - min(bslen)
-
-        uniqvals = {bs.bytes for bs in sc.similarSegments.baseSegments}
-        internDis = [dis for dis, idx in sc.similarSegments.distancesToMixedLength(dc)]
-        ischar = sum([isExtendedCharSeq(seg.bytes)
-                      for seg in sc.similarSegments.baseSegments]) > .5 * len(sc.similarSegments.baseSegments)
-
-        fn = join(reportFolder, scoFile)
-        writeheader = not exists(fn)
-        with open(fn, "a") as segfile:
-            segcsv = csv.writer(segfile)
-            if writeheader:
-                segcsv.writerow(scoHeader)
-            segcsv.writerow([
-                trace, sc.similarSegments.fieldtype, len(sc.similarSegments.baseSegments),
-                sc.similarSegments.length,
-                repr(cid in relevantSubclusters), lendiff, len(uniqvals), ischar,
-                min(internDis), max(internDis), numpy.mean(internDis)
-            ])
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    segFn = "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"
-    with open(join(reportFolder, segFn), "a") as segfile:
-        segcsv = csv.writer(segfile)
-        for sc in collectedSubclusters:
-            segcsv.writerows([
-                [],
-                ["# Cluster", sc.similarSegments.fieldtype, "Segments", len(sc.similarSegments.baseSegments)],
-                ["-"*10]*4,
-            ])
-            segcsv.writerows(
-                {(seg.bytes.hex(), seg.bytes) for seg in sc.similarSegments.baseSegments}
-            )
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Write FMS statistics
-    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-        0.9 if not args.sigma else args.sigma
-    inferenceTitle = "nemesys-s{:.1f}".format(sigma)
+    inferenceTitle = "4bytesfixed_raw_segments"
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Determine the amount of off-by-one errors in original segments
     message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(inferredSegmentedMessages))
@@ -712,20 +487,7 @@ if __name__ == '__main__':
     print("  off-by-one:", offbyonecount)
     print("  off-by-more:", offbymorecount)
     print("exact matches:", exactcount)
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # Determine the amount of off-by-one errors in refined segmentation
-    message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(refinedSM))
-    reportWriter.writeReport(message2quality, -1.0, specimens, comparator, inferenceTitle + '_pcaRefined',
-                             reportFolder)
-    exactcount, offbyonecount, offbymorecount = reportWriter.countMatches(message2quality.values())
-    minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
-    print("Format Match Scores (refined)")
-    print("  (min, mean, max): ", *minmeanmax)
-    print("near matches")
-    print("  off-by-one:", offbyonecount)
-    print("  off-by-more:", offbymorecount)
-    print("exact matches:", exactcount)
-    # # # # # # # # # # # # # # # # # # # # # # # #
+
 
 
 

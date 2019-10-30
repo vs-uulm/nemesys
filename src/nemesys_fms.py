@@ -17,7 +17,8 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
+from inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
+    originalRefinements, baseRefinements, refinements, symbolsFromSegments
 from validation import reportWriter
 
 
@@ -144,7 +145,8 @@ if __name__ == '__main__':
     startsegmentation = time.time()
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
     runtimeSegmentation = time.time() - startsegmentation
-    refinedPerMsg = refinements(segmentsPerMsg)
+    # refinedPerMsg = originalRefinements(segmentsPerMsg)
+    refinedPerMsg = baseRefinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
@@ -167,9 +169,9 @@ if __name__ == '__main__':
     msg2analyzer = {segs[0].message: segs[0].analyzer for segs in refinedPerMsg}
     minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
 
-    # here we only use one message as example of a quality! There may be more messages with the same quality.
-    bcdg_mmm = [msg2analyzer[quality2messages[q][0]] for q in minmeanmax]  # type: List[BitCongruenceDeltaGauss]
-    bcDeltaPlot(bcdg_mmm)
+    # # here we only use one message as example of a quality! There may be more messages with the same quality.
+    # bcdg_mmm = [msg2analyzer[quality2messages[q][0]] for q in minmeanmax]  # type: List[BitCongruenceDeltaGauss]
+    # bcDeltaPlot(bcdg_mmm)
 
     ########################
 

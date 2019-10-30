@@ -434,7 +434,11 @@ class CropDistinct(MessageModifier):
         while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
         moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
-        return moco
+        # return moco
+
+        # omit all sequences that have common subsequences
+        mocoShort = [m for m in moco if not any(m != c and m.find(c) > -1 for c in moco)]
+        return mocoShort
 
     def split(self):
         newmsg = list()
@@ -1249,7 +1253,7 @@ class RelocatePCA(object):
         import tabulate as tabmod
         tabmod.PRESERVE_WHITESPACE = True
 
-        trace = splitext(basename(comparator.specimens.pcapFileName))[0]
+        trace = splitext(basename(comparator.specimens.pcapFileName))[0] if comparator else None
 
         collectedSubclusters = self.getSubclusters(dc, kneedleSensitivity)
         if isinstance(collectEvaluationData, list):
@@ -1955,11 +1959,11 @@ class RelocatePCA(object):
 
             # final assertion of complete representation of message by the new segments
             msgbytes = b"".join([seg.bytes for seg in refinedSegmentedMessages[-1]])
-            # if not msgbytes == msg.data:
-            #     print(msg.data.hex())
-            #     print(msgbytes.hex())
-            #     print(msgsegs)
-            #     IPython.embed()
+            if not msgbytes == msg.data:
+                print(msg.data.hex())
+                print(msgbytes.hex())
+                print(msgsegs)
+                IPython.embed()
             assert msgbytes == msg.data, "segment sequence does not match message bytes:"
         return refinedSegmentedMessages
 

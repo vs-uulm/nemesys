@@ -14,7 +14,7 @@ from collections import Counter
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
-from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
+from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements
 from inference.formatRefinement import RelocatePCA
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -31,6 +31,13 @@ analysisTitle = 'value'
 distance_method = 'canberra'
 # use NEMESYS segments
 tokenizer = 'nemesys'
+# refinement methods
+refinementMethods = [
+    "base", # moco+splitfirstseg
+    "PCA",  # PCA
+    "PCAmoco" # PCA+moco
+    ]
+
 
 kneedleSensitivity=12.0
 
@@ -106,59 +113,50 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--with-plots',
                         help='Generate plots of true field types and their distances.',
                         action="store_true")
+    parser.add_argument('-r', '--refinement', help='Select segment refinement method.', choices=refinementMethods)
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
     pcapbasename = basename(args.pcapfilename)
+    trace = splitext(pcapbasename)[0]
+    reportFolder = join(reportFolder, trace)
+    if not exists(reportFolder):
+        makedirs(reportFolder)
     withPlots = args.with_plots
-
     analyzerType = analyses[analysisTitle]
     analysisArgs = None
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
     #
-    # noinspection PyUnboundLocalVariable
-    specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True#, True
-    )  # Note!  When manipulating distances, deactivate caching by adding "True".
-    # chainedSegments = dc.rawSegments
-    # # # # # # # # # # # # # # # # # # # # # # # #
+    if args.refinement == "base":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=baseRefinements
+            #, disableCache=True
+        )
+
+        refinedSM = inferredSegmentedMessages
+    elif args.refinement == "PCA":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=pcaRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "PCAmoco":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=pcaMocoRefinements
+            #, disableCache=True
+        )
+    else:
+        print("Unknown refinement", args.refinement, "\nAborting")
+        exit(2)
     trueSegmentedMessages = {msgseg[0].message: msgseg
-                         for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
-                         }
-    # tabuSeqOfSeg(trueSegmentedMessages)
-    # print(trueSegmentedMessages.values())
-
-    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
-    makedirs(reportFolder)
-
+                             for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)}
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # conduct PCA refinement
-    try:
-        refinedSM = RelocatePCA.refineSegments(inferredSegmentedMessages, dc)
-        # TODO needs recalculation of segment distances
-    except ClusterAutoconfException as e:
-        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
-              "The original exception message was:\n", e)
-        exit(10)
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # some paramters
-    trace = splitext(pcapbasename)[0]
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-
-
-
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -245,37 +243,39 @@ if __name__ == '__main__':
 
 
 
-    # # # # # # # # # # # # # # # # # # # # # # # # #
-    # # TODO mark (at least) exact segment matches with the true data type
-    # # currently marks only very few segments. Improve boundaries first!
-    # typedMatchSegs = list()
-    # for seg in dc.segments:
-    #     if isinstance(seg, MessageSegment):
-    #         typedMatchSegs.append(comparator.segment2typed(seg))
-    #     elif isinstance(seg, Template):
-    #         machingType = None
-    #         typedBasesegments = list()
-    #         for bs in seg.baseSegments:
-    #             tempTyped = comparator.segment2typed(bs)
-    #             if not isinstance(tempTyped, TypedSegment):
-    #                 # print("At least one segment in template is not a field match.")
-    #                 # markSegNearMatch(tempTyped)
-    #                 machingType = None
-    #                 break
-    #             elif machingType == tempTyped.fieldtype or machingType is None:
-    #                 machingType = tempTyped.fieldtype
-    #                 typedBasesegments.append(tempTyped)
-    #             else:
-    #                 # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
-    #                 #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
-    #                 # ))
-    #                 machingType = None
-    #                 break
-    #         if machingType is None:
-    #             typedMatchSegs.append(seg)
-    #         else:
-    #             typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
-    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO mark (at least) exact segment matches with the true data type
+    # currently marks only very few segments. Improve boundaries first!
+    typedMatchSegs = list()
+    for seg in dc.segments:
+        if isinstance(seg, MessageSegment):
+            typedMatchSegs.append(comparator.segment2typed(seg))
+        elif isinstance(seg, Template):
+            machingType = None
+            typedBasesegments = list()
+            for bs in seg.baseSegments:
+                tempTyped = comparator.segment2typed(bs)
+                if not isinstance(tempTyped, TypedSegment):
+                    # print("At least one segment in template is not a field match.")
+                    # markSegNearMatch(tempTyped)
+                    machingType = None
+                    break
+                elif machingType == tempTyped.fieldtype or machingType is None:
+                    machingType = tempTyped.fieldtype
+                    typedBasesegments.append(tempTyped)
+                else:
+                    # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
+                    #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
+                    # ))
+                    machingType = None
+                    break
+            if machingType is None:
+                typedMatchSegs.append(seg)
+            else:
+                typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
+    # assign true type to inferred segment if overlap is larger than 50%, i. e.,
+    # (number of bytes of true segment)/(number of bytes of inferred segment) > .5
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
