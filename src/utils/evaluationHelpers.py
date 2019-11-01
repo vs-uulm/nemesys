@@ -11,7 +11,7 @@ from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator, ParsedMessage
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
-    refinements, charRefinements, segmentsFixed
+    refinements, charRefinements, segmentsFixed, pcaMocoRefinements
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC
 
@@ -44,6 +44,21 @@ sigmapertrace = {
     "smb_SMIA20111010-one_deduped-1000.pcap": 1.2,
     "dns_ictf2010_deduped-982-1000.pcap" : 0.6,
     "ntp_SMIA-20111010_deduped-1000.pcap": 1.2
+}
+
+pcamocoSigmapertrace = {
+    "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
+    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
+    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.9,
+    "dns_ictf2010_deduped-100.pcap"             : 0.6, # 0.9,
+    "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+    "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+    "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
+    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.9,
+    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.8,
+    "dns_ictf2010_deduped-982-1000.pcap"        : 0.9,
+    "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
+    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2
 }
 
 epspertrace = {
@@ -494,8 +509,12 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     :return:
     """
     pcapbasename = os.path.basename(pcapfilename)
-    sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
-        0.9 if not sigma else sigma
+    if refinementCallback == pcaMocoRefinements:
+        sigma = pcamocoSigmapertrace[pcapbasename] if not sigma and pcapbasename in pcamocoSigmapertrace else \
+            0.9 if not sigma else sigma
+    else:
+        sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
+            0.9 if not sigma else sigma
     pcapName = os.path.splitext(pcapbasename)[0]
     # noinspection PyUnboundLocalVariable
     tokenparm = tokenizer if tokenizer != "nemesys" else \

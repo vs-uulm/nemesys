@@ -3,6 +3,7 @@ segment messages by NEMESYS and cluster
 """
 
 import argparse, IPython
+import numpy
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
 from math import log
@@ -137,8 +138,6 @@ if __name__ == '__main__':
             refinementCallback=baseRefinements
             #, disableCache=True
         )
-
-        refinedSM = inferredSegmentedMessages
     elif args.refinement == "PCA":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
@@ -149,7 +148,7 @@ if __name__ == '__main__':
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=pcaMocoRefinements
-            #, disableCache=True
+            # , disableCache=True
         )
     else:
         print("Unknown refinement", args.refinement, "\nAborting")
@@ -243,38 +242,54 @@ if __name__ == '__main__':
 
 
 
+    # TODO create typed segments/templates per cluster to get the inferred assignment
+
     # # # # # # # # # # # # # # # # # # # # # # # #
     # TODO mark (at least) exact segment matches with the true data type
-    # currently marks only very few segments. Improve boundaries first!
-    typedMatchSegs = list()
+    #  currently marks only very few segments. Improve boundaries first!
+    # list of tuples of overlap ratio ("intensity of match") and segment
+    typedMatchSegs = dict()  # type: Dict[Union[Template, MessageSegment], Tuple[float, Union[TypedSegment, MessageSegment]]]
+    typedMatchTemplates = dict()  # type: Dict[Union[Template, MessageSegment], Tuple[float, Union[TypedSegment, TypedTemplate, Template, MessageSegment]]]
     for seg in dc.segments:
         if isinstance(seg, MessageSegment):
-            typedMatchSegs.append(comparator.segment2typed(seg))
+            typedMatchSegs[seg] = comparator.segment2typed(seg)
+            typedMatchTemplates[seg] = comparator.segment2typed(seg)
         elif isinstance(seg, Template):
             machingType = None
-            typedBasesegments = list()
-            for bs in seg.baseSegments:
-                tempTyped = comparator.segment2typed(bs)
-                if not isinstance(tempTyped, TypedSegment):
+            typedBaseSegments = [comparator.segment2typed(bs) for bs in seg.baseSegments]
+            typedMatchSegs.update({bs: ts for bs, ts in zip(seg.baseSegments, typedBaseSegments)})
+            for ratio, baseS in typedBaseSegments:
+                # assign true type to inferred segment if overlap is larger than 50%, i. e.,
+                # (number of bytes of true segment)/(number of bytes of inferred segment) > 0.5
+                if not isinstance(baseS, TypedSegment) or ratio <= 0.5:
                     # print("At least one segment in template is not a field match.")
                     # markSegNearMatch(tempTyped)
                     machingType = None
                     break
-                elif machingType == tempTyped.fieldtype or machingType is None:
-                    machingType = tempTyped.fieldtype
-                    typedBasesegments.append(tempTyped)
+                elif machingType == baseS.fieldtype or machingType is None:
+                    machingType = baseS.fieldtype
                 else:
                     # print("Segment's matching field types are not the same in template, e. g., {} and {} ({})".format(
                     #     machingType, tempTyped.fieldtype, tempTyped.bytes.hex()
                     # ))
                     machingType = None
                     break
+
             if machingType is None:
-                typedMatchSegs.append(seg)
+                typedMatchTemplates[seg] = (0.0, seg)
             else:
-                typedMatchSegs.append(TypedTemplate(seg.values, typedBasesegments, seg._method))
-    # assign true type to inferred segment if overlap is larger than 50%, i. e.,
-    # (number of bytes of true segment)/(number of bytes of inferred segment) > .5
+                typedMatchTemplates[seg] = (float(numpy.mean([tr for tr, _ in typedBaseSegments])),
+                                           TypedTemplate(seg.values, [ts for _, ts in typedBaseSegments], seg._method))
+    # unknown segments
+    unk = [(o, t) for o, t in typedMatchSegs.values() if o < 1]
+    # print all unidentified segments
+    for ovr, seg in unk:
+        print("overlap: {:.2f}".format(ovr), seg.fieldtype if isinstance(seg, TypedSegment) else "")
+        # if isinstance(seg, Template):
+        #     for bs in seg.baseSegments:
+        #         comparator.pprint2Interleaved(bs.message, mark=bs)
+        # else:
+        comparator.pprint2Interleaved(seg.message, mark=seg)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -287,12 +302,13 @@ if __name__ == '__main__':
         sdp = DistancesPlotter(specimens,
                                'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
                                    clusterer.eps, int(clusterer.min_samples)), False)
-
         clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
         labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
-        # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
-        sdp.plotSegmentDistances(dc, labels)
+        sdp.plotManifoldDistances(
+            [typedMatchTemplates[seg][1] if typedMatchTemplates[seg][0] > 0.5 else seg for seg in dc.segments],
+            dc.distanceMatrix, labels)
+        # sdp.plotSegmentDistances(dc, labels)
         sdp.writeOrShowFigure()
         del sdp
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -315,7 +331,8 @@ if __name__ == '__main__':
 
 
 
-
+    for msgsegs in inferredSegmentedMessages:
+        comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
 
 
 

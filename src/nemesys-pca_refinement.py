@@ -392,7 +392,7 @@ if __name__ == '__main__':
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
         args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
         refinementCallback=charRefinements
-        #, disableCache=True
+        , disableCache=True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     # # # # # # # # # # # # # # # # # # # # # # # #

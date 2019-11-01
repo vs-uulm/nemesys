@@ -5,7 +5,7 @@ Methods to comparison of a list of messages' inferences and their dissections
 and match a message's inference with its dissector in different ways.
 """
 
-from typing import List, Tuple, Dict, Iterable, Generator
+from typing import List, Tuple, Dict, Iterable, Generator, Union
 from collections import OrderedDict
 import copy
 
@@ -16,7 +16,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
-from inference.segments import MessageSegment
+from inference.segments import MessageSegment, TypedSegment
 
 
 class FormatMatchScore(object):
@@ -197,7 +197,7 @@ class MessageComparator(object):
         return distinctFormats
 
 
-    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int], mark: Tuple[int,int]=None):
+    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int]=None, mark: Union[Tuple[int,int], MessageSegment]=None):
         import visualization.bcolors as bc
 
         l2msg = self.messages[message]
@@ -205,10 +205,12 @@ class MessageComparator(object):
         tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
 
         msglen = len(message.data)
-        ife = [0] + sorted(inferredFieldEnds)
+        ife = [0] + sorted(inferredFieldEnds if inferredFieldEnds is not None else self.fieldEndsPerMessage(message))
         ife += [msglen] if ife[-1] < msglen else []
 
         if mark is not None:
+            if isinstance(mark, MessageSegment):
+                mark = mark.offset, mark.nextOffset
             assert mark[0] >= 0
             assert mark[1] <= msglen
 
@@ -392,23 +394,51 @@ class MessageComparator(object):
         return texcode
 
 
-    def segment2typed(self, segment: MessageSegment):
-        from inference.segments import TypedSegment
+    def segment2typed(self, segment: MessageSegment) -> Tuple[float, Union[TypedSegment, MessageSegment]]:
+        parsedMessage = self.parsedMessages[self.messages[segment.message]]
+        fieldSequence = list()
+        off = 0
+        for _, l in parsedMessage.getFieldSequence():
+            off += l
+            fieldSequence.append(off)
+        # fieldSequence = self.fieldEndsPerMessage(segment.message)
+        # print(".", end="")
 
-        pm = self.parsedMessages[self.messages[segment.message]]
-        fs = pm.getFieldSequence()
-        fsnum, offset = 0, 0
-        while offset < segment.offset:
-            offset += fs[fsnum][1]
-            fsnum += 1
-        if offset != segment.offset:
-            # no true field with matching offset exists
-            return segment
-        if fs[fsnum][1] != segment.length:
-            # no true field at this offset with matching length exists
-            return segment
-        # exact matching segment: return a typed version of the segment
-        return TypedSegment(segment.analyzer, offset, segment.length, pm.getTypeSequence()[fsnum][0])
+        # the largest true offset smaller or equal to the given segment start
+        beforeOff = max([0] + [trueOff for trueOff in fieldSequence if trueOff <= segment.offset])
+        # the smallest true offset larger or equal to the given segment end
+        afterOff = min([trueOff for trueOff in fieldSequence if trueOff >= segment.nextOffset] +
+                       [len(segment.message.data)])
+        # true offsets fully enclosed in the inferred segment
+        enclosed = sorted(trueOff for trueOff in fieldSequence if segment.offset < trueOff < segment.nextOffset)
+
+        # longest overlap
+        overlapStart, overlapEnd = 0, 0
+        for start, end in zip([segment.offset] + enclosed, enclosed + [segment.nextOffset]):
+            if overlapEnd - overlapStart < end - start:
+                overlapStart, overlapEnd = start, end
+
+        # if more than half of the longest overlap is outside of the inferred segment, there is no type match
+        if overlapStart == segment.offset and (overlapEnd - beforeOff)/(overlapEnd - overlapStart) <= .5 \
+                or overlapEnd == segment.nextOffset and (afterOff - overlapStart)/(overlapEnd - overlapStart) <= .5:
+            # no true field with sufficient overlap exists
+            return 0.0, segment
+
+        overlapRatio = (overlapEnd - overlapStart) / segment.length
+
+        assert overlapEnd > 0, "No possible overlap could be found. Investigate!"
+        trueEnd = afterOff if overlapEnd == segment.nextOffset else overlapEnd
+
+        if not trueEnd in fieldSequence:
+            print("Field sequence is not matching any possible overlap. Investigate!")
+            import IPython; IPython.embed()
+        assert trueEnd in fieldSequence, "Field sequence is not matching any possible overlap. Investigate!"
+        overlapIndex = fieldSequence.index(trueEnd)
+
+        fieldtype = parsedMessage.getTypeSequence()[overlapIndex][0]
+
+        # return a typed version of the segment and the ratio of overlapping bytes to the segment length
+        return overlapRatio, TypedSegment(segment.analyzer, segment.offset, segment.length, fieldtype)
 
 
     def lookupField(self, segment: MessageSegment):

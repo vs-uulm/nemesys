@@ -206,11 +206,11 @@ class DistancesPlotter(MessagePlotter):
 
 
         # include field type labels for TypedSegments input
-        if isinstance(segments[0], (TypedSegment, TypedTemplate, RawMessage)):
-            if isinstance(segments[0], (TypedSegment, TypedTemplate)):
-                ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
-            elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
-                ftypes = numpy.array([msg.messageType for msg in segments])  # PP
+        if any(isinstance(seg, (TypedSegment, TypedTemplate, RawMessage)) for seg in segments):
+            if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
+                ftypes = numpy.array([seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else "[unknown]" for seg in segments])  # PP
+            elif any(isinstance(seg, RawMessage) and seg.messageType != 'Raw' for seg in segments):
+                ftypes = numpy.array([msg.messageType if isinstance(msg, RawMessage) and msg.messageType != 'Raw' else "[unknown]" for msg in segments])  # PP
             else:
                 ftypes = set()
             # identify unique types
