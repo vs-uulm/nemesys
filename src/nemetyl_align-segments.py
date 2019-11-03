@@ -455,14 +455,15 @@ if __name__ == '__main__':
     minCsize = numpy.log(len(segmentedMessages))
 
 
+    # TODO test run due to writeCollective(Message)ClusteringStaticstics implementation change!
     # # # # # # # # # # # # # # # # # # # # # # # #
     # write message clustering statistics to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
-    clusterStats, conciseness = writeMessageClusteringStaticstics(
+    clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
         messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # #
-    writeCollectiveClusteringStaticstics(
+    writeCollectiveMessageClusteringStaticstics(
         messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # # min cluster size
@@ -471,7 +472,7 @@ if __name__ == '__main__':
     filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
     filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                       if len(v) < minCsize for s in v)
-    writeCollectiveClusteringStaticstics(
+    writeCollectiveMessageClusteringStaticstics(
         filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -547,11 +548,11 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
         # write message clustering statistics to csv
         # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeMessageClusteringStaticstics(
+        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # min cluster size
@@ -562,7 +563,7 @@ if __name__ == '__main__':
         filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
         filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -730,11 +731,11 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
         # write message clustering statistics to csv
         # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeMessageClusteringStaticstics(
+        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # min cluster size
@@ -745,7 +746,7 @@ if __name__ == '__main__':
         filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
         filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -774,13 +775,13 @@ if __name__ == '__main__':
         matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
         mergedClusters = clustermerger.mergeClusters(
             messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+        mergedClusterStats, mergedConciseness = writeIndividualMessageClusteringStaticstics(
             mergedClusters, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
             comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             mergedClusters, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
@@ -791,7 +792,7 @@ if __name__ == '__main__':
         filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
         filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredMerged, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),

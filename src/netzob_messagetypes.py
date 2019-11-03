@@ -165,9 +165,9 @@ if __name__ == '__main__':
         messageClusters = {symname: [[HelperSegment(NoneAnalysis(msg),0,len(msg.data))] for msg in msglist]
                            for symname, msglist in symbMsgs.items()}
 
-        clusterStats, conciseness = eh.writeMessageClusteringStaticstics(
+        clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
-        eh.writeCollectiveClusteringStaticstics(
+        eh.writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
 
     ParsedMessage.closetshark()

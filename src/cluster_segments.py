@@ -15,7 +15,7 @@ from collections import Counter
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
-from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements
+from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements, originalRefinements
 from inference.formatRefinement import RelocatePCA
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -34,14 +34,16 @@ distance_method = 'canberra'
 tokenizer = 'nemesys'
 # refinement methods
 refinementMethods = [
-    "base", # moco+splitfirstseg
-    "PCA",  # PCA
-    "PCAmoco" # PCA+moco
+    "original", # WOOT2018 paper
+    "base",     # moco+splitfirstseg
+    "PCA",      # PCA
+    "PCAmoco"   # PCA+moco
     ]
 
 
 kneedleSensitivity=12.0
-
+# kneedleSensitivity=6.0
+# kneedleSensitivity=24.0
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
@@ -101,6 +103,16 @@ def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
 def inferredFEs4segment(segment: MessageSegment) -> List[int]:
     return [infs.nextOffset for infs in inferred4segment(segment)]
 
+def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
+    resolvedSegments = list()
+    for seg in segments:
+        if isinstance(seg, Template):
+            resolvedSegments.extend(seg.baseSegments)
+        else:
+            resolvedSegments.append(seg)
+    return resolvedSegments
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -132,7 +144,13 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
     #
-    if args.refinement == "base":
+    if args.refinement == "original":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=originalRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "base":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=baseRefinements
@@ -172,12 +190,12 @@ if __name__ == '__main__':
     # noise: List[MessageSegment]
     # clusters: List[List[MessageSegment]]
 
-    # extract "large" templates from noise that should rather be its own cluster
-    for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
-        freqThresh = log(len(dc.rawSegments))
-        if isinstance(seg, Template):
-            if len(seg.baseSegments) > freqThresh:
-                clusters.append(noise.pop(idx).baseSegments)
+    # # extract "large" templates from noise that should rather be its own cluster
+    # for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
+    #     freqThresh = log(len(dc.rawSegments))
+    #     if isinstance(seg, Template):
+    #         if len(seg.baseSegments) > freqThresh:
+    #             clusters.append(noise.pop(idx).baseSegments)
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -205,12 +223,7 @@ if __name__ == '__main__':
             )
 
         # generate FieldTypeContexts (padded values)
-        resolvedSegments = list()
-        for seg in segments:
-            if isinstance(seg, Template):
-                resolvedSegments.extend(seg.baseSegments)
-            else:
-                resolvedSegments.append(seg)
+        resolvedSegments = resolveTemplates2Segments(segments)
         fcontext = FieldTypeContext(resolvedSegments)
         fcontext.fieldtype = ftype.fieldtype
         fTypeContext.append(fcontext)
@@ -280,19 +293,39 @@ if __name__ == '__main__':
             else:
                 typedMatchTemplates[seg] = (float(numpy.mean([tr for tr, _ in typedBaseSegments])),
                                            TypedTemplate(seg.values, [ts for _, ts in typedBaseSegments], seg._method))
-    # unknown segments
-    unk = [(o, t) for o, t in typedMatchSegs.values() if o < 1]
-    # print all unidentified segments
-    for ovr, seg in unk:
-        print("overlap: {:.2f}".format(ovr), seg.fieldtype if isinstance(seg, TypedSegment) else "")
-        # if isinstance(seg, Template):
-        #     for bs in seg.baseSegments:
-        #         comparator.pprint2Interleaved(bs.message, mark=bs)
-        # else:
-        comparator.pprint2Interleaved(seg.message, mark=seg)
+    # # unknown segments
+    # unk = [(o, t) for o, t in typedMatchSegs.values() if o < 1]
+    # # print all unidentified segments
+    # for ovr, seg in unk:
+    #     print("overlap: {:.2f}".format(ovr), seg.fieldtype if isinstance(seg, TypedSegment) else "")
+    #     # if isinstance(seg, Template):
+    #     #     for bs in seg.baseSegments:
+    #     #         comparator.pprint2Interleaved(bs.message, mark=bs)
+    #     # else:
+    #     comparator.pprint2Interleaved(seg.message, mark=seg)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # # allover clustering quality statistics
+    # if tokenizer == "nemesys":
+    if args.refinement == "PCAmoco":
+        sigma = pcamocoSigmapertrace[pcapbasename] if not args.sigma and pcapbasename in pcamocoSigmapertrace else \
+            0.9 if not args.sigma else args.sigma
+    else:
+        sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
+            0.9 if not args.sigma else args.sigma
 
+    ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
+    ftclusters["Noise"] = resolveTemplates2Segments(noise)
+    groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+                   for rawSeg, typSeg in typedMatchSegs.items()}
+    runtitle = "{}-{}-{}-S={:.1f}-eps={:.2f}-min_samples={:.2f}-singlePoint".format(
+        tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
+        args.refinement, type(clusterer).__name__, kneedleSensitivity, clusterer.eps, clusterer.min_samples)
+    writeCollectiveClusteringStaticstics(ftclusters, groundtruth, runtitle, comparator)
+
+    # # field-type-wise cluster quality statistics
+    writeIndividualClusterStatistics(ftclusters, groundtruth, runtitle, comparator)
 
 
 
@@ -316,23 +349,13 @@ if __name__ == '__main__':
 
 
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # The following is strictly speaking not clustering relevant:
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
     # # show position of each segment individually.
     # for seg in dc.segments:
     #     markSegNearMatch(seg)
 
-    # comparator.pprint2Interleaved(dc.segments[6].message, inferredFEs4segment(dc.segments[6]),
-    #                               (dc.segments[6].offset-2, dc.segments[6].nextOffset+1))
-
-
-
-
-    for msgsegs in inferredSegmentedMessages:
-        comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
+    # # show segmentation of messages.
+    # for msgsegs in inferredSegmentedMessages:
+    #     comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
 
 
 

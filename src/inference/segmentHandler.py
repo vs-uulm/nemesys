@@ -323,7 +323,7 @@ def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Mes
 
 def originalRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
-    Refine the segmentation using specific improvements for the feature:
+    Refine the segmentation according to the WOOT2018 paper method using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.

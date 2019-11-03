@@ -15,6 +15,11 @@ from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegm
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC
 
+
+
+Element = TypeVar('Element')
+
+
 # available analysis methods
 analyses = {
     'bcpnm': BitCongruenceNgramMean,
@@ -33,17 +38,18 @@ analyses = {
 }
 
 sigmapertrace = {
-    "dhcp_SMIA2011101X_deduped-100.pcap" : 0.6,
-    # "nbns_SMIA20111010-one_deduped-100.pcap" : 1.8,
-    "smb_SMIA20111010-one_deduped-100.pcap" : 0.7,
-    "dns_ictf2010_deduped-100.pcap" : 0.6,
-    "dns_ictf2010-new-deduped-100.pcap" : 1.0,
-    "ntp_SMIA-20111010_deduped-100.pcap" : 1.2,
-    "dhcp_SMIA2011101X_deduped-1000.pcap": 0.6,
-    # "nbns_SMIA20111010-one_deduped-1000.pcap": 2.4,
-    "smb_SMIA20111010-one_deduped-1000.pcap": 1.2,
-    "dns_ictf2010_deduped-982-1000.pcap" : 0.6,
-    "ntp_SMIA-20111010_deduped-1000.pcap": 1.2
+    "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
+    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
+    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.7,
+    "dns_ictf2010_deduped-100.pcap"             : 0.6,
+    "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+    "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+    "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
+    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.8,
+    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.7,
+    "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
+    "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
+    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2
 }
 
 pcamocoSigmapertrace = {
@@ -97,8 +103,9 @@ epsdefault = 2.4
 reportFolder = "reports"
 cacheFolder = "cache"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
-ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-clustering-statistics.csv')
+ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-cluster-statistics.csv')
 scStatsFile = os.path.join(reportFolder, 'segment-cluster-statistics.csv')
+coStatsFile = os.path.join(reportFolder, 'segment-collective-cluster-statistics.csv')
 
 
 
@@ -114,17 +121,29 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
     return segmentedMessages
 
 
-# Element = TypeVar('Element')
-def writeMessageClusteringStaticstics(
+def writeIndividualMessageClusteringStaticstics(
         clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
         runtitle: str, comparator: MessageComparator):
     """
     calculate conciseness, correctness = precision, and recall
 
     """
+    abstrMsgClusters = {lab : [comparator.messages[element[0].message] for element in segseq]
+                        for lab, segseq in clusters.items()}
+    return writeIndividualClusterStatistics(abstrMsgClusters, groundtruth, runtitle, comparator)
+
+
+def writeIndividualClusterStatistics(
+        clusters: Dict[Hashable, List[Element]], groundtruth: Dict[Element, str],
+        runtitle: str, comparator: MessageComparator):
+    # clusters: clusterlabel : List of Segments (not Templates!)
+    # groundtruth: Lookup for Segment : true type string
     from collections import Counter
 
-    print('Write message cluster statistics to {}...'.format(clStatsFile))
+    outfile = clStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else scStatsFile
+    print('Write {} cluster statistics to {}...'.format(
+        "message" if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else "segment",
+        outfile))
 
     numSegs = 0
     prList = []
@@ -148,7 +167,7 @@ def writeMessageClusteringStaticstics(
 
     for label, cluster in clusters.items():
         # we assume correct Tuples of MessageSegments with all objects in one Tuple originating from the same message
-        typeFrequency = Counter([groundtruth[comparator.messages[element[0].message]] for element in cluster])
+        typeFrequency = Counter([groundtruth[element] for element in cluster])
         mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
         numSegsinCuster = len(cluster)
         numSegs += numSegsinCuster
@@ -163,10 +182,10 @@ def writeMessageClusteringStaticstics(
         numNoise = len(noise)
         numSegs += numNoise
         ratioNoise = numNoise / numSegs
-        noiseTypes = {groundtruth[comparator.messages[element[0].message]] for element in noise}
+        noiseTypes = {groundtruth[element] for element in noise}
 
-    csvWriteHead = False if os.path.exists(clStatsFile) else True
-    with open(clStatsFile, 'a') as csvfile:
+    csvWriteHead = False if os.path.exists(outfile) else True
+    with open(outfile, 'a') as csvfile:
         clStatscsv = csv.writer(csvfile)  # type: csv.writer
         if csvWriteHead:
             # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
@@ -175,16 +194,17 @@ def writeMessageClusteringStaticstics(
         if noise:
             # noinspection PyUnboundLocalVariable
             clStatscsv.writerow([
-                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', '', str(noiseTypes), ratioNoise, numNoise])
+                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), 'ratio:', ratioNoise, numNoise])
         clStatscsv.writerows([
             (runtitle, comparator.specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
         ])
 
     return prList, conciseness
 
-# Element = TypeVar('Element')
+
+
 def writeCollectiveClusteringStaticstics(
-        clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
+        clusters: Dict[Hashable, List[Element]], groundtruth: Dict[Element, str],
         runtitle: str, comparator: MessageComparator):
     """
     Precision and recall for the whole clustering interpreted as number of draws from pairs of messages.
@@ -199,7 +219,8 @@ def writeCollectiveClusteringStaticstics(
     from itertools import combinations, chain
     from scipy.special import binom
 
-    print('Write message cluster statistics to {}...'.format(clStatsFile))
+    outfile = ccStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else coStatsFile
+    print('Write message cluster statistics to {}...'.format(outfile))
 
     noise = []
     noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
@@ -228,9 +249,9 @@ def writeCollectiveClusteringStaticstics(
     #                           for c in clusters.values() for element in c)
     numTypesOverall = Counter(groundtruth.values())
     # number of types per cluster
-    typeFrequencies = [Counter([groundtruth[comparator.messages[element[0].message]] for element in c])
+    typeFrequencies = [Counter([groundtruth[element] for element in c])
                              for c in clusters.values()]
-    noiseTypes = Counter([groundtruth[comparator.messages[element[0].message]] for element in noise])
+    noiseTypes = Counter([groundtruth[element] for element in noise])
 
     tpfp = sum(binom(len(c), 2) for c in clusters.values())
     tp = sum(binom(t,2) for c in typeFrequencies for t in c.values())
@@ -248,12 +269,20 @@ def writeCollectiveClusteringStaticstics(
              'precision', 'recall', 'noise']
     row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn, precision, recall, len(noise) ]
 
-    csvWriteHead = False if os.path.exists(ccStatsFile) else True
-    with open(ccStatsFile, 'a') as csvfile:
+    csvWriteHead = False if os.path.exists(outfile) else True
+    with open(outfile, 'a') as csvfile:
         clStatscsv = csv.writer(csvfile)  # type: csv.writer
         if csvWriteHead:
             clStatscsv.writerow(head)
         clStatscsv.writerow(row)
+
+
+def writeCollectiveMessageClusteringStaticstics(
+        messageClusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
+        runtitle: str, comparator: MessageComparator):
+    abstrMsgClusters = {lab : [comparator.messages[element[0].message] for element in segseq]
+                        for lab, segseq in messageClusters.items()}
+    return writeCollectiveClusteringStaticstics(abstrMsgClusters, groundtruth, runtitle, comparator)
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
@@ -276,6 +305,7 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
 
+    # TODO redundant code of writeIndividualMessageClusteringStaticstics
     if typeDict:  # calculate conciseness, correctness = precision, and recall
         import os, csv
         from collections import Counter
@@ -347,6 +377,8 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
 
     mmp.writeOrShowFigure()
     del mmp
+
+
 
 
 def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
