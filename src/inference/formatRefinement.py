@@ -1850,7 +1850,8 @@ class RelocatePCA(object):
                 refinedSegmentedMessages.append(msgsegs)
                 continue
 
-            newMsgBounds = sorted(set(chain(*newBounds[msg].values())))
+            # sort new bounds and ensure they are in within the message (offset >= 0 and <= len)
+            newMsgBounds = sorted({nb for nb in chain(*newBounds[msg].values()) if 0 <= nb <= len(msg.data)})
             lastBound = 0
             currentBoundID = 0
             refinedSegmentedMessages.append(list())
@@ -1964,7 +1965,7 @@ class RelocatePCA(object):
                 print(msgbytes.hex())
                 print(msgsegs)
                 IPython.embed()
-            assert msgbytes == msg.data, "segment sequence does not match message bytes:"
+            assert msgbytes == msg.data, "segment sequence does not match message bytes"
         return refinedSegmentedMessages
 
 

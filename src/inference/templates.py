@@ -930,10 +930,10 @@ class DistanceCalculator(object):
             #     for all segments in current length group
             for iseg in innersegs:
                 # TODO performance improvement: embedSegment directly generates six (offset cutoff) ndarrays per run
-                # and gets called a lot of times: e.g. for dhcp-10000 511008 times alone for outerlen = 9 taking 50 sec.
+                #  and gets called a lot of times: e.g. for dhcp-10000 511008 times alone for outerlen = 9 taking 50 sec.
                 # :
-                # instead prepare one values matrix for all outersegs of one innerseg iteration at once (the "embedded"
-                # lengths are all of innerlen, so they are compatible for one single run of cdist). Remeber offset for
+                # instead, prepare one values matrix for all outersegs of one innerseg iteration at once (the "embedded"
+                # lengths are all of innerlen, so they are compatible for one single run of cdist). Remember offset for
                 # each "embedding subsequence", i.e. each first slice from the outerseg values.
                 # this then is a list of embedding options (to take the minimum distance from) for all outersegs
                 # embedded into the one innerseg.

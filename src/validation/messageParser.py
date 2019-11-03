@@ -725,52 +725,61 @@ class ParsedMessage(object):
             # else:
             #     print("Working on message", msgChunk[0])
 
-            for m in msgChunk:
-                if not isinstance(m, RawMessage):
-                    raise TypeError(
-                        "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. Type of provided message was {} from {}".format(
-                            m.__class__.__name__, m.__class__.__module__))
-                ParsedMessage.__tshark.writePacket(m.data)
-            if not ParsedMessage.__tshark.isRunning():
-                raise RuntimeError("tshark could not be called.")
+            # retry writing and parsing to tshark on JSON failure
+            retryCounter = 3
             tjson = None
-            try:
-                tjson = ParsedMessage.__tshark.readPacket()
-            except (ValueError, TimeoutError) as e:
-                print("Need to respawn tshark ({})".format(e))
-                ParsedMessage.__tshark.terminate(2)
-                prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
-                                                             failOnUndissectable, linktype))
+            while retryCounter > 0:
+                for m in msgChunk:
+                    if not isinstance(m, RawMessage):
+                        raise TypeError(
+                            "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. Type of provided message was {} from {}".format(
+                                m.__class__.__name__, m.__class__.__module__))
+                    ParsedMessage.__tshark.writePacket(m.data)
+                if not ParsedMessage.__tshark.isRunning():
+                    raise RuntimeError("tshark could not be called.")
+                tjson = None
+                try:
+                    tjson = ParsedMessage.__tshark.readPacket()
+                except (ValueError, TimeoutError) as e:
+                    print("Need to respawn tshark ({})".format(e))
+                    ParsedMessage.__tshark.terminate(2)
+                    prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
+                                                                 failOnUndissectable, linktype))
 
-            # parse json
-            try:
-                if tjson is None:
-                    print("Empty dissection received.")
-                    continue  # TODO do we need to fail in some way?
-                dissectjson = json.loads(tjson, object_pairs_hook = list)
-                for paketjson, m in zip(dissectjson, msgChunk):
-                    if target:
-                        pm = target  # for one single target
-                    else:
-                        pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
-                                           failOnUndissectable=failOnUndissectable)
-                    try:
-                        pm._parseJSON(paketjson)
-                        prsdmsgs[m] = pm
-                    except DissectionTemporaryFailure as e:
-                        print("Need to respawn tshark ({})".format(e))
-                        ParsedMessage.__tshark.terminate(2)
-                        # TODO prevent an infinite recursion
-                        prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP))
-                        break  # continue with next chunk. The rest of the current chunk was taken care of the above
-                        # slice in the recursion parameter
-                    except DissectionInsufficient as e:
-                        pm._fieldsflat = tuple()
-                        print(e, "\nCurrent message: {}\nContinuing with next message.".format(m))
-                        continue
+                # parse json
+                try:
+                    if tjson is None:
+                        print("Empty dissection received.")
+                        continue  # TODO do we need to fail in some way?
+                    dissectjson = json.loads(tjson, object_pairs_hook = list)
+                    for paketjson, m in zip(dissectjson, msgChunk):
+                        if target:
+                            pm = target  # for one single target
+                        else:
+                            pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
+                                               failOnUndissectable=failOnUndissectable)
+                        try:
+                            pm._parseJSON(paketjson)
+                            prsdmsgs[m] = pm
+                        except DissectionTemporaryFailure as e:
+                            print("Need to respawn tshark ({})".format(e))
+                            ParsedMessage.__tshark.terminate(2)
+                            # TODO prevent an infinite recursion
+                            prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP))
+                            break  # continue with next chunk. The rest of the current chunk was taken care of the above
+                            # slice in the recursion parameter
+                        except DissectionInsufficient as e:
+                            pm._fieldsflat = tuple()
+                            print(e, "\nCurrent message: {}\nContinuing with next message.".format(m))
+                            continue
 
-            except json.JSONDecodeError:
-                print("Parsing failed for multiple messages for JSON:\n" + tjson)
+                    # parsing worked for this chunk so go on with the next.
+                    break  # the while
+                except json.JSONDecodeError:
+                    retryCounter += 1
+                    print("Parsing failed for multiple messages for JSON. Retrying.")
+            if retryCounter == 0:
+                print("Parsing failed for multiple messages for JSON:\n" + tjson if tjson else "[none]")
                 # There is no typical reason known, when this happens, so handle it manually.
                 IPython.embed()
 
