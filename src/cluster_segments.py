@@ -13,9 +13,10 @@ import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
+from inference.templates import DBSCANsegmentClusterer, HDBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
-from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements, originalRefinements
+from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements, originalRefinements, \
+    pcaPcaRefinements
 from inference.formatRefinement import RelocatePCA
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -42,8 +43,8 @@ refinementMethods = [
 
 
 kneedleSensitivity=12.0
+# kneedleSensitivity=100.0
 # kneedleSensitivity=6.0
-# kneedleSensitivity=24.0
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
@@ -144,29 +145,30 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
     #
+    doCache = False
     if args.refinement == "original":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=originalRefinements
-            #, disableCache=True
+            , disableCache=not doCache
         )
     elif args.refinement == "base":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=baseRefinements
-            #, disableCache=True
+            , disableCache=not doCache
         )
     elif args.refinement == "PCA":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
-            refinementCallback=pcaRefinements
-            #, disableCache=True
+            refinementCallback=pcaPcaRefinements
+            , disableCache=not doCache
         )
     elif args.refinement == "PCAmoco":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=pcaMocoRefinements
-            # , disableCache=True
+            , disableCache=not doCache
         )
     else:
         print("Unknown refinement", args.refinement, "\nAborting")
@@ -179,11 +181,15 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cluster segments to determine field types on commonality
     try:
-        clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
+        clusterer.eps *= 1.2  # TODO check results
+        # import math
+        # clusterer.eps = 0.5 * 1/(1+math.exp(48*clusterer.eps-13)) + 0.8
     except ClusterAutoconfException as e:
         print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
               "The original exception message was:\n", e)
         exit(10)
+    # clusterer = HDBSCANsegmentClusterer(dc, dc.rawSegments, min_cluster_size=12)
 
     # noinspection PyUnboundLocalVariable
     noise, *clusters = clusterer.clusterSimilarSegments(False)
@@ -200,8 +206,17 @@ if __name__ == '__main__':
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # make "enum" cluster TODO
+    cluCopy = list(clusters)
+    enumCluster = list()
+    for clu in cluCopy:
+        if len({seg.bytes for seg in clu}) < clusterer.min_samples:
+            enumCluster.extend(clu)
+            clusters.remove(clu)
+    if len(enumCluster) > 0:
+        clusters.append(enumCluster)
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
@@ -308,20 +323,25 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # # allover clustering quality statistics
     # if tokenizer == "nemesys":
-    if args.refinement == "PCAmoco":
-        sigma = pcamocoSigmapertrace[pcapbasename] if not args.sigma and pcapbasename in pcamocoSigmapertrace else \
-            0.9 if not args.sigma else args.sigma
-    else:
-        sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-            0.9 if not args.sigma else args.sigma
+    # if args.refinement == "PCAmoco":
+    #     sigma = pcamocoSigmapertrace[pcapbasename] if not args.sigma and pcapbasename in pcamocoSigmapertrace else \
+    #         0.9 if not args.sigma else args.sigma
+    # else:
+    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
+        0.9 if not args.sigma else args.sigma
 
     ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
     ftclusters["Noise"] = resolveTemplates2Segments(noise)
     groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
                    for rawSeg, typSeg in typedMatchSegs.items()}
-    runtitle = "{}-{}-{}-S={:.1f}-eps={:.2f}-min_samples={:.2f}-singlePoint".format(
-        tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
-        args.refinement, type(clusterer).__name__, kneedleSensitivity, clusterer.eps, clusterer.min_samples)
+    if isinstance(clusterer, DBSCANsegmentClusterer):
+        runtitle = "{}-{}-{}-S={:.1f}-eps={:.2f}-min_samples={:.2f}".format(
+            tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
+            args.refinement, type(clusterer).__name__, kneedleSensitivity, clusterer.eps, clusterer.min_samples)
+    else:
+        runtitle = "{}-{}-{}-S={:.1f}-min_samples={:.2f}".format(
+            tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
+            args.refinement, type(clusterer).__name__, kneedleSensitivity, clusterer.min_samples)
     writeCollectiveClusteringStaticstics(ftclusters, groundtruth, runtitle, comparator)
 
     # # field-type-wise cluster quality statistics
@@ -332,9 +352,12 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots:
         print("Plot distances...")
-        sdp = DistancesPlotter(specimens,
-                               'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-                                   clusterer.eps, int(clusterer.min_samples)), False)
+        if isinstance(clusterer, DBSCANsegmentClusterer):
+            atitle = 'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+                clusterer.eps, int(clusterer.min_samples))
+        else:
+            atitle = 'distances-' + "nemesys-segments_HDBSCAN-ms{:d}".format(int(clusterer.min_samples))
+        sdp = DistancesPlotter(specimens, atitle, False)
         clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
         labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
@@ -350,8 +373,10 @@ if __name__ == '__main__':
 
 
     # # show position of each segment individually.
-    # for seg in dc.segments:
-    #     markSegNearMatch(seg)
+    # for clu in clusters:
+    #     print("# "*20)
+    #     for seg in clu:
+    #         markSegNearMatch(seg)
 
     # # show segmentation of messages.
     # for msgsegs in inferredSegmentedMessages:

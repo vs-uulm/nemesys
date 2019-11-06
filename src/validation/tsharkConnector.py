@@ -84,7 +84,7 @@ class TsharkConnector(object):
         # st = time.time()
 
         # Wait for file content
-        for x in range(500):
+        for x in range(300):
             try:
                 peeked = pipe.peek(10)  # type: bytes
                 if peeked:
@@ -124,7 +124,11 @@ class TsharkConnector(object):
         :return: A JSON string, trimmed and superficially validated.
         """
         assert self.__tempreader is not None, "Call writePacket() first"
-        TsharkConnector.__readlines(self.__tempreader, self.__tsharkqueue)
+
+        import threading
+        readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
+        readThread.start()
+        readThread.join(10.0)
 
         if self.__tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")

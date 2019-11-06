@@ -429,11 +429,11 @@ class CropDistinct(MessageModifier):
         from itertools import chain
         segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
         segFreq = segcnt.most_common()
-        freqThre = .2 * len(segmentedMessages)
+        freqThre = .1 * len(segmentedMessages)
         thre = 0
         while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
-        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > 1]  # omit \x00-sequences and 1-byte long segments
         # return moco
 
         # omit all sequences that have common subsequences
@@ -1324,6 +1324,9 @@ class RelocatePCA(object):
                 cutsExt = commonBounds.frequentBoundReframing(newPaddingRelative, relocate)
                 relocatedCommons.update(cutsExt)
 
+                # if sc.similarSegments.fieldtype == "tf02":
+                #     IPython.embed()
+
                 if comparator and reportFolder:
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # generate value matrix for visualization
@@ -1549,7 +1552,7 @@ class RelocatePCA(object):
 
     class CommonBoundUtil(object):
 
-        uoboFreqThresh = 0.8 # 0.4
+        uoboFreqThresh = 0.4 # 0.8
 
         """
         ...
@@ -1988,7 +1991,7 @@ class RelocatePCA(object):
         :return: List of segments grouped by the message they are from.
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
-        clusterer = DBSCANsegmentClusterer(dc, S=initialKneedleSensitivity)
+        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
         noise, *clusters = clusterer.clusterSimilarSegments(False)
 
         newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]

@@ -11,7 +11,7 @@ from netzob.Model.Vocabulary.Symbol import Symbol, Field
 from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from inference.analyzers import MessageAnalyzer
-from inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator
+from inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -201,7 +201,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
 
 
 
-def refinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def refinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -211,7 +211,7 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Message
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    return pcaMocoRefinements(segmentsPerMsg)
+    return pcaMocoRefinements(segmentsPerMsg, dc)
 
 
 def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
@@ -222,22 +222,31 @@ def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceC
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
+    from itertools import chain
     from inference.formatRefinement import RelocatePCA, CropDistinct
 
-    print("Refine segmentation (PCA+moco refinements)...")
+    print("Refine segmentation (+ moco refinements)...")
 
-    refinedPerMsg = charRefinements(segmentsPerMsg)
-    refinedSegmentedMessages = RelocatePCA.refineSegments(refinedPerMsg, dc)
+    # charPass1 = charRefinements(segmentsPerMsg)
+    # refinedSegmentedMessages = RelocatePCA.refineSegments(charPass1, dc)
+
+    # pcaRound = charRefinements(segmentsPerMsg)
+    pcaRound = segmentsPerMsg
+    for i in range(2):
+        refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC)
 
     # additionally perform most common values refinement
-    moco = CropDistinct.countCommonValues(refinedSegmentedMessages)
+    moco = CropDistinct.countCommonValues(pcaRound)
     print([m.hex() for m in moco])
     refinedSM = list()
-    for msg in refinedSegmentedMessages:
+    for msg in pcaRound:
         croppedMsg = CropDistinct(msg, moco).split()
         refinedSM.append(croppedMsg)
 
-    return refinedSM
+    charPass2 = charRefinements(refinedSM)
+
+    return charPass2
 
 
 def pcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
@@ -248,17 +257,48 @@ def pcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalcu
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
+    from itertools import chain
     from inference.formatRefinement import RelocatePCA
 
     print("Refine segmentation (PCA refinements)...")
 
-    refinedPerMsg = charRefinements(segmentsPerMsg)
-    refinedSM = RelocatePCA.refineSegments(refinedPerMsg, dc)
+    # char refinement before and after
+    charPass1 = charRefinements(segmentsPerMsg)
+    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))
+    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC)
+    charPass2 = charRefinements(refinedSM)
+    # refinedPerMsg = charRefinements(segmentsPerMsg)
+    # refinedSM = RelocatePCA.refineSegments(refinedPerMsg, dc)
+
+    return charPass2
+
+
+def pcaPcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :return: refined segments in list per message
+    """
+    from itertools import chain
+    from inference.formatRefinement import RelocatePCA
+
+    print("Refine segmentation (PCA refinements)...")
+
+    # char refinement before and after
+    # pcaRound = charRefinements(segmentsPerMsg)
+    pcaRound = segmentsPerMsg
+
+    for i in range(2):
+        refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC)
+    refinedSM = charRefinements(pcaRound)
 
     return refinedSM
 
 
-def baseRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -269,6 +309,36 @@ def baseRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Mes
     import inference.formatRefinement as refine
 
     print("Refine segmentation (base refinements)...")
+
+    refinedPerMsg = list()
+    for msg in segmentsPerMsg:
+        # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
+        charsMerged = refine.MergeConsecutiveChars(msg).merge()
+        charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
+        refinedPerMsg.append(charSplited)
+
+    # for tests use test_segment-refinements.py
+    moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
+    newstuff = list()
+    for msg in refinedPerMsg:
+        croppedMsg = refine.CropDistinct(msg, moco).split()
+        charmerged = refine.CumulativeCharMerger(croppedMsg).merge()
+        newstuff.append(charmerged)
+
+    return newstuff
+
+
+def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :return: refined segments in list per message
+    """
+    import inference.formatRefinement as refine
+
+    print("Refine segmentation (nemetyl refinements)...")
 
     refinedPerMsg = list()
     for msg in segmentsPerMsg:
@@ -303,7 +373,7 @@ def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Mes
     """
     import inference.formatRefinement as refine
 
-    print("Refine segmentation (char refinements only)...")
+    print("Refine segmentation (char refinements)...")
 
     refinedPerMsg = list()
     for msg in segmentsPerMsg:
@@ -321,7 +391,7 @@ def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[Mes
     return newstuff
 
 
-def originalRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation according to the WOOT2018 paper method using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.

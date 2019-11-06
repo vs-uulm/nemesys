@@ -11,6 +11,9 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 
 class BaseTypeMemento(object):
+    """
+    Base class providing the means to identify a field type by a name and ID.
+    """
     def __init__(self, fieldtype: str, length = None):
         # data type this field represents
         self._fieldtype = fieldtype
@@ -39,6 +42,12 @@ class BaseTypeMemento(object):
 
 
 class FieldTypeMemento(BaseTypeMemento):
+    """
+    Class to help persisting field type characteristics from a FieldTypeTemplate represented by mean and covariance.
+    Contains methods to calculate the covariance matrix, mahalanobis distance to a given vector, and the "confidence"
+    of a positive match.
+    """
+
     def __init__(self, mean: numpy.ndarray, stdev: numpy.ndarray, cov: numpy.ndarray, fieldtype: str,
                  analyzerClass: Type[MessageAnalyzer] = Value, analysisParams: Union[Any, Tuple] = None,
                  unit=MessageAnalyzer.U_BYTE):
@@ -148,7 +157,7 @@ class FieldTypeMemento(BaseTypeMemento):
         covariance matrix contained in this object.
 
         Mahalanobis distance measures the distance of a vector from the mean in terms of the multivariate pendent to
-        the standard deviation: zoter
+        the standard deviation: zotero
 
         :param vector: The vector of which the distance to the mean shall be calculated.
         :return: The Mahalanobis distance between the field type mean and the given vector.

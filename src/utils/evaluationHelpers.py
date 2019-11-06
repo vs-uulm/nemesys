@@ -37,35 +37,71 @@ analyses = {
     'stropy': Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
 }
 
+
+# raw nemesys - cft-121 "withoutrefinement"
 sigmapertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
-    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
-    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.7,
     "dns_ictf2010_deduped-100.pcap"             : 0.6,
-    "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+    "dns_ictf2010-new-deduped-100.pcap"         : 0.6,
+    "nbns_SMIA20111010-one_deduped-100.pcap"    : 1.0,
     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.6,
     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
-    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.8,
-    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.7,
     "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
     "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
-    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2
+    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 1.0,
+    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
+    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.6,
 }
 
+# nemesys pca refined - cft-117
+# sigmapertrace = {
+#     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
+#     "dns_ictf2010_deduped-100.pcap"             : 0.6,
+#     "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+#     "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
+#     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+#     "smb_SMIA20111010-one_deduped-100.pcap"     : 0.7,
+#     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
+#     "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
+#     "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
+#     "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.8,
+#     "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
+#     "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.7,
+# }
+
+
+# FMS based - cft-130 + cft-132
 pcamocoSigmapertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
-    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
-    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.9,
-    "dns_ictf2010_deduped-100.pcap"             : 0.6, # 0.9,
+    "dns_ictf2010_deduped-100.pcap"             : 0.9,
     "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.9,
     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
-    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.9,
-    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.8,
     "dns_ictf2010_deduped-982-1000.pcap"        : 0.9,
     "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
-    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2
+    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.9,
+    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
+    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.8,
 }
+
+# # NEMEFTR based
+# pcamocoSigmapertrace = {
+#     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.8,
+#     "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.6,
+#     "smb_SMIA20111010-one_deduped-100.pcap"     : 1.2,
+#     "dns_ictf2010_deduped-100.pcap"             : 0.6, # 1.2,
+#     "dns_ictf2010-new-deduped-100.pcap"         : 0.6, # 1.0,
+#     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2, # 1.0,
+#     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 1.2, # 1.0,
+#     "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.8, # 0.6,
+#     "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.6, # 1.0,
+#     "dns_ictf2010_deduped-982-1000.pcap"        : 0.6, # 1.0,
+#     "dns_ictf2010-new-deduped-1000.pcap"        : 0.8, # 1.2,
+#     "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2
+# }
 
 epspertrace = {
     "dhcp_SMIA2011101X_deduped-100.pcap" : 1.8,
@@ -257,9 +293,19 @@ def writeCollectiveClusteringStaticstics(
     tp = sum(binom(t,2) for c in typeFrequencies for t in c.values())
     tnfn = sum(map(lambda n: n[0] * n[1], combinations(
         (len(c) for c in chain.from_iterable([clusters.values(), [noise]])), 2)))
+    # import IPython; IPython.embed()
+    # fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
+    #           for typeCluster in typeFrequencies + [noiseTypes]
+    #           for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2
+    #
+    # # noise handling: consider all elements in noise as false negatives
     fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
-              for typeCluster in typeFrequencies + [noiseTypes]
-              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2
+              for typeCluster in typeFrequencies
+              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster)) + \
+         sum((typeTotal * noiseTypes[typeName]
+              for typeName, typeTotal in numTypesOverall.items() if typeName in noiseTypes)) \
+         //2
+
 
     # precision = tp / (tp + fp)
     precision = tp / tpfp
@@ -526,7 +572,7 @@ def calcHexDist(hexA, hexB):
 
 def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
                    analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filter=False,
-                   refinementCallback:Callable = refinements,
+                   refinementCallback:Union[Callable, None] = refinements,
                    disableCache=False) \
         -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
         float, float]:
@@ -541,18 +587,20 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     :return:
     """
     pcapbasename = os.path.basename(pcapfilename)
-    if refinementCallback == pcaMocoRefinements:
-        sigma = pcamocoSigmapertrace[pcapbasename] if not sigma and pcapbasename in pcamocoSigmapertrace else \
-            0.9 if not sigma else sigma
-    else:
-        sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
-            0.9 if not sigma else sigma
+    # if refinementCallback == pcaMocoRefinements:
+    #     sigma = pcamocoSigmapertrace[pcapbasename] if not sigma and pcapbasename in pcamocoSigmapertrace else \
+    #         0.9 if not sigma else sigma
+    # else:
+    sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
+        0.9 if not sigma else sigma
     pcapName = os.path.splitext(pcapbasename)[0]
     # noinspection PyUnboundLocalVariable
     tokenparm = tokenizer if tokenizer != "nemesys" else \
         "{}{:.0f}".format(tokenizer, sigma * 10)
     dccachefn = os.path.join(cacheFolder, 'cache-dc-{}-{}-{}-{}-{}.{}'.format(
-        analysisTitle, tokenparm, "filtered" if filter else "all", refinementCallback.__name__, pcapName, 'ddc'))
+        analysisTitle, tokenparm, "filtered" if filter else "all",
+        refinementCallback.__name__ if refinementCallback is not None else "raw",
+        pcapName, 'ddc'))
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
     if disableCache or not os.path.exists(dccachefn):
         # dissect and label messages
@@ -579,14 +627,15 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
                 for seg in msg] for msg in segmentsPerMsg]
 
-            if refinementCallback.__code__.co_argcount > 1:
-                # assume the second argument is expected to be a distance calculator
-                chainedSegments = list(chain.from_iterable(segmentedMessages))
-                print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
-                refinementDC = DelegatingDC(chainedSegments)
-                segmentedMessages = refinementCallback(segmentedMessages, refinementDC)
-            else:
-                segmentedMessages = refinementCallback(segmentedMessages)
+            if refinementCallback is not None:
+                if refinementCallback.__code__.co_argcount > 1:
+                    # assume the second argument is expected to be a distance calculator
+                    chainedSegments = list(chain.from_iterable(segmentedMessages))
+                    print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
+                    refinementDC = DelegatingDC(chainedSegments)
+                    segmentedMessages = refinementCallback(segmentedMessages, refinementDC)
+                else:
+                    segmentedMessages = refinementCallback(segmentedMessages)
 
             # segments = list(chain.from_iterable(segmentedMessages))
 

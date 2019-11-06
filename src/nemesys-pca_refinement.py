@@ -13,7 +13,8 @@ from collections import Counter
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
-from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq
+from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
+    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements
 from inference.formatRefinement import RelocatePCA, CropDistinct
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -32,6 +33,13 @@ distance_method = 'canberra'
 tokenizer = 'nemesys'
 # tokenizer = '4bytesfixed'
 
+refinementMethods = [
+    "original", # WOOT2018 paper
+    "base",     # moco+splitfirstseg
+    "PCA",      # 2-pass PCA
+    "PCA1",     # 1-pass PCA
+    "PCAmoco"   # 2-pass PCA+moco
+    ]
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
@@ -374,6 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--with-plots',
                         help='Generate plots of true field types and their distances.',
                         action="store_true")
+    parser.add_argument('-r', '--refinement', help='Select segment refinement method.', choices=refinementMethods)
     args = parser.parse_args()
 
     if not isfile(args.pcapfilename):
@@ -391,7 +400,7 @@ if __name__ == '__main__':
     # noinspection PyUnboundLocalVariable
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
         args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
-        refinementCallback=charRefinements
+        refinementCallback=None
         , disableCache=True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
@@ -411,40 +420,54 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # conduct PCA refinement
     collectedSubclusters = list()  # type: List[RelocatePCA]
-    try:
-        startRefinement = time.time()
 
-        # # first perform most common values refinement
-        # moco = CropDistinct.countCommonValues(inferredSegmentedMessages)
-        # print([m.hex() for m in moco])
-        # refinedSegmentedMessages = list()
-        # for msg in inferredSegmentedMessages:
-        #     croppedMsg = CropDistinct(msg, moco).split()
-        #     refinedSegmentedMessages.append(croppedMsg)
-        # refinedSM = RelocatePCA.refineSegments(refinedSegmentedMessages, dc,
-        #                                        collectEvaluationData=collectedSubclusters)
-
-        refinedSegmentedMessages = RelocatePCA.refineSegments(inferredSegmentedMessages, dc,
-                                               collectEvaluationData=collectedSubclusters)
-
-        # additionally perform most common values refinement
-        moco = CropDistinct.countCommonValues(refinedSegmentedMessages)
-        print([m.hex() for m in moco])
-        refinedSM = list()
-        for msg in refinedSegmentedMessages:
-            croppedMsg = CropDistinct(msg, moco).split()
-            refinedSM.append(croppedMsg)
-
-        # refinedSM = refinedSegmentedMessages
-
-        runtimeRefinement = time.time() - startRefinement
+    startRefinement = time.time()
+    if args.refinement == "original":
+        refinedSM = originalRefinements(inferredSegmentedMessages)
+    elif args.refinement == "base":
+        refinedSM = baseRefinements(inferredSegmentedMessages)
+    elif args.refinement == "PCA1":
+        refinedSM = pcaRefinements(inferredSegmentedMessages, dc)
+    elif args.refinement == "PCA":
+        refinedSM = pcaPcaRefinements(inferredSegmentedMessages, dc)
+    elif args.refinement == "PCAmoco":
+        try:
 
 
-        # TODO now needs recalculation of segment distances
-    except ClusterAutoconfException as e:
-        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
-              "The original exception message was:\n", e)
-        exit(10)
+            # # first perform most common values refinement
+            # moco = CropDistinct.countCommonValues(inferredSegmentedMessages)
+            # print([m.hex() for m in moco])
+            # refinedSegmentedMessages = list()
+            # for msg in inferredSegmentedMessages:
+            #     croppedMsg = CropDistinct(msg, moco).split()
+            #     refinedSegmentedMessages.append(croppedMsg)
+            # refinedSM = RelocatePCA.refineSegments(refinedSegmentedMessages, dc,
+            #                                        collectEvaluationData=collectedSubclusters)
+
+            pcaRound = charRefinements(inferredSegmentedMessages)
+            for i in range(2):
+                refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+                pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
+                                                   collectEvaluationData=collectedSubclusters)
+
+            # additionally perform most common values refinement
+            moco = CropDistinct.countCommonValues(pcaRound)
+            print([m.hex() for m in moco])
+            refinedSM = list()
+            for msg in pcaRound:
+                croppedMsg = CropDistinct(msg, moco).split()
+                refinedSM.append(croppedMsg)
+
+            refinedSM = charRefinements(refinedSM)
+
+            # refinedSM = refinedSegmentedMessages
+
+            # TODO now needs recalculation of segment distances
+        except ClusterAutoconfException as e:
+            print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+                  "The original exception message was:\n", e)
+            exit(10)
+    runtimeRefinement = time.time() - startRefinement
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -715,7 +738,8 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Determine the amount of off-by-one errors in refined segmentation
     message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(refinedSM))
-    reportWriter.writeReport(message2quality, -1.0, specimens, comparator, inferenceTitle + '_pcaRefined',
+    reportWriter.writeReport(message2quality, -1.0, specimens, comparator,
+                             inferenceTitle + "_" + args.refinement + '-refined',
                              reportFolder)
     exactcount, offbyonecount, offbymorecount = reportWriter.countMatches(message2quality.values())
     minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])

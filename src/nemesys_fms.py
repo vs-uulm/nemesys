@@ -18,7 +18,7 @@ from validation.dissectorMatcher import MessageComparator, FormatMatchScore, Dis
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
-    originalRefinements, baseRefinements, refinements, symbolsFromSegments
+    originalRefinements, baseRefinements, pcaRefinements, pcaMocoRefinements, pcaPcaRefinements, symbolsFromSegments
 from validation import reportWriter
 
 

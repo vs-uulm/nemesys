@@ -108,7 +108,7 @@ class DistancesPlotter(MessagePlotter):
 
         # identify unique labels
         allabels = set(labels)
-        if all(l.isdigit() for l in allabels if l != "Noise"):
+        if all(isinstance(l, numpy.integer) or l.isdigit() for l in allabels if l != "Noise"):
             ulab = sorted(allabels,
                           key=lambda l: -1 if l == "Noise" else int(l))
         else:

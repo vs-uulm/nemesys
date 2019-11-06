@@ -762,16 +762,18 @@ class ParsedMessage(object):
                             pm._parseJSON(paketjson)
                             prsdmsgs[m] = pm
                         except DissectionTemporaryFailure as e:
+                            # TODO catch also "No IP layer" exception here, retry tshark
                             print("Need to respawn tshark ({})".format(e))
                             ParsedMessage.__tshark.terminate(2)
                             # TODO prevent an infinite recursion
                             prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP))
-                            break  # continue with next chunk. The rest of the current chunk was taken care of the above
-                            # slice in the recursion parameter
+                            break  # continue with next chunk. The rest of
+                            # the current chunk was taken care of by the above slice in the recursion parameter
                         except DissectionInsufficient as e:
                             pm._fieldsflat = tuple()
                             print(e, "\nCurrent message: {}\nContinuing with next message.".format(m))
                             continue
+
 
                     # parsing worked for this chunk so go on with the next.
                     break  # the while
@@ -815,7 +817,7 @@ class ParsedMessage(object):
                         self.protocols = protocolsvalue.split(':')
                         if self.relativeToIP and 'ip' not in self.protocols:
                             errortext = "No IP layer could be identified in a message of the trace."
-                            print(errortext, "\n\nPlease investigate yourself:")
+                            print(errortext, "\n\nPlease investigate yourself:") # TODO raise Exception
                             IPython.embed()
                             raise ValueError(errortext)
                         absLayNum = (self.layernumber if self.layernumber >= 0 else len(self.protocols) - 1) \

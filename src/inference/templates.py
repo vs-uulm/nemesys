@@ -15,6 +15,9 @@ debug = False
 
 
 class ClusterAutoconfException(Exception):
+    """
+    Exception to raise in case of an failed clusterer autoconfiguration.
+    """
     def __init__(self, description: str):
         super().__init__(description)
 
@@ -876,6 +879,8 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
+        import concurrent.futures
+
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
         import time
@@ -883,28 +888,38 @@ class DistanceCalculator(object):
 
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
-        for outerlen in rslens:
-            self._outerloop(lenGrps, outerlen, distance, rslens)
+        # for outerlen in rslens:
+        #     distance.extend(self._outerloop(lenGrps, outerlen, rslens))
+        #
+        #     profiler = cProfile.Profile()
+        #     int_start = time.time()
+        #     stats = profiler.runctx('self._outerloop(lenGrps, outerlen, distance, rslens)', globals(), locals())
+        #     int_runtime = time.time() - int_start
+        #     profiler.dump_stats("embdedAndCalcDistances-{:02.1f}-{}-i{:03d}.profile".format(
+        #         int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
 
-            # profiler = cProfile.Profile()
-            # int_start = time.time()
-            # stats = profiler.runctx('self._outerloop(lenGrps, outerlen, distance, rslens)', globals(), locals())
-            # int_runtime = time.time() - int_start
-            # profiler.dump_stats("embdedAndCalcDistances-{:02.1f}-{}-i{:03d}.profile".format(
-            #     int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
-
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:   # Process # Thread
+            futureDis = dict()
+            for outerlen in rslens:
+                futureDis[executor.submit(self._outerloop, lenGrps, outerlen, rslens)] = outerlen
+            futureRes = dict()
+            for future in concurrent.futures.as_completed(futureDis.keys()):
+                futureRes[futureDis[future]] = future.result()
+            for ol in rslens:
+                distance.extend(futureRes[ol])
 
         runtime = time.time() - pit_start
         print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(len(distance), runtime))
         return distance
 
 
-    def _outerloop(self, lenGrps, outerlen, distance, rslens):
+    def _outerloop(self, lenGrps, outerlen, rslens):
         """
         explicit function for the outer loop of _embdedAndCalcDistances() for profiling it
 
         :return:
         """
+        dissimilarities = list()
         outersegs = lenGrps[outerlen]
         if DistanceCalculator.debug:
             print("    outersegs, length {}, segments {}".format(outerlen, len(outersegs)))
@@ -912,7 +927,7 @@ class DistanceCalculator(object):
         # TODO something outside of calcDistances takes a lot longer to return during the embedding loop. Investigate.
         ilDist = DistanceCalculator.calcDistances(outersegs, method=self._method)
         # # # # # # # # # # # # # # # # # # # # # # # #
-        distance.extend([(i, l,
+        dissimilarities.extend([(i, l,
                           self.thresholdFunction(
                               d * self._normFactor(outerlen),
                               **self.thresholdArgs))
@@ -924,8 +939,8 @@ class DistanceCalculator(object):
             innersegs = lenGrps[innerlen]
             if DistanceCalculator.debug:
                 print("        innersegs, length {}, segments {}".format(innerlen, len(innersegs)))
-            else:
-                print(" .", end="", flush=True)
+            # else:
+            #     print(" .", end="", flush=True)
             # for all segments in "shorter length" group
             #     for all segments in current length group
             for iseg in innersegs:
@@ -963,10 +978,11 @@ class DistanceCalculator(object):
                     )
                               )  # minimum of dimensions
                     # # # # # # # # # # # # # # # # # # # # # # # #
-                    distance.append(dlDist)
+                    dissimilarities.append(dlDist)
                     self._offsets[(interseg[0], interseg[1])] = embedded[1]
-        if not DistanceCalculator.debug:
-            print()
+        # if not DistanceCalculator.debug:
+        #     print()
+        return dissimilarities
 
 
     def _normFactor(self, dimensions: int):
@@ -1170,7 +1186,7 @@ class DistanceCalculator(object):
 
 class Template(AbstractSegment):
     """
-    Represents a template for some group of similar MessageSegments
+    Represents a template for some group of similar MessageSegments.
     A Templates values are either the values of a medoid or the mean of values per vector component.
     """
 
@@ -1395,6 +1411,9 @@ class Template(AbstractSegment):
 
 
 class TypedTemplate(Template):
+    """
+    Template for the representation of a segment type.
+    """
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
                  baseSegments: Iterable[AbstractSegment],
@@ -1430,6 +1449,12 @@ class TypedTemplate(Template):
 
 
 class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
+    """
+    Template and Memento for collecting base segments representing a common field type.
+    Also serves to commonly analyze the collevtive base segments, and thus, to determine characteristics of the
+    field type. This way the class is the basis to verify a segment cluster's suitability as a type template in the
+    first place.
+    """
 
     def __init__(self, baseSegments: Iterable[AbstractSegment], method='canberra'):
         """
@@ -2021,14 +2046,14 @@ class HDBSCANsegmentClusterer(AbstractClusterer):
     https://github.com/scikit-learn-contrib/hdbscan
     """
 
-    def __init__(self, dc: DistanceCalculator, **kwargs):
+    def __init__(self, dc: DistanceCalculator, segments: Sequence[MessageSegment] = None, **kwargs):
         """
 
         :param dc:
         :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
             If not given (None), it is autoconfigured.
         """
-        super().__init__(dc)
+        super().__init__(dc, segments)
 
         if len(kwargs) == 0:
             # from math import log
@@ -2076,10 +2101,11 @@ class DBSCANsegmentClusterer(AbstractClusterer):
     def __init__(self, dc: DistanceCalculator, segments: Sequence[MessageSegment] = None, **kwargs):
         """
         :param dc:
+        :param segments: subset of segments from dc to cluster, use all segments in dc if None
         :param kwargs: e. g. epsilon: The DBSCAN epsilon value, if it should be fixed.
             If not given (None), it is autoconfigured.
-            For autoconfiguration with Kneedle based on the ECDF, S is Kneedle's sensitivity parameter
-            with a default of 0.8.
+            For autoconfiguration with Kneedle applied to the ECDF of dissimilarities,
+            S is Kneedle's sensitivity parameter with a default of 0.8.
         """
         super().__init__(dc, segments)
 

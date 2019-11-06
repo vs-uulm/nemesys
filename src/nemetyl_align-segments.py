@@ -21,7 +21,8 @@ from tabulate import tabulate
 # mpl.use('Agg')
 
 from alignment.alignMessages import SegmentedMessages
-from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
+from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements, originalRefinements, \
+    baseRefinements, pcaRefinements, pcaMocoRefinements
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from utils.evaluationHelpers import *
@@ -38,6 +39,14 @@ analysis_method = 'value'
 distance_method = 'canberra'
 tokenizers = ('tshark', '4bytesfixed', 'nemesys')
 roundingprecision = 10**8
+
+# refinement methods
+refinementMethods = [
+    "original", # WOOT2018 paper
+    "base",     # moco+splitfirstseg
+    "PCA",      # PCA
+    "PCAmoco"   # PCA+moco
+    ]
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -303,6 +312,8 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.9')
+    parser.add_argument('-r', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
+                        default="base")
     parser.add_argument('--split', help='Use old split-clusters implementation.',
                         action="store_true")
     parser.add_argument('-p', '--with-plots',
@@ -333,9 +344,39 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # TODO when manipulating distances, deactivate caching! by adding "True"
     # noinspection PyUnboundLocalVariable
-    specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma   # , disableCache=True
-    )
+    if args.tokenizer != "nemesys":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=None
+            # , disableCache=True
+        )
+    elif args.refinement == "original":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=originalRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "base":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=baseRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "PCA":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=pcaRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "PCAmoco":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=pcaMocoRefinements
+            # , disableCache=True
+        )
+    else:
+        print("Unknown refinement", args.refinement, "\nAborting")
+        exit(2)
     chainedSegments = dc.rawSegments
 
 
