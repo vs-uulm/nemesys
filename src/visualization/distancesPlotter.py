@@ -39,8 +39,6 @@ class DistancesPlotter(MessagePlotter):
         self._cm = cm.jet  # type: colors.LinearSegmentedColormap
 
 
-
-
     def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
                               distances: numpy.ndarray,
                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):

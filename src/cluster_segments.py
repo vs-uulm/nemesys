@@ -1,5 +1,9 @@
 """
-segment messages by NEMESYS and cluster
+NEMEFTR mode 3:
+Clustering of segments on similarity without ground truth.
+Segments are created from messages by NEMESYS and clustered with DBSCANsegmentClusterer
+and refined by the method selected at the command line (-r).
+Generates segment-dissimilarity topology plots of the clustering result.
 """
 
 import argparse, IPython
@@ -105,6 +109,11 @@ def inferredFEs4segment(segment: MessageSegment) -> List[int]:
     return [infs.nextOffset for infs in inferred4segment(segment)]
 
 def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
+    """
+    Resolve a (mixed) list of segments and templates into a list of single segments.
+    :param segments: (mixed) list of segments and templates
+    :return: list of single segments with all given segments and the base segments of the templates.
+    """
     resolvedSegments = list()
     for seg in segments:
         if isinstance(seg, Template):
@@ -182,9 +191,9 @@ if __name__ == '__main__':
     # cluster segments to determine field types on commonality
     try:
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
-        clusterer.eps *= 1.2  # TODO check results
+        clusterer.eps *= 1.2
         # import math
-        # clusterer.eps = 0.5 * 1/(1+math.exp(48*clusterer.eps-13)) + 0.8
+        # clusterer.eps *= 0.5 * 1/(1+math.exp(24*clusterer.eps-6)) + 0.8
     except ClusterAutoconfException as e:
         print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
               "The original exception message was:\n", e)

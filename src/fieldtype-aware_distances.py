@@ -1,10 +1,13 @@
 """
-Use groundtruth about field segmentation by dissectors and apply field type identification to them.
-Then evaluate distance matrix using representatives for field-type-hypothesis specific values modifications.
+NEMEFTR: early state and evaluation of epsilon autoconfiguration.
+Plot and print dissimilarities between segments. Clusters on dissimilarities and compares the results to ground truth.
+Segmentations are obtained by dissectors and apply field type identification to them.
+Output for evaluation are a dissimilarity topology plot and histogram, ECDF plot, clustered vector visualization plots,
+and segment cluster statistics.
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
 These segments get analyzed by the given analysis method which is used as feature to determine their similarity.
-The distance matrix is generated using representatives for field-type-hypothesis specific values modifications.
+The distance matrix is generated using representatives for field-type-hypothesis specific values modifications. TODO check this!
 Similar fields are then clustered by DBSCAN and for comparison plotted in groups of their real field types.
 In addition, a MDS projection into a 2D plane for visualization of the relative distances of the features is plotted.
 """

@@ -1,5 +1,11 @@
 """
-Use groundtruth about field segmentation by dissectors and apply field type identification to them.
+pre-NEMEFTR:
+Evaluate clustering methods and parameters for identifying field data types by clustering of message segments.
+Segments are generated using groundtruth from dissectors.
+
+TODO CAVEAT and cleanup:
+	Very old state without epsilon autoconfiguration and default epsilon values based on a code state
+	prior to the fixing of the "precomputed dissimilarity matrix bug".
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
 These segments get analyzed by the given analysis method which is used as feature to determine their similarity.

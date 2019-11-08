@@ -1,5 +1,7 @@
 """
-Use groundtruth about field segmentation by dissectors and apply field type identification to them.
+Write a topology plot to visualize where centers of true field types are and an type-separation histogram per true field type.
+Helps in determining which field types may be distinct enough to be later recognized from a template generated from this ground truth.
+Use groundtruth about field segmentation by dissectors and determine the medoid of all segments of one data type.
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
 These segments get analyzed by the "value" analysis method which is used as feature to determine their similarity.

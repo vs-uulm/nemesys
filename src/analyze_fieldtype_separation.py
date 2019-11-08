@@ -1,9 +1,9 @@
 """
-Use groundtruth about field segmentation by dissectors and apply field type identification to them.
+Generate statistics about the char segment identification heuristic.
+For segmentation groundtruth from dissectors is used and segments are labeled with their true field types.
+True and false positives and false negatives of the char detection are determined and printed for the given trace.
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
-These segments get analyzed by the "value" analysis method which is used as feature to determine their similarity.
-Real field types are separated using ground truth and the quality of this separation is visualized.
 """
 
 import argparse, IPython
@@ -111,17 +111,24 @@ def charsDistanceStatistics(dc, typegroups):
     smp.writeOrShowFigure()
 
 
-def charsValueMeanStatistics(filteredChars, typegroups):
+def charsValueMeanStatistics(filteredChars: List[MessageSegment], typegroups):
+    """
+    Write detection quality of char segments by byte value means.
+    :param filteredChars: Char segments
+    :param typegroups: Ground truth about field types.
+    :return:
+    """
+    print("\nDetection quality of char segments by byte value means:")
     typelabels = list(typegroups.keys())
 
     if charskey in typelabels:
-        # only non-null sequences quality as valid ground truth
+        # only non-null sequences qualify as valid ground truth
         nnchars = [seg for seg in typegroups[charskey] if any(val > 0 for val in seg.values)]
         if len(nnchars) > 0:
             tp, fp, fn = tPfPfN(filteredChars, nnchars)
             print("TP:", len(tp), "FP:", len(fp), "FN", len(fn))
             segmentMeans = meanHisto(nnchars)
-            print("Means min: {:.3f} max: {:.3f}".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
+            print("Means min: {:.3f} max: {:.3f}\n".format(numpy.min(segmentMeans), numpy.max(segmentMeans)))
             return tp, fp, fn
         else:
             print("No non-zero char segments in trace. FP count:", len(filteredChars))
@@ -129,6 +136,7 @@ def charsValueMeanStatistics(filteredChars, typegroups):
                 print("First 100 of the false positive detected chars:")
                 printChars(filteredChars[:100])
                 # meanHisto(filteredChars)
+            print()
             return [], filteredChars, []
     else:
         print("No char segments in trace. FP count:", len(filteredChars))

@@ -1,9 +1,12 @@
 """
-Use ground truth about field borders and their data types to generate MessageSegments representing the field values.
+NEMEFTR mode 1:
+Generate FieldTypeTemplates representing data types.
+For segmentation, it uses ground truth about field borders and field data types.
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
 These segments get analyzed by the given analysis method which is used as feature.
-Charateristic feature abstraction (mean and covariance) is generated as templates for specific field data types.
+For abstraction from individual field values to the charateristic feature (mean and covariance)
+FieldTypeTemplates are generated to persist the specific field type characteristics.
 
 """
 import argparse, IPython

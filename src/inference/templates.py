@@ -390,6 +390,7 @@ class DistanceCalculator(object):
         # is set in the constructor and should therefore be always valid.
         return self._offsets
 
+
     def segments2index(self, segmentList: Iterable[AbstractSegment]) -> List[int]:
         # noinspection PyUnresolvedReferences
         """
@@ -1671,7 +1672,7 @@ class FieldTypeContext(FieldTypeTemplate):
     def __init__(self, baseSegments: Iterable[MessageSegment], method='canberra'):
         """
         FieldTypeTemplate-subclass which, instead of a nan-padded offset alignment,
-        fills shorter segments with the values of the message at the respective position
+        fills shorter segments with the values of the message at the respective position.
 
         :param baseSegments: Requires a List of MessageSegment not AbstractSegment!
             Templates must therefore be resolved beforehand!

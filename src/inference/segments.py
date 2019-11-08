@@ -753,7 +753,7 @@ class HelperSegment(MessageSegment):
 
 class TypedSegment(MessageSegment):
     """
-    Segment class that knows the type of field data contained
+    Segment class that knows the type of field data contained.
     """
 
     def __init__(self, analyzer: MessageAnalyzer,

@@ -165,6 +165,12 @@ class FieldTypeMemento(BaseTypeMemento):
         return scipy.spatial.distance.mahalanobis(self.mean, vector, self.picov)
 
     def confidence(self, vector: Iterable[float]) -> numpy.ndarray:
+        """
+        :param vector: A feature vector (e. g. byte values)
+        :return: The confidence that the given vector is of the field type represented by this memento.
+            Mostly this is equivalent to the mahalanobis distance between vector and FieldTypeMemento, but for
+            the fieldtype "id" the confidence is reduced by factor 2 (smaller value => higher confidence).
+        """
         conf = self.mahalanobis(vector)
         # TODO move to be a parameterizable property of the FieldTypeMemento class
         # make ids twice as unconfident
@@ -174,6 +180,10 @@ class FieldTypeMemento(BaseTypeMemento):
 
 
 class RecognizedVariableLengthField(object):
+    """
+    Lightweight representation a field of variable length recognized by a heuristic method.
+    """
+
     def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
                  position: int, end: int, confidence: float):
         self.message = message
@@ -207,6 +217,15 @@ class RecognizedVariableLengthField(object):
 
     def toSegment(self, fallbackAnalyzer:Type[MessageAnalyzer]=Value,
                   fallbackUnit: int=MessageAnalyzer.U_BYTE, fallbackParams: Tuple=()) -> TypedSegment:
+        """
+        Convertes this object to a MessageSegment. Uses the analyzer stored in the object's template
+        to (re-)create the segments.
+
+        :param fallbackAnalyzer: Used if the object knows no template to extract an analyzer from.
+        :param fallbackUnit: Used if the object knows no template to extract a unit from.
+        :param fallbackParams: Used if the object knows no template to extract analyzer parameters from.
+        :return: A segment anotated with this templates fieldtype.
+        """
         if isinstance(self.template, FieldTypeMemento):
             analyzer = self.template.recreateAnalyzer(self.message)
         else:
@@ -219,7 +238,7 @@ class RecognizedVariableLengthField(object):
 
 class RecognizedField(RecognizedVariableLengthField):
     """
-    Represents a field recognized by a heuristic method.
+    Represents a field of constant length recognized by a heuristic method.
     """
     def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
                  position: int, confidence: float):
@@ -240,6 +259,10 @@ class RecognizedField(RecognizedVariableLengthField):
 
 
 class FieldTypeRecognizer(object):
+    """
+    Class containing persisted FieldTypeMementos to search for.
+    Provides the method #recognizedFields to find the most confident matches with the known field types to be recognized.
+    """
 
     # TODO make extensible by moving to a ValueFieldTypeRecognizer subclass and making this class abstract.
     # from commit 475d179
@@ -320,7 +343,7 @@ class FieldTypeRecognizer(object):
 
     def charsInMessage(self) -> List[RecognizedField]:
         """
-        Mark recognized char sequences
+        Mark recognized char sequences.
 
         :return: list of recognized char sequences with the constant confidence of 0.2
         """
@@ -368,8 +391,9 @@ class FieldTypeRecognizer(object):
     def flagsInMessage(self) -> List[RecognizedField]:
         """
         Mark probable flag byte pairs.
+        Recognizes probable flag bytes by not exceeding the number of 2 bits set per byte.
 
-        :return: list of recog nized flag sequences with the constant confidence of 0.2
+        :return: list of recognized flag sequences with the constant confidence of 3.0
         """
         confidence = 3.0
         offset = 0
@@ -424,6 +448,10 @@ class FieldTypeRecognizer(object):
 
 
 class FieldTypeQuery(object):
+    """
+    Class to encapsulate the retrieving of recognized field types for single positions in messages and whole messages.
+    Moreover, statistics about the matching quality can be generated from here.
+    """
 
     def __init__(self, ftRecognizer: FieldTypeRecognizer):
         self.message = ftRecognizer.message
@@ -440,6 +468,11 @@ class FieldTypeQuery(object):
 
 
     def retrieve4position(self, offset: int) -> List:
+        """
+        Retrieve all template matches for a specific byte position in the message referenced by this object.
+        :param offset: The byte position in the message.
+        :return: List of template matches sorted by their confidence.
+        """
         templateMatches = sorted(self._posTemplMap[offset], key=lambda x: x.confidence) \
             if offset in self._posTemplMap else []
         return templateMatches
@@ -454,6 +487,11 @@ class FieldTypeQuery(object):
 
 
     def resolveConflicting(self):
+        """
+        Resolve conflicting recognitions by selecting the most confident match from the set of recognizable field types.
+
+        :return: List of recognized fields sorted by their position in the message.
+        """
         nonConflicting = list()
         mostConfident = self.mostConfident()
         while len(mostConfident) > 0:

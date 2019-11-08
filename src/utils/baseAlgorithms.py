@@ -104,7 +104,7 @@ def autoconfigureDBSCAN(neighbors: List[List[Tuple[int, float]]]):
 
 def ecdf(data: List, evenlySpaced: bool = True):
     """
-    Emperical Cumulative Distribution Function (ECDF)
+    Empirical Cumulative Distribution Function (ECDF)
     from https://www.codementor.io/kripanshubharga/calculate-ecdf-in-python-gycltzxi3
 
     :param data: The data for which to calculate the ECDF.

@@ -1,9 +1,6 @@
 """
-Use groundtruth about field segmentation by dissectors and apply field type identification to them.
-
-Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
-These segments get analyzed by the "value" analysis method which is used as feature to determine their similarity.
-Real field types are separated using ground truth and the quality of this separation is visualized.
+Identify the number of relevant offsets to consider for dissimilarity calculation of mixed-length segment pairs.
+Generates the segments to evaluate this calculation optimization from groundtruth obtained from dissectors.
 """
 
 import argparse, IPython
@@ -167,13 +164,15 @@ if __name__ == '__main__':
         else:
             print("No mixed-length segment pairs.")
 
-
-    mmp = MultiMessagePlotter(comparator.specimens, "offset2distance", len(stats2plot))
-    mmp.scatterInEachAx(([s2p[1] for s2p in stats2plot]), marker="o") # means
-    mmp.scatterInEachAx(([s2p[2] for s2p in stats2plot]), marker="v")  # mins
-    mmp.scatterInEachAx(([s2p[3] for s2p in stats2plot]), marker="^")  # maxs
-    mmp.nameEachAx([s2p[0] for s2p in stats2plot]) # labels
-    mmp.writeOrShowFigure()
+    if len(stats2plot) > 0:
+        mmp = MultiMessagePlotter(comparator.specimens, "offset2distance", len(stats2plot))
+        mmp.scatterInEachAx(([s2p[1] for s2p in stats2plot]), marker="o") # means
+        mmp.scatterInEachAx(([s2p[2] for s2p in stats2plot]), marker="v")  # mins
+        mmp.scatterInEachAx(([s2p[3] for s2p in stats2plot]), marker="^")  # maxs
+        mmp.nameEachAx([s2p[0] for s2p in stats2plot]) # labels
+        mmp.writeOrShowFigure()
+    else:
+        print("Nothing interesting to plot.")
     # TODO reintegrage statistics from across field types
     # IPython.embed()
 
