@@ -197,26 +197,44 @@ class MessageComparator(object):
         return distinctFormats
 
 
-    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int]=None, mark: Union[Tuple[int,int], MessageSegment]=None):
+    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int]=None,
+                           mark: Union[Tuple[int,int], MessageSegment]=None,
+                           messageSlice: Tuple[Union[int,None],Union[int,None]]=None):
+        """
+
+        :param message: The message from which to print the byte hex values. Also used to look up the
+            true field boundaries to mark by spaces between in the printed byte hex values.
+        :param inferredFieldEnds: The field ends that should be visualized by color changes.
+        :param mark: Start and end indices of a range to mark by underlining.
+        :param messageSlice: Tuple used as parameters of the slice builtin to select a subset of all messages to print.
+            Use None to create an open slice (up to the beginnin or end of the message).
+        :return:
+        """
         import visualization.bcolors as bc
 
         l2msg = self.messages[message]
         tformat = self.dissections[l2msg]
         tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
-
         msglen = len(message.data)
+        absSlice = (
+            messageSlice[0] if messageSlice is not None and messageSlice[0] is not None else 0,
+            messageSlice[1] if messageSlice is not None and messageSlice[1] is not None else msglen
+        )
+        dataSnip = message.data if messageSlice is None else message.data[slice(*messageSlice)]
+
+
         ife = [0] + sorted(inferredFieldEnds if inferredFieldEnds is not None else self.fieldEndsPerMessage(message))
         ife += [msglen] if ife[-1] < msglen else []
 
         if mark is not None:
             if isinstance(mark, MessageSegment):
                 mark = mark.offset, mark.nextOffset
-            assert mark[0] >= 0
-            assert mark[1] <= msglen
+            assert mark[0] >= absSlice[0], repr(mark) + repr(messageSlice)
+            assert mark[1] <= absSlice[1], repr(mark) + repr(messageSlice)
 
         hexdata = list()  # type: List[str]
         lastcolor = None
-        for po, by in enumerate(message.data):
+        for po, by in enumerate(dataSnip, absSlice[0]):
             # end mark
             if mark is not None and po == mark[1]:
                 hexdata.append(bc.ENDC)
@@ -236,7 +254,7 @@ class MessageComparator(object):
                     # restart mark after color change
                     if mark is not None and mark[0] < po < mark[1]:
                         hexdata.append(bc.UNDERLINE)
-                if po < msglen:
+                if po < absSlice[1]:
                     lastcolor = po
                     hexdata.append(bc.eightBitColor(po % 231 + 1))
 
