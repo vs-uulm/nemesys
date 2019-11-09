@@ -1,0 +1,1 @@
+/home/stephan/Dokumente/git.lab-vs/REUP/nemesys-reports/NEMETYL/4_Message Type Clustering/alignment.sh

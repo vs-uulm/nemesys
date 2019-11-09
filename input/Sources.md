@@ -76,6 +76,17 @@
     * by `python src/prep_deduplicate-trace.py dns_ictf2010.pcap --p [N]`
     * filtered by `!_ws.malformed`
 
+#### new DNS
+
+* filter non-error responses: `(dns.flags.response == 1) && (dns.flags.rcode == 0)`
+* write to `dns_ictf2010-responses.pcap`
+* deduplicate: `python src/prep_deduplicate-trace.py -p 10000 input/hide/dns_ictf2010-responses.pcap`
+* For 100/1000/10000s, each do:
+    * get 66, 666, 6666 packets to merge: `python src/prep_deduplicate-trace.py -p 66  input/dns_ictf2010_deduped-9911-10000.pcap`
+    * merge: `mergecap -w dns_ictf2010-new_1000.pcap hide/dns_ictf2010_deduped-666.pcap hide/dns_ictf2010-responses_deduped.pcap`
+    * truncate: `python src/prep_deduplicate-trace.py -p 1000 input/dns_ictf2010-new_1000.pcap`
+    * rename to: `dns_ictf2010-new-deduped-100.pcap`
+
 
 ## Random
 Validation to find structure: Generated PCAPs with no structure (random byte sequences):
