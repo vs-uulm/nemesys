@@ -17,10 +17,10 @@ import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, HDBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
-    ClusterAutoconfException
+from inference.templates import DBSCANsegmentClusterer, HDBSCANsegmentClusterer, FieldTypeTemplate, Template, \
+    TypedTemplate, FieldTypeContext,  ClusterAutoconfException
 from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements, originalRefinements, \
-    pcaPcaRefinements
+    pcaPcaRefinements, zeroBaseRefinements
 from inference.formatRefinement import RelocatePCA
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -42,13 +42,14 @@ refinementMethods = [
     "original", # WOOT2018 paper
     "base",     # moco+splitfirstseg
     "PCA",      # PCA
-    "PCAmoco"   # PCA+moco
+    "PCAmoco",  # PCA+moco
+    "zero"      # zeroslices+base
     ]
 
 
-kneedleSensitivity=12.0
+# kneedleSensitivity=12.0
 # kneedleSensitivity=100.0
-# kneedleSensitivity=6.0
+kneedleSensitivity=9.0
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
@@ -179,6 +180,12 @@ if __name__ == '__main__':
             refinementCallback=pcaMocoRefinements
             , disableCache=not doCache
         )
+    elif args.refinement == "zero":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=zeroBaseRefinements
+            , disableCache=not doCache
+        )
     else:
         print("Unknown refinement", args.refinement, "\nAborting")
         exit(2)
@@ -191,7 +198,9 @@ if __name__ == '__main__':
     # cluster segments to determine field types on commonality
     try:
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
-        clusterer.eps *= 1.2
+        clusterer.kneelocator.plot_knee() #plot_knee_normalized()
+        plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
+        # clusterer.eps *= 1.15
         # import math
         # clusterer.eps *= 0.5 * 1/(1+math.exp(24*clusterer.eps-6)) + 0.8
     except ClusterAutoconfException as e:
@@ -215,17 +224,17 @@ if __name__ == '__main__':
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # make "enum" cluster TODO
-    cluCopy = list(clusters)
-    enumCluster = list()
-    for clu in cluCopy:
-        if len({seg.bytes for seg in clu}) < clusterer.min_samples:
-            enumCluster.extend(clu)
-            clusters.remove(clu)
-    if len(enumCluster) > 0:
-        clusters.append(enumCluster)
-    # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # make "enum" cluster TODO
+    # cluCopy = list(clusters)
+    # enumCluster = list()
+    # for clu in cluCopy:
+    #     if len({seg.bytes for seg in clu}) < clusterer.min_samples:
+    #         enumCluster.extend(clu)
+    #         clusters.remove(clu)
+    # if len(enumCluster) > 0:
+    #     clusters.append(enumCluster)
+    # # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
@@ -235,16 +244,6 @@ if __name__ == '__main__':
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
         fTypeTemplates.append(ftype)
-        with open(join(reportFolder, "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"), "a") as segfile:
-            segcsv = csv.writer(segfile)
-            segcsv.writerows([
-                [],
-                ["# Cluster", cLabel, "Segments", len(segments)],
-                ["-"*10]*4,
-            ])
-            segcsv.writerows(
-                {(seg.bytes.hex(), seg.bytes) for seg in segments}
-            )
 
         # generate FieldTypeContexts (padded values)
         resolvedSegments = resolveTemplates2Segments(segments)
@@ -356,7 +355,20 @@ if __name__ == '__main__':
     # # field-type-wise cluster quality statistics
     writeIndividualClusterStatistics(ftclusters, groundtruth, runtitle, comparator)
 
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    with open(join(reportFolder, "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"), "a") as segfile:
+        segcsv = csv.writer(segfile)
+        for cLabel, segments in ftclusters.items():
+            segcsv.writerows([
+                [],
+                ["# Cluster", cLabel, "Segments", len(segments)],
+                ["-" * 10] * 4,
+            ])
+            segcsv.writerows(
+                {(seg.bytes.hex(), seg.bytes, typedMatchSegs[seg][1].fieldtype, typedMatchSegs[seg][0])
+                 for seg in segments}
+            )
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots:
@@ -387,7 +399,7 @@ if __name__ == '__main__':
     #     for seg in clu:
     #         markSegNearMatch(seg)
 
-    # # show segmentation of messages.
+    # # # show segmentation of messages.
     # for msgsegs in inferredSegmentedMessages:
     #     comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
 

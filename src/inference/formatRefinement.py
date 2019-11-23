@@ -2047,7 +2047,72 @@ class RelocatePCA(object):
 
 
 
+class BlendZeroSlices(MessageModifier):
+    def __init__(self, segments: List[MessageSegment]):
+        super().__init__(segments)
+        if BlendZeroSlices._debug:
+            self.zeroSegments = list()
 
+
+    def blend(self):
+        from inference.segmentHandler import isExtendedCharSeq
+
+        zeroBounds = list()
+        mdata = self.segments[0].message.data  # type: bytes
+
+        # all transitions from 0 to any and vice versa + message start and end
+        for bi, bv in enumerate(mdata[1:], 1):
+            if bv == 0 and mdata[bi-1] != 0 \
+                    or bv != 0 and mdata[bi-1] == 0:
+                zeroBounds.append(bi)
+        zeroBounds = [0] + zeroBounds + [len(mdata)]
+
+        # remove boundaries of short zero sequences to merge to previous or next non-zero segment
+        minCharLen = 6  # 6
+        zeroBounds = sorted(set(zeroBounds))
+        zBCopy = zeroBounds.copy()
+        for zi, zb in enumerate(zBCopy[:-1]):  # omit message end bound
+            if mdata[zb] == 0:
+                nzb = zBCopy[zi + 1]
+                # ... there are only one or two zeros in a row ...
+                if zb + 2 >= nzb:
+                    # if chars are preceding, add zero to previous
+
+                    if isExtendedCharSeq(mdata[max(0,zb-minCharLen):zb], minLen=minCharLen): # \
+                            # or zb > 0 and MessageAnalyzer.nibblesFromBytes(mdata[zb-1:zb])[1] == 0:  # or the least significant nibble of the preceding byte is zero
+                        zeroBounds.remove(zb)
+                    # otherwise to next
+                    elif zBCopy[zi+1] < len(mdata):
+                        zeroBounds.remove(zBCopy[zi+1])
+
+        if BlendZeroSlices._debug:
+            # generate zero-bounded segments from bounds
+            ms = list()
+            for segStart, segEnd in zip(zeroBounds[:-1], zeroBounds[1:]):
+                ms.append(MessageSegment(self.segments[0].analyzer, segStart, segEnd - segStart))
+            self.zeroSegments.append(ms)
+
+
+        # integrate original inferred bounds with zero segments, zero bounds have precedence
+        combinedMsg = list()  # type: List[MessageSegment]
+        infMarginOffsets = [infs.nextOffset for infs in self.segments
+                            if infs.nextOffset - 1 not in zeroBounds and infs.nextOffset + 1 not in zeroBounds]
+        remZeroBounds = [zb for zb in zeroBounds if zb not in infMarginOffsets]
+        combinedBounds = sorted(infMarginOffsets + remZeroBounds)
+        startEndMap = {(seg.offset, seg.nextOffset) : seg for seg in self.segments}
+        analyzer = self.segments[0].analyzer
+        for bS, bE in zip(combinedBounds[:-1], combinedBounds[1:]):
+            # unchanged
+            if (bS, bE) in startEndMap:
+                combinedMsg.append(startEndMap[(bS, bE)])
+            else:
+                nseg = MessageSegment(analyzer, bS, bE-bS)
+                combinedMsg.append(nseg)
+        # final assertion of complete representation of message by the new segments
+        msgbytes = b"".join([seg.bytes for seg in combinedMsg])
+        assert msgbytes == mdata, "segment sequence does not match message bytes"
+
+        return combinedMsg
 
 
 

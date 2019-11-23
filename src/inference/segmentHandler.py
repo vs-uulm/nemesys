@@ -328,6 +328,15 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     return newstuff
 
 
+def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
+    import inference.formatRefinement as refine
+
+    print("Refine segmentation (zero-slices refinements)...")
+
+    combinedRefinedSegments = [refine.BlendZeroSlices(list(msg)).blend() for msg in segmentsPerMsg]
+    return baseRefinements(combinedRefinedSegments)
+
+
 def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:

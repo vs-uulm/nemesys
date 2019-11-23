@@ -1,10 +1,15 @@
 import argparse
 from os import makedirs
 from os.path import isfile, basename, join, splitext, exists
+from typing import List
 
 import IPython
 
-from inference.segmentHandler import originalRefinements, baseRefinements, pcaPcaRefinements, pcaMocoRefinements
+from inference.segmentHandler import originalRefinements, baseRefinements, pcaPcaRefinements, pcaMocoRefinements, \
+    isExtendedCharSeq, symbolsFromSegments
+from inference.segments import MessageAnalyzer, MessageSegment
+from validation import reportWriter
+from validation.dissectorMatcher import DissectorMatcher
 from utils.evaluationHelpers import analyses, cacheAndLoadDC, annotateFieldTypes, reportFolder
 
 debug = False
@@ -87,31 +92,80 @@ if __name__ == '__main__':
 
     # Experiment: How to slice segments from between zero values.
 
+
     # mSlice = (0,40) # dhcp start
     # mSlice = (220, 1000)  # dhcp middle
     mSlice = (0, 1000)
+    zeroSegments = list()
+    combinedRefinedSegments = list()
     for msgsegs in inferredSegmentedMessages:
-        startZ = 10  # dhcp: 0, 5, 60, 220, 230
+        zeroBounds = list()
         mdata = msgsegs[0].message.data  # type: bytes
-        betweenZeros = [None, None]
-        while startZ < len(mdata):
-            aZero = mdata.find(b"\x00", startZ)
-            if aZero < 0:
-                break  # no zeros found
-            bZero = mdata.find(b"\x00", aZero + 1)
-            if bZero > aZero + 1:  # some non-zeros inbetween
-                betweenZeros = aZero + 1, bZero
-                break
-            startZ += 1
-        if any(bz is None for bz in betweenZeros):
-            betweenZeros = None
-        # limit to message slice
-        if betweenZeros is not None and any(mSlice[0] > bz or bz > mSlice[1] for bz in betweenZeros):
-            betweenZeros = None
-        # compare zeros-slicing to nemesys segments:
-        comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs],
-                                      mark=betweenZeros, messageSlice=mSlice)
 
+        # all transitions from 0 to any and vice versa + message start and end
+        for bi, bv in enumerate(mdata[1:], 1):
+            if bv == 0 and mdata[bi-1] != 0 \
+                    or bv != 0 and mdata[bi-1] == 0:
+                zeroBounds.append(bi)
+        zeroBounds = [0] + zeroBounds + [len(mdata)]
+
+        # remove boundaries of short zero sequences to merge to previous or next non-zero segment
+        minCharLen = 6  # 6
+        zeroBounds = sorted(set(zeroBounds))
+        zBCopy = zeroBounds.copy()
+        for zi, zb in enumerate(zBCopy[:-1]):  # omit message end bound
+            if mdata[zb] == 0:
+                nzb = zBCopy[zi + 1]
+                # ... there are only one or two zeros in a row ...
+                if zb + 2 >= nzb:
+                    # if chars are preceding, add zero to previous
+                    if isExtendedCharSeq(mdata[max(0,zb-minCharLen):zb], minLen=minCharLen): # \
+                            # or zb > 0 and MessageAnalyzer.nibblesFromBytes(mdata[zb-1:zb])[1] == 0:  # or the least significant nibble of the preceding byte is zero
+                        zeroBounds.remove(zb)
+                    # otherwise to next
+                    elif zBCopy[zi+1] < len(mdata):
+                        zeroBounds.remove(zBCopy[zi+1])
+
+        # generate zero-bounded segments from bounds
+        ms = list()
+        for segStart, segEnd in zip(zeroBounds[:-1], zeroBounds[1:]):
+            ms.append(MessageSegment(msgsegs[0].analyzer, segStart, segEnd - segStart))
+        zeroSegments.append(ms)
+
+
+        # integrate original inferred bounds with zero segments, zero bounds have precedence
+        combinedMsg = list()  # type: List[MessageSegment]
+        infMarginOffsets = [infs.nextOffset for infs in msgsegs
+                            if infs.nextOffset - 1 not in zeroBounds and infs.nextOffset + 1 not in zeroBounds]
+        remZeroBounds = [zb for zb in zeroBounds if zb not in infMarginOffsets]
+        combinedBounds = sorted(infMarginOffsets + remZeroBounds)
+        startEndMap = {(seg.offset, seg.nextOffset) : seg for seg in msgsegs}
+        analyzer = msgsegs[0].analyzer
+        for bS, bE in zip(combinedBounds[:-1], combinedBounds[1:]):
+            # unchanged
+            if (bS, bE) in startEndMap:
+                combinedMsg.append(startEndMap[(bS, bE)])
+            else:
+                nseg = MessageSegment(analyzer, bS, bE-bS)
+                combinedMsg.append(nseg)
+        # final assertion of complete representation of message by the new segments
+        msgbytes = b"".join([seg.bytes for seg in combinedMsg])
+        assert msgbytes == mdata, "segment sequence does not match message bytes"
+        combinedRefinedSegments.append(combinedMsg)
+
+        # # compare zeros-slicing to nemesys segments:
+        # comparator.pprint2Interleaved(msgsegs[0].message,
+        #                               # combinedBounds,
+        #                               [infs.nextOffset for infs in baseCombinedRefSegs[-1]],
+        #                               # mark=betweenZeros,
+        #                               messageSlice=mSlice)
+
+    baseCombinedRefSegs = baseRefinements(combinedRefinedSegments)
+
+    for msgsegs in baseCombinedRefSegs:
+        comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
+
+    #
     # if its a single zero: add to previous slice if (n bytes) before are chars (extended definition),
     #   otherwise add to subsequent segment.
 
@@ -121,6 +175,19 @@ if __name__ == '__main__':
 
     # then refine by PCA, ...
 
+
+
+    # write FMS
+    symbols = symbolsFromSegments(baseCombinedRefSegs)
+    message2quality = DissectorMatcher.symbolListFMS(comparator, symbols)
+    exactcount, offbyonecount, offbymorecount = reportWriter.countMatches(message2quality.values())
+    minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
+    print("\nFormat Match Scores", specimens.pcapFileName)
+    print("  (min, mean, max): ", *minmeanmax)
+    print("near matches")
+    print("  off-by-one:", offbyonecount)
+    print("  off-by-more:", offbymorecount)
+    print("exact matches:", exactcount)
 
     if args.interactive:
         from tabulate import tabulate
