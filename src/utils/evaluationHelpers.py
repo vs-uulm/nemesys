@@ -241,7 +241,7 @@ def writeIndividualClusterStatistics(
 
 def writeCollectiveClusteringStaticstics(
         clusters: Dict[Hashable, List[Element]], groundtruth: Dict[Element, str],
-        runtitle: str, comparator: MessageComparator):
+        runtitle: str, comparator: MessageComparator, ignoreUnknown=True):
     """
     Precision and recall for the whole clustering interpreted as number of draws from pairs of messages.
 
@@ -258,8 +258,18 @@ def writeCollectiveClusteringStaticstics(
     outfile = ccStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else coStatsFile
     print('Write message cluster statistics to {}...'.format(outfile))
 
+    if ignoreUnknown:
+        unknownKey = "[unknown]"
+        numUnknown = len([gt for gt in groundtruth.values() if gt == unknownKey])
+        clustersTemp = {lab: [ele for ele in clu if groundtruth[ele] != unknownKey] for lab, clu in clusters.items()}
+        clusters = {lab: elist for lab, elist in clustersTemp.items() if len(elist) > 0}
+        groundtruth = {sg: gt for sg,gt in groundtruth.items() if gt != unknownKey}
+    else:
+        numUnknown = "n/a"
+
     noise = []
     noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
+    print("noisekey", noisekey)
     if noisekey is not None:
         noise = clusters[noisekey]
         clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
@@ -292,7 +302,8 @@ def writeCollectiveClusteringStaticstics(
     tpfp = sum(binom(len(c), 2) for c in clusters.values())
     tp = sum(binom(t,2) for c in typeFrequencies for t in c.values())
     tnfn = sum(map(lambda n: n[0] * n[1], combinations(
-        (len(c) for c in chain.from_iterable([clusters.values(), [noise]])), 2)))
+        (len(c) for c in chain.from_iterable([clusters.values(), [noise]])), 2))) + \
+           sum(binom(noiseTypes[typeName],2) for typeName, typeTotal in noiseTypes.items())
     # import IPython; IPython.embed()
     # fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
     #           for typeCluster in typeFrequencies + [noiseTypes]
@@ -301,10 +312,12 @@ def writeCollectiveClusteringStaticstics(
     # # noise handling: consider all elements in noise as false negatives
     fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
               for typeCluster in typeFrequencies
-              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster)) + \
-         sum((typeTotal * noiseTypes[typeName]
-              for typeName, typeTotal in numTypesOverall.items() if typeName in noiseTypes)) \
-         //2
+              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2 + \
+         sum((binom(noiseTypes[typeName],2) +
+              (
+                      (typeTotal - noiseTypes[typeName]) * noiseTypes[typeName]
+              )//2
+              for typeName, typeTotal in numTypesOverall.items() if typeName in noiseTypes))
 
 
     # precision = tp / (tp + fp)
@@ -312,8 +325,8 @@ def writeCollectiveClusteringStaticstics(
     recall = tp / (tp + fn)
 
     head = [ 'run_title', 'trace', 'true positives', 'false positives', 'false negatives', 'true negatives',
-             'precision', 'recall', 'noise']
-    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn, precision, recall, len(noise) ]
+             'precision', 'recall', 'noise', 'unknown']
+    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn, precision, recall, len(noise), numUnknown ]
 
     csvWriteHead = False if os.path.exists(outfile) else True
     with open(outfile, 'a') as csvfile:
