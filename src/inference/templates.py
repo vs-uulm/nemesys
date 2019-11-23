@@ -3,6 +3,7 @@ import numpy, scipy.spatial, itertools
 from pandas import DataFrame
 from collections import Counter
 from abc import ABC, abstractmethod
+from kneed import KneeLocator
 
 from inference.fieldTypes import FieldTypeMemento
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -880,7 +881,7 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
-        import concurrent.futures
+        parallelDistanceCalc = False
 
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
@@ -889,25 +890,28 @@ class DistanceCalculator(object):
 
         distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
-        # for outerlen in rslens:
-        #     distance.extend(self._outerloop(lenGrps, outerlen, rslens))
-        #
+
+        if not parallelDistanceCalc:
+            for outerlen in rslens:
+                distance.extend(self._outerloop(lenGrps, outerlen, rslens))
+
         #     profiler = cProfile.Profile()
         #     int_start = time.time()
         #     stats = profiler.runctx('self._outerloop(lenGrps, outerlen, distance, rslens)', globals(), locals())
         #     int_runtime = time.time() - int_start
         #     profiler.dump_stats("embdedAndCalcDistances-{:02.1f}-{}-i{:03d}.profile".format(
         #         int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:   # Process # Thread
-            futureDis = dict()
-            for outerlen in rslens:
-                futureDis[executor.submit(self._outerloop, lenGrps, outerlen, rslens)] = outerlen
-            futureRes = dict()
-            for future in concurrent.futures.as_completed(futureDis.keys()):
-                futureRes[futureDis[future]] = future.result()
-            for ol in rslens:
-                distance.extend(futureRes[ol])
+        else:
+            import concurrent.futures
+            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:   # Process # Thread
+                futureDis = dict()
+                for outerlen in rslens:
+                    futureDis[executor.submit(self._outerloop, lenGrps, outerlen, rslens)] = outerlen
+                futureRes = dict()
+                for future in concurrent.futures.as_completed(futureDis.keys()):
+                    futureRes[futureDis[future]] = future.result()
+                for ol in rslens:
+                    distance.extend(futureRes[ol])
 
         runtime = time.time() - pit_start
         print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(len(distance), runtime))
@@ -2112,6 +2116,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         self.S = kwargs["S"] if "S" in kwargs else 0.8
         if len(kwargs) == 0 or len(kwargs) == 1 and "S" in kwargs:
+            self.kneelocator = None  # type: KneeLocator
             self.min_samples, self.eps = self._autoconfigure()
         else:
             if not 'eps' in kwargs or not 'min_samples' in kwargs:
@@ -2202,7 +2207,6 @@ class DBSCANsegmentClusterer(AbstractClusterer):
             # # round(minpts + 0.5 * (self.distances.shape[0] - 1 - min_samples))
 
         # # knee by Kneedle alogithm: https://ieeexplore.ieee.org/document/5961514
-        from kneed import KneeLocator
         kneel = KneeLocator(range(len(neighdists)), neighdists, curve='convex', direction='increasing')
         kneeX = kneel.knee
 
@@ -2264,15 +2268,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         except ValueError as e:
             raise ClusterAutoconfException("No knee could be found.")  # Original exception was:\n" + repr(e))
         epsilon = kneel.knee  #  * 0.8 use KneeLocator's parameter "S" instead of a factor here.
-
-        # import IPython
-        # IPython.embed()
-        if plot:
-            import matplotlib.pyplot as plt
-            kneel.plot_knee_normalized()
-            # TODO write plot to file
-            # self.distanceCalculator
-            # plt.savefig()
+        self.kneelocator = kneel
 
         print("eps {:0.3f} autoconfigured (Kneedle on ECDF with S {}) from k {}".format(epsilon, self.S, k))
         return min_samples, epsilon
