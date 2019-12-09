@@ -111,6 +111,7 @@ class DistancesPlotter(MessagePlotter):
                           key=lambda l: -1 if l == "Noise" else int(l))
         else:
             ulab = sorted(allabels)
+        # import IPython; IPython.embed()
 
         # subsample if segment count is larger than maxSamples
         maxSamples = 1000
@@ -161,7 +162,7 @@ class DistancesPlotter(MessagePlotter):
             axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
 
         # omit noise in cluster labels if types are plotted anyway.
-        if isinstance(segments[0], (TypedSegment, TypedTemplate)):
+        if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
             for l in ulab:
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)

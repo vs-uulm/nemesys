@@ -457,7 +457,7 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
     return simtrx
 
 
-def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
+def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str, singularTemplates=True) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
@@ -484,16 +484,18 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
         ]
     """
     from math import log
+    from collections import Counter
     from .templates import Template
     print("Clustering segments...")
     noise, *clusters = clusterer.clusterSimilarSegments(False)
 
-    # extract "large" templates from noise that should rather be its own cluster
-    for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
-        freqThresh = log(len(clusterer.segments))
-        if isinstance(seg, Template):
-            if len(seg.baseSegments) > freqThresh:
-                clusters.append([noise.pop(idx)])  # .baseSegments
+    if singularTemplates:
+        # extract "large" templates from noise that should rather be its own cluster
+        for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
+            freqThresh = log(len(clusterer.segments))
+            if isinstance(seg, Template):
+                if len(seg.baseSegments) > freqThresh:
+                    clusters.append([noise.pop(idx)])  # .baseSegments
 
     print("{} clusters generated from {} segments".format(len(clusters), len(clusterer.segments)))
 
@@ -520,9 +522,11 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
             outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
         segLengths.update(clusterSegLengths)
 
-        segmentGroups = ('{} ({} bytes), Cluster #{}: {} Seg.s ($d_{{max}}$={:.3f})'.format(
+        mostFrequentTypes = sorted(((ftype, len(tsegs)) for ftype, tsegs in typegroups.items()), key=lambda x: -x[1])
+
+        segmentGroups = ('{} ({} bytes), Cluster #{} ({:.2f} {}): {} Seg.s ($d_{{max}}$={:.3f})'.format(
             analysisTitle, " ".join(outputLengths),
-            cnum, len(segs), clusterDists.max()), list())
+            cnum, mostFrequentTypes[0][1]/sum(s for t, s in mostFrequentTypes), mostFrequentTypes[0][0], len(segs), clusterDists.max()), list())
         for ftype, tsegs in typegroups.items():  # [label, segment]
             segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
         segmentClusters.append(segmentGroups)

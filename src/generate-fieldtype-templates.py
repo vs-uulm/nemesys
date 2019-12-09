@@ -1,5 +1,5 @@
 """
-NEMEFTR mode 1:
+NEMEFTR-full mode 2, step 1:
 Generate FieldTypeTemplates representing data types.
 For segmentation, it uses ground truth about field borders and field data types.
 
@@ -17,7 +17,7 @@ from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCa
 from inference.fieldTypes import FieldTypeMemento
 from inference.segments import TypedSegment, HelperSegment
 from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
+from inference.segmentHandler import groupByLength, segments2types, \
     filterSegments
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
@@ -75,6 +75,7 @@ def segments2typedClusters(segments: List[TypedSegment], withPlots=True) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments and arrange them into groups of types.
+    The autodetected eps is increased by factor 2.0 to add some margin.
 
     On the way, plot distances of segments and clusters in a 2-dimensional projection.
 

@@ -12,7 +12,7 @@ from math import ceil, floor
 from inference.templates import DistanceCalculator
 from inference.segments import TypedSegment
 from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
+from inference.segmentHandler import groupByLength, segments2types, \
     filterSegments
 from utils.evaluationHelpers import annotateFieldTypes
 from validation.dissectorMatcher import MessageComparator

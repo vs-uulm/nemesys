@@ -30,7 +30,7 @@ from visualization.distancesPlotter import DistancesPlotter
 
 from characterize_fieldtypes import analyses, labelForSegment
 from utils.evaluationHelpers import plotMultiSegmentLines, sigmapertrace
-from inference.segmentHandler import segments2clusteredTypes, filterSegments, symbolsFromSegments
+from inference.segmentHandler import filterSegments, symbolsFromSegments
 
 
 

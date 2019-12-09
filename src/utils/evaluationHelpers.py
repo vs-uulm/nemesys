@@ -2,7 +2,7 @@
 Module encapsulating evaluation parameters and helper functions to validate aspects of the
 NEMESYS and NEMETYL approaches.
 """
-from typing import Union, Tuple, List, TypeVar, Hashable, Sequence, Callable
+from typing import Union, Tuple, List, TypeVar, Hashable, Sequence, Callable, Iterable
 from netzob.all import RawMessage
 from itertools import chain
 import os, csv, pickle, time
@@ -13,9 +13,7 @@ from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
     refinements, charRefinements, segmentsFixed, pcaMocoRefinements
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
-from inference.templates import DistanceCalculator, DelegatingDC
-
-
+from inference.templates import DistanceCalculator, DelegatingDC, Template
 
 Element = TypeVar('Element')
 
@@ -144,6 +142,8 @@ scStatsFile = os.path.join(reportFolder, 'segment-cluster-statistics.csv')
 coStatsFile = os.path.join(reportFolder, 'segment-collective-cluster-statistics.csv')
 
 
+unknown = "[unknown]"
+
 
 def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
                        unit=MessageAnalyzer.U_BYTE) -> List[Tuple[TypedSegment]]:
@@ -259,11 +259,11 @@ def writeCollectiveClusteringStaticstics(
     print('Write message cluster statistics to {}...'.format(outfile))
 
     if ignoreUnknown:
-        unknownKey = "[unknown]"
-        numUnknown = len([gt for gt in groundtruth.values() if gt == unknownKey])
-        clustersTemp = {lab: [ele for ele in clu if groundtruth[ele] != unknownKey] for lab, clu in clusters.items()}
+        unknownKeys = ["[unknown]", "[mixed]"]
+        numUnknown = len([gt for gt in groundtruth.values() if gt in unknownKeys])
+        clustersTemp = {lab: [ele for ele in clu if groundtruth[ele] not in unknownKeys] for lab, clu in clusters.items()}
         clusters = {lab: elist for lab, elist in clustersTemp.items() if len(elist) > 0}
-        groundtruth = {sg: gt for sg,gt in groundtruth.items() if gt != unknownKey}
+        groundtruth = {sg: gt for sg,gt in groundtruth.items() if gt not in unknownKeys}
     else:
         numUnknown = "n/a"
 
@@ -683,5 +683,21 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         segmentationTime, dist_calc_segmentsTime = None, None
 
     return specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime
+
+
+def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
+    """
+    Resolve a (mixed) list of segments and templates into a list of single segments.
+    :param segments: (mixed) list of segments and templates
+    :return: list of single segments with all given segments and the base segments of the templates.
+    """
+    resolvedSegments = list()
+    for seg in segments:
+        if isinstance(seg, Template):
+            resolvedSegments.extend(seg.baseSegments)
+        else:
+            resolvedSegments.append(seg)
+    return resolvedSegments
+
 
 

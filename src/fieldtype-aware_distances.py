@@ -13,14 +13,14 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
-from os.path import isfile, basename, splitext
+from os.path import isfile, basename, splitext, join
 from itertools import chain
 from matplotlib import pyplot as plt
 import numpy
 
 from utils.baseAlgorithms import tril
 from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, labelForSegment, \
-    plotMultiSegmentLines
+    plotMultiSegmentLines, writeCollectiveClusteringStaticstics, resolveTemplates2Segments
 from inference.templates import TemplateGenerator, DistanceCalculator, DelegatingDC, DBSCANsegmentClusterer
 from inference.segments import TypedSegment
 
@@ -40,6 +40,11 @@ analysisTitle = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 
+reportFolder = "reports"
+
+kneedleSensitivity=9.0
+# kneedleSensitivity=6.0
+
 # for evaluation
 besteps = {
     "dhcp_SMIA2011101X_deduped-100.pcap": 0.188,
@@ -58,7 +63,7 @@ besteps = {
 
 
 # epsfactors = (1, 1.4, 1.6, 2)
-epsfactors = (1, 0.9, 1.1)
+epsfactors = (1.2, 1.4)
 
 
 if __name__ == '__main__':
@@ -79,6 +84,8 @@ if __name__ == '__main__':
     analysisArgs = None
 
     pcapbasename = basename(args.pcapfilename)
+    trace = splitext(pcapbasename)[0]
+    # reportFolder = join(reportFolder, trace)
     print("Trace:", pcapbasename)
 
     # dissect and label messages
@@ -101,15 +108,15 @@ if __name__ == '__main__':
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
     # use DBSCAN
-    clusterer = DBSCANsegmentClusterer(dc)
+    clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
     titleFormat = "{} ({}-{})".format(
         distance_method, dc.thresholdFunction.__name__,
         "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
 
     # TODO hier gehts weiter
-    clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename))
-                                      # besteps[pcapbasename]) # clusterer.eps)
+    # clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename))
+    #                                   # besteps[pcapbasename]) # clusterer.eps)
 
     # Histogram of all the distances between the segments
     hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
@@ -117,19 +124,19 @@ if __name__ == '__main__':
     knn = [dc.neigbors(seg)[0][1] for seg in dc.segments]
     # print(knn)
     hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
-    plt.axvline(besteps[pcapbasename], label=besteps[pcapbasename], color="darkmagenta")
-    plt.axvline(besteps[pcapbasename]/2, label=besteps[pcapbasename]/2, color="orchid", linestyle="dotted")
+    if pcapbasename in besteps:
+        plt.axvline(besteps[pcapbasename], label=besteps[pcapbasename], color="orchid", linestyle="dotted")
+    plt.axvline(clusterer.eps, label="{:.3f}".format(clusterer.eps), color="darkmagenta")
     hstplt.writeOrShowFigure()
     plt.clf()
-
-    # TODO hier gehts weiter
-    # exit()
 
     # vary epsilon
     autoeps = clusterer.eps
     for epsfactor in epsfactors if args.epsfactor else (1,):
         clusterer.eps = epsfactor * autoeps
-        segmentGroups = segments2clusteredTypes(clusterer, analysisTitle)
+        segmentGroups = segments2clusteredTypes(clusterer, analysisTitle, False)
+        clusterer.kneelocator.plot_knee() #plot_knee_normalized()
+        plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
 
         # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
         labels = numpy.array([
@@ -152,7 +159,22 @@ if __name__ == '__main__':
             plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
                                   True, typeDict, False)
 
+        # ftclusters = {label: resolveTemplates2Segments(e for t, e in elements)
+        #               for label, elements in segmentGroups[0][1]}
+        ftclusters = {label: [e for t, e in elements]
+                      for label, elements in segmentGroups[0][1]}
+        noisekeys = [ftk for ftk in ftclusters.keys() if ftk.find("Noise") >= 0]
+        if len(noisekeys) > 0:
+            ftclusters["Noise"] = ftclusters[noisekeys[0]]
+        del ftclusters[noisekeys[0]]
+        groundtruth = {seg: seg.fieldtype
+                       for l, segs in ftclusters.items() for seg in segs}
 
+        # ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeContext}
+        # ftclusters["Noise"] = resolveTemplates2Segments(noise)
+        # groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+        #                for rawSeg, typSeg in typedMatchSegs.items()}
+        writeCollectiveClusteringStaticstics(ftclusters, groundtruth, titleFormat, comparator)
 
     if args.interactive:
         IPython.embed()

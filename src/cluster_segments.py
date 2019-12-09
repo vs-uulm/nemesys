@@ -1,5 +1,5 @@
 """
-NEMEFTR mode 3:
+NEMEFTR-full mode 1:
 Clustering of segments on similarity without ground truth.
 Segments are created from messages by NEMESYS and clustered with DBSCANsegmentClusterer
 and refined by the method selected at the command line (-r).
@@ -7,27 +7,15 @@ Generates segment-dissimilarity topology plots of the clustering result.
 """
 
 import argparse, IPython
-import numpy
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
-from math import log
-from typing import Union, Any
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import matplotlib.colors as colors
-from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, HDBSCANsegmentClusterer, FieldTypeTemplate, Template, \
-    TypedTemplate, FieldTypeContext,  ClusterAutoconfException
-from inference.segmentHandler import baseRefinements, pcaRefinements, pcaMocoRefinements, originalRefinements, \
+from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, TypedTemplate, FieldTypeContext,  ClusterAutoconfException
+from inference.segmentHandler import baseRefinements, originalRefinements, \
     pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA
-from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
-from visualization.simplePrint import *
 from utils.evaluationHelpers import *
-from validation.dissectorMatcher import FormatMatchScore
-
 
 debug = False
 
@@ -50,6 +38,8 @@ refinementMethods = [
 # kneedleSensitivity=12.0
 # kneedleSensitivity=100.0
 kneedleSensitivity=9.0
+
+
 
 
 def markSegNearMatch(segment: Union[MessageSegment, Template]):
@@ -108,21 +98,6 @@ def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
 
 def inferredFEs4segment(segment: MessageSegment) -> List[int]:
     return [infs.nextOffset for infs in inferred4segment(segment)]
-
-def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
-    """
-    Resolve a (mixed) list of segments and templates into a list of single segments.
-    :param segments: (mixed) list of segments and templates
-    :return: list of single segments with all given segments and the base segments of the templates.
-    """
-    resolvedSegments = list()
-    for seg in segments:
-        if isinstance(seg, Template):
-            resolvedSegments.extend(seg.baseSegments)
-        else:
-            resolvedSegments.append(seg)
-    return resolvedSegments
-
 
 
 if __name__ == '__main__':
@@ -278,15 +253,13 @@ if __name__ == '__main__':
 
 
 
-    # TODO create typed segments/templates per cluster to get the inferred assignment
-
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # TODO mark (at least) exact segment matches with the true data type
-    #  currently marks only very few segments. Improve boundaries first!
+    # mark segment matches with > 50% overlap with the prevalent true data type for the nearest boundaries.
     # list of tuples of overlap ratio ("intensity of match") and segment
     typedMatchSegs = dict()  # type: Dict[Union[Template, MessageSegment], Tuple[float, Union[TypedSegment, MessageSegment]]]
     typedMatchTemplates = dict()  # type: Dict[Union[Template, MessageSegment], Tuple[float, Union[TypedSegment, TypedTemplate, Template, MessageSegment]]]
     for seg in dc.segments:
+        # create typed segments/templates per cluster to get the inferred assignment
         if isinstance(seg, MessageSegment):
             typedMatchSegs[seg] = comparator.segment2typed(seg)
             typedMatchTemplates[seg] = comparator.segment2typed(seg)
@@ -353,7 +326,7 @@ if __name__ == '__main__':
     writeCollectiveClusteringStaticstics(ftclusters, groundtruth, runtitle, comparator)
 
     # # field-type-wise cluster quality statistics
-    writeIndividualClusterStatistics(ftclusters, groundtruth, runtitle, comparator)
+    clusterStats, conciseness = writeIndividualClusterStatistics(ftclusters, groundtruth, runtitle, comparator)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     with open(join(reportFolder, "segmentclusters-" + splitext(pcapbasename)[0] + ".csv"), "a") as segfile:
@@ -372,15 +345,35 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots:
+        # largest clusters
+        clusterCutoff = 15
+
         print("Plot distances...")
+        atitle = 'distances-'
         if isinstance(clusterer, DBSCANsegmentClusterer):
-            atitle = 'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+             atitle += "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
                 clusterer.eps, int(clusterer.min_samples))
         else:
-            atitle = 'distances-' + "nemesys-segments_HDBSCAN-ms{:d}".format(int(clusterer.min_samples))
+            atitle += "nemesys-segments_HDBSCAN-ms{:d}".format(
+                int(clusterer.min_samples))
+        if clusterCutoff > 0:
+            atitle +="-largest{}clusters".format(clusterCutoff)
         sdp = DistancesPlotter(specimens, atitle, False)
-        clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
-        clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
+
+        clusterStatsLookup = {stats[0]: (stats[4], stats[2], stats[1])  # label, mostFreqentType, precision, recall, numSegsinCuster
+                              for stats in clusterStats if stats is not None}
+        sortedClusters = sorted(fTypeTemplates, key=lambda x: -len(x.baseSegments))
+        if clusterCutoff > 0:
+            selectedClusters = [ftt for ftt in sortedClusters
+                                if clusterStatsLookup[ftt.fieldtype][2] != unknown][:clusterCutoff]
+        else:
+            selectedClusters = sortedClusters
+        omittedClusters = [ftt for ftt in sortedClusters if ftt not in selectedClusters]
+        clustermask = {segid: "{}: {} seg.s ({:.2f} {})".format(ftt.fieldtype, *clusterStatsLookup[ftt.fieldtype])
+            for ftt in selectedClusters for segid in dc.segments2index(ftt.baseSegments)}
+        clustermask.update({segid: "Noise" for segid in dc.segments2index(
+            noise + [bs for ftt in omittedClusters for bs in ftt.baseSegments]
+        )})
         labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
         sdp.plotManifoldDistances(
             [typedMatchTemplates[seg][1] if typedMatchTemplates[seg][0] > 0.5 else seg for seg in dc.segments],
@@ -407,7 +400,6 @@ if __name__ == '__main__':
 
 
     if args.interactive:
-        from tabulate import tabulate
         # globals().update(locals())
         IPython.embed()
 
