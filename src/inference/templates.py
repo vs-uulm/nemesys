@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Iterable, Sequence, Tuple
+from typing import List, Dict, Union, Iterable, Sequence, Tuple, Iterator
 import numpy, scipy.spatial, itertools
 from pandas import DataFrame
 from collections import Counter
@@ -187,7 +187,7 @@ class DistanceCalculator(object):
         # offset of inner segment to outer segment (key: tuple(i, o))
         self._offsets = dict()
         # distance matrix for all rows and columns in order of self._segments
-        self._distances = DistanceCalculator._getDistanceMatrix(self._embdedAndCalcDistances(), len(self._quicksegments))
+        self._distances = type(self)._getDistanceMatrix(self._embdedAndCalcDistances(), len(self._quicksegments))
 
         # prepare lookup for matrix indices
         self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
@@ -486,7 +486,8 @@ class DistanceCalculator(object):
         """
         clusterI = As
         clusterJ = As if Bs is None else Bs
-        simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        # simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        simtrx = MemmapDC.largeFilled((len(clusterI), len(clusterJ)))
 
         transformatorK = dict()  # maps indices i from clusterI to matrix rows k
         for i, seg in enumerate(clusterI):
@@ -678,7 +679,7 @@ class DistanceCalculator(object):
         return segPairs
 
     @staticmethod
-    def _getDistanceMatrix(distances: List[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:
+    def _getDistanceMatrix(distances: Iterable[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:
         # noinspection PyProtectedMember
         """
         Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
@@ -725,8 +726,9 @@ class DistanceCalculator(object):
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from inference.segmentHandler import matrixFromTpairs
-        simtrx = matrixFromTpairs([(ise[0], ise[1], ise[2]) for ise in distances], range(segmentCount),
-                                  incomparable=-1)  # TODO hanlde incomparable values (resolve and replace the negative value)
+        # [(ise[0], ise[1], ise[2]) for ise in distances]
+        simtrx = matrixFromTpairs(distances, range(segmentCount),
+                                  incomparable=-1)  # TODO handle incomparable values (resolve and replace the negative value)
         return simtrx
 
 
@@ -834,7 +836,7 @@ class DistanceCalculator(object):
 
 
     def _embdedAndCalcDistances(self) -> \
-            List[Tuple[int, int, float]]:
+            Iterator[Tuple[int, int, float]]:
         """
         Embed all shorter Segments into all larger ones and use the resulting pairwise distances to generate a
         complete distance list of all combinations of the into segment list regardless of their length.
@@ -881,6 +883,7 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
+        dissCount = 0
         parallelDistanceCalc = False
 
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
@@ -888,12 +891,13 @@ class DistanceCalculator(object):
         import time
         pit_start = time.time()
 
-        distance = list()  # type: List[Tuple[int, int, float]]
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
 
         if not parallelDistanceCalc:
             for outerlen in rslens:
-                distance.extend(self._outerloop(lenGrps, outerlen, rslens))
+                for diss in self._outerloop(lenGrps, outerlen, rslens):
+                    dissCount += 1
+                    yield diss
 
         #     profiler = cProfile.Profile()
         #     int_start = time.time()
@@ -911,11 +915,12 @@ class DistanceCalculator(object):
                 for future in concurrent.futures.as_completed(futureDis.keys()):
                     futureRes[futureDis[future]] = future.result()
                 for ol in rslens:
-                    distance.extend(futureRes[ol])
+                    for diss in futureRes[ol]:
+                        dissCount += 1
+                        yield diss
 
         runtime = time.time() - pit_start
-        print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(len(distance), runtime))
-        return distance
+        print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(dissCount, runtime))
 
 
     def _outerloop(self, lenGrps, outerlen, rslens):
@@ -2743,7 +2748,8 @@ class DelegatingDC(DistanceCalculator):
         """
         clusterI = As
         clusterJ = As if Bs is None else Bs
-        simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        # simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        simtrx = MemmapDC.largeFilled((len(clusterI), len(clusterJ)))
 
         transformatorK = {i: a for i, a in enumerate(self.segments2index(clusterI))}  # maps indices i from clusterI to matrix rows k
         if Bs is not None:
@@ -2793,7 +2799,8 @@ class DelegatingDC(DistanceCalculator):
             transformatorL = transformatorK
         else:
             transformatorL, clusterJ = self.__genTransformator(Bs)
-        simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        # simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        simtrx = MemmapDC.largeFilled((len(clusterI), len(clusterJ)))
 
         for k, i in transformatorK.items():
             for l, j in transformatorL.items():
@@ -2823,6 +2830,86 @@ class DelegatingDC(DistanceCalculator):
                           enumerate(drctSegI)}  # original index -> new index for direct segments
         transformatorK.update(transformatorKrepr)  # maps indices i from clusterI to matrix rows k
         return transformatorK, clusterI
+
+
+
+
+class MemmapDC(DelegatingDC):
+    maxMemMatrix = 5000000
+
+    @staticmethod
+    def _getDistanceMatrix(distances: Iterable[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:
+        # noinspection PyProtectedMember
+        """
+        Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
+        The order of the matrix elements in each row and column is the same as in self._segments.
+
+        Distances for pair not included in the list parameter are considered incomparable and set to -1 in the
+        resulting matrix.
+
+        Used in constructor.
+
+        >>> from tabulate import tabulate
+        >>> from inference.templates import DistanceCalculator
+        >>> testdata =  [(3, 3, 0.0),
+        ...              (0, 3, 0.80835755871765202),
+        ...              (5, 3, 1.0),
+        ...              (1, 3, 0.78816607689353413),
+        ...              (4, 3, 0.57661277498012198),
+        ...              (2, 3, 0.7091107871720117),
+        ...              (0, 5, 1.0),
+        ...              (1, 0, 0.21437499999999998),
+        ...              (1, 5, 1.0),
+        ...              (4, 0, 0.74803614550403941),
+        ...              (4, 5, 1.0),
+        ...              (2, 0, 0.39749999999999996),
+        ...              (2, 5, 1.0),
+        ...              (1, 4, 0.67928228544666891),
+        ...              (2, 1, 0.2974074074074074),
+        ...              (2, 4, 0.70049738841405507),
+        ...              (2, 2, 0.0)]
+        >>> dm = DistanceCalculator._getDistanceMatrix(testdata, 7)
+        >>> print(tabulate(dm))
+        ---------  ---------  ---------  ---------  ---------  --  --
+         0          0.214375   0.3975     0.808358   0.748036   1  -1
+         0.214375   0          0.297407   0.788166   0.679282   1  -1
+         0.3975     0.297407   0          0.709111   0.700497   1  -1
+         0.808358   0.788166   0.709111   0          0.576613   1  -1
+         0.748036   0.679282   0.700497   0.576613   0          1  -1
+         1          1          1          1          1          0  -1
+        -1         -1         -1         -1         -1         -1   0
+        ---------  ---------  ---------  ---------  ---------  --  --
+
+        :param distances: The pairwise similarities to arrange.
+        :return: The distance matrix for the given similarities.
+            -1 for each undefined element, 0 in the diagonal, even if not given in the input.
+        """
+        from tempfile import NamedTemporaryFile
+        from inference.segmentHandler import matrixFromTpairs
+
+        tempfile = NamedTemporaryFile()
+        distancesSwap = numpy.memmap(tempfile.name, dtype=numpy.float16, mode="w+", shape=(segmentCount,segmentCount))
+
+        simtrx = matrixFromTpairs(distances, range(segmentCount),
+                                  incomparable=-1, simtrx=distancesSwap)  # TODO handle incomparable values (resolve and replace the negative value)
+        return simtrx
+
+
+    @staticmethod
+    def largeFilled(shape: Tuple[int,int], filler=1):
+        if shape[0] * shape[1] > MemmapDC.maxMemMatrix:
+            from tempfile import NamedTemporaryFile
+            tempfile = NamedTemporaryFile()
+            simtrx = numpy.memmap(tempfile.name, dtype=numpy.float16, mode="w+", shape=shape)
+            simtrx.fill(filler)
+        elif filler == 1:
+            simtrx = numpy.ones(shape, dtype=numpy.float16)
+        elif filler == 0:
+            simtrx = numpy.zeros(shape, dtype=numpy.float16)
+        else:
+            simtrx = numpy.empty(shape, dtype=numpy.float16)
+            simtrx.fill(filler)
+        return simtrx
 
 
 

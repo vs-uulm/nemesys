@@ -9,7 +9,7 @@ from scipy.special import comb
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
 from inference.segmentHandler import matrixFromTpairs
 from inference.segments import MessageSegment
-from inference.templates import DistanceCalculator
+from inference.templates import DistanceCalculator, MemmapDC
 
 
 class SegmentedMessages(object):
@@ -190,7 +190,8 @@ class SegmentedMessages(object):
         """
         clusterI = As
         clusterJ = As if Bs is None else Bs
-        simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        # simtrx = numpy.ones((len(clusterI), len(clusterJ)))
+        simtrx = MemmapDC.largeFilled((len(clusterI), len(clusterJ)))
 
         transformatorK = dict()  # maps indices i from clusterI to matrix rows k
         for i, seg in enumerate(clusterI):

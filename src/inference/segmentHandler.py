@@ -423,13 +423,15 @@ def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
 
 
 T = TypeVar('T')
-def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T], identity=0, incomparable=1) -> numpy.ndarray:
+def matrixFromTpairs(distances: Iterable[Tuple[T,T,float]], segmentOrder: Sequence[T], identity=0, incomparable=1,
+                     simtrx: numpy.ndarray=None) -> numpy.ndarray:
     """
     Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
     The order of the matrix elements in each row and column is the same as in self._segments.
 
     Used in constructor.
 
+    :param simtrx: provide a ndarray object to use as matrix to fill instead of creating a new one.
     :param distances: The pairwise similarities to arrange.
         0. T: segA
         1. T: segB
@@ -441,9 +443,16 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
         1 for each undefined element, 0 in the diagonal, even if not given in the input.
     """
     numsegs = len(segmentOrder)
-    simtrx = numpy.ones((numsegs, numsegs))
-    if incomparable != 1:
+    if simtrx is not None:
+        assert simtrx.shape == (numsegs, numsegs)
+        print("Use provided matrix:", type(simtrx), simtrx.shape, simtrx.dtype)
         simtrx.fill(incomparable)
+    else:
+        # reduce memory footprint by limiting precision to 16 bit float
+        # https://docs.scipy.org/doc/numpy-1.13.0/user/basics.types.html?highlight=float16
+        simtrx = numpy.ones((numsegs, numsegs), dtype=numpy.float16)
+        if incomparable != 1:
+            simtrx.fill(incomparable)
     numpy.fill_diagonal(simtrx, identity)
     # fill matrix with pairwise distances
     for intseg in distances:

@@ -16,7 +16,7 @@ from os.path import isfile
 from inference.analyzers import *
 from inference.segmentHandler import segments2types, filterSegments
 from inference.segments import TypedSegment
-from inference.templates import DistanceCalculator, Template, TemplateGenerator, DelegatingDC
+from inference.templates import DistanceCalculator, Template, TemplateGenerator, DelegatingDC, MemmapDC
 from utils.evaluationHelpers import annotateFieldTypes
 from utils.loader import SpecimenLoader
 from validation.dissectorMatcher import MessageComparator
@@ -61,9 +61,12 @@ if __name__ == '__main__':
     # # all segments
     filteredSegments = list(chain.from_iterable(segmentedMessages))
 
+    print("Calculating dissimilarities...")
     # dc = DistanceCalculator(filteredSegments)
-    dc = DelegatingDC(filteredSegments)
+    # dc = DelegatingDC(filteredSegments)
+    dc = MemmapDC(filteredSegments)
 
+    print("Generate type groups and templates...")
     typegroups = segments2types(filteredSegments)
     typelabels = list(typegroups.keys())
     templates = TemplateGenerator.generateTemplatesForClusters(dc, [typegroups[ft] for ft in typelabels])
@@ -74,10 +77,12 @@ if __name__ == '__main__':
     for l, t in zip(typelabels, templates):
         labels[dc.segments2index([t.medoid])[0]] = l
 
+    print("Plot dissimilarities...")
     sdp = DistancesPlotter(specimens, 'distances-templatecenters', args.interactive)
     sdp.plotSegmentDistances(dc, numpy.array(labels))
     sdp.writeOrShowFigure()
 
+    print("Plot histograms...")
     # import matplotlib.pyplot as plt
     mmp = MultiMessagePlotter(specimens, 'histo-templatecenters', len(templates))
     for figIdx, (typlabl, typlate) in enumerate(zip(typelabels, templates)):
