@@ -493,7 +493,6 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str, si
         ]
     """
     from math import log
-    from collections import Counter
     from .templates import Template
     print("Clustering segments...")
     noise, *clusters = clusterer.clusterSimilarSegments(False)

@@ -13,7 +13,7 @@ from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
     refinements, charRefinements, segmentsFixed, pcaMocoRefinements
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
-from inference.templates import DistanceCalculator, DelegatingDC, Template
+from inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
 
 Element = TypeVar('Element')
 
@@ -250,6 +250,8 @@ def writeCollectiveClusteringStaticstics(
 
     Writes a CSV with tp, fp, fn, tn, pr, rc
         for (a) all clusters and for (b) clusters that have a size of at least 1/40 of the number of samples/messages.
+
+    'total segs' and 'unique segs' are including 'unknown' and 'noise'
     """
     from collections import Counter
     from itertools import combinations, chain
@@ -258,10 +260,15 @@ def writeCollectiveClusteringStaticstics(
     outfile = ccStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else coStatsFile
     print('Write message cluster statistics to {}...'.format(outfile))
 
+    segTotal = sum(
+        sum(len(el.baseSegments) if isinstance(el, Template) else 1 for el in cl)
+        for cl in clusters.values() )
+    segUniqu = sum(len(cl) for cl in clusters.values())
+
     if ignoreUnknown:
         unknownKeys = ["[unknown]", "[mixed]"]
         numUnknown = len([gt for gt in groundtruth.values() if gt in unknownKeys])
-        clustersTemp = {lab: [ele for ele in clu if groundtruth[ele] not in unknownKeys] for lab, clu in clusters.items()}
+        clustersTemp = {lab: [el for el in clu if groundtruth[el] not in unknownKeys] for lab, clu in clusters.items()}
         clusters = {lab: elist for lab, elist in clustersTemp.items() if len(elist) > 0}
         groundtruth = {sg: gt for sg,gt in groundtruth.items() if gt not in unknownKeys}
     else:
@@ -325,8 +332,9 @@ def writeCollectiveClusteringStaticstics(
     recall = tp / (tp + fn)
 
     head = [ 'run_title', 'trace', 'true positives', 'false positives', 'false negatives', 'true negatives',
-             'precision', 'recall', 'noise', 'unknown']
-    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn, precision, recall, len(noise), numUnknown ]
+             'precision', 'recall', 'noise', 'unknown', 'total segs', 'unique segs']
+    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn,
+            precision, recall, len(noise), numUnknown, segTotal, segUniqu ]
 
     csvWriteHead = False if os.path.exists(outfile) else True
     with open(outfile, 'a') as csvfile:
@@ -645,7 +653,10 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
                     # assume the second argument is expected to be a distance calculator
                     chainedSegments = list(chain.from_iterable(segmentedMessages))
                     print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
-                    refinementDC = DelegatingDC(chainedSegments)
+                    if len(chainedSegments)**2 > MemmapDC.maxMemMatrix:
+                        refinementDC = MemmapDC(chainedSegments)
+                    else:
+                        refinementDC = DelegatingDC(chainedSegments)
                     segmentedMessages = refinementCallback(segmentedMessages, refinementDC)
                 else:
                     segmentedMessages = refinementCallback(segmentedMessages)
@@ -666,7 +677,10 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
         dist_calc_segmentsTime = time.time()
-        dc = DelegatingDC(chainedSegments)
+        if len(chainedSegments) ** 2 > MemmapDC.maxMemMatrix:
+            dc = MemmapDC(chainedSegments)
+        else:
+            dc = DelegatingDC(chainedSegments)
         dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
         with open(dccachefn, 'wb') as f:
             pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)

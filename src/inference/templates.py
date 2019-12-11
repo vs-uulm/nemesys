@@ -1,18 +1,25 @@
 from typing import List, Dict, Union, Iterable, Sequence, Tuple, Iterator
-import numpy, scipy.spatial, itertools
-from pandas import DataFrame
-from collections import Counter
 from abc import ABC, abstractmethod
+from os import cpu_count
+from collections import Counter
+from pandas import DataFrame
 from kneed import KneeLocator
+import numpy, scipy.spatial, itertools
 
 from inference.fieldTypes import FieldTypeMemento
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
-
 from inference.analyzers import MessageAnalyzer, Value
 from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment, HelperSegment, TypedSegment
 
 
 debug = False
+
+parallelDistanceCalc = False
+"""
+activate parallel/multi-processor calculation of dissimilarities 
+in inference.templates.DistanceCalculator#_embdedAndCalcDistances
+"""
+
 
 
 class ClusterAutoconfException(Exception):
@@ -884,8 +891,6 @@ class DistanceCalculator(object):
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
         dissCount = 0
-        parallelDistanceCalc = False
-
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
         import time
@@ -907,7 +912,7 @@ class DistanceCalculator(object):
         #         int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
         else:
             import concurrent.futures
-            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:   # Process # Thread
+            with concurrent.futures.ProcessPoolExecutor(max_workers=cpu_count()) as executor:   # Process # Thread
                 futureDis = dict()
                 for outerlen in rslens:
                     futureDis[executor.submit(self._outerloop, lenGrps, outerlen, rslens)] = outerlen
@@ -2835,7 +2840,9 @@ class DelegatingDC(DistanceCalculator):
 
 
 class MemmapDC(DelegatingDC):
-    maxMemMatrix = 5000000
+    maxMemMatrix = 1500000
+    if parallelDistanceCalc:
+        maxMemMatrix /= cpu_count()
 
     @staticmethod
     def _getDistanceMatrix(distances: Iterable[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:

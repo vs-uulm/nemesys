@@ -13,22 +13,19 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
+from math import log
 from os.path import isfile, basename, splitext, join
 from itertools import chain
 from matplotlib import pyplot as plt
 import numpy
 
-from utils.baseAlgorithms import tril
-from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, labelForSegment, \
-    plotMultiSegmentLines, writeCollectiveClusteringStaticstics, resolveTemplates2Segments
-from inference.templates import TemplateGenerator, DistanceCalculator, DelegatingDC, DBSCANsegmentClusterer
-from inference.segments import TypedSegment
+from utils.evaluationHelpers import analyses, annotateFieldTypes, labelForSegment, \
+    plotMultiSegmentLines, writeCollectiveClusteringStaticstics
+from inference.templates import DBSCANsegmentClusterer, MemmapDC, DelegatingDC
 
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
-    filterSegments
+from inference.segmentHandler import segments2types, segments2clusteredTypes
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.singlePlotter import SingleMessagePlotter
 
@@ -101,13 +98,17 @@ if __name__ == '__main__':
     segments = [seg for seg in chain.from_iterable(segmentedMessages) if seg.length > 1 and set(seg.values) != {0} ]
 
     print("Calculate distances...")
-    dc = DelegatingDC(segments)
+    if len(segments) ** 2 > MemmapDC.maxMemMatrix:
+        dc = MemmapDC(segments)
+    else:
+        dc = DelegatingDC(segments)
     # dc = DistanceCalculator(segments)
 
     print("Clustering...")
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
     # use DBSCAN
+    kneedleSensitivity += (log(len(dc.segments),10) - 2) * 3
     clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
     titleFormat = "{} ({}-{})".format(
