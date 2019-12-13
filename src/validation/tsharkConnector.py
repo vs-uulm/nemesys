@@ -123,14 +123,19 @@ class TsharkConnector(object):
 
         :return: A JSON string, trimmed and superficially validated.
         """
-        assert self.__tempreader is not None, "Call writePacket() first"
+        assert self.__tempreader is not None and not self.__tempreader.closed, "Call writePacket() first"
 
         import threading
         readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
         readThread.start()
-        readThread.join(10.0)
+        for timeout in range(20):
+            if self.__tsharkqueue.empty():
+                time.sleep(.01)
+            else:
+                break
+        readThread.join(2.0)
 
-        if self.__tsharkqueue.empty():
+        if readThread.is_alive() or self.__tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")
 
         tjson = ""
@@ -161,6 +166,13 @@ class TsharkConnector(object):
 
         :return: A running tshark process, to await packets written to it via :func:`_tsharkWritePacket()`.
         """
+        # if there is a tshark process running...
+        if self.__tshark is not None and self.__tshark.poll() is None \
+            and (self.__tempfile is None or self.__tempreader is None
+                 or self.__tempfile.closed or self.__tempreader.closed):
+                # ... there must also be a open self.__tempfile and self.__tempreader
+                self.terminate(2)
+                # print("Terminated tshark", self.__tshark.poll())
 
         if self.__tshark is None or self.__tshark.poll() is not None:
             self.__version = TsharkConnector.checkTsharkCompatibility()[0]
@@ -168,30 +180,44 @@ class TsharkConnector(object):
             header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, self.__linktype)
 
             # create tempfile
+            # print("create tempfile")
             self.__tempfile = NamedTemporaryFile()
             self.__tempreader = open(self.__tempfile.name, "rb")
             self.__tshark = subprocess.Popen(TsharkConnector.__tsharkline,
                                         stdout=self.__tempfile, stdin=subprocess.PIPE)
             self.__tshark.stdin.write(header)
             time.sleep(.3)
+
+        assert self.__tshark is not None and self.__tshark.poll() is None \
+               and self.__tempfile is not None and self.__tempreader is not None \
+               and not self.__tempfile.closed and not self.__tempreader.closed
+
         return self.__tshark
 
 
-    def terminate(self, wait=None):
+    def terminate(self, wait=2):
         """
         Closes the running tshark process if any.
         Should be called after all messages are parsed and always before the program is closed.
 
         :param wait: Wait for the process with timeout (see Popen.wait)
         """
-        if self.__tshark is None or self.__tshark.poll() is not None:
+        if self.__tshark is not None and self.__tshark.poll() is None:  # poll returns None if tshark running
             self.__tshark.terminate()
             if wait:
                 self.__tshark.wait(wait)
+                if self.__tshark.poll() is None:  # still running
+                    print("kill", self.__tshark.pid)
+                    self.__tshark.kill()
+                    if self.__tshark.poll() is None:  # still running
+                        raise ChildProcessError("tshark process could not be terminated.")
+
         if self.__tempreader:
             self.__tempreader.close()
         if self.__tempfile:
             self.__tempfile.close()
+
+        assert self.__tshark is None or self.__tshark.poll() is not None
 
 
     def isRunning(self):

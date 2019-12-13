@@ -713,7 +713,7 @@ class ParsedMessage(object):
         if not ParsedMessage.__tshark:
             ParsedMessage.__tshark = TsharkConnector(linktype)
         elif ParsedMessage.__tshark.linktype != linktype:
-            ParsedMessage.__tshark.terminate()
+            ParsedMessage.__tshark.terminate(2)
             ParsedMessage.__tshark = TsharkConnector(linktype)
 
 
@@ -732,7 +732,8 @@ class ParsedMessage(object):
                 for m in msgChunk:
                     if not isinstance(m, RawMessage):
                         raise TypeError(
-                            "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. Type of provided message was {} from {}".format(
+                            "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. "
+                            "Type of provided message was {} from {}".format(
                                 m.__class__.__name__, m.__class__.__module__))
                     ParsedMessage.__tshark.writePacket(m.data)
                 if not ParsedMessage.__tshark.isRunning():
@@ -745,7 +746,7 @@ class ParsedMessage(object):
                     ParsedMessage.__tshark.terminate(2)
                     prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
                                                                  failOnUndissectable, linktype))
-
+                    IPython.embed()
                 # parse json
                 try:
                     if tjson is None:
@@ -817,9 +818,9 @@ class ParsedMessage(object):
                         self.protocols = protocolsvalue.split(':')
                         if self.relativeToIP and 'ip' not in self.protocols:
                             errortext = "No IP layer could be identified in a message of the trace."
-                            print(errortext, "\n\nPlease investigate yourself:") # TODO raise Exception
-                            IPython.embed()
-                            raise ValueError(errortext)
+                            # print(errortext, "\n\nPlease investigate yourself:") # TODO raise Exception
+                            # IPython.embed()
+                            raise DissectionTemporaryFailure(errortext)
                         absLayNum = (self.layernumber if self.layernumber >= 0 else len(self.protocols) - 1) \
                             if not self.relativeToIP else (self.protocols.index('ip') + self.layernumber)
                         try:
@@ -1341,7 +1342,7 @@ class ParsedMessage(object):
     @staticmethod
     def closetshark():
         if ParsedMessage.__tshark:
-            ParsedMessage.__tshark.terminate()
+            ParsedMessage.__tshark.terminate(2)
 
 
     ###  #############################################
