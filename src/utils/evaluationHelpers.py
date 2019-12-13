@@ -276,7 +276,7 @@ def writeCollectiveClusteringStaticstics(
 
     noise = []
     noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
-    print("noisekey", noisekey)
+    # print("noisekey", noisekey)
     if noisekey is not None:
         noise = clusters[noisekey]
         clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
@@ -461,6 +461,20 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
     :param seg: The segment to label
     :return: The label of the cluster that the seg is member of
     """
+    if isinstance(seg, Template):
+        inGroup = None
+        for bs in seg.baseSegments:
+            for name, grp in segGrpHier[0][1]:
+                if bs in (s for t, s in grp):
+                    if inGroup is None or inGroup == name:
+                        inGroup = name
+                    else:
+                        return "[mixed]"
+        if inGroup is not None:
+            return inGroup.split(", ", 2)[-1]
+        else:
+            return "[unknown]"
+
     for name, grp in segGrpHier[0][1]:
         if seg in (s for t, s in grp):
             return name.split(", ", 2)[-1]

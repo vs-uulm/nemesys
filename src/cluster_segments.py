@@ -35,9 +35,9 @@ refinementMethods = [
     ]
 
 
-# kneedleSensitivity=12.0
-# kneedleSensitivity=100.0
 kneedleSensitivity=9.0
+# kneedleSensitivity=100.0
+# kneedleSensitivity=9.0
 
 
 
@@ -173,6 +173,8 @@ if __name__ == '__main__':
     # cluster segments to determine field types on commonality
     try:
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
+        # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+
         clusterer.kneelocator.plot_knee() #plot_knee_normalized()
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
         # clusterer.eps *= 1.15
@@ -215,12 +217,12 @@ if __name__ == '__main__':
     fTypeTemplates = list()
     fTypeContext = list()
     for cLabel, segments in enumerate(clusters):
-        # generate FieldTypeTemplates (padded nans)
+        # generate FieldTypeTemplates (padded nans) - Templates as is
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
         fTypeTemplates.append(ftype)
 
-        # generate FieldTypeContexts (padded values)
+        # generate FieldTypeContexts (padded values) - Templates resolved to single Segments
         resolvedSegments = resolveTemplates2Segments(segments)
         fcontext = FieldTypeContext(resolvedSegments)
         fcontext.fieldtype = ftype.fieldtype
@@ -309,12 +311,25 @@ if __name__ == '__main__':
     #         0.9 if not args.sigma else args.sigma
     # else:
     sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-        0.9 if not args.sigma else args.sigma
+        1.2 if not args.sigma else args.sigma
 
-    ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
-    ftclusters["Noise"] = resolveTemplates2Segments(noise)
-    groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
-                   for rawSeg, typSeg in typedMatchSegs.items()}
+    if dc.segments != clusterer.segments:
+        # print("resolve Templates")
+        #
+        # Templates resolved to single Segments
+        ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
+        ftclusters["Noise"] = resolveTemplates2Segments(noise)
+        groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+                       for rawSeg, typSeg in typedMatchSegs.items()}
+    else:
+        # print("keep Templates")
+        #
+        # Templates as is
+        ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeTemplates}
+        ftclusters["Noise"] = noise
+        groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+                       for rawSeg, typSeg in typedMatchTemplates.items()}
+
     if isinstance(clusterer, DBSCANsegmentClusterer):
         runtitle = "{}-{}-{}-S={:.1f}-eps={:.2f}-min_samples={:.2f}".format(
             tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
@@ -323,8 +338,8 @@ if __name__ == '__main__':
         runtitle = "{}-{}-{}-S={:.1f}-min_samples={:.2f}".format(
             tokenizer if tokenizer != "nemesys" else "{}-sigma={:.1f}".format(tokenizer, sigma),
             args.refinement, type(clusterer).__name__, kneedleSensitivity, clusterer.min_samples)
-    writeCollectiveClusteringStaticstics(ftclusters, groundtruth, runtitle, comparator)
 
+    writeCollectiveClusteringStaticstics(ftclusters, groundtruth, runtitle, comparator)
     # # field-type-wise cluster quality statistics
     clusterStats, conciseness = writeIndividualClusterStatistics(ftclusters, groundtruth, runtitle, comparator)
 
@@ -337,10 +352,18 @@ if __name__ == '__main__':
                 ["# Cluster", cLabel, "Segments", len(segments)],
                 ["-" * 10] * 4,
             ])
-            segcsv.writerows(
-                {(seg.bytes.hex(), seg.bytes, typedMatchSegs[seg][1].fieldtype, typedMatchSegs[seg][0])
-                 for seg in segments}
-            )
+            if dc.segments != clusterer.segments:
+                # Templates resolved to single Segments
+                segcsv.writerows({(seg.bytes.hex(), seg.bytes, typedMatchSegs[seg][1].fieldtype, typedMatchSegs[seg][0])
+                                  for seg in segments})
+            else:
+                # Templates as is
+                segcsv.writerows({(seg.bytes.hex(), seg.bytes,
+                                   typedMatchTemplates[seg][1].fieldtype if isinstance(typedMatchTemplates[seg][1],
+                                                                                       (TypedTemplate, TypedSegment))
+                                                                         else "[unknown]",
+                                   typedMatchTemplates[seg][0])
+                                  for seg in segments})
     # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #

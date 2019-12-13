@@ -733,7 +733,6 @@ class DistanceCalculator(object):
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from inference.segmentHandler import matrixFromTpairs
-        # [(ise[0], ise[1], ise[2]) for ise in distances]
         simtrx = matrixFromTpairs(distances, range(segmentCount),
                                   incomparable=-1)  # TODO handle incomparable values (resolve and replace the negative value)
         return simtrx
@@ -2264,7 +2263,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
         k = 0
 
-        neighdists = self._knearestdistance(k)
+        neighdists = self._knearestdistance(k, True)
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         try:
@@ -2438,14 +2437,21 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         return [e[1] for e in neighdistmeans]
 
 
-    def _knearestdistance(self, k: int):
+    def _knearestdistance(self, k: int, onlyUnique=False):
         """
         :param k: neighbor to be selected
+        :param onlyUnique: if set to true, and dc.segments contains Templates that pool some of the self.segments,
+            use the pooled distances only between unique segments,
         :return: The distances of the k-nearest neighbors for all distances of this clusterer instance.
         """
-        if not k < self._distances.shape[0] - 1:
+        if onlyUnique and isinstance(self.distanceCalculator, DelegatingDC):
+            segments = self.distanceCalculator.segments
+        else:
+            segments = self.segments
+
+        if not k < len(segments) - 1:
             raise IndexError("k={} exeeds the number of neighbors.".format(k))
-        neigbordistances = [self._dc.neigbors(seg)[k][1] for seg in self.segments]
+        neigbordistances = [self._dc.neigbors(seg)[k][1] for seg in segments]
         return sorted(neigbordistances)
 
 
@@ -2840,7 +2846,7 @@ class DelegatingDC(DistanceCalculator):
 
 
 class MemmapDC(DelegatingDC):
-    maxMemMatrix = 1500000
+    maxMemMatrix = 750000
     if parallelDistanceCalc:
         maxMemMatrix /= cpu_count()
 
@@ -2892,6 +2898,7 @@ class MemmapDC(DelegatingDC):
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from tempfile import NamedTemporaryFile
+        from sys import getsizeof
         from inference.segmentHandler import matrixFromTpairs
 
         tempfile = NamedTemporaryFile()

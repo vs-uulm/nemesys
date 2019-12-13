@@ -39,8 +39,9 @@ distance_method = 'canberra'
 
 reportFolder = "reports"
 
-kneedleSensitivity=9.0
-# kneedleSensitivity=6.0
+# kneedleSensitivity=9.0
+# kneedleSensitivity=8.0
+kneedleSensitivity=3.0
 
 # for evaluation
 besteps = {
@@ -107,17 +108,15 @@ if __name__ == '__main__':
     print("Clustering...")
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
+
     # use DBSCAN
-    kneedleSensitivity += (log(len(dc.segments),10) - 2) * 3
-    clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+    # kneedleSensitivity += (log(len(dc.segments),10) - 2) * 4  # for larger traces
+    clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
+    # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
     titleFormat = "{} ({}-{})".format(
         distance_method, dc.thresholdFunction.__name__,
         "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
-
-    # TODO hier gehts weiter
-    # clusterer.autoconfigureEvaluation("reports/knn_ecdf_{}_{}.pdf".format(titleFormat, pcapbasename))
-    #                                   # besteps[pcapbasename]) # clusterer.eps)
 
     # Histogram of all the distances between the segments
     hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
@@ -140,9 +139,7 @@ if __name__ == '__main__':
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
 
         # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
-        labels = numpy.array([
-            labelForSegment(segmentGroups, seg) for seg in dc.segments
-        ])
+        labels = numpy.array([labelForSegment(segmentGroups, seg) for seg in dc.segments])
 
         titleFormat = "{} ({}, {}-{})".format(
             segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
@@ -150,7 +147,9 @@ if __name__ == '__main__':
 
         print("Plot distances...")
         sdp = DistancesPlotter(specimens, 'distances-' + titleFormat, False)
-        sdp.plotSegmentDistances(dc, labels)
+        # sdp.plotSegmentDistances(dc, labels)
+        sdp.plotManifoldDistances(
+            dc.segments, dc.distanceMatrix, labels)
         sdp.writeOrShowFigure()
         del sdp
 
@@ -160,6 +159,7 @@ if __name__ == '__main__':
             plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
                                   True, typeDict, False)
 
+        # # total/all segments
         # ftclusters = {label: resolveTemplates2Segments(e for t, e in elements)
         #               for label, elements in segmentGroups[0][1]}
         ftclusters = {label: [e for t, e in elements]
@@ -171,6 +171,7 @@ if __name__ == '__main__':
         groundtruth = {seg: seg.fieldtype
                        for l, segs in ftclusters.items() for seg in segs}
 
+        # # unique segments
         # ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeContext}
         # ftclusters["Noise"] = resolveTemplates2Segments(noise)
         # groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
