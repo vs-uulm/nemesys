@@ -13,6 +13,7 @@ In addition, a MDS projection into a 2D plane for visualization of the relative 
 """
 
 import argparse, IPython
+from collections import Counter
 from math import log
 from os.path import isfile, basename, splitext, join
 from itertools import chain
@@ -41,7 +42,7 @@ reportFolder = "reports"
 
 # kneedleSensitivity=9.0
 # kneedleSensitivity=8.0
-kneedleSensitivity=3.0
+kneedleSensitivity=4.0
 
 # for evaluation
 besteps = {
@@ -62,6 +63,11 @@ besteps = {
 
 # epsfactors = (1, 1.4, 1.6, 2)
 epsfactors = (1.2, 1.4)
+
+
+def lookupTemplates4Segments(dc):
+    dc.segments, dc.segments2index()
+    pass
 
 
 if __name__ == '__main__':
@@ -114,6 +120,9 @@ if __name__ == '__main__':
     clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
     # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
+    import math
+    clusterer.min_samples = math.sqrt(len(clusterer.segments))
+
     titleFormat = "{} ({}-{})".format(
         distance_method, dc.thresholdFunction.__name__,
         "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
@@ -137,25 +146,44 @@ if __name__ == '__main__':
         segmentGroups = segments2clusteredTypes(clusterer, analysisTitle, False)
         clusterer.kneelocator.plot_knee() #plot_knee_normalized()
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
-
-        # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
-        labels = numpy.array([labelForSegment(segmentGroups, seg) for seg in dc.segments])
-
         titleFormat = "{} ({}, {}-{})".format(
             segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
             "".join([str(k) + str(v) for k, v in dc.thresholdArgs.items()]) if dc.thresholdArgs else '')
 
+        uniqueClusters = list()
+        for cLabel, elements in segmentGroups[0][1]:
+            # same template with different labels
+            uniqueSegments = {(sLabel, dc.segments[dc.segments2index([tSegment])[0]]) for sLabel, tSegment in elements}
+            uniqueClusters.append((cLabel, sorted(uniqueSegments, key=lambda x: x[1].values)))
+        mixedSegments = [seg for seg, cnt in
+            Counter(tSegment for cLabel, elements in uniqueClusters for sLabel, tSegment in elements).items() if cnt > 1]
+        for tSegment in mixedSegments:
+            mixedClusters = [elements for cLabel, elements in uniqueClusters
+                             if tSegment in (sElem for sLabel, sElem in elements)]
+            assert len(mixedClusters) < 2  # that would be strange and we needed to find some solution then
+            toReplace = [sIdx for sIdx,sTuple in enumerate(mixedClusters[0]) if sTuple[1] == tSegment]
+            for rIdx in reversed(sorted(toReplace)):
+                del mixedClusters[0][rIdx]
+            mixedClusters[0].append(("[mixed]", tSegment))
+        uniqueGroups = [(segmentGroups[0][0], uniqueClusters)]
+
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+        # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
         print("Plot distances...")
         sdp = DistancesPlotter(specimens, 'distances-' + titleFormat, False)
-        # sdp.plotSegmentDistances(dc, labels)
+        # labels = numpy.array([labelForSegment(segmentGroups, seg) for seg in dc.segments])
+        labels = numpy.array([labelForSegment(uniqueGroups, seg) for seg in dc.segments])
         sdp.plotManifoldDistances(
             dc.segments, dc.distanceMatrix, labels)
         sdp.writeOrShowFigure()
         del sdp
+        # # # # # # # # # # # # # # # # # # # # # # # # #
+
 
         print("Prepare output...")
         typeDict = segments2types(segments)
-        for pagetitle, segmentClusters in segmentGroups:
+        # for pagetitle, segmentClusters in segmentGroups:
+        for pagetitle, segmentClusters in uniqueGroups:
             plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
                                   True, typeDict, False)
 
@@ -163,7 +191,7 @@ if __name__ == '__main__':
         # ftclusters = {label: resolveTemplates2Segments(e for t, e in elements)
         #               for label, elements in segmentGroups[0][1]}
         ftclusters = {label: [e for t, e in elements]
-                      for label, elements in segmentGroups[0][1]}
+                      for label, elements in uniqueGroups[0][1]}
         noisekeys = [ftk for ftk in ftclusters.keys() if ftk.find("Noise") >= 0]
         if len(noisekeys) > 0:
             ftclusters["Noise"] = ftclusters[noisekeys[0]]

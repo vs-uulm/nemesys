@@ -635,7 +635,7 @@ if __name__ == '__main__':
             print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
 
             valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                                for fidx, segs in enumerate(fields)}
+                                for fidx, segs in enumerate(fields)}  # type: Dict[int, Counter]
             pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
                  if 1 < vCnt <= freqThresh  # knee
                  and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps

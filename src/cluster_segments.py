@@ -7,6 +7,7 @@ Generates segment-dissimilarity topology plots of the clustering result.
 """
 
 import argparse, IPython
+from collections import Counter
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
 import matplotlib.pyplot as plt
@@ -35,9 +36,9 @@ refinementMethods = [
     ]
 
 
+# kneedleSensitivity=4.0
+# kneedleSensitivity=6.0
 kneedleSensitivity=9.0
-# kneedleSensitivity=100.0
-# kneedleSensitivity=9.0
 
 
 
@@ -130,7 +131,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
     #
-    doCache = False
+    doCache = True
     if args.refinement == "original":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
@@ -177,9 +178,13 @@ if __name__ == '__main__':
 
         clusterer.kneelocator.plot_knee() #plot_knee_normalized()
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
+
         # clusterer.eps *= 1.15
-        # import math
         # clusterer.eps *= 0.5 * 1/(1+math.exp(24*clusterer.eps-6)) + 0.8
+
+        # import math
+        # clusterer.min_samples = math.sqrt(len(clusterer.segments))
+
     except ClusterAutoconfException as e:
         print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
               "The original exception message was:\n", e)
@@ -213,20 +218,41 @@ if __name__ == '__main__':
     #     clusters.append(enumCluster)
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    uniqueClusters = list()
+    for elements in clusters + [noise]:
+        # same template with different labels
+        uniqueSegments = {dc.segments[dc.segments2index([tSegment])[0]] for tSegment in elements}
+        uniqueClusters.append(sorted(uniqueSegments, key=lambda x: x.values))
+    mixedSegments = [seg for seg, cnt in
+                     Counter(tSegment for elements in uniqueClusters for tSegment in elements).items()
+                     if cnt > 1]
+    for tSegment in mixedSegments:
+        mixedClusters = [elements for elements in uniqueClusters
+                         if tSegment in elements]
+        assert len(mixedClusters) < 2  # that would be strange and we needed to find some solution then
+        toReplace = [sIdx for sIdx, mSegment in enumerate(mixedClusters[0]) if mSegment == tSegment]
+        for rIdx in reversed(sorted(toReplace)):
+            del mixedClusters[0][rIdx]
+        mixedClusters[0].append(("[mixed]", tSegment))
+    uniqueNoise = uniqueClusters[-1]
+    uniqueClusters = uniqueClusters[:-1]
+
+
     # # # # # # # # # # # # # # # # # # # # # # # #
     fTypeTemplates = list()
     fTypeContext = list()
-    for cLabel, segments in enumerate(clusters):
+    # for cLabel, segments in enumerate(clusters):
+    for cLabel, segments in enumerate(uniqueClusters):
         # generate FieldTypeTemplates (padded nans) - Templates as is
         ftype = FieldTypeTemplate(segments)
         ftype.fieldtype = "tf{:02d}".format(cLabel)
         fTypeTemplates.append(ftype)
 
-        # generate FieldTypeContexts (padded values) - Templates resolved to single Segments
-        resolvedSegments = resolveTemplates2Segments(segments)
-        fcontext = FieldTypeContext(resolvedSegments)
-        fcontext.fieldtype = ftype.fieldtype
-        fTypeContext.append(fcontext)
+        # # generate FieldTypeContexts (padded values) - Templates resolved to single Segments
+        # resolvedSegments = resolveTemplates2Segments(segments)
+        # fcontext = FieldTypeContext(resolvedSegments)
+        # fcontext.fieldtype = ftype.fieldtype
+        # fTypeContext.append(fcontext)
 
         # print("\nCluster", cLabel, "Segments", len(segments))
         # print({seg.bytes for seg in segments})
@@ -249,6 +275,7 @@ if __name__ == '__main__':
         #         recog = RecognizedVariableLengthField(seg.message, ftype, seg.offset, seg.nextOffset, confidence)
         #         printFieldContext(trueSegmentedMessages, recog)
     # # # # # # # # # # # # # # # # # # # # # # # #
+
 
 
 
@@ -313,22 +340,23 @@ if __name__ == '__main__':
     sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
         1.2 if not args.sigma else args.sigma
 
-    if dc.segments != clusterer.segments:
-        # print("resolve Templates")
-        #
-        # Templates resolved to single Segments
-        ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
-        ftclusters["Noise"] = resolveTemplates2Segments(noise)
-        groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
-                       for rawSeg, typSeg in typedMatchSegs.items()}
-    else:
-        # print("keep Templates")
-        #
-        # Templates as is
-        ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeTemplates}
-        ftclusters["Noise"] = noise
-        groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
-                       for rawSeg, typSeg in typedMatchTemplates.items()}
+    # if dc.segments != clusterer.segments:
+    #     # print("resolve Templates")
+    #     #
+    #     # Templates resolved to single Segments
+    #     ftclusters = {ftc.fieldtype : ftc.baseSegments for ftc in fTypeContext}
+    #     ftclusters["Noise"] = resolveTemplates2Segments(noise)
+    #     groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+    #                    for rawSeg, typSeg in typedMatchSegs.items()}
+    # else:
+    # print("keep Templates")
+    #
+    # Templates as is
+    ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeTemplates}
+    ftclusters["Noise"] = uniqueNoise
+    # ftclusters["Noise"] = noise
+    groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+                   for rawSeg, typSeg in typedMatchTemplates.items()}
 
     if isinstance(clusterer, DBSCANsegmentClusterer):
         runtitle = "{}-{}-{}-S={:.1f}-eps={:.2f}-min_samples={:.2f}".format(
@@ -352,18 +380,18 @@ if __name__ == '__main__':
                 ["# Cluster", cLabel, "Segments", len(segments)],
                 ["-" * 10] * 4,
             ])
-            if dc.segments != clusterer.segments:
-                # Templates resolved to single Segments
-                segcsv.writerows({(seg.bytes.hex(), seg.bytes, typedMatchSegs[seg][1].fieldtype, typedMatchSegs[seg][0])
-                                  for seg in segments})
-            else:
-                # Templates as is
-                segcsv.writerows({(seg.bytes.hex(), seg.bytes,
-                                   typedMatchTemplates[seg][1].fieldtype if isinstance(typedMatchTemplates[seg][1],
-                                                                                       (TypedTemplate, TypedSegment))
-                                                                         else "[unknown]",
-                                   typedMatchTemplates[seg][0])
-                                  for seg in segments})
+            # if dc.segments != clusterer.segments:
+            #     # Templates resolved to single Segments
+            #     segcsv.writerows({(seg.bytes.hex(), seg.bytes, typedMatchSegs[seg][1].fieldtype, typedMatchSegs[seg][0])
+            #                       for seg in segments})
+            # else:
+            # Templates as is
+            segcsv.writerows({(seg.bytes.hex(), seg.bytes,
+                               typedMatchTemplates[seg][1].fieldtype if isinstance(typedMatchTemplates[seg][1],
+                                                                                   (TypedTemplate, TypedSegment))
+                                                                     else "[unknown]",
+                               typedMatchTemplates[seg][0])
+                              for seg in segments})
     # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -395,7 +423,7 @@ if __name__ == '__main__':
         clustermask = {segid: "{}: {} seg.s ({:.2f} {})".format(ftt.fieldtype, *clusterStatsLookup[ftt.fieldtype])
             for ftt in selectedClusters for segid in dc.segments2index(ftt.baseSegments)}
         clustermask.update({segid: "Noise" for segid in dc.segments2index(
-            noise + [bs for ftt in omittedClusters for bs in ftt.baseSegments]
+            uniqueNoise + [bs for ftt in omittedClusters for bs in ftt.baseSegments]
         )})
         labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
         sdp.plotManifoldDistances(

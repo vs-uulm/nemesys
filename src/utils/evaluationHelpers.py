@@ -461,6 +461,10 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
     :param seg: The segment to label
     :return: The label of the cluster that the seg is member of
     """
+    for name, grp in segGrpHier[0][1]:
+        if seg in (s for t, s in grp):
+            return name.split(", ", 2)[-1]
+
     if isinstance(seg, Template):
         inGroup = None
         for bs in seg.baseSegments:
@@ -475,9 +479,6 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
         else:
             return "[unknown]"
 
-    for name, grp in segGrpHier[0][1]:
-        if seg in (s for t, s in grp):
-            return name.split(", ", 2)[-1]
     return False
 
 

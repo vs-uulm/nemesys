@@ -421,12 +421,12 @@ class AbstractSegment(ABC):
     CORR_PEARSON = 0  # Pearson Product-Moment Correlation Coefficient
 
     def __init__(self):
-        self._values = None  # type: Union[List, numpy.ndarray]
+        self._values = None  # type: Union[Tuple, None]
         """list of analysis result values for the segment scope"""
         self.length = None
 
     @property
-    def values(self):
+    def values(self) -> Tuple:
         return self._values
 
     T = TypeVar('T')
@@ -518,7 +518,7 @@ class CorrelatedSegment(AbstractSegment):
     MEASURE_DISTANCE = 0
     MEASURE_SIMILARITY = 1
 
-    def __init__(self, values: Union[List, numpy.ndarray], feature: AbstractSegment, haystack: 'MessageSegment',
+    def __init__(self, values: Tuple, feature: AbstractSegment, haystack: 'MessageSegment',
                  measure:int='CorrelatedSegment.MEASURE_SIMILARITY'):
         """
         :param values: List of analysis result values.
@@ -527,7 +527,7 @@ class CorrelatedSegment(AbstractSegment):
         :param measure: The similarity measure to use.
         """
         super().__init__()
-        self._values = values  # type: Union[List, numpy.ndarray]
+        self._values = values  # type: Tuple
         self.length = len(values)
         self.feature = feature  # type: AbstractSegment
         self.haystack = haystack  # type: MessageSegment
@@ -633,8 +633,8 @@ class MessageSegment(AbstractSegment):
         if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
-            return self.analyzer.values(self.offset, self.offset+self.length)
-        return self.analyzer.values[self.offset:self.offset+self.length]
+            return tuple(self.analyzer.values(self.offset, self.offset+self.length))
+        return tuple(self.analyzer.values[self.offset:self.offset+self.length])
 
 
     def valueat(self, absoluteBytePosition: int):
@@ -747,7 +747,7 @@ class HelperSegment(MessageSegment):
         return self._values
 
     @values.setter
-    def values(self, values):
+    def values(self, values: Tuple):
         self._values = values
 
 

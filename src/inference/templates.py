@@ -1204,7 +1204,7 @@ class Template(AbstractSegment):
     A Templates values are either the values of a medoid or the mean of values per vector component.
     """
 
-    def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
+    def __init__(self, values: Union[Tuple[Union[float, int]], MessageSegment],
                  baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         """
@@ -1429,7 +1429,7 @@ class TypedTemplate(Template):
     Template for the representation of a segment type.
     """
 
-    def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
+    def __init__(self, values: Union[Tuple[Union[float, int]], MessageSegment],
                  baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         from inference.segments import TypedSegment
@@ -2236,7 +2236,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         return min_samples, epsilon
 
 
-    def _autoconfigureECDFKneedle(self, plot = False):
+    def _autoconfigureECDFKneedle(self):
         from math import log, ceil
         from scipy.ndimage.filters import gaussian_filter1d
         from kneed import KneeLocator

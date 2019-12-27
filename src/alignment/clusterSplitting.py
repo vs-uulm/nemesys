@@ -126,7 +126,7 @@ class ClusterSplitter(object):
         :return: Pivots to split the cluster.
         """
         valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                            for fidx, segs in enumerate(fields)}
+                            for fidx, segs in enumerate(fields)}  # type: Dict[int, Counter]
         distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
         # amount of distinct values per field
         valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
