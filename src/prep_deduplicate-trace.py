@@ -11,6 +11,8 @@ import argparse
 from os.path import exists,isfile,splitext
 from collections import OrderedDict
 
+from validation.messageParser import ParsingConstants
+
 PACKET_LIMIT = 1000
 
 class Deduplicate(object):
@@ -60,7 +62,7 @@ class Deduplicate(object):
                 layername = TARGETLAYER + ' + 2'
             else:
                 layername = TARGETLAYER
-            print('Network layer ' + str(layername) + ' not available in the following packet:')
+            print('Protocol layer ' + str(layername) + ' not available in the following packet:')
             print('\n\n' + repr(packet) + '\n\n')
         return False
 
@@ -78,9 +80,9 @@ def main(filename, outputfile, targetlayer, packetlimit):
     # get the first packet (we assume all have the same linktype)
     eplpkt = next(iter(dedup.unique_packets.values()))
     if isinstance(eplpkt, Ether):
-        lt = 0x1
+        lt = ParsingConstants.LINKTYPES["ETHERNET"] # 0x1
     elif isinstance(eplpkt, IP):
-        lt = 0x65
+        lt = ParsingConstants.LINKTYPES["RAW_IP"] # 0x65
     else:
         raise Exception("Check linktype.")
 

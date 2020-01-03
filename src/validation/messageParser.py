@@ -757,7 +757,7 @@ class ParsedMessage(object):
                         if target:
                             pm = target  # for one single target
                         else:
-                            pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
+                            pm = ParsedMessage(m, layernumber=layer, relativeToIP=relativeToIP,
                                                failOnUndissectable=failOnUndissectable)
                         try:
                             pm._parseJSON(paketjson)
