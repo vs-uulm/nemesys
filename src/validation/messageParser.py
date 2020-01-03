@@ -746,7 +746,8 @@ class ParsedMessage(object):
                     ParsedMessage.__tshark.terminate(2)
                     prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
                                                                  failOnUndissectable, linktype))
-                    IPython.embed()
+                    print("Stopped for raised exception:", e)
+                    # IPython.embed()
                 # parse json
                 try:
                     if tjson is None:
@@ -757,8 +758,12 @@ class ParsedMessage(object):
                         if target:
                             pm = target  # for one single target
                         else:
-                            pm = ParsedMessage(m, layernumber=layer, relativeToIP=relativeToIP,
+                            # Prevent individual tshark call for parsing by creating a
+                            #   ParsedMessage with message set to None...
+                            pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
                                                failOnUndissectable=failOnUndissectable)
+                            # ... and set the message afterwards
+                            pm.message = m
                         try:
                             pm._parseJSON(paketjson)
                             prsdmsgs[m] = pm
@@ -767,7 +772,8 @@ class ParsedMessage(object):
                             print("Need to respawn tshark ({})".format(e))
                             ParsedMessage.__tshark.terminate(2)
                             # TODO prevent an infinite recursion
-                            prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP))
+                            prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target,
+                                                                         target.layernumber, target.relativeToIP))
                             break  # continue with next chunk. The rest of
                             # the current chunk was taken care of by the above slice in the recursion parameter
                         except DissectionInsufficient as e:

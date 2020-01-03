@@ -220,6 +220,7 @@ if __name__ == '__main__':
 
 
     # write back the packets
+    print("Read trace with scapy...")
     packetList = sy.rdpcap(pcapfilename)
     # # The order of packets is not constent for netzob's PCAPImporter and scapy's rdpcap, despite the following is true
     # sorted([a.date for a in specimens.messagePool.values()]) == sorted([a.time for a in packetList])
@@ -228,7 +229,8 @@ if __name__ == '__main__':
         matchedPacket = next(iter(packet for packet in packetList if bytes(packet) == rawmsg.data))
         filteredPackets.append(matchedPacket)
     sortedPackets = sorted(filteredPackets, key=lambda x: x.time)
-    sy.wrpcap(outfile, filteredPackets, linktype=specimens.getBaseLayerOfPCAP())
+    print("Write filtered trace to", outfile)
+    sy.wrpcap(outfile, sortedPackets, linktype=specimens.getBaseLayerOfPCAP())
 
     if args.interactive:
         # globals().update(locals())

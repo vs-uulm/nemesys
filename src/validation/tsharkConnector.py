@@ -128,6 +128,7 @@ class TsharkConnector(object):
         import threading
         readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
         readThread.start()
+        # print("Wait for queue...")
         for timeout in range(20):
             if self.__tsharkqueue.empty():
                 time.sleep(.01)
@@ -137,6 +138,8 @@ class TsharkConnector(object):
 
         if readThread.is_alive() or self.__tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")
+
+        # print("Queue filled...")
 
         tjson = ""
         while not self.__tsharkqueue.empty():
