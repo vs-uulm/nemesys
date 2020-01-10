@@ -294,7 +294,9 @@ class MultiMessagePlotter(MessagePlotter):
             ax.axis('on')
             vdomain = segmentGroups[0][1][0][1].analyzer.domain
             ax.set_ylim(*vdomain)
-            ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
+            locator = ticker.MultipleLocator(1)
+            locator.MAXTICKS = 10000
+            ax.xaxis.set_major_locator(locator)
 
             if numpy.all([numpy.all(numpy.isnan(cseg.values)) for label, cseg in segrpl]):
                 ax.text(0.5, 0.5, 'nan', fontdict={'size': 'xx-large'})
