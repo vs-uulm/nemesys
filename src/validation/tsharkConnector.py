@@ -101,7 +101,7 @@ class TsharkConnector(object):
             else:
                 emptywaitcycles -= 1
                 # st = time.time()
-                for x in range(5):
+                for x in range(10):
                     # sometimes the last "]\n" comes only after a delay
                     if pipe.peek(10):
                         line = pipe.readline()
