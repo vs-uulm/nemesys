@@ -38,7 +38,8 @@ refinementMethods = [
 
 # kneedleSensitivity=4.0
 # kneedleSensitivity=6.0
-kneedleSensitivity=9.0
+# kneedleSensitivity=9.0
+kneedleSensitivity=24.0
 
 
 
@@ -173,10 +174,11 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cluster segments to determine field types on commonality
     try:
-        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
+        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity, k=-1)
         # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
         clusterer.kneelocator.plot_knee() #plot_knee_normalized()
+        plt.text(0.5, 0.2, "S = {:.1f}\neps = {:.3f}\nk = {:.0f}".format(clusterer.S, clusterer.eps, clusterer.k))
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
 
         # clusterer.eps *= 1.15

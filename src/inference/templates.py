@@ -2124,10 +2124,11 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         super().__init__(dc, segments)
 
         self.S = kwargs["S"] if "S" in kwargs else 0.8
-        if len(kwargs) == 0 or len(kwargs) == 1 and "S" in kwargs:
+        self.k = kwargs["k"] if "k" in kwargs else 0
+        if len(kwargs) == 0 or "S" in kwargs or "k" in kwargs:
             self.kneelocator = None  # type: KneeLocator
             self.min_samples, self.eps = self._autoconfigure()
-        else:
+        else:  # eps and min_samples given, preventing autoconfiguration
             if not 'eps' in kwargs or not 'min_samples' in kwargs:
                 raise ValueError("Parameters for DBSCAN without autoconfiguration missing. "
                                  "Requires epsilon and min_cluster_size.")
@@ -2153,7 +2154,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
 
 
     def __repr__(self):
-        return 'DBSCAN eps {:0.3f} mpt'.format(self.eps, self.min_samples) \
+        return 'DBSCAN eps {:0.3f} mpt {:0.0f}'.format(self.eps, self.min_samples) \
             if self.eps and self.min_samples \
             else 'DBSCAN unconfigured (need to set epsilon and min_samples)'
 
@@ -2242,8 +2243,10 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         from kneed import KneeLocator
         from utils.baseAlgorithms import ecdf
 
-        sigma = log(len(self.segments)) / 2
-        min_samples = sigma * 2
+        # only unique!
+        min_samples = round(log(len(self.distanceCalculator.segments)))
+        # sigma = log(len(self.segments)) / 2
+        # min_samples = sigma * 2
         # minD = 1
         # minK = None
         # # minX = None
@@ -2261,17 +2264,20 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # # epsilon = minX
         # k = minK
 
-        k = 0
+        if self.k < 0:
+            self.k = round(log(len(self.distanceCalculator.segments)) / 2)
 
-        neighdists = self._knearestdistance(k, True)
+        # only unique
+        neighdists = self._knearestdistance(self.k, True)
         knncdf = ecdf(neighdists, True)
         # smoothknn = gaussian_filter1d(knncdf[1], sigma)
         try:
             import warnings
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                kneel = KneeLocator(knncdf[0], knncdf[1], S=self.S, curve='concave', direction='increasing')
-                                    # interp_method='polynomial')  # interp1d
+                kneel = KneeLocator(knncdf[0], knncdf[1], S=self.S, curve='concave', direction='increasing',
+                                    interp_method='polynomial') # polynomial prevents errors at the fringes
+                                                                # interp1d does not smooth fringes sufficiently
                 if kneel.knee is None or kneel.knee <= 0.0:
                     raise ClusterAutoconfException("No knee could be found.")
         except ValueError as e:
@@ -2279,7 +2285,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         epsilon = kneel.knee  #  * 0.8 use KneeLocator's parameter "S" instead of a factor here.
         self.kneelocator = kneel
 
-        print("eps {:0.3f} autoconfigured (Kneedle on ECDF with S {}) from k {}".format(epsilon, self.S, k))
+        print("eps {:0.3f} autoconfigured (Kneedle on ECDF with S {}) from k {}".format(epsilon, self.S, self.k))
         return min_samples, epsilon
 
 

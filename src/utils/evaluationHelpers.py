@@ -697,8 +697,12 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         else:
             dc = DelegatingDC(chainedSegments)
         dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
-        with open(dccachefn, 'wb') as f:
-            pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
+        try:
+            with open(dccachefn, 'wb') as f:
+                pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
+        except MemoryError as e:
+            print("DC could not be cached due to a MemoryError. Removing", dccachefn, "and continuing.")
+            os.remove(dccachefn)
     else:
         print("Load distances from cache file {}".format(dccachefn))
         with open(dccachefn, 'rb') as f:

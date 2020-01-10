@@ -445,7 +445,7 @@ def matrixFromTpairs(distances: Iterable[Tuple[T,T,float]], segmentOrder: Sequen
     numsegs = len(segmentOrder)
     if simtrx is not None:
         assert simtrx.shape == (numsegs, numsegs)
-        print("Use provided matrix:", type(simtrx), simtrx.shape, simtrx.dtype)
+        print("Use provided matrix:", type(simtrx).__name__, simtrx.shape, simtrx.dtype)
         simtrx.fill(incomparable)
     else:
         # reduce memory footprint by limiting precision to 16 bit float
@@ -466,7 +466,8 @@ def matrixFromTpairs(distances: Iterable[Tuple[T,T,float]], segmentOrder: Sequen
     return simtrx
 
 
-def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str, singularTemplates=True) \
+def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str,
+                            singularTemplates=True, charSegments:List[AbstractSegment]=None) \
         -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
     """
     Cluster segments according to the distance of their feature vectors.
@@ -496,6 +497,9 @@ def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str, si
     from .templates import Template
     print("Clustering segments...")
     noise, *clusters = clusterer.clusterSimilarSegments(False)
+
+    if charSegments is not None and len(charSegments) > 0:
+        clusters.append(charSegments)
 
     if singularTemplates:
         # extract "large" templates from noise that should rather be its own cluster

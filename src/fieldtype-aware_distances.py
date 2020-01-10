@@ -22,9 +22,9 @@ import numpy
 
 from utils.evaluationHelpers import analyses, annotateFieldTypes, labelForSegment, \
     plotMultiSegmentLines, writeCollectiveClusteringStaticstics
-from inference.templates import DBSCANsegmentClusterer, MemmapDC, DelegatingDC
+from inference.templates import DBSCANsegmentClusterer, MemmapDC, DelegatingDC, ClusterAutoconfException
 
-from inference.segmentHandler import segments2types, segments2clusteredTypes
+from inference.segmentHandler import segments2types, segments2clusteredTypes, isExtendedCharSeq
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.distancesPlotter import DistancesPlotter
@@ -42,7 +42,8 @@ reportFolder = "reports"
 
 # kneedleSensitivity=9.0
 # kneedleSensitivity=8.0
-kneedleSensitivity=4.0
+# kneedleSensitivity=4.0
+kneedleSensitivity=24.0
 
 # for evaluation
 besteps = {
@@ -111,17 +112,33 @@ if __name__ == '__main__':
         dc = DelegatingDC(segments)
     # dc = DistanceCalculator(segments)
 
+    separateChars = False
+
+    # extract char sequences
+    if separateChars:
+        charSegments = list()
+        nonCharSegs = list()
+        for seg in segments:
+            if isExtendedCharSeq(seg.bytes):
+                charSegments.append(seg)
+            else:
+                nonCharSegs.append(seg)
+
     print("Clustering...")
     # # use HDBSCAN
     # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
 
     # use DBSCAN
     # kneedleSensitivity += (log(len(dc.segments),10) - 2) * 4  # for larger traces
-    clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity)
     # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+    if separateChars:
+        clusterer = DBSCANsegmentClusterer(dc, nonCharSegs, S=kneedleSensitivity, k=-1)
+    else:
+        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity, k=-1)
 
-    import math
-    clusterer.min_samples = math.sqrt(len(clusterer.segments))
+
+    import math  # only unique
+    clusterer.min_samples = math.sqrt(len(clusterer.distanceCalculator.segments))
 
     titleFormat = "{} ({}-{})".format(
         distance_method, dc.thresholdFunction.__name__,
@@ -139,12 +156,26 @@ if __name__ == '__main__':
     hstplt.writeOrShowFigure()
     plt.clf()
 
-    # vary epsilon
-    autoeps = clusterer.eps
-    for epsfactor in epsfactors if args.epsfactor else (1,):
-        clusterer.eps = epsfactor * autoeps
-        segmentGroups = segments2clusteredTypes(clusterer, analysisTitle, False)
-        clusterer.kneelocator.plot_knee() #plot_knee_normalized()
+    # # vary epsilon
+    # autoeps = clusterer.eps
+    # for epsfactor in epsfactors if args.epsfactor else (1,):
+    #     clusterer.eps = epsfactor * autoeps
+
+    # vary S
+    for kneedS in (28,32,40,56):
+        prevEps = round(clusterer.eps, 3)
+        clusterer.S = kneedS
+        try:
+            ms, clusterer.eps = clusterer._autoconfigure()
+            if prevEps == round(clusterer.eps, 3):
+                print("  no change to previous S for S =", kneedS)
+                continue
+        except ClusterAutoconfException as e:
+            print(e, "for S =", kneedS)
+            continue
+        segmentGroups = segments2clusteredTypes(clusterer, analysisTitle, False, charSegments if separateChars else None)
+        clusterer.kneelocator.plot_knee()  # plot_knee_normalized()
+        plt.text(0.5, 0.2, "S = {:.1f}\neps = {:.3f}\nk = {:.0f}".format(clusterer.S, clusterer.eps, clusterer.k))
         plt.savefig(join(reportFolder, "knee-{}-S{:.1f}-eps{:.3f}.pdf".format(trace, kneedleSensitivity, clusterer.eps)))
         titleFormat = "{} ({}, {}-{})".format(
             segmentGroups[0][0], distance_method, dc.thresholdFunction.__name__,
