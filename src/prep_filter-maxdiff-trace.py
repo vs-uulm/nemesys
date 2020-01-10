@@ -138,6 +138,9 @@ def valueCommonalityFilter(refinedPerMsg: List[List[MessageSegment]], packetcoun
     print("Determine messages' commonalities...")
     valueCommonalityPerMsg = list()  # type: List[MessageValueCommonality]
     for msg in refinedPerMsg:
+        if len(msg) < 1:
+            print("Message ignored, since empty?!")  # TODO investigate cause of error
+            continue
         valCom = float(numpy.median([valCounter[seg.bytes] for seg in msg]))
         mvc = MessageValueCommonality(valCom, msg[0].message)
         bisect.insort(valueCommonalityPerMsg, mvc)
@@ -151,6 +154,7 @@ def valueCommonalityFilter(refinedPerMsg: List[List[MessageSegment]], packetcoun
 
     # the selected messages of most "uncommon messages"
     filteredMsgs = list(uniqueMsgs.values())[:packetcount]
+    # filteredMsgs = list(uniqueMsgs.values())[-packetcount:]  # TODO
     return filteredMsgs
 
 
@@ -179,11 +183,12 @@ if __name__ == '__main__':
         exit(1)
 
     infile,ext = splitext(pcapfilename)
-    outfile = infile + "_maxdiff-{:d}".format(packetcount) + ext
+    outfile = infile + "_maxdiff-{:d}".format(packetcount) + ext  # TODO _maxdiff  _mindiff
     if exists(outfile):
         print('Output file exists: ' + outfile)
         exit(1)
 
+    print("Loading", pcapfilename)
     # get segments from messages and their common values
     specimens = SpecimenLoader(pcapfilename, layer, True)
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
@@ -220,14 +225,12 @@ if __name__ == '__main__':
 
 
     # write back the packets
-    print("Read trace with scapy...")
+    print("Re-read trace with scapy...")
     packetList = sy.rdpcap(pcapfilename)
     # # The order of packets is not constent for netzob's PCAPImporter and scapy's rdpcap, despite the following is true
     # sorted([a.date for a in specimens.messagePool.values()]) == sorted([a.time for a in packetList])
-    filteredPackets = list()
-    for rawmsg in filteredSpecimens.messagePool.values():
-        matchedPacket = next(iter(packet for packet in packetList if bytes(packet) == rawmsg.data))
-        filteredPackets.append(matchedPacket)
+    packetMap = {bytes(packet): packet for packet in packetList}
+    filteredPackets = [packetMap[rawmsg.data] for rawmsg in filteredSpecimens.messagePool.values()]
     sortedPackets = sorted(filteredPackets, key=lambda x: x.time)
     print("Write filtered trace to", outfile)
     sy.wrpcap(outfile, sortedPackets, linktype=specimens.getBaseLayerOfPCAP())
