@@ -2265,7 +2265,7 @@ class DBSCANsegmentClusterer(AbstractClusterer):
         # k = minK
 
         if self.k < 0:
-            self.k = round(log(len(self.distanceCalculator.segments)) / 2)
+            self.k = round(log(len(self.distanceCalculator.segments)))  # / 2
 
         # only unique
         neighdists = self._knearestdistance(self.k, True)

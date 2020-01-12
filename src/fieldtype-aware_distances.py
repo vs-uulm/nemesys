@@ -63,7 +63,7 @@ besteps = {
 
 
 # epsfactors = (1, 1.4, 1.6, 2)
-epsfactors = (1.2, 1.4)
+epsfactors = (0.8, 0.9, 1.1, 1.2)
 
 
 def lookupTemplates4Segments(dc):
@@ -156,23 +156,33 @@ if __name__ == '__main__':
     hstplt.writeOrShowFigure()
     plt.clf()
 
+    # adjust epsilon
+    epsfraclist = (5,)  # 5
+    epspivot = 0.2
+    autoeps = clusterer.eps
+    for epsfrac in epsfraclist if args.epsfactor else (0,):
+        if args.epsfactor:
+            adjeps = clusterer.eps + clusterer.eps/epsfrac * (1 if clusterer.eps < epspivot else -1)
+            clusterer.eps = adjeps
+
     # # vary epsilon
     # autoeps = clusterer.eps
     # for epsfactor in epsfactors if args.epsfactor else (1,):
     #     clusterer.eps = epsfactor * autoeps
 
-    # vary S
-    for kneedS in (28,32,40,56):
-        prevEps = round(clusterer.eps, 3)
-        clusterer.S = kneedS
-        try:
-            ms, clusterer.eps = clusterer._autoconfigure()
-            if prevEps == round(clusterer.eps, 3):
-                print("  no change to previous S for S =", kneedS)
-                continue
-        except ClusterAutoconfException as e:
-            print(e, "for S =", kneedS)
-            continue
+    # # vary S
+    # for kneedS in (1,5,15):
+    #     prevEps = round(clusterer.eps, 3)
+    #     clusterer.S = kneedS
+    #     try:
+    #         ms, clusterer.eps = clusterer._autoconfigure()
+    #         if prevEps == round(clusterer.eps, 3):
+    #             print("  no change to previous S for S =", kneedS)
+    #             continue
+    #     except ClusterAutoconfException as e:
+    #         print(e, "for S =", kneedS)
+    #         continue
+
         segmentGroups = segments2clusteredTypes(clusterer, analysisTitle, False, charSegments if separateChars else None)
         clusterer.kneelocator.plot_knee()  # plot_knee_normalized()
         plt.text(0.5, 0.2, "S = {:.1f}\neps = {:.3f}\nk = {:.0f}".format(clusterer.S, clusterer.eps, clusterer.k))

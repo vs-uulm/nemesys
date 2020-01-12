@@ -603,6 +603,7 @@ class MessageSegment(AbstractSegment):
         if not isinstance(length, int):
             raise ValueError('Length is not an int. Its representation is ', repr(length))
         if offset >= len(self.message.data):
+            print(self.message.data.hex())
             raise ValueError('Offset {} too large for message of length {}.'.format(offset, len(self.message.data)))
         if offset+length-1 > len(self.message.data):
             raise ValueError('Length {} from offset {} too large for message of length {}.'.format(

@@ -8,13 +8,14 @@ Generates segment-dissimilarity topology plots of the clustering result.
 
 import argparse, IPython
 from collections import Counter
+from math import log
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
 import matplotlib.pyplot as plt
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, TypedTemplate, FieldTypeContext,  ClusterAutoconfException
 from inference.segmentHandler import baseRefinements, originalRefinements, \
-    pcaPcaRefinements, zeroBaseRefinements
+    pcaPcaRefinements, zeroBaseRefinements, isExtendedCharSeq
 from visualization.distancesPlotter import DistancesPlotter
 from utils.evaluationHelpers import *
 
@@ -171,11 +172,41 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+
+    separateChars = True
+
+    # extract char sequences
+    if separateChars:
+        charSegments = list()
+        nonCharSegs = list()
+        for seg in dc.rawSegments:
+            if isExtendedCharSeq(seg.bytes):
+                charSegments.append(seg)
+            else:
+                nonCharSegs.append(seg)
+
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cluster segments to determine field types on commonality
     try:
-        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity, k=-1)
+        if separateChars:
+            k = round(log(len(nonCharSegs)) / 2)
+            clusterer = DBSCANsegmentClusterer(dc, nonCharSegs, S=kneedleSensitivity, k=k)
+        else:
+            k = round(log(len(dc.rawSegments)) / 2)
+            clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity, k=k)
         # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
+
+        # reduce k if no realistic eps is detected (TODO move into autoconfigure and use if y balow < .5 of samples)
+        if clusterer.eps < 0.05:
+            clusterer.k //= 2
+            clusterer.min_samples, clusterer.eps = clusterer._autoconfigure()
+
+        # adjust epsilon  TODO test
+        epsfrac = 4  # done: 5, 4,
+        epspivot = 0.15
+        autoeps = clusterer.eps
+        adjeps = clusterer.eps + clusterer.eps / epsfrac * (1 if clusterer.eps < epspivot else -1)
+        clusterer.eps = adjeps
 
         clusterer.kneelocator.plot_knee() #plot_knee_normalized()
         plt.text(0.5, 0.2, "S = {:.1f}\neps = {:.3f}\nk = {:.0f}".format(clusterer.S, clusterer.eps, clusterer.k))
@@ -207,6 +238,9 @@ if __name__ == '__main__':
 
     print("{} clusters generated from {} distinct segments".format(len(clusters), len(dc.segments)))
     # # # # # # # # # # # # # # # # # # # # # # # #
+
+    if separateChars and len(charSegments) > 0:
+        clusters.append(charSegments)
 
     # # # # # # # # # # # # # # # # # # # # # # # # #
     # # make "enum" cluster TODO
