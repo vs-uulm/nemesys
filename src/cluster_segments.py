@@ -196,13 +196,13 @@ if __name__ == '__main__':
             clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=kneedleSensitivity, k=k)
         # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
 
-        # reduce k if no realistic eps is detected (TODO move into autoconfigure and use if y balow < .5 of samples)
+        # reduce k if no realistic eps is detected (TODO move into autoconfigure and use if y below < .5 of samples)
         if clusterer.eps < 0.05:
             clusterer.k //= 2
             clusterer.min_samples, clusterer.eps = clusterer._autoconfigure()
 
         # adjust epsilon  TODO test
-        epsfrac = 4  # done: 5, 4,
+        epsfrac = 3  # done: 5, 4,
         epspivot = 0.15
         autoeps = clusterer.eps
         adjeps = clusterer.eps + clusterer.eps / epsfrac * (1 if clusterer.eps < epspivot else -1)
