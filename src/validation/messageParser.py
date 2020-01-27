@@ -128,9 +128,9 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['ntp.flags'] = 'flags'  # bit field
     TYPELOOKUP['ntp.stratum'] = 'flags'  # or 'int'  # 1 byte integer: byte
     TYPELOOKUP['ntp.ppoll'] = 'int'
-    TYPELOOKUP['ntp.precision'] = 'int'  # signed 1 byte integer: sbyte
-    TYPELOOKUP['ntp.rootdelay'] = 'float'  # 4 byte integer: int
-    TYPELOOKUP['ntp.rootdispersion'] = 'float'
+    TYPELOOKUP['ntp.precision'] = 'int'  # signed 1 byte integer: sbyte  -  decimal representation of "float" value, behaves like int
+    TYPELOOKUP['ntp.rootdelay'] = 'int'  # 4 byte integer: int  -  decimal representation of "float" value, behaves like int
+    TYPELOOKUP['ntp.rootdispersion'] = 'int'
     TYPELOOKUP['ntp.refid'] = 'ipv4'  # 'id'  # some id, effectively often an ipv4 is used
     TYPELOOKUP['ntp.reftime'] = 'timestamp'  #
     TYPELOOKUP['ntp.org'] = 'timestamp'
