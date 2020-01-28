@@ -215,7 +215,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.rr.udp_payload_size'] = 'int'  # has value: 1000
     TYPELOOKUP['dns.resp.ext_rcode'] = 'int'  # has value: 00
     TYPELOOKUP['dns.resp.edns0_version'] = 'int'  # has value: 00
-    TYPELOOKUP['dns.resp.z'] = 'flag'  # has value: 8000
+    TYPELOOKUP['dns.resp.z'] = 'flags'  # has value: 8000
 
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'

@@ -620,9 +620,9 @@ if __name__ == '__main__':
             print(tabulate(sorted(fn_ipv4_finfo.items(), key=lambda x: x[0][1], reverse=True)))
             #   * ipv4: mostly ntp.refid  <-- ips outside of trained subnet
 
-            fn_float_c = Counter([seg.bytes for seg in matchStatistics["float"][2]])
+            fn_float_c = Counter([seg.bytes for seg in matchStatistics["int"][2]])
             fn_float_mc = fn_float_c.most_common(10)
-            fn_float_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["float"][2] if seg.bytes == ffm[0]}
+            fn_float_finfo = { ffm: {comparator.lookupField(seg) for seg in matchStatistics["int"][2] if seg.bytes == ffm[0]}
                 for ffm in fn_float_mc }
             print(tabulate(sorted(fn_float_finfo.items(), key=lambda x: x[0][1], reverse=True)))
             #   * float: ntp.rootdelay starting with 0000  <-- unclear

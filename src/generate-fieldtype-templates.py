@@ -209,54 +209,74 @@ if __name__ == '__main__':
                 mmp.writeOrShowFigure()
                 del mmp
 
-        if basename(specimens.pcapFileName) != "binaryprotocols_merged_500.pcap":
-            print("Run the script with input file binaryprotocols_merged_500.pcap to "
-                  "access selected field type templates.")
+        # binaryProtocols = "binaryprotocols_merged_500.pcap"
+        binaryProtocols = "binaryprotocols_maxdiff-fromOrig-500.pcap"
+
+        if basename(specimens.pcapFileName) != binaryProtocols:
+            print("Run the script with input file", binaryProtocols, " to access selected field type templates.")
         else:
             try:
                 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
                 # select promising field type templates from binaryprotocols_merged_500.pcap
                 fieldtypeTemplates = dict()
-                # for ipv4: combine clusters 0 to 5
-                fieldtypeTemplates["ipv4"] = [ FieldTypeTemplate(chain.from_iterable(
-                    [ ftMap[tid].baseSegments for tid in [
-                        "0b3f139a" ] ])) ]
-                # for macaddr: use the complete group
-                fieldtypeTemplates["macaddr"] = [ FieldTypeTemplate(
-                    [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("macaddr")
-                      for cluster in page for segs in cluster[1] ]
-                ) ]
-                # for id: test whether this works
-                fieldtypeTemplates["id"] = [ ftMap["153b0111"] ]
 
-                # for float: use the complete group AND refine
-                floatHelpers = list()
-                # modify values to raise the first bytes from zero to get something like floatMean = [1, 4, 22, 117]
-                float_rand_lower = numpy.array([0, 0, 0, 0]) # , 14, 44]   # [1, 4, 0, 0]
-                float_rand_upper = numpy.array([2, 6, 0, 0]) # , 31, 190]
-                for tid in ["84f0fc52", "98b5b680"]:
-                    for bs in ftMap[tid].baseSegments:  # type; AbstractSegment
-                        fh = HelperSegment(bs.analyzer, 0, bs.length)
-                        fh.values = bs.values + \
-                                    (float_rand_upper - float_rand_lower) * numpy.random.rand(4) + float_rand_lower
-                        floatHelpers.append(fh)
-                fieldtypeTemplates["float"] = [ FieldTypeTemplate(floatHelpers) ]
+                # for ipv4: use the complete group
+                fieldtypeTemplates["ipv4"] = [
+                    # FieldTypeTemplate([ segs[1] for ptitle, page in groupStructure if ptitle.startswith("ipv4")
+                    #   for cluster in page for segs in cluster[1] ])
+                    # FTT from selected cluster: e.g. combine clusters n to m
+                    FieldTypeTemplate(chain.from_iterable([ftMap[tid].baseSegments for tid in
+                                                           ["ce412960", "60b04ad2", "c9f10baa", "f4891db9"]])),
+                    ftMap["88357dbb"],
+                    FieldTypeTemplate(chain.from_iterable([ftMap[tid].baseSegments for tid in
+                                                           ["3235ee72", "b2eded77"]])),
+                ]
+                for ftt in fieldtypeTemplates["ipv4"]:
+                    ftt.fieldtype = "ipv4"
+
+                # for macaddr: use the complete group
+                fieldtypeTemplates["macaddr"] = [FieldTypeTemplate(
+                    # [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("macaddr")
+                    #   for cluster in page for segs in cluster[1] ]
+                    chain.from_iterable([ftMap[tid].baseSegments for tid in
+                                         ["7a7d3084", "f7dc5c07"]])
+                )]
+
+                # for id: test whether this works
+                fieldtypeTemplates["id"] = [FieldTypeTemplate(chain.from_iterable([ftMap[tid].baseSegments for tid in
+                                                           ["5470aaf1", "e5fe2f7a"]])
+                )]
+                # fieldtypeTemplates["id"][0].fieldtype = "id"
+
+                # # for int: use the complete group AND refine
+                # intHelpers = list()
+                # # modify values to raise the first bytes from zero to get something like floatMean = [1, 4, 22, 117]
+                # int_rand_lower = numpy.array([0, 0, 0, 0]) # , 14, 44]   # [1, 4, 0, 0]
+                # int_rand_upper = numpy.array([2, 6, 0, 0]) # , 31, 190]
+                # for tid in ["bdee139a"]:
+                #     for bs in ftMap[tid].baseSegments:  # type; AbstractSegment
+                # # for bs in (segs[1] for ptitle, page in groupStructure if ptitle.startswith("int")
+                # #              for cluster in page for segs in cluster[1] if segs[1].length == 4):  # only of length 4
+                #         ih = HelperSegment(bs.analyzer, 0, bs.length)
+                #         ih.values = bs.values + \
+                #                     (int_rand_upper - int_rand_lower) * numpy.random.rand(4) + int_rand_lower
+                #         intHelpers.append(ih)
+                fieldtypeTemplates["int"] = [ftMap["bdee139a"]]  # FieldTypeTemplate(intHelpers)
+                # fieldtypeTemplates["int"][0].fieldtype = "int"
 
                 # for timestamp: use the complete group
                 fieldtypeTemplates["timestamp"] = [ FieldTypeTemplate(
                     [ segs[1] for ptitle, page in groupStructure if ptitle.startswith("timestamp")
-                      for cluster in page for segs in cluster[1] ]
+                      for cluster in page for segs in cluster[1] if segs[1].length == 8 ]
                 ) ]
 
-                # TODO for checksum: use only 8 byte fields
-                fieldtypeTemplates["checksum"] = [FieldTypeTemplate(
-                    [ms for ms in ftMap["bb3a6822"].baseSegments if ms.length == 8]
-                )]
+                # for checksum: use only 8 byte fields
+                fieldtypeTemplates["checksum"] = [ftMap["06bbd67e"]]
 
-                # TODO for int: test two byte template
-                fieldtypeTemplates["int"] = [FieldTypeTemplate(
-                    ftMap["4e923fd9"].baseSegments
-                )]
+                # # TODO for int: test two byte template
+                # fieldtypeTemplates["int"] = [FieldTypeTemplate(
+                #     ftMap["4e923fd9"].baseSegments
+                # )]
 
                 # Python code representation to persist the fieldtypeTemplates
                 fieldtypeMementos = list()
@@ -297,9 +317,11 @@ if __name__ == '__main__':
                 #         print("cov: ", numpy.sqrt(ftt.cov.diagonal()) )
 
             except KeyError as e:
+                # "binaryprotocols_merged_500.pcap at commit f442b9d. "
+
                 print("There seems to have been a change since the (manual) selection of the templates. "
                       "Templates have been selected from clustering of tshark segments from "
-                      "binaryprotocols_merged_500.pcap at commit f442b9d. "
+                      "binaryprotocols_maxdiff-fromOrig-500.pcap at commit 73f19ba. "
                       "You most probably need to select new cluster IDs that are suitable as templates for types from "
                       "the plots and replace the invalid IDs in this script with your new ones.")
 
