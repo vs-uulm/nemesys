@@ -3,17 +3,29 @@
 #input=input/*-100.pcap
 #input=input/*-1000.pcap
 #input="input/*-100.pcap input/*-1000.pcap"
-# input="input/ntp_SMIA-20111010_deduped-1000.pcap input/smb_SMIA20111010-one_deduped-1000.pcap"
+# input/dhcp_SMIA2011101X_deduped-1000.pcap  input/dns_ictf2010-new-deduped-1000.pcap
+# input/ntp_SMIA-20111010_deduped-1000.pcap input/dns_ictf2010_deduped-982-1000.pcap
+# input/nbns_SMIA20111010-one_deduped-1000.pcap  input/smb_SMIA20111010-one_deduped-1000.pcap
+#input="input/smb_SMIA20111010-one_deduped-1000.pcap"
+#input="input/dhcp_SMIA2011101X_deduped-1000.pcap"
 #input="input/ntp_SMIA-20111010_deduped-100.pcap"
-input=input/smb_SMIA20111010-one_deduped-100.pcap
+#input=input/smb_SMIA20111010-one_deduped-100.pcap
+
+#input=input/maxdiff-filtered/*-1000.pcap
+# input="input/maxdiff-filtered/ntp_SMIA-20111010_deduped-9995-10000_maxdiff-1100.pcap"
+
+input=input/maxdiff-fromOrig/*-1000.pcap
+
+# input=input/mindiff-filtered/*.pcap
+#input=input/smb_maccdc2012_maxdiff-1000.pcap
 
 #sigmas="0.6 0.7 0.8 0.9 1.0 1.1 1.2"
-sigmas="0.6 0.8 1.0 1.2"
+#sigmas="0.6 0.8 1.0 1.2 1.6"
 #sigmas="0.9"
 
 #refines="base original PCA PCAmoco"
-refines="PCA PCAmoco"
-#refines="PCAmoco"
+#refines="PCA PCAmoco"
+refines="zero"
 
 
 cftnext=$(expr 1 + $(ls -d reports/cft-* | sed "s/^.*cft-\([0-9]*\)-.*$/\1/" | sort | tail -1))
@@ -37,7 +49,11 @@ mkdir ${report}
 
 for ref in ${refines} ; do
     for fn in ${input} ; do
-        python src/cluster_segments.py -p -r ${ref} ${fn}
+        # dynamic sigma:
+        # python src/cluster_segments.py -p -r ${ref} ${fn}
+        #
+        # fixed sigma 1.2
+        python src/cluster_segments.py -s 1.2 -p -r ${ref} ${fn}
     done
 
 
