@@ -37,12 +37,12 @@ mkdir ${report}
 
 #for fn in ${input} ; do
 #for sig in ${sigmas} ; do
-##python src/cluster_segments.py -s ${sig} -r PCAmoco ${fn}
-#python src/cluster_segments.py -s ${sig} -r PCA ${fn}
-##python src/cluster_segments.py -s ${sig} -r base ${fn}
-##python src/cluster_segments.py -s ${sig} -r original ${fn}
+##python src/nemeftr_cluster-segments.py -s ${sig} -r PCAmoco ${fn}
+#python src/nemeftr_cluster-segments.py -s ${sig} -r PCA ${fn}
+##python src/nemeftr_cluster-segments.py -s ${sig} -r base ${fn}
+##python src/nemeftr_cluster-segments.py -s ${sig} -r original ${fn}
 #
-##python src/cluster_segments.py -p -s ${sig} -r PCAmoco ${fn}
+##python src/nemeftr_cluster-segments.py -p -s ${sig} -r PCAmoco ${fn}
 #done
 #done
 
@@ -50,10 +50,10 @@ mkdir ${report}
 for ref in ${refines} ; do
     for fn in ${input} ; do
         # dynamic sigma:
-        # python src/cluster_segments.py -p -r ${ref} ${fn}
+        # python src/nemeftr_cluster-segments.py -p -r ${ref} ${fn}
         #
         # fixed sigma 1.2
-        python src/cluster_segments.py -s 1.2 -p -r ${ref} ${fn}
+        python src/nemeftr_cluster-segments.py -s 1.2 -p -r ${ref} ${fn}
     done
 
 

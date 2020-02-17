@@ -23,10 +23,10 @@ mkdir ${report}
 
 # for fn in ${input} ; do python src/visualize_fieldtype_separation.py ${fn} ; done
 
-#for fn in ${input} ; do python src/fieldtype-aware_distances.py ${fn} ; done
-for fn in ${input} ; do python src/fieldtype-aware_distances.py -f ${fn} ; done
+#for fn in ${input} ; do python src/nemeftr_cluster-true-fields.py ${fn} ; done
+for fn in ${input} ; do python src/nemeftr_cluster-true-fields.py -f ${fn} ; done
 
-# for fn in ${input} ; do python src/field_recognition.py ${fn} ; done
+# for fn in ${input} ; do python src/nemeftr_field-recognition.py ${fn} ; done
 
 
 
