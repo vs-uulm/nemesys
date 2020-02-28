@@ -265,9 +265,8 @@ def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs)
 
     # char refinement before and after
     charPass1 = charRefinements(segmentsPerMsg)
-    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)), reliefFactor=0.8)  # TODO parameter changes HERE!
-    RelocatePCA.maxLengthDelta = 15
-    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC, initialKneedleSensitivity=30, subclusterKneedleSensitivity=15, **kwargs)
+    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))  # TODO parameter changes HERE!
+    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC, **kwargs)
     charPass2 = charRefinements(refinedSM)
 
     return charPass2
