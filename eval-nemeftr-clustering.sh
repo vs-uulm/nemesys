@@ -24,8 +24,8 @@ input=input/maxdiff-fromOrig/*-1000.pcap
 #sigmas="0.9"
 
 #refines="base original PCA PCAmoco"
-#refines="PCA PCAmoco"
-refines="zero"
+refines="zeroPCA"
+#refines="zero"
 
 
 cftnext=$(expr 1 + $(ls -d reports/cft-* | sed "s/^.*cft-\([0-9]*\)-.*$/\1/" | sort | tail -1))

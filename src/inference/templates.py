@@ -175,6 +175,7 @@ class DistanceCalculator(object):
             By default (preset with None), does a neutral transform that does not apply any changes.
             One available alternative implemented in this class is DistanceCalculator.sigmoidThreshold()
         :param thresholdArgs: dict of kwargs for the set thresholdFunction. Empty by default.
+        :param reliefFactor: Increase the non-linearity of the dimensionality penalty for mismatching segment lengths.
         :return: A normalized distance matrix for all input segments.
             If necessary, performs an embedding of mixed-length segments to determine cross-length distances.
         """
@@ -1724,9 +1725,9 @@ class FieldTypeContext(FieldTypeTemplate):
         assert len(values) == self._maxLen, "value padding failed"
         # overlapping offset from -1
         if shift >= 0:
-            assert values[shift:shift + segment.length] == segment.values, "value padding failed (positive shift)"
+            assert tuple(values[shift:shift + segment.length]) == segment.values, "value padding failed (positive shift)"
         else:
-            assert values[0:shift + segment.length] == segment.values[-shift:], "value padding failed (negative shift)"
+            assert tuple(values[0:shift + segment.length]) == segment.values[-shift:], "value padding failed (negative shift)"
         return values
 
     def baseOffset(self, segment: MessageSegment):
@@ -2566,6 +2567,7 @@ class DelegatingDC(DistanceCalculator):
         -  ------------------------------------------------------------------
 
         :param segments: List of segments to calculate pairwise distances from.
+        :param reliefFactor: Increase the non-linearity of the dimensionality penalty for mismatching segment lengths.
         """
         self._rawSegments = segments
 

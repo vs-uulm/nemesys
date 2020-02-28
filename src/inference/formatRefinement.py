@@ -1848,6 +1848,13 @@ class RelocatePCA(object):
         refinedSegmentedMessages = list()  # type: List[List[MessageSegment]]
         # iterate sorted message segments
         for msgsegs in inferredSegmentedMessages:
+
+            # TODO happens during RelocatePCA.refineSegments(charPass1, refinementDC) for dns sigma 2.4
+            if len(msgsegs) < 1:
+                print("Empty message. Investigate!")
+
+                continue
+
             msg = msgsegs[0].message
             if msg not in newBounds:
                 refinedSegmentedMessages.append(msgsegs)
@@ -1976,7 +1983,7 @@ class RelocatePCA(object):
     def refineSegments(inferredSegmentedMessages: Iterable[Sequence[MessageSegment]], dc: DistanceCalculator,
                        initialKneedleSensitivity: float=10.0, subclusterKneedleSensitivity: float=5.0,
                        comparator: MessageComparator = None, reportFolder: str = None,
-                       collectEvaluationData: List['RelocatePCA']=False) \
+                       collectEvaluationData: List['RelocatePCA']=False, retClusterer=False) \
             -> List[List[MessageSegment]]:
         """
         Main method to condict PCA refinement for a set of segments.
@@ -1993,6 +2000,22 @@ class RelocatePCA(object):
         """
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
         noise, *clusters = clusterer.clusterSimilarSegments(False)
+        if isinstance(retClusterer, List):
+            retClusterer.append(clusterer)
+
+        # test of "magic cookie" cluster
+        #
+        # magicCookieSegs = list(chain.from_iterable(
+        #     sc for sc in clusters + [noise] if any(bytes.fromhex("63825363") in mc.bytes for mc in sc)))
+        # clusters = [
+        #     [seg for seg in clu if seg not in magicCookieSegs] for clu in clusters
+        # ]
+        # for clu in clusters:
+        #     if len(clu) == 0:
+        #         clusters.remove(clu)
+        # # [clu for clu in clusters + [noise] if any(seg in magicCookieSegs for seg in clu)]
+        # clusters.append(magicCookieSegs)
+        # # IPython.embed()
 
         newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]
         for cLabel, segments in enumerate(clusters):
@@ -2054,7 +2077,7 @@ class BlendZeroSlices(MessageModifier):
             self.zeroSegments = list()
 
 
-    def blend(self):
+    def blend(self, ignoreSingleZeros=False):
         from inference.segmentHandler import isExtendedCharSeq
 
         zeroBounds = list()
@@ -2074,16 +2097,29 @@ class BlendZeroSlices(MessageModifier):
         for zi, zb in enumerate(zBCopy[:-1]):  # omit message end bound
             if mdata[zb] == 0:
                 nzb = zBCopy[zi + 1]
+
+                # if the next bound (nzb) is only one byte ahead and we should ignore single zeros, remove both bounds.
+                if ignoreSingleZeros and zb + 1 == nzb:
+                    # if the current bound is not the message start
+                    if zb > 0:
+                        zeroBounds.remove(zb)
+                    # if the next bound is not the message end
+                    if nzb < len(mdata):
+                        zeroBounds.remove(nzb)
+                    continue
+
                 # ... there are only one or two zeros in a row ...
                 if zb + 2 >= nzb:
                     # if chars are preceding, add zero to previous
 
                     if isExtendedCharSeq(mdata[max(0,zb-minCharLen):zb], minLen=minCharLen): # \
                             # or zb > 0 and MessageAnalyzer.nibblesFromBytes(mdata[zb-1:zb])[1] == 0:  # or the least significant nibble of the preceding byte is zero
-                        zeroBounds.remove(zb)
+                        if zb in zeroBounds:
+                            zeroBounds.remove(zb)
                     # otherwise to next
-                    elif zBCopy[zi+1] < len(mdata):
-                        zeroBounds.remove(zBCopy[zi+1])
+                    elif nzb < len(mdata):
+                        if nzb in zeroBounds:
+                            zeroBounds.remove(nzb)
 
         if BlendZeroSlices._debug:
             # generate zero-bounded segments from bounds

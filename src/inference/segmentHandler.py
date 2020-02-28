@@ -249,12 +249,13 @@ def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceC
     return charPass2
 
 
-def pcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
+def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: is forwarded to RelocatePCA.refineSegments
     :return: refined segments in list per message
     """
     from itertools import chain
@@ -264,21 +265,21 @@ def pcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalcu
 
     # char refinement before and after
     charPass1 = charRefinements(segmentsPerMsg)
-    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))
-    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC)
+    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)), reliefFactor=0.8)  # TODO parameter changes HERE!
+    RelocatePCA.maxLengthDelta = 15
+    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC, initialKneedleSensitivity=30, subclusterKneedleSensitivity=15, **kwargs)
     charPass2 = charRefinements(refinedSM)
-    # refinedPerMsg = charRefinements(segmentsPerMsg)
-    # refinedSM = RelocatePCA.refineSegments(refinedPerMsg, dc)
 
     return charPass2
 
 
-def pcaPcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
+def pcaPcaRefinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: is forwarded to RelocatePCA.refineSegments
     :return: refined segments in list per message
     """
     from itertools import chain
@@ -292,7 +293,7 @@ def pcaPcaRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCa
 
     for i in range(2):
         refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
-        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC)
+        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
     refinedSM = charRefinements(pcaRound)
 
     return refinedSM
@@ -337,6 +338,10 @@ def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
     return baseRefinements(combinedRefinedSegments)
 
 
+def zeroPCARefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
+    return pcaRefinements(zeroBaseRefinements(segmentsPerMsg))
+
+
 def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
@@ -368,7 +373,7 @@ def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[
     return newstuff
 
 
-def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[Sequence[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.

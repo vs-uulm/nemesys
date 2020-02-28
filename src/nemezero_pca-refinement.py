@@ -15,7 +15,7 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
     originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct
+from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -30,21 +30,18 @@ analysisTitle = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 # use NEMESYS segments
-tokenizer = 'nemesys'
-# tokenizer = '4bytesfixed'
+tokenizer = 'zeros'
 
 refinementMethods = [
-    "original", # WOOT2018 paper
     "base",     # moco+splitfirstseg
     "PCA",      # 2-pass PCA
     "PCA1",     # 1-pass PCA
     "PCAmoco",  # 2-pass PCA+moco
-    "zeroPCA",  # zero+base + 2-pass PCA
-    "zero"      # zero+base
     ]
 
 
-def markSegNearMatch(segment: Union[MessageSegment, Template]):
+def markSegNearMatch(inferredSegmentedMessages: Sequence[Sequence[MessageSegment]],
+                     segment: Union[MessageSegment, Template]):
     """
     Print messages with the given segment in each message marked.
     Supports Templates by resolving them to their base segments.
@@ -59,7 +56,7 @@ def markSegNearMatch(segment: Union[MessageSegment, Template]):
 
     print()  # one blank line for visual structure
     for seg in segs:
-        inf4seg = inferred4segment(seg)
+        inf4seg = inferred4segment(inferredSegmentedMessages, seg)
         comparator.pprint2Interleaved(seg.message, [infs.nextOffset for infs in inf4seg],
                                       (seg.offset, seg.nextOffset))
 
@@ -91,7 +88,8 @@ def markSegNearMatch(segment: Union[MessageSegment, Template]):
     #         posSegEnd = posSegMatch
     #     contextEnd = min(posSegEnd + 1, len(trueSegmentedMessages))
 
-def inferred4segment(segment: MessageSegment) -> Sequence[MessageSegment]:
+def inferred4segment(inferredSegmentedMessages: Sequence[Sequence[MessageSegment]],
+                     segment: MessageSegment) -> Sequence[MessageSegment]:
     """
     :param segment: The input segment.
     :return: All inferred segments for the message which the input segment is from.
@@ -202,132 +200,7 @@ def plotRecursiveComponentAnalysis(relocateFromEnd: Union[Dict, Any]):
     else:
         return False
 
-def factorAnalysis(fTypeContexts: Iterable[FieldTypeContext]):
-    """
-    Evaluation of Factor Analysis, see: https://www.datacamp.com/community/tutorials/introduction-factor-analysis
-            ==> Factor Analysis not feasible for our use case
-
-    :param fTypeContexts:
-    :return:
-    """
-    from factor_analyzer.factor_analyzer import calculate_bartlett_sphericity, calculate_kmo
-    for ftc in fTypeContexts:
-        print("# # Cluster", ftc.fieldtype)
-
-        # test sphericity (Bartlett’s test)
-        paddedValues = ftc.paddedValues()
-        nonConstPVals = paddedValues[:,ftc.stdev > 0]
-        if nonConstPVals.shape[1] > 1:
-            chi_square_value, p_value = calculate_bartlett_sphericity(nonConstPVals)
-            print("p-Value (Bartlett’s test): {:.6f} "
-                  "(should be very close to zero to pass the significance check)".format(p_value))
-            # Kaiser-Meyer-Olkin (KMO) Test
-            kmo_all, kmo_model = calculate_kmo(nonConstPVals)
-            print("KMO model: {:.3f} (should be at least above .6, better above .8)".format(kmo_model))
-        else:
-            print("Bartlett’s and KMO tests impossible: only one factor is non-constant.")
-
-        import sklearn
-        fa = sklearn.decomposition.FactorAnalysis(2)
-        fa.fit(ftc.paddedValues())
-        plt.plot(abs(fa.components_.T))
-        plt.show()
-        plt.imshow(abs(fa.components_.T))
-        plt.show()
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-def wobble(interestingClusters):
-    for cluster in interestingClusters:  # type: RelocatePCA
-        print("Cluster", cluster.similarSegments.fieldtype)
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # wobble segments in one cluster
-        # start test with only one cluster: this is thought to be ntp.c1
-
-        # templates must be resolved into segments before wobbling
-        wobbles = list()
-        for element in interestingClusters:
-            if isinstance(element, Template):
-                segments = element.baseSegments
-            else:
-                segments = [element]
-            for seg in segments:
-                wobbles.extend(wobbleSegmentInMessage(seg))
-        wobDC = DelegatingDC(wobbles)
-        wobClusterer = DBSCANsegmentClusterer(wobDC)
-        # wobClusterer.autoconfigureEvaluation(join(reportFolder, "wobble-epsautoconfig.pdf"))
-        wobClusterer.eps = wobClusterer.eps * 0.8
-        wobNoise, *wobClusters = wobClusterer.clusterSimilarSegments(False)
-
-        from utils.baseAlgorithms import tril
-        print("Wobbled cluster distances:")
-        print(tabulate([(clunu, wobDC.distancesSubset(wobclu).max(), tril(wobDC.distancesSubset(wobclu)).mean())
-                        for clunu, wobclu in enumerate(wobClusters)],
-                       headers=["Cluster", "max", "mean"]))
-        # nothing very interesting in here. Wobble-clusters of true boundaries are not denser or smaller than others.
-
-        for clunu, wobclu in enumerate(wobClusters):
-            print("\n# # Wobbled Cluster", clunu)
-            for seg in wobclu:
-                markSegNearMatch(seg)
-
-        # interestingWobbles = [0, 1]  # in ntp.c1
-        interestingWobbles = [0, 1]  # in ntp.c0
-        wc = dict()
-        wceig = dict()
-        for iW in interestingWobbles:
-            wc[iW] = FieldTypeTemplate(wobClusters[iW])
-            wceig[iW] = numpy.linalg.eigh(wc[iW].cov)
-            print("Eigenvalues wc {}".format(iW))
-            print(tabulate([wceig[iW][0]]))
-
-        if withPlots:
-            # # "component-analysis"
-            import matplotlib.pyplot as plt
-            # import matplotlib.colors as colors
-            #
-            # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix need to be towards the end
-            # for floats. The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
-            # TODO Does this make sense mathematically?
-            fig, ax = plt.subplots(1, len(interestingWobbles))  # type: plt.Figure, Sequence[plt.Axes]
-            for axI, iW in enumerate(interestingWobbles):
-                principalComponents = wceig[iW][0] > 1
-                lines = ax[axI].plot(wceig[iW][1][:, principalComponents])  # type: List[plt.Line2D]
-                for i, l in enumerate(lines):
-                    l.set_label(repr(i + 1))
-                ax[axI].legend()
-                ax[axI].set_title("Wobbled Cluster " + repr(iW))
-            fig.suptitle("Principal (with Eigenvalue > 1) Eigenvectors - Cluster " + repr(cluster.similarSegments.fieldtype))
-            plt.savefig(join(reportFolder, "component-analysis_cluster{}.pdf".format(cluster.similarSegments.fieldtype)))
-            plt.close('all')
-
-        if withPlots:
-            # TODO plot heatmaps for covariance matrices of all wobclusters and clusters: mark correct boundaries
-            # plot heatmaps of cov matrices "cov-test-heatmap"
-            fig, ax = plt.subplots(1, len(interestingWobbles))  # type: plt.Figure, Sequence[plt.Axes]
-            # im = list()
-            for axI, iW in enumerate(interestingWobbles):
-                # logcolors = colors.SymLogNorm(min(wc00.cov.min(), wc01.cov.min()), max(wc00.cov.max(), wc01.cov.max()))
-                ax[axI].imshow(wc[iW].cov)  # , norm=logcolors)  im[axI]
-                # ax[axI].pcolormesh()
-            # fig.colorbar(im[0], ax=ax[1], extend='max')
-            plt.savefig(join(reportFolder, "cov-test-heatmap_cluster{}.pdf".format(cluster.similarSegments.fieldtype)))
-            plt.close('all')
-
-        if withPlots:
-            print("Plot distances...")
-            sdp = DistancesPlotter(specimens,
-                                   'distances-wobble-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}-cluster{}".format(
-                                       wobClusterer.eps, int(wobClusterer.min_samples), cluster.similarSegments.fieldtype), False)
-
-            clustermask = {segid: cluN for cluN, segL in enumerate(wobClusters) for segid in wobDC.segments2index(segL)}
-            clustermask.update({segid: "Noise" for segid in wobDC.segments2index(wobNoise)})
-            labels = numpy.array([clustermask[segid] for segid in range(len(wobDC.segments))])
-            # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
-            sdp.plotSegmentDistances(wobDC, labels)
-            sdp.writeOrShowFigure()
-            del sdp
-
-def mostCommonValues():
+def mostCommonValues(inferredSegmentedMessages: Sequence[Sequence[MessageSegment]], dc: DistanceCalculator):
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Count and compare the most common segment values
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -363,7 +236,7 @@ def commonBoundsIrrelevant():
         if len(set(baseOffs.values())) > 1 or len(set(fromEnd.values())) > 1:
             print("#", noninCluster.similarSegments.fieldtype, "# "*10)
             for bs in noninCluster.similarSegments.baseSegments:
-                markSegNearMatch(bs)
+                markSegNearMatch(inferredSegmentedMessages, bs)
             print(tabulate(noninCluster.similarSegments.paddedValues(), showindex=
                            [(baseOffs[bs], fromEnd[bs]) for bs in noninCluster.similarSegments.baseSegments]))
     print("# " * 20)
@@ -379,8 +252,6 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interactive', help='Show interactive plot instead of writing output to file and '
                                                     'open ipython prompt after finishing the analysis.',
                         action="store_true")
-    parser.add_argument('-s', '--sigma', type=float, help='Sigma for noise reduction (gauss filter) in NEMESYS,'
-                                                          'default: 0.9')
     parser.add_argument('-p', '--with-plots',
                         help='Generate plots of true field types and their distances.',
                         action="store_true")
@@ -397,45 +268,40 @@ if __name__ == '__main__':
     analysisArgs = None
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # cache/load the DistanceCalculator to the filesystem
+    # local alternative to cache/load the DistanceCalculator to the filesystem
     #
-    # noinspection PyUnboundLocalVariable
-    specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-        args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
-        refinementCallback=None
-        , disableCache=True
-    )  # Note!  When manipulating distances, deactivate caching by adding "True".
-    # chainedSegments = dc.rawSegments
+    pcapName = os.path.splitext(pcapbasename)[0]
+    # dissect and label messages
+    print("Load messages from {}...".format(pcapName))
+    specimens = SpecimenLoader(args.pcapfilename, 2, True)
+    comparator = MessageComparator(specimens, 2, True, debug=debug)
+
+    # zero/non-zero segments
+    segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
+    # blend: True to omit single zeros
+    inferredSegmentedMessages = [BlendZeroSlices(list(msg)).blend(True) for msg in segmentsPerMsg]
+
     # # # # # # # # # # # # # # # # # # # # # # # #
     trueSegmentedMessages = {msgseg[0].message: msgseg
                          for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
                          }
-    # tabuSeqOfSeg(trueSegmentedMessages)
-    # print(trueSegmentedMessages.values())
-
-    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
-    if not exists(reportFolder):
-        makedirs(reportFolder)
-    # TODO add exit() on else
-
+    #
+    # for msgsegs in inferredSegmentedMessages:
+    #     comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # conduct PCA refinement
     collectedSubclusters = list()  # type: List[RelocatePCA]
+    pcaClusterer = list()  # type: List[DBSCANsegmentClusterer]
 
     startRefinement = time.time()
-    if args.refinement == "original":
-        refinedSM = originalRefinements(inferredSegmentedMessages)
-    elif args.refinement == "base":
+    if args.refinement == "base":
         refinedSM = baseRefinements(inferredSegmentedMessages)
-    elif args.refinement == "zeroPCA":
-        refinedSM = pcaRefinements(zeroBaseRefinements(inferredSegmentedMessages))
-    elif args.refinement == "zero":
-        refinedSM = zeroBaseRefinements(inferredSegmentedMessages)
     elif args.refinement == "PCA1":
-        refinedSM = pcaRefinements(inferredSegmentedMessages)
+        refinedSM = pcaRefinements(inferredSegmentedMessages, collectEvaluationData=collectedSubclusters,
+                                   retClusterer=pcaClusterer)
     elif args.refinement == "PCA":
-        refinedSM = pcaPcaRefinements(inferredSegmentedMessages)
+        refinedSM = pcaPcaRefinements(inferredSegmentedMessages, collectEvaluationData=collectedSubclusters)
     elif args.refinement == "PCAmoco":
         try:
 
@@ -476,10 +342,17 @@ if __name__ == '__main__':
     runtimeRefinement = time.time() - startRefinement
     # # # # # # # # # # # # # # # # # # # # # # # #
 
+    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
+    if not exists(reportFolder):
+        makedirs(reportFolder)
+    else:
+        print("Adding report to existing folder:", reportFolder)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # some parameters
-    trace = splitext(pcapbasename)[0]
+    # Distance Calculator
+    print("Calculating Dissimilarities...")
+
+    dc = MemmapDC(list(chain.from_iterable(refinedSM)))
     # # # # # # # # # # # # # # # # # # # # # # # #
 
     for msgsegs in refinedSM:
@@ -650,24 +523,27 @@ if __name__ == '__main__':
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
                 # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
-                relocate = sc.relocateOffsets(reportFolder, trace, comparator)
+                relocate = sc.relocateOffsets(reportFolder, pcapName, comparator)
                 plotComponentAnalysis(sc,
                                       eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
                                       relocate)
                 for bs in sc.similarSegments.baseSegments:
-                    markSegNearMatch(bs)
+                    markSegNearMatch(inferredSegmentedMessages, bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
-        # print("Plot distances...")
-        # sdp = DistancesPlotter(specimens,
-        #                        'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-        #                            clusterer.eps, int(clusterer.min_samples)), False)
-        # clustermask = {segid: cluN for cluN, segL in enumerate(clusters) for segid in dc.segments2index(segL)}
+        print("Plot distances...")
+        sdp = DistancesPlotter(specimens,
+                               'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+                                   pcaClusterer[0].eps, int(pcaClusterer[0].min_samples)),
+                               False)
+        clustermask = {segid: cluN for cluN, segL in enumerate(collectedSubclusters) for segid in
+                       pcaClusterer[0].distanceCalculator.segments2index(segL.similarSegments.baseSegments)}
         # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        # labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
-        # # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
-        # sdp.plotSegmentDistances(dc, labels)
-        # sdp.writeOrShowFigure()
-        # del sdp
+        clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})
+        labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
+        # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
+        sdp.plotSegmentDistances(dc, labels)
+        sdp.writeOrShowFigure()
+        del sdp
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -703,7 +579,7 @@ if __name__ == '__main__':
             if writeheader:
                 segcsv.writerow(scoHeader)
             segcsv.writerow([
-                trace, sc.similarSegments.fieldtype, len(sc.similarSegments.baseSegments),
+                pcapName, sc.similarSegments.fieldtype, len(sc.similarSegments.baseSegments),
                 sc.similarSegments.length,
                 repr(cid in relevantSubclusters), lendiff, len(uniqvals), ischar,
                 min(internDis), max(internDis), numpy.mean(internDis)
@@ -725,9 +601,7 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Write FMS statistics
-    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-        0.9 if not args.sigma else args.sigma
-    inferenceTitle = "nemesys-s{:.1f}".format(sigma)
+    inferenceTitle = tokenizer # "-".join([tokenizer, ])
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Determine the amount of off-by-one errors in original segments
     message2quality = DissectorMatcher.symbolListFMS(comparator, symbolsFromSegments(inferredSegmentedMessages))

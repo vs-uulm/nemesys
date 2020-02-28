@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, TypedTemplate, FieldTypeContext,  ClusterAutoconfException
 from inference.segmentHandler import baseRefinements, originalRefinements, \
-    pcaPcaRefinements, zeroBaseRefinements, isExtendedCharSeq
+    pcaPcaRefinements, zeroBaseRefinements, isExtendedCharSeq, zeroPCARefinements
 from visualization.distancesPlotter import DistancesPlotter
 from utils.evaluationHelpers import *
 
@@ -33,7 +33,8 @@ refinementMethods = [
     "base",     # moco+splitfirstseg
     "PCA",      # PCA
     "PCAmoco",  # PCA+moco
-    "zero"      # zeroslices+base
+    "zero",      # zeroslices+base
+    "zeroPCA",  # zero+base + 2-pass PCA
     ]
 
 
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
     #
-    doCache = True
+    doCache = False
     if args.refinement == "original":
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
@@ -162,6 +163,12 @@ if __name__ == '__main__':
         specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
             refinementCallback=zeroBaseRefinements
+            , disableCache=not doCache
+        )
+    elif args.refinement == "zeroPCA":
+        specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
+            refinementCallback=zeroPCARefinements
             , disableCache=not doCache
         )
     else:
