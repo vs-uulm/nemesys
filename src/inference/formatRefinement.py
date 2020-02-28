@@ -671,7 +671,9 @@ class RelocatePCA(object):
             # interpreted as fraction of the component count as dynamic determination.
     contributionRelevant = 0.1  # 0.12; threshold for the minimum difference from 0
             # to consider a loading component in the eigenvector as contributing to the variance
-    maxLengthDelta = 7  # (max true: 6 in dns-new, min false 9 in dhcp)
+    maxLengthDelta = 30  # (max true: 6 in dns-new, min false 9 in dhcp)    7   # TODO: test parameter 20200228
+
+    pcDeltaMin = 0.98
 
     # e1 parameters
     nearZero = 0.030  # 0.003
@@ -941,7 +943,7 @@ class RelocatePCA(object):
 
 
     def relocateOffsets(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None,
-                        conditionA = True, conditionE1 = True, conditionE2 = True,
+                        conditionA = True, conditionE1 = False, conditionE2 = True,
                         conditionF = False, conditionG = False):
         """
 
@@ -985,14 +987,20 @@ class RelocatePCA(object):
         if not self.principalComponents.any():
             return relocate
 
+
+
         # # Condition a: Covariance ~0 after non-0
         # at which eigenvector component does any of the principal components have a relevant contribution
         contributingLoadingComponents = (abs(self._contribution) > RelocatePCA.contributionRelevant).any(1)
 
-
         if conditionA:
             for lc in reversed(range(1, contributingLoadingComponents.shape[0])):
-                if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1]:
+                # a "significant" relative drop in covariance
+                relPCdelta = (abs(self._contribution[lc - 1]).max() - abs(self._contribution[lc]).max()) \
+                             / abs(self._contribution[lc - 1]).max()
+
+                if not contributingLoadingComponents[lc] and contributingLoadingComponents[lc - 1] \
+                        and relPCdelta > RelocatePCA.pcDeltaMin:
                     relocate.append(lc)
 
                     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1039,11 +1047,12 @@ class RelocatePCA(object):
         # # Condition d:
         # cancelled
 
+
+        # prepare list of eigen vectors sorted by eigen values
         eigVsorted = list(reversed(sorted([(val, vec) for val, vec in zip(
             self._eigen[0][self.principalComponents], self.contribution.T)],
                                           key=lambda x: x[0])))
         eigVecS = numpy.array([colVec[1] for colVec in eigVsorted]).T
-
 
         # TODO caveat: precision of numerical method for cov or eigen does not suffice for near zero resolution
         #  in all cases. e. g. setting nearZero to 0.003 indeterministically results in a false negative for the
@@ -1070,6 +1079,8 @@ class RelocatePCA(object):
                 rnzCount += 1
             else:
                 rnzCount = 0
+
+            relPCdelta = (abs(pcLoadings[lc]).max() - abs(pcLoadings[lc - 1]).max()) / abs(pcLoadings[lc]).max()
 
             if conditionE1 \
                     and all(abs(pcLoadings[lc - 1]) < RelocatePCA.nearZero) \
@@ -1102,10 +1113,15 @@ class RelocatePCA(object):
 
                 relocate.append(lc)
 
+            # has been close to zero for at least the previous **relaxedNZlength** bytes
+            # and any loading is greater than relaxedNotableContrib
+            # and all loadings are less than relaxedMaxContrib
+            # and ...
             elif conditionE2 \
                     and rnzCount >= RelocatePCA.relaxedNZlength \
                     and any(abs(pcLoadings[lc]) > RelocatePCA.relaxedNotableContrib) \
-                    and all(abs(pcLoadings[lc]) < RelocatePCA.relaxedMaxContrib):
+                    and all(abs(pcLoadings[lc]) < RelocatePCA.relaxedMaxContrib) \
+                    and relPCdelta > RelocatePCA.pcDeltaMin:
                     # # that is away more than 1 position from another new cut (see smb tf03), leads to only one FP
                     # not any(nearBound in relocate for nearBound in [lc, lc - 1, lc + 1]):
 
@@ -1511,8 +1527,11 @@ class RelocatePCA(object):
 
         for segment, newBounds in relocatedBounds.items():
             relocatedBoundaries[segment].extend([int(rb + segment.offset) for rb in newBounds])
+            assert len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment]))
         for segment, newCommons in relocatedCommons.items():
-            relocatedBoundaries[segment].extend([int(rc + segment.offset) for rc in newCommons])
+            relocatedBoundaries[segment].extend([int(rc + segment.offset) for rc in newCommons
+                                                 if int(rc + segment.offset) not in relocatedBoundaries[segment]])
+            assert len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment]))
 
         # from itertools import chain
         # messageBounds = {seg.message: [[], []] for seg in chain(relocatedBounds.keys(), relocatedCommons.keys())}
@@ -1999,6 +2018,7 @@ class RelocatePCA(object):
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
+        clusterer.eps = clusterer.eps * 1.5   # TODO: test parameter 20200228
         noise, *clusters = clusterer.clusterSimilarSegments(False)
         if isinstance(retClusterer, List):
             retClusterer.append(clusterer)
@@ -2153,10 +2173,62 @@ class BlendZeroSlices(MessageModifier):
 
 
 
+class CropChars(MessageModifier):
+
+    def split(self):
+        from inference.fieldTypes import FieldTypeRecognizer
+
+        ftrecog = FieldTypeRecognizer(self.segments[0].analyzer)
+        # RecognizedFields or type char using isExtendedCharSeq
+        charsRecog = [cr.toSegment() for cr in ftrecog.charsInMessage()]
+
+        blendedSegments = self.blend(charsRecog)
+
+        # final assertion of complete representation of message by the new segments
+        newbytes = b"".join([seg.bytes for seg in blendedSegments])
+        msgbytes = b"".join([seg.bytes for seg in self.segments])
+        assert msgbytes == newbytes, "segment sequence does not match message bytes:\nshould: " \
+                                     + msgbytes.hex() + "\nis:     " + newbytes.hex()
+
+        return blendedSegments
 
 
+    def blend(self, mixin: List[MessageSegment]):
+        """
+        :param mixin: list of segments to blend into the segments of the object
+        :return: List of segments blended together from the segments of the object as basis and the mixin, forming the message.
+        """
+        stack = sorted(mixin, key=lambda x: -x.offset)
+        newSegSeq = list()  # type: List[MessageSegment]
+        for seg in self.segments:
+            while len(stack) > 0 and stack[-1].offset < seg.nextOffset:
+                lastOffset = newSegSeq[-1].nextOffset if len(newSegSeq) > 0 else 0
+                if stack[-1].offset > lastOffset:  # prepend/fill gap to char
+                    newSegSeq.append(MessageSegment(seg.analyzer, lastOffset, stack[-1].offset - lastOffset))
+                newSegSeq.append(stack.pop())  # append char
+            lastOffset = newSegSeq[-1].nextOffset if len(newSegSeq) > 0 else 0
+            if lastOffset == seg.offset:  # append unchanged segment
+                newSegSeq.append(seg)
+            elif lastOffset < seg.nextOffset:  # append gap to next segment
+                newSegSeq.append(MessageSegment(seg.analyzer, lastOffset, seg.nextOffset - lastOffset))
+            # else nothing to do since no bytes/segments left
+        return newSegSeq
 
 
+    @staticmethod
+    def isOverlapping(segA: MessageSegment, segB: MessageSegment) -> bool:
+        """
+        Determines whether the given segmentS overlap.
 
+        :param segA: The segment to check against.
+        :param segB: The segment to check against.
+        :return: Is overlapping or not.
+        """
+        if segA.message == segB.message \
+                and (segA.offset <= segB.offset < segA.nextOffset
+                or segB.offset < segA.nextOffset <= segB.nextOffset):
+            return True
+        else:
+            return False
 
 

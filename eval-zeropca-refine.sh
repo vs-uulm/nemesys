@@ -7,9 +7,11 @@
 #input=input/dns_ictf2010-new-deduped-100.pcap
 input=input/maxdiff-fromOrig/*-1000.pcap
 #input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap
-#input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap"
+#input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap"
 
 refines="base PCA PCA1 PCAmoco"
+#refines="PCA1 PCAmoco"
+#refines="PCA1"
 
 
 cftnext=$(expr 1 + $(ls -d reports/zeropca-* | sed "s/^.*zeropca-\([0-9]*\)-.*$/\1/" | sort | tail -1))
@@ -20,7 +22,7 @@ mkdir ${report}
 
 for fn in ${input} ; do
 for ref in ${refines} ; do
-python src/nemezero_pca-refinement.py -r ${ref} ${fn}
+python src/nemezero_pca-refinement.py -p -r ${ref} ${fn}
 done
 done
 

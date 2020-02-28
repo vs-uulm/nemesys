@@ -15,7 +15,7 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
     originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices
+from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices, CropChars
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -279,7 +279,8 @@ if __name__ == '__main__':
     # zero/non-zero segments
     segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
     # blend: True to omit single zeros
-    inferredSegmentedMessages = [BlendZeroSlices(list(msg)).blend(True) for msg in segmentsPerMsg]
+    zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(True) for msg in segmentsPerMsg]
+    inferredSegmentedMessages = [CropChars(segs).split() for segs in zeroSlicedMessages]
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     trueSegmentedMessages = {msgseg[0].message: msgseg
@@ -298,10 +299,11 @@ if __name__ == '__main__':
     if args.refinement == "base":
         refinedSM = baseRefinements(inferredSegmentedMessages)
     elif args.refinement == "PCA1":
-        refinedSM = pcaRefinements(inferredSegmentedMessages, collectEvaluationData=collectedSubclusters,
-                                   retClusterer=pcaClusterer)
+        refinedSM = pcaRefinements(inferredSegmentedMessages,
+                                   collectEvaluationData=collectedSubclusters, retClusterer=pcaClusterer)
     elif args.refinement == "PCA":
-        refinedSM = pcaPcaRefinements(inferredSegmentedMessages, collectEvaluationData=collectedSubclusters)
+        refinedSM = pcaPcaRefinements(inferredSegmentedMessages,
+                                      collectEvaluationData=collectedSubclusters, retClusterer=pcaClusterer)
     elif args.refinement == "PCAmoco":
         try:
 
@@ -320,7 +322,7 @@ if __name__ == '__main__':
             for i in range(2):
                 refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
-                                                   collectEvaluationData=collectedSubclusters)
+                                  collectEvaluationData=collectedSubclusters,retClusterer=pcaClusterer)
 
             # additionally perform most common values refinement
             moco = CropDistinct.countCommonValues(pcaRound)
@@ -522,23 +524,24 @@ if __name__ == '__main__':
         print("Plot component analyses...")
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
-                # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
                 relocate = sc.relocateOffsets(reportFolder, pcapName, comparator)
                 plotComponentAnalysis(sc,
                                       eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
                                       relocate)
-                for bs in sc.similarSegments.baseSegments:
-                    markSegNearMatch(inferredSegmentedMessages, bs)
+                # # print each segment marked in its message
+                # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
+                # for bs in sc.similarSegments.baseSegments:
+                #     markSegNearMatch(inferredSegmentedMessages, bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
         print("Plot distances...")
         sdp = DistancesPlotter(specimens,
                                'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-                                   pcaClusterer[0].eps, int(pcaClusterer[0].min_samples)),
+                                   pcaClusterer[0].eps, int(pcaClusterer[0].min_samples)),   # TODO: might be misleading for multiple iterations of PCA
                                False)
-        clustermask = {segid: cluN for cluN, segL in enumerate(collectedSubclusters) for segid in
-                       pcaClusterer[0].distanceCalculator.segments2index(segL.similarSegments.baseSegments)}
+        clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters for segid in
+                       dc.segments2index(bs for bs in segL.similarSegments.baseSegments if bs in dc.rawSegments)}
         # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})
+        clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})  # TODO: not completely sure if that is the whole truth about the noise
         labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
         # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
         sdp.plotSegmentDistances(dc, labels)

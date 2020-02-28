@@ -265,7 +265,7 @@ def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs)
 
     # char refinement before and after
     charPass1 = charRefinements(segmentsPerMsg)
-    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))  # TODO parameter changes HERE!
+    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))
     refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC, **kwargs)
     charPass2 = charRefinements(refinedSM)
 
@@ -647,4 +647,7 @@ def wobbleSegmentInMessage(segment: MessageSegment):
         wobbles.append(MessageSegment(segment.analyzer, segment.offset + 1, segment.length - 1))
 
     return wobbles
+
+
+
 
