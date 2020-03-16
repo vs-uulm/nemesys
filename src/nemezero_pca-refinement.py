@@ -321,17 +321,10 @@ if __name__ == '__main__':
             # pcaRound = charRefinements(inferredSegmentedMessages)
             pcaRound = inferredSegmentedMessages
             for i in range(2):
-                # # most common values refinement
-                # moco = CropDistinct.countCommonValues(pcaRound)
-                # print("Common segment values:", [m.hex() for m in moco])
-                # refinedSM = list()
-                # for msg in pcaRound:
-                #     croppedMsg = CropDistinct(msg, moco).split()
-                #     refinedSM.append(croppedMsg)
-
-                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))   # refinedSM or directly pcaRound (without moco)
+                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
                                   collectEvaluationData=collectedSubclusters,retClusterer=pcaClusterer)
+            # refinedSM = charRefinements(pcaRound)
 
             # additionally perform most common values refinement
             moco = CropDistinct.countCommonValues(pcaRound)
@@ -344,7 +337,6 @@ if __name__ == '__main__':
             refinedSM = charRefinements(refinedSM)
 
             # refinedSM = refinedSegmentedMessages
-
             # TODO now needs recalculation of segment distances
         except ClusterAutoconfException as e:
             print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
