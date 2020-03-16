@@ -411,7 +411,7 @@ class Resplit2LeastFrequentPair(MessageModifier):
 
 class CropDistinct(MessageModifier):
     # TODO omit also 2-byte long
-    minSegmentLength = 2
+    minSegmentLength = 1
     frequencyThreshold = 0.1
     """fraction of *messages* to exhibit the value to be considered frequent"""
 

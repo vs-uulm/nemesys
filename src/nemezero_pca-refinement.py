@@ -279,7 +279,7 @@ if __name__ == '__main__':
     # zero/non-zero segments
     segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
     # .blend(True) to omit single zeros    TODO eval
-    zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(True) for msg in segmentsPerMsg]
+    zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(False) for msg in segmentsPerMsg]
     inferredSegmentedMessages = [CropChars(segs).split() for segs in zeroSlicedMessages]
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -321,15 +321,15 @@ if __name__ == '__main__':
             # pcaRound = charRefinements(inferredSegmentedMessages)
             pcaRound = inferredSegmentedMessages
             for i in range(2):
-                # most common values refinement
-                moco = CropDistinct.countCommonValues(pcaRound)
-                print("Common segment values:", [m.hex() for m in moco])
-                refinedSM = list()
-                for msg in pcaRound:
-                    croppedMsg = CropDistinct(msg, moco).split()
-                    refinedSM.append(croppedMsg)
+                # # most common values refinement
+                # moco = CropDistinct.countCommonValues(pcaRound)
+                # print("Common segment values:", [m.hex() for m in moco])
+                # refinedSM = list()
+                # for msg in pcaRound:
+                #     croppedMsg = CropDistinct(msg, moco).split()
+                #     refinedSM.append(croppedMsg)
 
-                refinementDC = MemmapDC(list(chain.from_iterable(refinedSM)))   # or directly pcaRound (without moco)
+                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))   # refinedSM or directly pcaRound (without moco)
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
                                   collectEvaluationData=collectedSubclusters,retClusterer=pcaClusterer)
 
