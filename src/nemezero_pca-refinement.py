@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
     # zero/non-zero segments
     segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
-    # blend: True to omit single zeros
+    # .blend(True) to omit single zeros    TODO eval
     zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(True) for msg in segmentsPerMsg]
     inferredSegmentedMessages = [CropChars(segs).split() for segs in zeroSlicedMessages]
 
@@ -318,15 +318,24 @@ if __name__ == '__main__':
             # refinedSM = RelocatePCA.refineSegments(refinedSegmentedMessages, dc,
             #                                        collectEvaluationData=collectedSubclusters)
 
-            pcaRound = charRefinements(inferredSegmentedMessages)
+            # pcaRound = charRefinements(inferredSegmentedMessages)
+            pcaRound = inferredSegmentedMessages
             for i in range(2):
-                refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+                # most common values refinement
+                moco = CropDistinct.countCommonValues(pcaRound)
+                print("Common segment values:", [m.hex() for m in moco])
+                refinedSM = list()
+                for msg in pcaRound:
+                    croppedMsg = CropDistinct(msg, moco).split()
+                    refinedSM.append(croppedMsg)
+
+                refinementDC = MemmapDC(list(chain.from_iterable(refinedSM)))   # or directly pcaRound (without moco)
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
                                   collectEvaluationData=collectedSubclusters,retClusterer=pcaClusterer)
 
             # additionally perform most common values refinement
             moco = CropDistinct.countCommonValues(pcaRound)
-            print([m.hex() for m in moco])
+            print("Common segment values:", [m.hex() for m in moco])
             refinedSM = list()
             for msg in pcaRound:
                 croppedMsg = CropDistinct(msg, moco).split()
@@ -520,7 +529,7 @@ if __name__ == '__main__':
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    if withPlots:
+    if withPlots and len(pcaClusterer) > 0:  # nothing to plot with, e. g., "base" refinement
         print("Plot component analyses...")
         for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
@@ -534,10 +543,9 @@ if __name__ == '__main__':
                 #     markSegNearMatch(inferredSegmentedMessages, bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
         print("Plot distances...")
-        sdp = DistancesPlotter(specimens,
-                               'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-                                   pcaClusterer[0].eps, int(pcaClusterer[0].min_samples)),   # TODO: might be misleading for multiple iterations of PCA
-                               False)
+        plotTitle = 'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+            pcaClusterer[0].eps, int(pcaClusterer[0].min_samples))  # TODO: might be misleading for multiple iterations of PCA
+        sdp = DistancesPlotter(specimens, plotTitle, False)
         clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters for segid in
                        dc.segments2index(bs for bs in segL.similarSegments.baseSegments if bs in dc.rawSegments)}
         # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})

@@ -2,7 +2,7 @@ import csv
 from abc import ABC, abstractmethod
 from itertools import chain
 from os.path import join, exists
-from typing import List, Dict, Tuple, Sequence, Iterable
+from typing import List, Dict, Tuple, Sequence, Iterable, Set
 
 import numpy
 from kneed import KneeLocator
@@ -410,6 +410,11 @@ class Resplit2LeastFrequentPair(MessageModifier):
 
 
 class CropDistinct(MessageModifier):
+    # TODO omit also 2-byte long
+    minSegmentLength = 2
+    frequencyThreshold = 0.1
+    """fraction of *messages* to exhibit the value to be considered frequent"""
+
     """
     Split segments into smaller chunks if a given value is contained in the segment.
     The given value is cropped to a segment on its own.
@@ -429,11 +434,12 @@ class CropDistinct(MessageModifier):
         from itertools import chain
         segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
         segFreq = segcnt.most_common()
-        freqThre = .1 * len(segmentedMessages)
+        freqThre = CropDistinct.frequencyThreshold * len(segmentedMessages)
         thre = 0
         while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
-        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > 1]  # omit \x00-sequences and 1-byte long segments
+        # by the "if" in list comprehension: omit \x00-sequences and shorter than {minSegmentLength}-byte long segments
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > CropDistinct.minSegmentLength]
         # return moco
 
         # omit all sequences that have common subsequences
@@ -672,6 +678,7 @@ class RelocatePCA(object):
     contributionRelevant = 0.1  # 0.12; threshold for the minimum difference from 0
             # to consider a loading component in the eigenvector as contributing to the variance
     maxLengthDelta = 30  # (max true: 6 in dns-new, min false 9 in dhcp)    7   # TODO: test parameter 20200228
+    maxLengthDeltaRatio = 0.80
 
     pcDeltaMin = 0.98
 
@@ -779,7 +786,8 @@ class RelocatePCA(object):
         # leave only clusters of at least minSegLen * 2 (=6)
         minClusterSize = RelocatePCA.minSegLen * 2
         for cid in interestingClusters.copy():
-            if len(fTypeContext[cid].baseSegments) < minClusterSize:
+            # must be at least minClusterSize unique segment values
+            if len(set([bs.bytes for bs in fTypeContext[cid].baseSegments])) < minClusterSize:
                 interestingClusters.remove(cid)
 
         # remove all clusters that have no knees in scree
@@ -798,15 +806,15 @@ class RelocatePCA(object):
         #         print(eigen[0])
         #         IPython.embed()
 
-        # remove all clusters having a segment length difference of more than maxLengthDelta
-        for cid in interestingClusters.copy():
-            bslen = {bs.length for bs in fTypeContext[cid].baseSegments}
-            if max(bslen) - min(bslen) > RelocatePCA.maxLengthDelta:
-                interestingClusters.remove(cid)
-                print("Removed cluster {} for too high segment length difference of {}".format(
-                    fTypeContext[cid].fieldtype,
-                    max(bslen) - min(bslen)
-                ))
+        # # remove all clusters having a segment length difference of more than maxLengthDelta  # TODo removed due to ntp quality in zeropca-016-refinement-79d3ba4-ntp and nemesys-107-refinement-79d3ba4
+        # for cid in interestingClusters.copy():
+        #     bslen = {bs.length for bs in fTypeContext[cid].baseSegments}
+        #     if min(bslen) / max(bslen) < RelocatePCA.maxLengthDeltaRatio:
+        #         interestingClusters.remove(cid)
+        #         print("Removed cluster {} for too high segment length difference ratio of {}".format(
+        #             fTypeContext[cid].fieldtype,
+        #             (max(bslen) - min(bslen))/max(bslen)
+        #         ))
 
         return interestingClusters, eigenVnV, screeKnees
 
@@ -851,14 +859,14 @@ class RelocatePCA(object):
         enoughSegments = len(self._similarSegments.baseSegments) > RelocatePCA.minSegLen
         # segment length difference is too high
         bslen = {bs.length for bs in self.similarSegments.baseSegments}
-        tooHighLenDiff = max(bslen) - min(bslen) > RelocatePCA.maxLengthDelta
+        tooHighLenDiff = min(bslen) / max(bslen) < RelocatePCA.maxLengthDeltaRatio
 
         if tooManyPCs:
-            print("Cluster {} needs reclustering: too many principal components.".format(
-                self._similarSegments.fieldtype))
+            print("Cluster {} needs reclustering: too many principal components ({}).".format(
+                self._similarSegments.fieldtype, sum(self._eigen[0] > self._screeThresh)))
         if tooHighLenDiff:
-            print("Cluster {} needs reclustering: length difference too high.".format(
-                self._similarSegments.fieldtype))
+            print("Cluster {} needs reclustering: length difference too high ({:.2f}).".format(
+                self._similarSegments.fieldtype, min(bslen) / max(bslen)))
 
 
         if (tooManyPCs or tooHighLenDiff) and enoughSegments:
@@ -929,11 +937,15 @@ class RelocatePCA(object):
                         subclusters = list()
                         for cid, subcluster in enumerate(fTypeContext):
                             print("Analyzing sub-cluster", subcluster.fieldtype)
-                            subRpca = RelocatePCA(subcluster)
-                            if cid in interestingClusters:
-                                subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
-                            else:
-                                subclusters.append(subRpca)
+                            try:
+                                subRpca = RelocatePCA(subcluster)
+                                if cid in interestingClusters:
+                                    subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
+                                else:
+                                    subclusters.append(subRpca)
+                            except numpy.linalg.LinAlgError:
+                                print("Ignore subcluster due to eigenvalues did not converge")
+                                print(repr(subcluster.baseSegments))
                         return subclusters
                 except ClusterAutoconfException as e:
                     print(e)
@@ -1531,7 +1543,11 @@ class RelocatePCA(object):
         for segment, newCommons in relocatedCommons.items():
             relocatedBoundaries[segment].extend([int(rc + segment.offset) for rc in newCommons
                                                  if int(rc + segment.offset) not in relocatedBoundaries[segment]])
-            assert len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment]))
+            if not len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment])):
+                IPython.embed()
+            assert len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment])), \
+                repr(relocatedBoundaries[segment]) + "\n" + repr(set(relocatedBoundaries[segment]))
+                # TODO smb-1000 PCA/moco FAILS
 
         # from itertools import chain
         # messageBounds = {seg.message: [[], []] for seg in chain(relocatedBounds.keys(), relocatedCommons.keys())}
@@ -1709,7 +1725,7 @@ class RelocatePCA(object):
 
 
         def frequentBoundReframing(self, newPaddingRelative: Dict[MessageSegment, List[int]], relocate: List[int]) \
-                -> Dict[MessageSegment, List[int]]:
+                -> Dict[MessageSegment, Set[int]]:
             """
             Frequent raw segment bound reframing:
             Refine boundaries within the padded range of all segments in the cluster considering frequent common offsets
@@ -1744,7 +1760,7 @@ class RelocatePCA(object):
                                             or common in commonUnchangedOffbyone
                                     )
                                     )
-                cutsExt[seg] = cutsExtStart + cutsExtEnd
+                cutsExt[seg] = set(cutsExtStart + cutsExtEnd)
             return cutsExt
 
 
@@ -1811,13 +1827,13 @@ class RelocatePCA(object):
                                 segsbounds[segOutScope].remove(bound)
                     else:
                         # multiple segments truly have bound in scope
-                        # TODO replace by exception
+                        # TODO replace by exception - what can we do before failing?
                         print("Bound {} is in scope of multiple segments:".format(bound))
                         for lookedupSeg in RelocatePCA.segs4bound(segsbounds, bound):
                             markSegmentInMessage(lookedupSeg)
                         print("Needs resolving!")
                         print()
-                        IPython.embed()
+                        # IPython.embed()
 
             # if bound in other segment is as close as one position away: resolve
             flatSegsboundsCopy = [(seg, bound) for seg, bounds in segsbounds.items() for bound in bounds]
@@ -2049,19 +2065,23 @@ class RelocatePCA(object):
 
             ftContext = FieldTypeContext(resolvedSegments)
             ftContext.fieldtype = "tf{:02d}".format(cLabel)
-            ftRelocate = RelocatePCA(ftContext)
+            try:
+                ftRelocate = RelocatePCA(ftContext)
 
-            clusterBounds = ftRelocate.relocateBoundaries(dc, subclusterKneedleSensitivity, comparator, reportFolder,
-                                                          collectEvaluationData=collectEvaluationData)
-            for segment, bounds in clusterBounds.items():
-                if segment.message not in newBounds:
-                    newBounds[segment.message] = dict()
-                elif segment in newBounds[segment.message]:
-                    # TODO replace by exception
-                    print("\nSame segment was refined (PCA) multiple times. Needs resolving. Segment is:\n", segment)
-                    print()
-                    IPython.embed()
-                newBounds[segment.message][segment] = bounds
+                clusterBounds = ftRelocate.relocateBoundaries(dc, subclusterKneedleSensitivity, comparator, reportFolder,
+                                                              collectEvaluationData=collectEvaluationData)
+                for segment, bounds in clusterBounds.items():
+                    if segment.message not in newBounds:
+                        newBounds[segment.message] = dict()
+                    elif segment in newBounds[segment.message]:
+                        # TODO replace by exception
+                        print("\nSame segment was refined (PCA) multiple times. Needs resolving. Segment is:\n", segment)
+                        print()
+                        IPython.embed()
+                    newBounds[segment.message][segment] = bounds
+            except numpy.linalg.LinAlgError:
+                print("Ignore subcluster due to eigenvalues did not converge")
+                print(repr(ftContext.baseSegments))
         # remove from newBounds, in place
         RelocatePCA.removeSuperfluousBounds(newBounds)
 

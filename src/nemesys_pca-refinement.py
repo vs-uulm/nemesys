@@ -15,7 +15,7 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
     originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct
+from inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -40,7 +40,8 @@ refinementMethods = [
     "PCA1",     # 1-pass PCA
     "PCAmoco",  # 2-pass PCA+moco
     "zeroPCA",  # zero+base + 2-pass PCA
-    "zero"      # zero+base
+    "zero",     # zero+base
+    "zerocharPCAmoco"  # with crop char
     ]
 
 
@@ -406,6 +407,10 @@ if __name__ == '__main__':
         , disableCache=True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
+    #
+    # for msgsegs in inferredSegmentedMessages:
+    #     comparator.pprint2Interleaved(msgsegs[0].message, [infs.nextOffset for infs in msgsegs])
+    # exit()
     # # # # # # # # # # # # # # # # # # # # # # # #
     trueSegmentedMessages = {msgseg[0].message: msgseg
                          for msgseg in annotateFieldTypes(analyzerType, analysisArgs, comparator)
@@ -438,8 +443,6 @@ if __name__ == '__main__':
         refinedSM = pcaPcaRefinements(inferredSegmentedMessages)
     elif args.refinement == "PCAmoco":
         try:
-
-
             # # first perform most common values refinement
             # moco = CropDistinct.countCommonValues(inferredSegmentedMessages)
             # print([m.hex() for m in moco])
@@ -466,12 +469,36 @@ if __name__ == '__main__':
 
             refinedSM = charRefinements(refinedSM)
 
-            # refinedSM = refinedSegmentedMessages
-
             # TODO now needs recalculation of segment distances
         except ClusterAutoconfException as e:
             print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
                   "The original exception message was:\n", e)
+            exit(10)
+    elif args.refinement == "zerocharPCAmoco":
+        try:
+            # .blend(True) to omit single zeros: in most cases (dns, nbns, smb), quality deteriorates.
+            zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(False) for msg in inferredSegmentedMessages]
+            pcaRound = [CropChars(segs).split() for segs in zeroSlicedMessages]
+            for i in range(2):
+                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
+                pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
+                                                      collectEvaluationData=collectedSubclusters)
+
+            # additionally perform most common values refinement
+            moco = CropDistinct.countCommonValues(pcaRound)
+            print([m.hex() for m in moco])
+            refinedSM = list()
+            for msg in pcaRound:
+                croppedMsg = CropDistinct(msg, moco).split()
+                refinedSM.append(croppedMsg)
+
+            # refinedSM = charRefinements(refinedSM)
+
+            # TODO now needs recalculation of segment distances
+        except ClusterAutoconfException as e:
+            print(
+                "Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+                "The original exception message was:\n", e)
             exit(10)
     runtimeRefinement = time.time() - startRefinement
     # # # # # # # # # # # # # # # # # # # # # # # #
