@@ -678,7 +678,7 @@ class RelocatePCA(object):
     contributionRelevant = 0.1  # 0.12; threshold for the minimum difference from 0
             # to consider a loading component in the eigenvector as contributing to the variance
     maxLengthDelta = 30  # (max true: 6 in dns-new, min false 9 in dhcp)    7   # TODO: test parameter 20200228
-    maxLengthDeltaRatio = 0.80
+    maxLengthDeltaRatio = 0.5  # threshold for the ratio between sortest and longest segment.
 
     pcDeltaMin = 0.98
 
@@ -2034,7 +2034,7 @@ class RelocatePCA(object):
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
-        clusterer.eps = clusterer.eps * 1.5   # TODO: test parameter 20200228
+        clusterer.eps = clusterer.eps * 1.5   # tested parameter - results see zeropca-048 and -049
         noise, *clusters = clusterer.clusterSimilarSegments(False)
         if isinstance(retClusterer, List):
             retClusterer.append(clusterer)

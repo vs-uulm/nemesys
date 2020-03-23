@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
     # zero/non-zero segments
     segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
-    # .blend(True) to omit single zeros    TODO eval
+    # .blend(True) to omit single zeros
     zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(False) for msg in segmentsPerMsg]
     inferredSegmentedMessages = [CropChars(segs).split() for segs in zeroSlicedMessages]
 

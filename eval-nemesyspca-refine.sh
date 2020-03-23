@@ -5,18 +5,21 @@
 #input="input/*-100.pcap input/*-1000.pcap"
 # input="input/ntp_SMIA-20111010_deduped-1000.pcap input/smb_SMIA20111010-one_deduped-1000.pcap"
 #input=input/dns_ictf2010-new-deduped-100.pcap
-#input=input/maxdiff-fromOrig/*-1000.pcap
-input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap
-#input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap"
+#
+input=input/maxdiff-fromOrig/*-1000.pcap
+#input=input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-100.pcap
+#input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap
+#input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap"
 
 #sigmas="0.6 0.7 0.8 0.9 1.0 1.1 1.2"
-sigmas="1.2"
-#sigmas="0.9 1.2"
+#sigmas="1.2"
+sigmas="0.9 1.2"
 
 #refines="base original PCA PCA1 PCAmoco"
-refines="zerocharPCAmoco"
+#refines="zerocharPCAmoco"
 #refines="PCA1 zeroPCA base"
-#refines="zero"
+#refines="zeroPCA PCAmoco"
+refines="zero base"
 
 
 cftnext=$(expr 1 + $(ls -d reports/nemesys-* | sed "s/^.*nemesys-\([0-9]*\)-.*$/\1/" | sort | tail -1))
@@ -56,5 +59,5 @@ cd -
 python reports/combine-fms.py ${report}/
 
 
-
+echo "Report written to folder ${report}"
 spd-say "Bin fertig!"

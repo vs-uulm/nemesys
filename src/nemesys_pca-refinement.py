@@ -404,7 +404,7 @@ if __name__ == '__main__':
     specimens, comparator, inferredSegmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
         args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma, True,
         refinementCallback=None
-        , disableCache=True
+        # , disableCache=True
     )  # Note!  When manipulating distances, deactivate caching by adding "True".
     # chainedSegments = dc.rawSegments
     #
@@ -421,7 +421,9 @@ if __name__ == '__main__':
     reportFolder = join(reportFolder, splitext(pcapbasename)[0])
     if not exists(reportFolder):
         makedirs(reportFolder)
-    # TODO add exit() on else
+    else:
+        print("Using existing ", reportFolder, " as report folder.")
+        # or exit() on else ?
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -443,16 +445,6 @@ if __name__ == '__main__':
         refinedSM = pcaPcaRefinements(inferredSegmentedMessages)
     elif args.refinement == "PCAmoco":
         try:
-            # # first perform most common values refinement
-            # moco = CropDistinct.countCommonValues(inferredSegmentedMessages)
-            # print([m.hex() for m in moco])
-            # refinedSegmentedMessages = list()
-            # for msg in inferredSegmentedMessages:
-            #     croppedMsg = CropDistinct(msg, moco).split()
-            #     refinedSegmentedMessages.append(croppedMsg)
-            # refinedSM = RelocatePCA.refineSegments(refinedSegmentedMessages, dc,
-            #                                        collectEvaluationData=collectedSubclusters)
-
             pcaRound = charRefinements(inferredSegmentedMessages)
             for i in range(2):
                 refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
@@ -492,6 +484,7 @@ if __name__ == '__main__':
                 croppedMsg = CropDistinct(msg, moco).split()
                 refinedSM.append(croppedMsg)
 
+            # decreases FMS slightly for dhcp and smb
             # refinedSM = charRefinements(refinedSM)
 
             # TODO now needs recalculation of segment distances

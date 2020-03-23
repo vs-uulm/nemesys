@@ -5,8 +5,9 @@
 #input="input/*-100.pcap input/*-1000.pcap"
 #input="input/ntp_SMIA-20111010_deduped-1000.pcap input/smb_SMIA20111010-one_deduped-1000.pcap"
 #input=input/dns_ictf2010-new-deduped-100.pcap
-input=input/maxdiff-fromOrig/*-100.pcap
-#input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap
+#
+input=input/maxdiff-fromOrig/*-1000.pcap
+#input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap
 #input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap"
 #input="input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap"
 #input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap input/maxdiff-fromOrig/dns_ictf2010_maxdiff-1000.pcap input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-1000.pcap input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-1000.pcap"
@@ -50,7 +51,6 @@ ln -s ../combine-stats.sh .
 cd -
 python reports/combine-fms.py ${report}/
 
+
 echo "Report written to folder ${report}"
-
-
 spd-say "Bin fertig!"
