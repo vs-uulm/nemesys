@@ -14,7 +14,7 @@ from collections import Counter
 from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
-    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
+    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements, nemetylRefinements
 from inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
@@ -34,11 +34,12 @@ tokenizer = 'nemesys'
 # tokenizer = '4bytesfixed'
 
 refinementMethods = [
-    "original", # WOOT2018 paper
-    "base",     # moco+splitfirstseg
+    "original", # WOOT2018 paper, merge/resplit chars
+    "base",     # merge/resplit chars + moco + cumuchars
+    "nemetyl",  # INFOCOM2020 paper, base + splitfirstseg
     "PCA",      # 2-pass PCA
     "PCA1",     # 1-pass PCA
-    "PCAmoco",  # 2-pass PCA+moco
+    "PCAmoco",  # 2-pass PCA + moco
     "zeroPCA",  # zero+base + 2-pass PCA
     "zero",     # zero+base
     "zerocharPCAmoco"  # with crop char
@@ -435,6 +436,8 @@ if __name__ == '__main__':
         refinedSM = originalRefinements(inferredSegmentedMessages)
     elif args.refinement == "base":
         refinedSM = baseRefinements(inferredSegmentedMessages)
+    elif args.refinement == "nemetyl":
+        refinedSM = nemetylRefinements(inferredSegmentedMessages)
     elif args.refinement == "zeroPCA":
         refinedSM = pcaRefinements(zeroBaseRefinements(inferredSegmentedMessages))
     elif args.refinement == "zero":

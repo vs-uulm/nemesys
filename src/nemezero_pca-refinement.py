@@ -334,10 +334,8 @@ if __name__ == '__main__':
                 croppedMsg = CropDistinct(msg, moco).split()
                 refinedSM.append(croppedMsg)
 
-            refinedSM = charRefinements(refinedSM)
-
-            # refinedSM = refinedSegmentedMessages
-            # TODO now needs recalculation of segment distances
+            # TODO remove for comparability to nemesys_pca-refinement.py ?!?
+            # refinedSM = charRefinements(refinedSM)
         except ClusterAutoconfException as e:
             print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
                   "The original exception message was:\n", e)

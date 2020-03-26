@@ -2196,6 +2196,12 @@ class BlendZeroSlices(MessageModifier):
 class CropChars(MessageModifier):
 
     def split(self):
+        """
+        Split a message into char segments and blend them with the segments given in the object instance's segment
+        variable.
+
+        :return: List of char and non-char segments for the message
+        """
         from inference.fieldTypes import FieldTypeRecognizer
 
         ftrecog = FieldTypeRecognizer(self.segments[0].analyzer)
@@ -2216,12 +2222,20 @@ class CropChars(MessageModifier):
     def blend(self, mixin: List[MessageSegment]):
         """
         :param mixin: list of segments to blend into the segments of the object
-        :return: List of segments blended together from the segments of the object as basis and the mixin, forming the message.
+        :return: List of segments blended together from the segments of the object as basis and the mixin,
+            together forming the message.
         """
         stack = sorted(mixin, key=lambda x: -x.offset)
         newSegSeq = list()  # type: List[MessageSegment]
+        # shifting from stack (from mixin) and inserting from self.segments (msg) to newSegSeq
+        # newSegSeq   msg   stack/mixin
+        #  |:::|     |   |   |   |
+        #  |---|     |:::|   |   |
+        #  |---|     |:::|   |---|
+        #  |:::|     |:::|   |---|
+        #  +---+     +---+   +---+
         for seg in self.segments:
-            while len(stack) > 0 and stack[-1].offset < seg.nextOffset:
+            while len(stack) > 0 and stack[-1].offset < seg.nextOffset:  # stack peek
                 lastOffset = newSegSeq[-1].nextOffset if len(newSegSeq) > 0 else 0
                 if stack[-1].offset > lastOffset:  # prepend/fill gap to char
                     newSegSeq.append(MessageSegment(seg.analyzer, lastOffset, stack[-1].offset - lastOffset))

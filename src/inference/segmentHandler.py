@@ -272,7 +272,7 @@ def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs)
     return charPass2
 
 
-def pcaPcaRefinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+def pcaPcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -341,7 +341,7 @@ def zeroPCARefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> Li
     return pcaRefinements(zeroBaseRefinements(segmentsPerMsg))
 
 
-def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
