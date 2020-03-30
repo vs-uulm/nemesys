@@ -410,8 +410,11 @@ class Resplit2LeastFrequentPair(MessageModifier):
 
 
 class CropDistinct(MessageModifier):
-    # TODO omit also 2-byte long
-    minSegmentLength = 1
+    """
+    Find common values of segments and split/crop other, larger segments if they contain these values.
+    """
+
+    minSegmentLength = 2
     frequencyThreshold = 0.1
     """fraction of *messages* to exhibit the value to be considered frequent"""
 
@@ -430,6 +433,12 @@ class CropDistinct(MessageModifier):
 
     @staticmethod
     def countCommonValues(segmentedMessages: List[List[MessageSegment]]):
+        """
+        :param segmentedMessages: The segments to analyze
+        :return: The most common byte values of the given segments
+            "Most common" is dynamically defined as those with a frequency above
+            CropDistinct.frequencyThreshold * len(segmentedMessages)
+        """
         from collections import Counter
         from itertools import chain
         segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
@@ -439,7 +448,7 @@ class CropDistinct(MessageModifier):
         while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
         # by the "if" in list comprehension: omit \x00-sequences and shorter than {minSegmentLength}-byte long segments
-        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > CropDistinct.minSegmentLength]
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) >= CropDistinct.minSegmentLength]
         # return moco
 
         # omit all sequences that have common subsequences
@@ -671,13 +680,13 @@ class RelocateZeros(MessageModifier):
 class RelocatePCA(object):
 
     # PCA conditions parameters
-    minSegLen = 3  # minimum length of the largest cluster member
+    minSegLen = 3  # minimum number of cluster members (CAVE: filterRelevantClusters doubles this!) TODO: why?
     screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
             # interpreted as fraction of the component count as dynamic determination.
     contributionRelevant = 0.1  # 0.12; threshold for the minimum difference from 0
             # to consider a loading component in the eigenvector as contributing to the variance
-    maxLengthDelta = 30  # (max true: 6 in dns-new, min false 9 in dhcp)    7   # TODO: test parameter 20200228
+    # maxLengthDelta = 30  # (max true: 6 in dns-new, min false 9 in dhcp)   # replaced by maxLengthDeltaRatio
     maxLengthDeltaRatio = 0.5  # threshold for the ratio between sortest and longest segment.
 
     pcDeltaMin = 0.98
@@ -702,15 +711,19 @@ class RelocatePCA(object):
         self._similarSegments = similarSegments
         self._eigen = eigenValuesAndVectors if eigenValuesAndVectors is not None \
             else numpy.linalg.eigh(similarSegments.cov)
+        """Tuple of eigenvalues (one-dimensional ndarray) and eigenvectors (zwo-dimensional ndarray)"""
         self._screeKnee = screeKnee if screeKnee is not None \
             else RelocatePCA.screeKneedle(self._eigen)
-        # defines an minimum for any principal component, that is
-        #       at least the knee in scree,
-        #       not less than one magnitude smaller then the first PC,
-        #       and larger than the absolute minimum.
+
         self._screeThresh = max(self._screeKnee, RelocatePCA.screeMinThresh, max(self._eigen[0]) / 10) \
                                 if any(self._eigen[0] < RelocatePCA.screeMinThresh) \
                                 else RelocatePCA.screeMinThresh
+        """
+            defines a minimum for any principal component, that is
+             * at least the knee in scree,
+             * not less than one magnitude smaller then the first PC,
+             * and larger than the absolute minimum.
+        """
         self._principalComponents = self._eigen[0] > self._screeThresh
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
 
@@ -725,6 +738,11 @@ class RelocatePCA(object):
     @staticmethod
     def screeKneedle(eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]) -> float:
         """
+        Scree is the name of the downward curve of the eigenvalues of the principal components. Typically, it has a
+        steep drop from the components with the most significant contribution to the variance towards a leveled tail of
+        low eigenvalues. The transition between the principal components with a significant contribution and the
+        negligible components is marked by the knee of the curve, according to common analysis methods. To determine
+        the knee, we facilitate the Kneedle algorithm (`KneeLocator`).
 
         :param eigenValuesAndVectors:
         :return: y-value of the knee, 0 if there is no knee.
@@ -986,10 +1004,10 @@ class RelocatePCA(object):
                                     if cnt > 0.5 * len(self.similarSegments.baseSegments)]
 
         # # # # # # # # # # # # # # # # # # # # # # # #
-        # "component-analysis"
+        # "component analysis"
         #
-        # the principal components (i. e. with Eigenvalue > 1) of the covariance matrix is assumed to be
-        # towards the end of varying fields with similar content (e.g. counting numbers).
+        # the principal components (i. e. with Eigenvalue > thresh) of the covariance matrix are assumed to peak
+        # towards the end of varying fields with similar content (e. g. counting numbers).
         # The component is near 1 or -1 in the Eigenvector of the respective Eigenvalue.
 
         relocate = list()  # new boundaries found: relocate the next end to this relative offset
@@ -1792,8 +1810,10 @@ class RelocatePCA(object):
             * bound in segment offsets or nextOffsets
             * de-duplicate bounds that are in scope of more than one segment
 
-        :param newBounds:
-        :return:
+        **Changes are made at newBounds in place!**
+
+        :param newBounds: Dict of all input messages, with a Dict mapping each segment to a list of its bounds.
+        :return: reference to the newBounds Dict
         """
         from visualization.simplePrint import markSegmentInMessage
 
@@ -2111,13 +2131,26 @@ class RelocatePCA(object):
 
 
 class BlendZeroSlices(MessageModifier):
+    """
+    Generate zero-bounded segments from bytes of given message (i.e. `self.segments[0].message.data`).
+    Blend these segments with the given segments (i.e. `self.segments`), with zero bounds have precedence.
+    """
     def __init__(self, segments: List[MessageSegment]):
+        """
+        :param segments: The segments of one message in offset order
+        """
         super().__init__(segments)
         if BlendZeroSlices._debug:
             self.zeroSegments = list()
 
 
     def blend(self, ignoreSingleZeros=False):
+        """
+        :param ignoreSingleZeros: ignore single zero bytes (except after char sequences),
+            or if False, generate segments only from zero sequences of at least two bytes.
+        :return: List of segments blended together from the segments of the object as basis and the zero,
+            together forming the message.
+        """
         from inference.segmentHandler import isExtendedCharSeq
 
         zeroBounds = list()
@@ -2138,6 +2171,7 @@ class BlendZeroSlices(MessageModifier):
             if mdata[zb] == 0:
                 nzb = zBCopy[zi + 1]
 
+                # TODO should that be done after the char `if`?
                 # if the next bound (nzb) is only one byte ahead and we should ignore single zeros, remove both bounds.
                 if ignoreSingleZeros and zb + 1 == nzb:
                     # if the current bound is not the message start
@@ -2194,6 +2228,11 @@ class BlendZeroSlices(MessageModifier):
 
 
 class CropChars(MessageModifier):
+    """
+    Identify probable char sequences using `inference.fieldTypes.FieldTypeRecognizer.charsInMessage`, which in turn uses
+    `inference.segmentHandler.isExtendedCharSeq`, to find these.
+    Generates segments from those char sequences and the given segments of the message (see constructor).
+    """
 
     def split(self):
         """
@@ -2228,12 +2267,13 @@ class CropChars(MessageModifier):
         stack = sorted(mixin, key=lambda x: -x.offset)
         newSegSeq = list()  # type: List[MessageSegment]
         # shifting from stack (from mixin) and inserting from self.segments (msg) to newSegSeq
-        # newSegSeq   msg   stack/mixin
-        #  |:::|     |   |   |   |
-        #  |---|     |:::|   |   |
-        #  |---|     |:::|   |---|
-        #  |:::|     |:::|   |---|
-        #  +---+     +---+   +---+
+        #       v---------------,
+        # newSegSeq <- msg   stack/mixin
+        #  |:::|      |   |   |   |
+        #  |---|      |:::|   |   |
+        #  |---|      |:::|   |---|
+        #  |:::|      |:::|   |---|
+        #  +---+      +---+   +---+
         for seg in self.segments:
             while len(stack) > 0 and stack[-1].offset < seg.nextOffset:  # stack peek
                 lastOffset = newSegSeq[-1].nextOffset if len(newSegSeq) > 0 else 0

@@ -1897,7 +1897,7 @@ class AbstractClusterer(ABC):
 
         Works on representatives for segments of identical features.
 
-        :param: if filterNoise is False, the first element in the returned list of clusters
+        :param filterNoise: if False, the first element in the returned list of clusters
             always is the (possibly empty) noise.
         :return: clusters of similar segments
         """
