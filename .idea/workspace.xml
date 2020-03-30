@@ -4,38 +4,20 @@
     <option name="SPLITTER_PROPORTION" value="0.34432235" />
     <option name="SCOPE_TYPE" value="3" />
   </component>
-  <component name="BookmarkManager">
-    <bookmark url="file://$PROJECT_DIR$/src/alignment/clusterMerging.py" line="402" mnemonic="7" />
-    <bookmark url="file://$PROJECT_DIR$/src/cluster_segments.py" line="189" mnemonic="1" />
-    <bookmark url="file://$PROJECT_DIR$/src/cluster_segments.py" line="229" mnemonic="2" />
-    <bookmark url="file://$PROJECT_DIR$/src/cluster_segments.py" line="361" mnemonic="5" />
-    <bookmark url="file://$PROJECT_DIR$/src/validation/reportWriter.py" line="93" />
-    <bookmark url="file://$PROJECT_DIR$/src/inference/formatRefinement.py" line="2011" mnemonic="9" />
-    <bookmark url="file://$PROJECT_DIR$/src/inference/formatRefinement.py" line="1258" mnemonic="8" />
-    <bookmark url="file://$PROJECT_DIR$/src/nemetyl_align-segments.py" line="819" mnemonic="0" />
-  </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
       <change beforePath="$PROJECT_DIR$/.idea/NEMESYS.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/NEMESYS.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/Sources.md" beforeDir="false" afterPath="$PROJECT_DIR$/input/Sources.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/binaryprotocols_merged_500.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/binaryprotocols_merged_5000.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/dns_ictf2010.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-ether.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-9911.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/ntp_SMIA-20111010_deduped-9995.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-100-continuous.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-100-fields.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-9999-continuous.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-9999-fields.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/refine-segmenter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/refine-segmenter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/formatRefinement.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/formatRefinement.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
     </list>
-    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -44,109 +26,12 @@
   <component name="CreatePatchCommitExecutor">
     <option name="PATCH_PATH" value="" />
   </component>
-  <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/nemetyl_align-segments.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="404">
-              <caret line="43" selection-start-line="43" selection-end-line="43" />
-              <folding>
-                <element signature="e#400#437#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/src/refine-segmenter.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="568">
-              <caret line="93" column="18" selection-start-line="93" selection-start-column="18" selection-end-line="93" selection-end-column="18" />
-              <folding>
-                <element signature="e#0#15#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/validation/dissectorMatcher.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="854">
-              <caret line="256" column="32" selection-start-line="256" selection-start-column="32" selection-end-line="256" selection-end-column="32" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
-  </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Python Script" />
       </list>
     </option>
-  </component>
-  <component name="FindInProjectRecents">
-    <findStrings>
-      <find>neighbor</find>
-      <find>trace =</find>
-      <find>reader</find>
-      <find>segmentsFixed</find>
-      <find>cache</find>
-      <find>pprintInterleaved</find>
-      <find>fieldend</find>
-      <find>fp</find>
-      <find>groundtruth</find>
-      <find>messageClusters</find>
-      <find>resol</find>
-      <find>nemaj</find>
-      <find>csv</find>
-      <find>write</find>
-      <find>scStatsFile</find>
-      <find>atrace</find>
-      <find>multiple messages</find>
-      <find>segment sequence does not match</find>
-      <find>No IP layer</find>
-      <find>sigmaper</find>
-      <find>F.*score</find>
-      <find>No IP layer could be identified</find>
-      <find>thread</find>
-      <find>split</find>
-      <find>merge</find>
-      <find>merged</find>
-      <find>cluster</find>
-      <find>pprint</find>
-      <find>reportF</find>
-      <find>, repr(mark) + repr(messageSlice)</find>
-    </findStrings>
-    <replaceStrings>
-      <replace />
-      <replace>ParsingConstants.IGNORE_FIELDS</replace>
-      <replace>ParsingConstants.TYPELOOKUP</replace>
-      <replace>TsharkConnector</replace>
-      <replace>self.method</replace>
-      <replace>|</replace>
-      <replace>ftm</replace>
-      <replace>ipv4</replace>
-      <replace>float</replace>
-      <replace>timestamp</replace>
-      <replace>,</replace>
-      <replace>bytes</replace>
-      <replace>self.counts</replace>
-      <replace>self.doprint</replace>
-    </replaceStrings>
-    <dirStrings>
-      <dir>$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/pyshark</dir>
-      <dir>$PROJECT_DIR$</dir>
-      <dir>$PROJECT_DIR$/src/dissectorValidation</dir>
-      <dir>$PROJECT_DIR$/src/</dir>
-      <dir>$PROJECT_DIR$/../n-grams</dir>
-      <dir>$PROJECT_DIR$/src/inference</dir>
-      <dir>$USER_HOME$/REUP-common/Tools/netzob-official/netzob/lib</dir>
-      <dir>$PROJECT_DIR$/src</dir>
-    </dirStrings>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -157,104 +42,26 @@
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/src/validation/messageParser.py" root0="FORCE_HIGHLIGHTING" />
   </component>
-  <component name="IdeDocumentHistory">
-    <option name="CHANGED_PATHS">
-      <list>
-        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch_5.py" />
-        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch.txt" />
-        <option value="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" />
-        <option value="$PROJECT_DIR$/src/alignment/clusterMerging.py" />
-        <option value="$PROJECT_DIR$/src/alignment/clusterSplitting.py" />
-        <option value="$APPLICATION_CONFIG_DIR$/scratches/segmentSimilarityValues.py" />
-        <option value="$PROJECT_DIR$/src/align_on_field_personality.py" />
-        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch_3.py" />
-        <option value="$PROJECT_DIR$/src/visualization/multiPlotter.py" />
-        <option value="$PROJECT_DIR$/src/visualization/simplePrint.py" />
-        <option value="$PROJECT_DIR$/src/test_segment-refinements.py" />
-        <option value="$PROJECT_DIR$/src/visualization/plotter.py" />
-        <option value="$PROJECT_DIR$/reports/cft-060-refinement-pca-minlt1mag/combine-stats.sh" />
-        <option value="$PROJECT_DIR$/src/prep_deduplicate-trace.py" />
-        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch_6.py" />
-        <option value="$PROJECT_DIR$/src/validation/reportWriter.py" />
-        <option value="$PROJECT_DIR$/reports/combine-fms.py" />
-        <option value="$PROJECT_DIR$/src/nemesys-pca_refinement_iterate-params.py" />
-        <option value="$PROJECT_DIR$/reports/combine-nemesys-fms.py" />
-        <option value="$PROJECT_DIR$/src/netzob_messagetypes.py" />
-        <option value="$PROJECT_DIR$/src/transform_cluster-statistics.py" />
-        <option value="$PROJECT_DIR$/src/nemetyl_align-segments.py" />
-        <option value="$PROJECT_DIR$/src/alignment/alignMessages.py" />
-        <option value="$PROJECT_DIR$/eval-nemetyl-messagetype.sh" />
-        <option value="$PROJECT_DIR$/src/validation/messageParser.py" />
-        <option value="$PROJECT_DIR$/src/inference/formatRefinement.py" />
-        <option value="$PROJECT_DIR$/src/utils/evaluationHelpers.py" />
-        <option value="$PROJECT_DIR$/eval-nemeftr.sh" />
-        <option value="$PROJECT_DIR$/eval-nemesys-refine.sh" />
-        <option value="$PROJECT_DIR$/src/nemesys_fms.py" />
-        <option value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
-        <option value="$PROJECT_DIR$/eval-nemeftr-clustering.sh" />
-        <option value="$PROJECT_DIR$/src/validation/tsharkConnector.py" />
-        <option value="$PROJECT_DIR$/src/nemesys-pca_refinement.py" />
-        <option value="$PROJECT_DIR$/reports/combine-nemetyl-results.py" />
-        <option value="$PROJECT_DIR$/eval-pca-refine.sh" />
-        <option value="$PROJECT_DIR$/src/inference/segments.py" />
-        <option value="$PROJECT_DIR$/src/inference/fieldTypes.py" />
-        <option value="$PROJECT_DIR$/src/utils/baseAlgorithms.py" />
-        <option value="$PROJECT_DIR$/src/inference/templates.py" />
-        <option value="$PROJECT_DIR$/src/visualization/distancesPlotter.py" />
-        <option value="$PROJECT_DIR$/src/cluster_segments.py" />
-        <option value="$PROJECT_DIR$/src/generate-fieldtype-templates.py" />
-        <option value="$PROJECT_DIR$/src/field_recognition.py" />
-        <option value="$PROJECT_DIR$/src/visualize_fieldtype_separation.py" />
-        <option value="$PROJECT_DIR$/src/analyze_fieldtype_separation.py" />
-        <option value="$PROJECT_DIR$/src/fieldtype-aware_distances.py" />
-        <option value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
-        <option value="$PROJECT_DIR$/src/mixedlength_fieldtype_offsets.py" />
-        <option value="$PROJECT_DIR$/src/validation/dissectorMatcher.py" />
-        <option value="$PROJECT_DIR$/src/refine-segmenter.py" />
-      </list>
-    </option>
-  </component>
   <component name="NamedScopeManager">
     <scope name="NEMESYS" pattern="file[NEMESYS]:src//*" />
   </component>
-  <component name="ProjectFrameBounds" extendedState="4">
-    <option name="y" value="30" />
-    <option name="width" value="1792" />
-    <option name="height" value="1410" />
-  </component>
+  <component name="ProjectId" id="1Usowxm5PcCYmYuqG6EU2y9G1wm" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
-  <component name="ProjectView">
-    <navigator proportions="" version="1">
-      <foldersAlwaysOnTop value="true" />
-    </navigator>
-    <panes>
-      <pane id="ProjectPane">
-        <subPane>
-          <expand>
-            <path>
-              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
-              <item name="nemesys" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
-              <item name="nemesys" type="462c0819:PsiDirectoryNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-            </path>
-          </expand>
-          <select />
-        </subPane>
-      </pane>
-      <pane id="Scope" />
-    </panes>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showExcludedFiles" value="true" />
+    <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SearchEverywhereHistoryKey" value="getoffset&#9;null&#9;null&#10;Bcolors&#9;null&#9;null&#10;bcolor&#9;null&#9;null&#10;getClustersFrom&#9;null&#9;null&#10;getClustersFromLa&#9;null&#9;null&#10;absolute differences&#9;null&#9;null&#10;plot&#9;FILE&#9;file:///home/stephan/git.lab-vs/REUP/specimen-generation/src/plotMessages.py&#10;bitarray&#9;null&#9;null" />
     <property name="TODO_SCOPE" value="Open Files" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$1/New Scratch File" value="Python&#10;TEXT&#10;Markdown" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="Python" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/src/visualization/simplePrint.py" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
-    <property name="settings.editor.selected.configurable" value="Errors" />
+    <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyIntegratedToolsModulesConfigurable" />
   </component>
   <component name="PyConsoleOptionsProvider">
     <option name="myPythonConsoleState">
@@ -265,12 +72,6 @@
     </option>
   </component>
   <component name="RecentsManager">
-    <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/reports" />
-      <recent name="$PROJECT_DIR$/src" />
-      <recent name="$PROJECT_DIR$/src/reupMessages" />
-      <recent name="$PROJECT_DIR$" />
-    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src" />
       <recent name="$PROJECT_DIR$/src/visualization" />
@@ -278,20 +79,14 @@
       <recent name="$PROJECT_DIR$/reupHelper" />
       <recent name="$PROJECT_DIR$/dissectorValidation" />
     </key>
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+      <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/reports" />
+      <recent name="$PROJECT_DIR$/src/reupMessages" />
+    </key>
   </component>
-  <component name="RunDashboard">
-    <option name="ruleStates">
-      <list>
-        <RuleState>
-          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
-        </RuleState>
-        <RuleState>
-          <option name="name" value="StatusDashboardGroupingRule" />
-        </RuleState>
-      </list>
-    </option>
-  </component>
-  <component name="RunManager" selected="Python.nemesys-pca_refinement">
+  <component name="RunManager" selected="Python.nemezero_pca-refinement">
     <configuration default="true" type="tests" factoryName="Attests">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -311,27 +106,6 @@
       <option name="USE_PATTERN" value="false" />
       <method />
     </configuration>
-    <configuration name="align_on_field_personality" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="NEMESYS" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemetyl_align-segments.py" />
-      <option name="PARAMETERS" value="input/dns_ictf2010_deduped-100.pcap" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
     <configuration name="cluster_segments" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -345,7 +119,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/cluster_segments.py" />
-      <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap" />
+      <option name="PARAMETERS" value="-s 1.2 -r zero input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -353,7 +127,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="field_recognition" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="nemeftr_cluster-segments" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -361,12 +135,12 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/field_recognition.py" />
-      <option name="PARAMETERS" value="input/hide/binaryprotocols_merged_500.pcap" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemeftr_cluster-segments.py" />
+      <option name="PARAMETERS" value="-s 1.2 -p -r PCA input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -395,7 +169,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="transform_cluster-statistics" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="nemezero_pca-refinement" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -407,8 +181,29 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/transform_cluster-statistics.py" />
-      <option name="PARAMETERS" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemezero_pca-refinement.py" />
+      <option name="PARAMETERS" value="-r PCA input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="refine-segmenter" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/refine-segmenter.py" />
+      <option name="PARAMETERS" value="-r base input/dhcp_SMIA2011101X_deduped-100.pcap" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -479,22 +274,34 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.nemesys-pca_refinement" />
       <item itemvalue="Python.cluster_segments" />
-      <item itemvalue="Python.align_on_field_personality" />
-      <item itemvalue="Python.field_recognition" />
-      <item itemvalue="Python.transform_cluster-statistics" />
+      <item itemvalue="Python.nemeftr_cluster-segments" />
+      <item itemvalue="Python.nemesys-pca_refinement" />
+      <item itemvalue="Python.nemezero_pca-refinement" />
+      <item itemvalue="Python.refine-segmenter" />
       <item itemvalue="Python tests.Doctest FieldTypeMemento.cov" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.nemesys-pca_refinement" />
-        <item itemvalue="Python.transform_cluster-statistics" />
+        <item itemvalue="Python.nemezero_pca-refinement" />
+        <item itemvalue="Python.nemeftr_cluster-segments" />
         <item itemvalue="Python.cluster_segments" />
-        <item itemvalue="Python.align_on_field_personality" />
-        <item itemvalue="Python.field_recognition" />
+        <item itemvalue="Python.refine-segmenter" />
+        <item itemvalue="Python.nemesys-pca_refinement" />
       </list>
     </recent_temporary>
+  </component>
+  <component name="ServiceViewManager">
+    <option name="viewStates">
+      <list>
+        <serviceView>
+          <treeState>
+            <expand />
+            <select />
+          </treeState>
+        </serviceView>
+      </list>
+    </option>
   </component>
   <component name="StructureViewFactory">
     <option name="AUTOSCROLL_FROM_SOURCE" value="true" />
@@ -521,45 +328,6 @@
     <option name="localTasksCounter" value="2" />
     <servers />
   </component>
-  <component name="TodoView" selected-index="1">
-    <todo-panel id="selected-file">
-      <is-autoscroll-to-source value="true" />
-    </todo-panel>
-    <todo-panel id="all">
-      <are-packages-shown value="true" />
-      <is-autoscroll-to-source value="true" />
-    </todo-panel>
-  </component>
-  <component name="ToolWindowManager">
-    <frame x="0" y="30" width="1792" height="1410" extended-state="4" />
-    <editor active="true" />
-    <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.43892828" visible="true" weight="0.35149083" />
-      <window_info active="true" x="1271" y="364" width="371" height="576" id="Structure" order="1" sideWeight="0.5610717" side_tool="true" visible="true" weight="0.35149083" />
-      <window_info id="Favorites" order="2" sideWeight="0.5744681" side_tool="true" weight="0.3543632" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Run" order="1" weight="0.3286052" />
-      <window_info anchor="bottom" id="Debug" order="2" sideWeight="0.6724546" weight="0.50827426" />
-      <window_info anchor="bottom" id="Cvs" order="3" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="4" weight="0.4" />
-      <window_info anchor="bottom" id="Version Control" order="5" weight="0.32781717" />
-      <window_info anchor="bottom" id="Event Log" order="6" sideWeight="0.32754537" side_tool="true" weight="0.28129953" />
-      <window_info anchor="bottom" id="Messages" order="7" />
-      <window_info anchor="bottom" id="Inspection Results" order="8" weight="0.44523248" />
-      <window_info anchor="bottom" id="TODO" order="9" weight="0.2892041" />
-      <window_info anchor="bottom" id="Python Console" order="10" weight="0.32781717" />
-      <window_info anchor="bottom" id="Terminal" order="11" weight="0.3286052" />
-      <window_info anchor="bottom" id="Debug Logs" order="12" />
-      <window_info anchor="bottom" id="Execute Anonymous" order="13" />
-      <window_info anchor="bottom" id="Salesforce" order="14" />
-      <window_info anchor="right" id="Commander" order="0" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" sideWeight="0.6256895" weight="0.5120818" />
-      <window_info anchor="right" id="Data View" order="3" weight="0.32952815" />
-      <window_info anchor="right" x="0" y="0" width="380" height="1210" id="Documentation" order="4" side_tool="true" weight="0.27817747" />
-      <window_info anchor="right" id="Find" order="5" sideWeight="0.3743105" side_tool="true" weight="0.5120818" />
-    </layout>
-  </component>
   <component name="Vcs.Log.History.Properties">
     <option name="COLUMN_ORDER">
       <list>
@@ -574,555 +342,124 @@
     <MESSAGE value="generate field lists of the same message either inferred and dissected" />
     <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
   </component>
-  <component name="debuggerHistoryManager">
-    <expressions id="evaluateCodeFragment">
-      <expression>
-        <expression-string>range(0, lastOffset, length)</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>len(l4msg.data)</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>l4msg.data.hex()</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>sequence</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>zeropadded</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>rmsg.data.hex()</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>commonStarts.most_common(1)[0][1]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>commonStarts.most_common(1)</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>commonStarts.most_common(1)[1]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>[abs(dife - infe) for infe in ininscope]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
-      </expression>
-    </expressions>
-    <expressions id="breakpointCondition">
-      <expression>
-        <expression-string>sc.similarSegments.fieldtype == &quot;tf02&quot;</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>offset &gt; 30</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>len(newmsg) &gt; len(self.segments)</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>segments[0].fieldtype == &quot;id&quot;</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>&quot;id&quot; in ftypes</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>&quot;id&quot; in utyp</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>len(byteValue) &lt; 2</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>byteValue == b&quot;\x00&quot; and k &gt; 1</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>byteValue == &quot;\x00&quot; and k &gt; 1</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>byteValue</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-    </expressions>
-    <expressions id="watch">
-      <expression>
-        <expression-string>refinedSegmentedMessages[-1]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-    </expressions>
-    <expressions id="evaluateExpression">
-      <expression>
-        <expression-string>sequence</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>sequence[]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>statDynValues[87]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>list(range(0, lastOffset, length))</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>statDynValues[41]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>statDynValues</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>fcSimMatrix[87,41]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>fcSimMatrix[41,87]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>statDynValuesMap[alignedFieldClasses[(6,10)][0][7]]</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-    </expressions>
-  </component>
-  <component name="editorHistoryManager">
-    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.7/os.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="86">
-          <caret line="225" selection-start-line="225" selection-end-line="225" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/netzob_fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="940">
-          <caret line="243" column="21" lean-forward="true" selection-start-line="243" selection-start-column="21" selection-end-line="243" selection-end-column="21" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/reports/combine-stats.sh">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/reports/combine-fms.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" column="57" lean-forward="true" selection-start-line="10" selection-start-column="57" selection-end-line="10" selection-end-column="57" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/alignment/clusterMerging.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="401" column="35" selection-start-line="401" selection-start-column="35" selection-end-line="401" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/netzob_messagetypes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="970">
-          <caret line="169" column="54" selection-start-line="169" selection-start-column="54" selection-end-line="169" selection-end-column="54" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/transform_cluster-statistics.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="988">
-          <caret line="77" column="83" selection-start-line="77" selection-start-column="83" selection-end-line="77" selection-end-column="83" />
-          <folding>
-            <element signature="e#323#337#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/alignment/alignMessages.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="464">
-          <caret line="167" column="34" selection-start-line="167" selection-start-column="34" selection-end-line="167" selection-end-column="34" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/.PyCharmCE2018.3/system/python_stubs/-147923168/itertools.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="78" column="6" selection-start-line="78" selection-start-column="6" selection-end-line="78" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys-pca_refinement_iterate-params.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="473">
-          <caret line="412" column="61" selection-start-line="412" selection-start-column="61" selection-end-line="412" selection-end-column="61" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/eval-nemetyl-messagetype.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="60">
-          <caret line="4" column="22" selection-start-line="4" selection-start-column="22" selection-end-line="4" selection-end-column="22" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys_fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="868">
-          <caret line="147" selection-start-line="147" selection-end-line="148" selection-end-column="51" />
-          <folding>
-            <element signature="e#149#170#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/eval-nemeftr.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="30">
-          <caret line="2" column="22" lean-forward="true" selection-start-line="2" selection-start-column="22" selection-end-line="2" selection-end-column="22" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/eval-nemesys-refine.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" column="2" selection-start-line="10" selection-start-column="2" selection-end-line="10" selection-end-column="2" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/eval-nemeftr-clustering.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="555">
-          <caret line="37" selection-start-line="37" selection-end-line="37" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/reports/combine-fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="15" lean-forward="true" selection-start-column="15" selection-end-column="15" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/reports/combine-nemesys-fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="10">
-          <caret line="3" column="14" selection-start-line="3" selection-start-column="14" selection-end-line="3" selection-end-column="14" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/alignment/clusterSplitting.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="172" column="8" selection-start-line="172" selection-start-column="8" selection-end-line="172" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/contents.txt">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/reports/combine-nemetyl-results.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1078">
-          <caret line="131" column="20" selection-start-line="131" selection-start-column="20" selection-end-line="131" selection-end-column="20" />
-          <folding>
-            <element signature="e#0#15#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="914">
-          <caret line="130" column="26" selection-start-line="130" selection-start-column="26" selection-end-line="130" selection-end-column="26" />
-          <folding>
-            <element signature="e#0#35#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/lib/python3.7/argparse.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="1627" column="8" selection-start-line="1627" selection-start-column="8" selection-end-line="1627" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="88" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="58">
-          <caret line="1322" column="14" lean-forward="true" selection-start-line="1322" selection-start-column="14" selection-end-line="1322" selection-end-column="14" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/eval-pca-refine.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="45">
-          <caret line="3" column="17" selection-start-line="3" selection-start-column="17" selection-end-line="3" selection-end-column="17" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/simplePrint.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="126" column="4" selection-start-line="126" selection-start-column="4" selection-end-line="126" selection-end-column="4" />
-          <folding>
-            <element signature="e#0#63#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="664" column="17" selection-start-line="664" selection-start-column="6" selection-end-line="664" selection-end-column="17" />
-          <folding>
-            <element signature="e#0#10#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/utils/loader.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="671">
-          <caret line="75" column="8" selection-start-line="75" selection-start-column="8" selection-end-line="75" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="687" column="8" selection-start-line="687" selection-start-column="8" selection-end-line="687" selection-end-column="8" />
-          <folding>
-            <element signature="e#126#137#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="914">
-          <caret line="224" column="8" selection-start-line="224" selection-start-column="8" selection-end-line="224" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="435">
-          <caret line="41" selection-start-line="41" selection-end-line="41" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="240">
-          <caret line="21" column="8" selection-start-line="21" selection-start-column="8" selection-end-line="21" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="41" column="8" selection-start-line="41" selection-start-column="8" selection-end-line="41" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/utils/baseAlgorithms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="686">
-          <caret line="107" column="4" lean-forward="true" selection-start-line="107" selection-start-column="4" selection-end-line="107" selection-end-column="85" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="1193" column="8" selection-start-line="1193" selection-start-column="8" selection-end-line="1193" selection-end-column="8" />
-          <folding>
-            <element signature="e#0#63#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/segments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="422" column="8" selection-start-line="422" selection-start-column="8" selection-end-line="422" selection-end-column="8" />
-          <folding>
-            <element signature="e#0#11#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/fieldTypes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="260" column="25" selection-start-line="260" selection-start-column="6" selection-end-line="260" selection-end-column="25" />
-          <folding>
-            <element signature="e#0#64#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualize_fieldtype_separation.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="630">
-          <caret line="55" column="52" lean-forward="true" selection-start-line="55" selection-start-column="52" selection-end-line="55" selection-end-column="52" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/analyze_fieldtype_separation.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="383">
-          <caret line="117" column="54" selection-start-line="117" selection-start-column="54" selection-end-line="117" selection-end-column="54" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/generate-fieldtype-templates.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="14" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/field_recognition.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" column="15" selection-start-line="1" selection-start-column="15" selection-end-line="1" selection-end-column="15" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/fieldtype-aware_distances.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="794">
-          <caret line="120" column="22" selection-start-line="120" selection-start-column="22" selection-end-line="120" selection-end-column="22" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/characterize_fieldtypes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" column="11" selection-start-line="1" selection-start-column="11" selection-end-line="1" selection-end-column="11" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="156" column="4" selection-start-line="156" selection-start-column="4" selection-end-line="156" selection-end-column="4" />
-          <folding>
-            <element signature="e#46#58#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/utils/evaluationHelpers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="413">
-          <caret line="138" selection-start-line="138" selection-end-line="138" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/mixedlength_fieldtype_offsets.py">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/cluster_segments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="944">
-          <caret line="390" selection-start-line="390" selection-end-line="391" selection-end-column="98" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys-pca_refinement.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="35" selection-start-line="35" selection-end-line="35" />
-          <folding>
-            <element signature="e#49#73#0" expanded="true" />
-            <marker date="1573041105545" expanded="true" signature="26769:26770" ph="..." />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemetyl_align-segments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="404">
-          <caret line="43" selection-start-line="43" selection-end-line="43" />
-          <folding>
-            <element signature="e#400#437#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/dissectorMatcher.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="854">
-          <caret line="256" column="32" selection-start-line="256" selection-start-column="32" selection-end-line="256" selection-end-column="32" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/refine-segmenter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="568">
-          <caret line="93" column="18" selection-start-line="93" selection-start-column="18" selection-end-line="93" selection-end-column="18" />
-          <folding>
-            <element signature="e#0#15#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
+  <component name="WindowStateProjectService">
+    <state x="502" y="396" width="800" height="684" key="#Notifications" timestamp="1576154933537">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="502" y="396" width="800" height="684" key="#Notifications/0.30.3440.1410@0.30.3440.1410" timestamp="1576154933537" />
+    <state x="355" y="82" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1582898675553">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="141" y="57" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.30.1366.738@0.30.1366.738" timestamp="1579033013280" />
+    <state x="355" y="82" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1582898675553" />
+    <state x="590" y="460" width="624" height="557" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1576154943097">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="590" y="460" width="624" height="557" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1576154943097" />
+    <state x="521" y="329" width="668" height="819" key="#nemeftr_cluster-segments" timestamp="1581964719175">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="521" y="329" width="668" height="819" key="#nemeftr_cluster-segments/0.30.3440.1410@0.30.3440.1410" timestamp="1581964719175" />
+    <state x="754" y="311" width="668" height="819" key="#nemezero_pca-refinement" timestamp="1582898755051">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="754" y="311" width="668" height="819" key="#nemezero_pca-refinement/0.30.3440.1410@0.30.3440.1410" timestamp="1582898755051" />
+    <state x="0" y="491" width="2060" height="495" key="#xdebugger.XInspectDialog" timestamp="1582898888581">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="0" y="491" width="2060" height="495" key="#xdebugger.XInspectDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1582898888581" />
+    <state x="1464" y="335" width="877" height="605" key="#xdebugger.evaluate" timestamp="1582899641384">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="260" y="120" width="877" height="605" key="#xdebugger.evaluate/0.30.1366.738@0.30.1366.738" timestamp="1579033845956" />
+    <state x="1464" y="335" width="959" height="806" key="#xdebugger.evaluate/0.30.3440.1410@0.30.3440.1410" timestamp="1582899641384" />
+    <state x="1295" y="130" width="1520" height="1210" key="DiffContextDialog" timestamp="1584292563861">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="1295" y="130" width="1520" height="1210" key="DiffContextDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1584292563861" />
+    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl" timestamp="1584292029370">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl/0.30.3440.1410@0.30.3440.1410" timestamp="1584292029370" />
+    <state width="1672" height="688" key="GridCell.Tab.0.bottom" timestamp="1582921576232">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.0.bottom/0.30.1366.738@0.30.1366.738" timestamp="1579034467361" />
+    <state width="1672" height="688" key="GridCell.Tab.0.bottom/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
+    <state width="1672" height="688" key="GridCell.Tab.0.center" timestamp="1582921576232">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.0.center/0.30.1366.738@0.30.1366.738" timestamp="1579034467360" />
+    <state width="1672" height="688" key="GridCell.Tab.0.center/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
+    <state width="1672" height="688" key="GridCell.Tab.0.left" timestamp="1582921576232">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.0.left/0.30.1366.738@0.30.1366.738" timestamp="1579034467359" />
+    <state width="1672" height="688" key="GridCell.Tab.0.left/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
+    <state width="1672" height="688" key="GridCell.Tab.0.right" timestamp="1582921576232">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.0.right/0.30.1366.738@0.30.1366.738" timestamp="1579034467361" />
+    <state width="1672" height="688" key="GridCell.Tab.0.right/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
+    <state width="1672" height="688" key="GridCell.Tab.1.bottom" timestamp="1582921576234">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.1.bottom/0.30.1366.738@0.30.1366.738" timestamp="1579034467364" />
+    <state width="1672" height="688" key="GridCell.Tab.1.bottom/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
+    <state width="1672" height="688" key="GridCell.Tab.1.center" timestamp="1582921576234">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.1.center/0.30.1366.738@0.30.1366.738" timestamp="1579034467363" />
+    <state width="1672" height="688" key="GridCell.Tab.1.center/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
+    <state width="1672" height="688" key="GridCell.Tab.1.left" timestamp="1582921576233">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.1.left/0.30.1366.738@0.30.1366.738" timestamp="1579034467362" />
+    <state width="1672" height="688" key="GridCell.Tab.1.left/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576233" />
+    <state width="1672" height="688" key="GridCell.Tab.1.right" timestamp="1582921576234">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="1318" height="311" key="GridCell.Tab.1.right/0.30.1366.738@0.30.1366.738" timestamp="1579034467363" />
+    <state width="1672" height="688" key="GridCell.Tab.1.right/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
+    <state x="1102" y="417" width="1037" height="737" key="SettingsEditor" timestamp="1585217960008">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="1102" y="417" width="1037" height="737" key="SettingsEditor/0.30.3440.1410@0.30.3440.1410" timestamp="1585217960008" />
+    <state width="1726" height="709" key="XDebugger.FullValuePopup" timestamp="1582898992477">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="685" height="371" key="XDebugger.FullValuePopup/0.30.1366.738@0.30.1366.738" timestamp="1579033625501" />
+    <state width="1726" height="709" key="XDebugger.FullValuePopup/0.30.3440.1410@0.30.3440.1410" timestamp="1582898992477" />
+    <state x="100" y="130" width="1520" height="1210" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog" timestamp="1584292399089">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="100" y="130" width="1520" height="1210" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1584292399089" />
+    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog" timestamp="1580141557388">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1580141557388" />
+    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1582980732777">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1582980732777" />
+    <state x="1438" y="335" width="1484" height="849" key="find.popup" timestamp="1583342336770">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="27" y="30" width="1285" height="718" key="find.popup/0.30.1366.738@0.30.1366.738" timestamp="1579033925018" />
+    <state x="1438" y="335" width="1484" height="849" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1583342336770" />
+    <state width="739" height="320" key="javadoc.popup.new" timestamp="1585577447924">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="590" height="324" key="javadoc.popup.new/0.30.1366.738@0.30.1366.738" timestamp="1577488306677" />
+    <state width="739" height="320" key="javadoc.popup.new/0.30.3440.1410@0.30.3440.1410" timestamp="1585577447924" />
+    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog" timestamp="1582452216011">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1582452216011" />
+    <state x="796" y="351" width="672" height="678" key="search.everywhere.popup" timestamp="1585217731855">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="796" y="351" width="672" height="678" key="search.everywhere.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1585217731855" />
   </component>
   <component name="masterDetails">
     <states>
