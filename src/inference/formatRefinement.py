@@ -2045,7 +2045,7 @@ class RelocatePCA(object):
 
         :param inferredSegmentedMessages: List of messages split into inferred segments.
         :param subclusterKneedleSensitivity: sensitivity of the initial clustering autodetection.
-        :param initialKneedleSensitivity: use reduced sensitivity (from 12 to 6)
+        :param initialKneedleSensitivity: use reduced sensitivity (from 10 to 5)
             due to large dissimilarities in clusters (TODO more evaluation!).
         :param dc: Distance calculator representing the segments to be analyzed and refined.
         :param collectEvaluationData: For evaluation: Collect the intermediate (sub-)clusters generated during
@@ -2054,6 +2054,8 @@ class RelocatePCA(object):
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
         clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
+        # The knee is mostly very distinct and the sensitivity parameter does not have that much impact towards larger
+        # values. Thus, adding a corona around each cluster works best using an factor:
         clusterer.eps = clusterer.eps * 1.5   # tested parameter - results see zeropca-048 and -049
         noise, *clusters = clusterer.clusterSimilarSegments(False)
         if isinstance(retClusterer, List):

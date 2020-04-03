@@ -618,7 +618,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     >>> chainedSegments = dc.rawSegments
 
 
-    :param filter: Filter out one-byte segments and such, just consisting of zeros.
+    :param filter: Filter out **one-byte** segments and such, just consisting of **zeros**.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
     :return:
     """

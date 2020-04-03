@@ -1507,6 +1507,8 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
             # Better than the longest would be the most common length, but that would increase complexity a lot and
             #   we assume that for most use cases the longest segments will be the most frequent length.
             # TODO -1 shift could also be necessary for comparing two max-long segments
+
+            # tuples of indices, lengths, and values of the segments that all are the longest in the input
             maxLenSegs = [(idx, seg.length, seg.values) for idx, seg in enumerate(relevantSegs, 1)
                           if seg.length == self._maxLen]
             segE = list()
@@ -1537,6 +1539,8 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
                 else:
                     offsets = [es[1] for es in embeddingsStraight]
 
+                # count and select which of the offsets for seg is most common amongst maxLenSegs when using the
+                # dissimilarity as criterion for the best-match shift of the shorter segment within the set of longest.
                 offCount = Counter(offsets)
                 self._baseOffsets[seg] = offCount.most_common(1)[0][0]
                 paddedVals = self.paddedValues(seg)
@@ -1545,10 +1549,13 @@ class FieldTypeTemplate(TypedTemplate, FieldTypeMemento):
                     print(tabulate((maxLenSegs[0][2], paddedVals)))
                 segE.append(paddedVals)
 
+            # for all short segments that can be truncated by one byte and still have at least a length of 2:
             if len(maxLenSegs) > 1 and self._maxLen > 2:
                 embeddingsStraight = DistanceCalculator.calcDistances(maxLenSegs)
                 longStraightDistLookup = {(es[0], es[1]): es[2] for es in embeddingsStraight}
 
+                # iterate the longest segments and determine if truncating the shorter segments further reduces the
+                # dissimilarity for any shift of the shorter within the longest segments.
                 for segIdx, segLen, segVals in maxLenSegs:
 
                     seg = relevantSegs[segIdx - 1]
