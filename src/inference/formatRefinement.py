@@ -725,7 +725,9 @@ class RelocatePCA(object):
              * and larger than the absolute minimum.
         """
         self._principalComponents = self._eigen[0] > self._screeThresh
+        """**significant** principal components"""
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
+        """contributions per **significant** principal component"""
 
         self._testSubclusters = None
 
@@ -893,7 +895,7 @@ class RelocatePCA(object):
                 return list()
             else:
                 try:
-                    # Re-Cluster
+                    # Sub-Cluster
                     clusterer = DBSCANsegmentClusterer(dc, segments=self._similarSegments.baseSegments, S=S)
                     noise, *clusters = clusterer.clusterSimilarSegments(False)
                     print(self._similarSegments.fieldtype,
@@ -958,9 +960,15 @@ class RelocatePCA(object):
                             try:
                                 subRpca = RelocatePCA(subcluster)
                                 if cid in interestingClusters:
+                                    # # # # # # # # # # # # # # # # # # # # # # # #
+                                    # decend into recursion
                                     subclusters.extend(subRpca.getSubclusters(dc, S, reportFolder, trace))
+                                    # # # # # # # # # # # # # # # # # # # # # # # #
                                 else:
+                                    # # # # # # # # # # # # # # # # # # # # # # # #
+                                    # stop further recursion
                                     subclusters.append(subRpca)
+                                    # # # # # # # # # # # # # # # # # # # # # # # #
                             except numpy.linalg.LinAlgError:
                                 print("Ignore subcluster due to eigenvalues did not converge")
                                 print(repr(subcluster.baseSegments))
@@ -1301,7 +1309,10 @@ class RelocatePCA(object):
 
         trace = splitext(basename(comparator.specimens.pcapFileName))[0] if comparator else None
 
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # start recursion
         collectedSubclusters = self.getSubclusters(dc, kneedleSensitivity)
+        # # # # # # # # # # # # # # # # # # # # # # # #
         if isinstance(collectEvaluationData, list):
             collectEvaluationData.extend(collectedSubclusters)
         relevantSubclusters, eigenVnV, screeKnees = RelocatePCA.filterRelevantClusters(
@@ -1312,8 +1323,9 @@ class RelocatePCA(object):
 
             # # TODO evaluate:
             # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-            # #  values [0, len] as bounds for all segments in the cluster.D
+            # #  values [0, len] as bounds for all segments in the cluster.
 
+            # prepare proposed new and common bounds
             if cid in relevantSubclusters:
                 relocate = sc.relocateOffsets(reportFolder, trace, comparator)
 
@@ -1347,7 +1359,11 @@ class RelocatePCA(object):
                     newRelativeBounds[seg] = newBounds
                 newPaddingRelative = {bs: [rbound + baseOffs[bs] for rbound in newRelativeBounds[bs]]
                                       for bs in sc.similarSegments.baseSegments}
+                # # # # # # # # # # # # # # # # # # # # # # # #
 
+                # # # # # # # # # # # # # # # # # # # # # # # #
+                # padded range refinement (+ preparation)
+                #
                 # padding-relative positions of boundary moves from that position and moves to that position
                 # based on the starts and ends of the original segment bounds.
                 moveFrom = dict()
@@ -1362,13 +1378,10 @@ class RelocatePCA(object):
                         moveFrom[seg].append(endOffs[seg])
                         moveTo[seg].append(newPaddingRelative[seg][-1])
                 # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-                # # # # # # # # # # # # # # # # # # # # # # # #
-                # padded range refinement (+ preparation)
                 commonBounds = RelocatePCA.CommonBoundUtil(baseOffs, endOffs, moveFrom, moveTo)
                 cutsExt = commonBounds.frequentBoundReframing(newPaddingRelative, relocate)
                 relocatedCommons.update(cutsExt)
+                # # # # # # # # # # # # # # # # # # # # # # # #
 
                 # if sc.similarSegments.fieldtype == "tf02":
                 #     IPython.embed()
