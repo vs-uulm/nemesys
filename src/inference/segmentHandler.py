@@ -8,7 +8,6 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
-from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from inference.analyzers import MessageAnalyzer
 from inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
@@ -649,5 +648,19 @@ def wobbleSegmentInMessage(segment: MessageSegment):
     return wobbles
 
 
+def locateNonPrintable(bstring: bytes) -> List[int]:
+    """
+    A bit broader definition of printable than python string's isPrintable()
 
+    :param bstring: a string of bytes
+    :return: position of bytes not in \t, \n, \r or between >= 0x20 and <= 0x7e
+    """
+    from inference.formatRefinement import isPrintableChar
 
+    npr = list()
+    for idx, bchar in enumerate(bstring):
+        if isPrintableChar(bchar):
+            continue
+        else:
+            npr.append(idx)
+    return npr
