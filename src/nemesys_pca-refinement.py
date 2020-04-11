@@ -477,6 +477,7 @@ if __name__ == '__main__':
             for i in range(2):
                 refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
+                                                      comparator=comparator, reportFolder=reportFolder,
                                                       collectEvaluationData=collectedSubclusters)
 
             # additionally perform most common values refinement

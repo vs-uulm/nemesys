@@ -663,7 +663,7 @@ class RelocateZeros(MessageModifier):
 class RelocatePCA(object):
 
     # PCA conditions parameters
-    minSegLen = 3  # minimum number of cluster members (CAVE: filterRelevantClusters doubles this!) TODO: why?
+    minSegLen = 6  # minimum number of cluster members (CAVE: filterRelevantClusters doubles this!) TODO: why?
     maxAbsolutePrincipals = 4  # absolute maximum of significant principal components for PCA/sub-clustering
     screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
@@ -925,7 +925,8 @@ class RelocatePCA(object):
         return not tooManyPCs and not tooHighLenDiff and not tooManyChars
 
 
-    def getSubclusters(self, dc: DistanceCalculator = None, S:float = None, reportFolder:str = None, trace:str = None):
+    def getSubclusters(self, dc: DistanceCalculator = None, S: float = None,
+                       reportFolder: str = None, trace: str = None):
         """
         Recursive sub-cluster.
 
@@ -941,9 +942,6 @@ class RelocatePCA(object):
         # terminate recursion and return self for PCA
         if self._meetsPCAprerequisites():
             return [self]
-        # # TODO evaluate:
-        # #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-        # #  common values [0, len] as bounds for all segments in the cluster.
         # # # # # # # # # # # # # # # # # # # # # # # #
 
         # no DC available for clustering
@@ -982,12 +980,13 @@ class RelocatePCA(object):
 
             # if there remains only noise, ignore cluster
             if len(clusters) == 0:
-                if RelocatePCA.__preFilter(self._similarSegments):
-                    # # # # # # # # # # # # # # # # # # # # # # # #
-                    # terminate recursion and return self for PCA as "last resort"
-                    print("Use super-cluster {}: only noise.".format(self._similarSegments.fieldtype))
-                    return [self]
-                else:
+                # TODO test impact
+                # if RelocatePCA.__preFilter(self._similarSegments):
+                #     # # # # # # # # # # # # # # # # # # # # # # # #
+                #     # terminate recursion and return self for PCA as "last resort"
+                #     print("Use super-cluster {}: only noise.".format(self._similarSegments.fieldtype))
+                #     return [self]
+                # else:
                     print("Ignore cluster {}: only noise.".format(self._similarSegments.fieldtype))
                     return []
 
@@ -1001,6 +1000,9 @@ class RelocatePCA(object):
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # stop further recursion and ignore this cluster
                     print("Ignore subcluster {} due to pre-filter.".format(ftContext.fieldtype))
+                    # # TODO confirm: these clusters seem completely uninteresting for common bound refinement
+                    # from pprint import pprint
+                    # pprint(sorted([bs for bs in ftContext.baseSegments], key=lambda x: (*x.values, x.offset)))
                     continue
                     # # # # # # # # # # # # # # # # # # # # # # # #
                 print("Analyzing sub-cluster", ftContext.fieldtype)
@@ -2050,7 +2052,9 @@ class RelocatePCA(object):
         :return: List of segments grouped by the message they are from.
         :raise ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
         """
-        clusterer = DBSCANsegmentClusterer(dc, dc.rawSegments, S=initialKneedleSensitivity)
+        # include only segments that are not just 0 and longer than 1 byte
+        relevantSegments = [rs for rs in dc.rawSegments if set(rs.values) != {0} and len(rs.values) > 1]
+        clusterer = DBSCANsegmentClusterer(dc, relevantSegments, S=initialKneedleSensitivity)
         # The knee is mostly very distinct and the sensitivity parameter does not have that much impact towards larger
         # values. Thus, adding a corona around each cluster works best using an factor:
         clusterer.eps = clusterer.eps * 1.5   # tested parameter - results see zeropca-048 and -049
@@ -2065,6 +2069,7 @@ class RelocatePCA(object):
             print("No refinement possible: clustering returns only noise.")
             return inferredSegmentedMessages
 
+        newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]
         for cLabel, segments in enumerate(clusters):
             # Generate suitable FieldTypeContext objects from the sub-clusters
             ftContext, suitedForAnalysis = RelocatePCA._preFilter(segments, "tf{:02d}".format(cLabel))
@@ -2073,7 +2078,11 @@ class RelocatePCA(object):
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # stop further recursion and ignore this cluster
                 print("Ignore subcluster {} due to pre-filter.".format(ftContext.fieldtype))
-                # TODO
+                # # TODO confirm: these clusters seem completely uninteresting for common bound refinement
+                # from pprint import pprint
+                # pprint(sorted((bs for bs in ftContext.baseSegments), key=lambda x: (*x.values, x.offset)))
+                # # print([bytes.fr for pv in ftContext.paddedValues()])
+                # # IPython.embed()
                 continue
                 # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -2093,9 +2102,11 @@ class RelocatePCA(object):
                 collectEvaluationData.extend(collectedSubclusters)
 
             # relocateBoundaries for all collectedSubclusters
-            newBounds = dict()  # type: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]
             for sc in collectedSubclusters:
                 clusterBounds = sc.relocateBoundaries(comparator, reportFolder)
+                # TODO evaluate:
+                #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+                #  common values [0, len] as bounds for all segments in the cluster.
                 for segment, bounds in clusterBounds.items():
                     if segment.message not in newBounds:
                         newBounds[segment.message] = dict()

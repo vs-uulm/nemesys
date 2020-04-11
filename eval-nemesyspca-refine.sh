@@ -12,14 +12,16 @@ input=input/maxdiff-fromOrig/*-1000.pcap
 #input="input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap"
 
 #sigmas="0.6 0.7 0.8 0.9 1.0 1.1 1.2"
-sigmas="0.9 1.2"
-#sigmas="0.9"
+#sigmas="0.9 1.2"
+sigmas="1.2"
 
 #refines="base original PCA PCA1 PCAmoco"
-#refines="zerocharPCAmoco"
+refines="zerocharPCAmoco"
 #refines="PCA1 zeroPCA base"
-#refines="zeroPCA PCAmoco"
-refines="nemetyl"
+#refines="PCA1"
+#refines="zeroPCA"
+# PCAmoco"
+#refines="nemetyl"
 
 
 cftnext=$(expr 1 + $(ls -d reports/nemesys-* | sed "s/^.*nemesys-\([0-9]*\)-.*$/\1/" | sort | tail -1))
