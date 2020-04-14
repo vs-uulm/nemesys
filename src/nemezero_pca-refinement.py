@@ -530,20 +530,21 @@ if __name__ == '__main__':
             # for bs in sc.similarSegments.baseSegments:
             #     markSegNearMatch(inferredSegmentedMessages, bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
-        print("Plot distances...")
-        plotTitle = 'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
-            pcaClusterer[0].eps, int(pcaClusterer[0].min_samples))  # TODO: might be misleading for multiple iterations of PCA
-        sdp = DistancesPlotter(specimens, plotTitle, False)
-        clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters if isinstance(segL, RelocatePCA)
-                       for segid in
-                       dc.segments2index(bs for bs in segL.similarSegments.baseSegments if bs in dc.rawSegments)}
-        # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
-        clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})  # TODO: not completely sure if that is the whole truth about the noise
-        labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
-        # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
-        sdp.plotSegmentDistances(dc, labels)
-        sdp.writeOrShowFigure()
-        del sdp
+        # # deactivated due to performance impact and little use
+        # print("Plot distances...")
+        # plotTitle = 'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
+        #     pcaClusterer[0].eps, int(pcaClusterer[0].min_samples))  # TODO: might be misleading for multiple iterations of PCA
+        # sdp = DistancesPlotter(specimens, plotTitle, False)
+        # clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters if isinstance(segL, RelocatePCA)
+        #                for segid in
+        #                dc.segments2index(bs for bs in segL.similarSegments.baseSegments if bs in dc.rawSegments)}
+        # # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
+        # clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})  # TODO: not completely sure if that is the whole truth about the noise
+        # labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
+        # # plotManifoldDistances(dc.segments, dc.distanceMatrix, labels)
+        # sdp.plotSegmentDistances(dc, labels)
+        # sdp.writeOrShowFigure()
+        # del sdp
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 

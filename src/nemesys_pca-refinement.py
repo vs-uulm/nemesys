@@ -682,6 +682,7 @@ if __name__ == '__main__':
                 for bs in sc.similarSegments.baseSegments:
                     markSegNearMatch(bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
+        # # deactivated due to performance impact and little use
         # print("Plot distances...")
         # sdp = DistancesPlotter(specimens,
         #                        'distances-' + "nemesys-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
