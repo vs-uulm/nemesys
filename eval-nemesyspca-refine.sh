@@ -16,12 +16,12 @@ input=input/maxdiff-fromOrig/*-1000.pcap
 sigmas="1.2"
 
 #refines="base original PCA PCA1 PCAmoco"
-#refines="zerocharPCAmoco"
+refines="zerocharPCAmoco"
 #refines="PCA1 zeroPCA base"
 #refines="PCA1"
 #refines="zeroPCA"
 # PCAmoco"
-refines="nemetyl"
+#refines="nemetyl"
 
 
 cftnext=$(expr 1 + $(ls -d reports/nemesys-* | sed "s/^.*nemesys-\([0-9]*\)-.*$/\1/" | sort | tail -1))
@@ -33,10 +33,10 @@ mkdir ${report}
 #for fn in ${input} ; do python src/nemesys_pca-refinement.py ${fn} ; done
 for fn in ${input} ; do
 for ref in ${refines} ; do
-#for sig in ${sigmas} ; do
-#python src/nemesys_pca-refinement.py -s ${sig} -r ${ref} ${fn}
-python src/nemesys_pca-refinement.py -r ${ref} ${fn}
-#done
+for sig in ${sigmas} ; do
+python src/nemesys_pca-refinement.py -s ${sig} -r ${ref} ${fn}
+#python src/nemesys_pca-refinement.py -r ${ref} ${fn}
+done
 done
 done
 
