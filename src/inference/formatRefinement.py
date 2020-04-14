@@ -993,7 +993,7 @@ class RelocatePCA(object):
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # terminate recursion and return self for PCA as "last resort"
                     print("Use super-cluster {}: only noise.".format(self._similarSegments.fieldtype))
-                    return [self]  # TODO ._similarSegments
+                    return [self]
                 else:
                     print("Ignore cluster {}: only noise.".format(self._similarSegments.fieldtype))
                     return []
@@ -1008,9 +1008,10 @@ class RelocatePCA(object):
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     # stop further recursion and ignore this cluster
                     print("Ignore subcluster {} due to pre-filter.".format(ftContext.fieldtype))
-                    # # TODO confirm: these clusters seem completely uninteresting for common bound refinement
-                    # from pprint import pprint
-                    # pprint(sorted([bs for bs in ftContext.baseSegments], key=lambda x: (*x.values, x.offset)))
+                    # performing "common bound" refinement here does not improve the results:
+                    # * is triggered in only few cases
+                    # * there are just a handfull of segments that may benefit
+                    # * there is some probability to produce more FP than TP.
                     continue
                     # # # # # # # # # # # # # # # # # # # # # # # #
                 print("Analyzing sub-cluster", ftContext.fieldtype)
@@ -2100,11 +2101,10 @@ class RelocatePCA(object):
                 # # # # # # # # # # # # # # # # # # # # # # # #
                 # stop further recursion and ignore this cluster
                 print("Ignore subcluster {} due to pre-filter.".format(ftContext.fieldtype))
-                # # TODO confirm: these clusters seem completely uninteresting for common bound refinement
-                # from pprint import pprint
-                # pprint(sorted((bs for bs in ftContext.baseSegments), key=lambda x: (*x.values, x.offset)))
-                # # print([bytes.fr for pv in ftContext.paddedValues()])
-                # # IPython.embed()
+                # performing "common bound" refinement here does not improve the results:
+                # * is triggered in only few cases
+                # * there are just a handfull of segments that may benefit
+                # * there is some probability to produce more FP than TP.
                 continue
                 # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -2128,9 +2128,12 @@ class RelocatePCA(object):
                 if isinstance(sc, RelocatePCA):
                     clusterBounds = sc.relocateBoundaries(comparator, reportFolder)
                 else:
-                    # TODO evaluate:
-                    #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-                    #  common values [0, len] as bounds for all segments in the cluster.
+                    # performing "common bound" refinement here does not improve the results:
+                    # * is triggered in only few cases
+                    # * there are just a handfull of segments that may benefit
+                    # * there is some probability to produce more FP than TP.
+                    # so, no such subclusters are returned by getSubclusters and on "if not suitedForAnalysis"
+                    # => this is never executed!
                     baseOffs = {bs: sc.baseOffset(bs) for bs in sc.baseSegments}
                     endOffs = {bs: sc.baseOffset(bs) + bs.length
                                for bs in sc.baseSegments}
