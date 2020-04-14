@@ -2,7 +2,7 @@ import csv
 from abc import ABC, abstractmethod
 from itertools import chain
 from os.path import join, exists
-from typing import List, Dict, Tuple, Sequence, Iterable, Set
+from typing import List, Dict, Tuple, Sequence, Iterable, Set, Union
 
 import numpy
 from kneed import KneeLocator
@@ -663,7 +663,7 @@ class RelocateZeros(MessageModifier):
 class RelocatePCA(object):
 
     # PCA conditions parameters
-    minSegLen = 6  # minimum number of cluster members (CAVE: filterRelevantClusters doubles this!) TODO: why?
+    minSegLen = 3  # minimum number of cluster members
     maxAbsolutePrincipals = 4  # absolute maximum of significant principal components for PCA/sub-clustering
     screeMinThresh = 10  # threshold for the minimum of a component to be considered principal
     principalCountThresh = .5   # threshold for the maximum number of allowed principal components to start the analysis;
@@ -711,7 +711,7 @@ class RelocatePCA(object):
         self._principalComponents = self._eigen[0] > self._screeThresh
         """**significant** principal components"""
         self._contribution = self._eigen[1][:, self._principalComponents]  # type: numpy.ndarray
-        """contributions per **significant** principal component"""
+        """contributions of loadings per **significant** principal component"""
 
         self._testSubclusters = None
 
@@ -719,6 +719,11 @@ class RelocatePCA(object):
     @property
     def similarSegments(self):
         return self._similarSegments
+
+
+    @property
+    def eigen(self):
+        return self._eigen
 
 
     @staticmethod
@@ -785,8 +790,8 @@ class RelocatePCA(object):
         """
         interestingClusters = RelocatePCA.filterForSubclustering(fTypeContext)
 
-        # leave only clusters of at least minSegLen * 2 (=6)
-        minClusterSize = RelocatePCA.minSegLen * 2
+        # leave only clusters of at least minSegLen (=6)
+        minClusterSize = RelocatePCA.minSegLen
         for cid in interestingClusters.copy():
             # must be at least minClusterSize unique segment values
             if len(set([bs.bytes for bs in fTypeContext[cid].baseSegments])) < minClusterSize:
@@ -823,6 +828,7 @@ class RelocatePCA(object):
 
     @property
     def principalComponents(self):
+        """**significant** principal components (scores)"""
         return self._principalComponents
 
 
@@ -833,6 +839,7 @@ class RelocatePCA(object):
 
     @property
     def contribution(self):
+        """contributions of loadings per **significant** principal component"""
         return self._contribution
 
 
@@ -883,12 +890,13 @@ class RelocatePCA(object):
         :return: the result of the filter, telling whether the cluster can be further analyzed by PCA or sub-clustering:
                 exclude if false.
         """
-        enoughSegments = len(ftContext.baseSegments) > RelocatePCA.minSegLen
+        uniqueSegVals = len(set(bs.bytes for bs in ftContext.baseSegments))
+        enoughSegments = uniqueSegVals >= RelocatePCA.minSegLen
         enoughVariance = not all(ftContext.stdev == 0)
         notOnlyChars = not all([isExtendedCharSeq(seg.bytes) for seg in ftContext.baseSegments])
 
         if not enoughSegments:
-            print("Cluster {} has not enough segments ({}).".format(ftContext.fieldtype, len(ftContext.baseSegments)))
+            print("Cluster {} has not enough unique segments ({}).".format(ftContext.fieldtype, uniqueSegVals))
         if not enoughVariance:
             print("Cluster {} has no variance.".format(ftContext.fieldtype))
         if not notOnlyChars:
@@ -926,7 +934,7 @@ class RelocatePCA(object):
 
 
     def getSubclusters(self, dc: DistanceCalculator = None, S: float = None,
-                       reportFolder: str = None, trace: str = None):
+                       reportFolder: str = None, trace: str = None) -> List[Union['RelocatePCA', FieldTypeContext]]:
         """
         Recursive sub-cluster.
 
@@ -981,12 +989,12 @@ class RelocatePCA(object):
             # if there remains only noise, ignore cluster
             if len(clusters) == 0:
                 # TODO test impact
-                # if RelocatePCA.__preFilter(self._similarSegments):
-                #     # # # # # # # # # # # # # # # # # # # # # # # #
-                #     # terminate recursion and return self for PCA as "last resort"
-                #     print("Use super-cluster {}: only noise.".format(self._similarSegments.fieldtype))
-                #     return [self]
-                # else:
+                if RelocatePCA.__preFilter(self._similarSegments):
+                    # # # # # # # # # # # # # # # # # # # # # # # #
+                    # terminate recursion and return self for PCA as "last resort"
+                    print("Use super-cluster {}: only noise.".format(self._similarSegments.fieldtype))
+                    return [self]  # TODO ._similarSegments
+                else:
                     print("Ignore cluster {}: only noise.".format(self._similarSegments.fieldtype))
                     return []
 
@@ -1339,7 +1347,7 @@ class RelocatePCA(object):
         from os.path import splitext, basename
         trace = splitext(basename(comparator.specimens.pcapFileName))[0] if comparator else None
 
-        # prepare proposed new and common bounds
+        # prepare proposed new bounds
         relocate = self.relocateOffsets(reportFolder, trace, comparator)
 
         # prepare different views on the newly proposed offsets
@@ -1394,9 +1402,6 @@ class RelocatePCA(object):
         commonBounds = RelocatePCA.CommonBoundUtil(baseOffs, endOffs, moveFrom, moveTo)
         relocatedCommons = commonBounds.frequentBoundReframing(newPaddingRelative, relocate)
         # # # # # # # # # # # # # # # # # # # # # # # #
-
-        # if self.similarSegments.fieldtype == "tf02":
-        #     IPython.embed()
 
         if comparator and reportFolder:
             import tabulate as tabmod
@@ -1613,7 +1618,18 @@ class RelocatePCA(object):
         """
         def __init__(self, baseOffs: Dict[MessageSegment, int], endOffs: Dict[MessageSegment, int],
                      moveFrom: Dict[MessageSegment, List[int]], moveTo: Dict[MessageSegment, List[int]]):
+            """
+
+            :param baseOffs: The relative base offset for all segments to analyze.
+            :param endOffs: The relative ends positions for all segments to analyze.
+            :param moveFrom: Lists of boundaries that should be replaced by another
+                for the segments where this is applicable.
+            :param moveTo: Lists of boundaries that should replace others for the segments where this is applicable.
+            """
             from collections import Counter
+
+            assert baseOffs.keys() == endOffs.keys() == moveFrom.keys() == moveTo.keys(), \
+                "All segments need to have a base offset and end defined."
 
             self._baseOffs = baseOffs
             self._endOffs = endOffs
@@ -1625,11 +1641,14 @@ class RelocatePCA(object):
             commonStarts = Counter(baseOffs.values())
             commonEnds = Counter(endOffs.values())
 
-            self.allAreMoved = [globrel for globrel in commonStarts.keys()
-                           if all(moveAtStart[seg] for seg, sstart in baseOffs.items() if globrel == sstart)
-                           ] + \
-                          [globrel for globrel in commonEnds.keys()
-                           if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)]
+            self.allAreMoved = \
+                [
+                    globrel for globrel in commonStarts.keys()
+                    if all(moveAtStart[seg] for seg, sstart in baseOffs.items() if globrel == sstart)
+                ] + [
+                    globrel for globrel in commonEnds.keys()
+                    if all(moveAtEnd[seg] for seg, send in endOffs.items() if globrel == send)
+                ]
 
             # if all original bounds that constitute a commonStart/End are moved away in all segments of the
             # type, remove from common bounds.
@@ -1682,6 +1701,7 @@ class RelocatePCA(object):
             Consider only common bounds that are off-by-one from the original bound
 
             :param seg:
+            :param reloc: here we need the padding-global raw "relocate" without the added 0 and length
             :return: List of direct neighbors of the unchanged bounds of seg that are common bounds themselves and are
                 more frequent than uoboFreqThresh.
             """
@@ -1748,6 +1768,8 @@ class RelocatePCA(object):
             Refine boundaries within the padded range of all segments in the cluster considering frequent common offsets
             and end positions.
 
+            :param newPaddingRelative: new relative boundaries, including start and end of a unchanged segment, if any.
+            :param relocate: here we need the padding-global raw "relocate" without the added 0 and length
             :return: The proposed cut positions per segment based on frequent common raw segment bounds in the cluster.
             """
             cutsExt = dict()
@@ -2103,10 +2125,29 @@ class RelocatePCA(object):
 
             # relocateBoundaries for all collectedSubclusters
             for sc in collectedSubclusters:
-                clusterBounds = sc.relocateBoundaries(comparator, reportFolder)
-                # TODO evaluate:
-                #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
-                #  common values [0, len] as bounds for all segments in the cluster.
+                if isinstance(sc, RelocatePCA):
+                    clusterBounds = sc.relocateBoundaries(comparator, reportFolder)
+                else:
+                    # TODO evaluate:
+                    #  if a cluster has no principal components > the threshold, but ones larger than 0, use the padded
+                    #  common values [0, len] as bounds for all segments in the cluster.
+                    baseOffs = {bs: sc.baseOffset(bs) for bs in sc.baseSegments}
+                    endOffs = {bs: sc.baseOffset(bs) + bs.length
+                               for bs in sc.baseSegments}
+                    commonBounds = RelocatePCA.CommonBoundUtil(
+                        baseOffs, endOffs, dict.fromkeys(baseOffs.keys(), []), dict.fromkeys(baseOffs.keys(), []))
+                    allOffs = {bs: [baseOffs[bs], endOffs[bs]] for bs in sc.baseSegments}
+                    relocatedCommons = commonBounds.frequentBoundReframing(allOffs, [])
+                    relocatedBoundaries = {seg: list() for seg in sc.baseSegments}
+                    for segment, newCommons in relocatedCommons.items():
+                        relocatedBoundaries[segment].extend([int(rc + segment.offset) for rc in newCommons
+                                                             if int(rc + segment.offset) not in relocatedBoundaries[segment]])
+                        if not len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment])):
+                            IPython.embed()
+                        assert len(relocatedBoundaries[segment]) == len(set(relocatedBoundaries[segment])), \
+                            repr(relocatedBoundaries[segment]) + "\n" + repr(set(relocatedBoundaries[segment]))
+                    clusterBounds = relocatedBoundaries
+
                 for segment, bounds in clusterBounds.items():
                     if segment.message not in newBounds:
                         newBounds[segment.message] = dict()

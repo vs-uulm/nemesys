@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # conduct PCA refinement
-    collectedSubclusters = list()  # type: List[RelocatePCA]
+    collectedSubclusters = list()  # type: List[Union[RelocatePCA, FieldTypeContext]]
 
     startRefinement = time.time()
     if args.refinement == "original":
@@ -585,7 +585,8 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     relevantSubclusters, eigenVnV, screeKnees = \
-        RelocatePCA.filterRelevantClusters([a.similarSegments for a in collectedSubclusters])
+        RelocatePCA.filterRelevantClusters(
+            [a.similarSegments for a in collectedSubclusters if isinstance(a, RelocatePCA)])
     # # select one tf
     # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
     # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -671,7 +672,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots:
         print("Plot component analyses...")
-        for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
+        for cid, sc in enumerate(pcaClusters for pcaClusters in collectedSubclusters if isinstance(pcaClusters, RelocatePCA)):  # type: int, RelocatePCA
             if cid in relevantSubclusters:
                 # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
                 relocate = sc.relocateOffsets(reportFolder, trace, comparator)
@@ -706,7 +707,7 @@ if __name__ == '__main__':
                  "min dissimilarity", "max dissimilarity", "mean dissimilarity"]
 
     #   ... for all subclusters, including the ones filtered out, for confirmation.
-    for cid, sc in enumerate(collectedSubclusters):
+    for cid, sc in enumerate(pcaClusters for pcaClusters in collectedSubclusters if isinstance(pcaClusters, RelocatePCA)):
         # if cid not in relevantSubclusters:
         #     print("Cluster filtered out: " + sc.similarSegments.fieldtype)
         #     for bs in sc.similarSegments.baseSegments:
@@ -737,14 +738,24 @@ if __name__ == '__main__':
     with open(join(reportFolder, segFn), "a") as segfile:
         segcsv = csv.writer(segfile)
         for sc in collectedSubclusters:
-            segcsv.writerows([
-                [],
-                ["# Cluster", sc.similarSegments.fieldtype, "Segments", len(sc.similarSegments.baseSegments)],
-                ["-"*10]*4,
-            ])
-            segcsv.writerows(
-                {(seg.bytes.hex(), seg.bytes) for seg in sc.similarSegments.baseSegments}
-            )
+            if isinstance(sc, RelocatePCA):
+                segcsv.writerows([
+                    [],
+                    ["# Cluster", sc.similarSegments.fieldtype, "Segments", len(sc.similarSegments.baseSegments)],
+                    ["-"*10]*4,
+                ])
+                segcsv.writerows(
+                    {(seg.bytes.hex(), seg.bytes) for seg in sc.similarSegments.baseSegments}
+                )
+            else:
+                segcsv.writerows([
+                    [],
+                    ["# Cluster", sc.fieldtype, "Segments", len(sc.baseSegments)],
+                    ["-"*10]*4,
+                ])
+                segcsv.writerows(
+                    {(seg.bytes.hex(), seg.bytes) for seg in sc.baseSegments}
+                )
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #

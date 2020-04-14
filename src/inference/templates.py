@@ -1738,6 +1738,7 @@ class FieldTypeContext(FieldTypeTemplate):
         return values
 
     def baseOffset(self, segment: MessageSegment):
+        """The offset of the given segment from the relative base offset of all the baseSegments in this object."""
         return self._baseOffsets[segment] if segment in self._baseOffsets else 0
 
 

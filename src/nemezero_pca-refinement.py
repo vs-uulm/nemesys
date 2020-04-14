@@ -229,16 +229,16 @@ def commonBoundsIrrelevant():
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Common Bounds refinement for NON-interestingClusters and NON-relevantSubclusters
     print("# "*20)
-    for noninCluster in (sc for cid, sc in enumerate(collectedSubclusters) if cid not in relevantSubclusters):
-        baseOffs = {bs: noninCluster.similarSegments.baseOffset(bs) for bs in noninCluster.similarSegments.baseSegments}
-        fromEnd = {bs: noninCluster.similarSegments.maxLen - noninCluster.similarSegments.baseOffset(bs) - bs.length
-                   for bs in noninCluster.similarSegments.baseSegments}
+    for noninCluster in (sc for sc in collectedSubclusters if isinstance(sc, FieldTypeContext)):
+        baseOffs = {bs: noninCluster.baseOffset(bs) for bs in noninCluster.baseSegments}
+        fromEnd = {bs: noninCluster.maxLen - noninCluster.baseOffset(bs) - bs.length
+                   for bs in noninCluster.baseSegments}
         if len(set(baseOffs.values())) > 1 or len(set(fromEnd.values())) > 1:
-            print("#", noninCluster.similarSegments.fieldtype, "# "*10)
-            for bs in noninCluster.similarSegments.baseSegments:
+            print("#", noninCluster.fieldtype, "# "*10)
+            for bs in noninCluster.baseSegments:
                 markSegNearMatch(inferredSegmentedMessages, bs)
-            print(tabulate(noninCluster.similarSegments.paddedValues(), showindex=
-                           [(baseOffs[bs], fromEnd[bs]) for bs in noninCluster.similarSegments.baseSegments]))
+            print(tabulate(noninCluster.paddedValues(), showindex=
+                           [(baseOffs[bs], fromEnd[bs]) for bs in noninCluster.baseSegments]))
     print("# " * 20)
     # Considering the probable impact, not worth the effort.
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -276,6 +276,12 @@ if __name__ == '__main__':
     specimens = SpecimenLoader(args.pcapfilename, 2, True)
     comparator = MessageComparator(specimens, 2, True, debug=debug)
 
+    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
+    if not exists(reportFolder):
+        makedirs(reportFolder)
+    else:
+        print("Adding report to existing folder:", reportFolder)
+
     # zero/non-zero segments
     segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),) for msg in specimens.messagePool.keys()]
     # .blend(True) to omit single zeros
@@ -292,7 +298,7 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # conduct PCA refinement
-    collectedSubclusters = list()  # type: List[RelocatePCA]
+    collectedSubclusters = list()  # type: List[Union[RelocatePCA, FieldTypeContext]]
     pcaClusterer = list()  # type: List[DBSCANsegmentClusterer]
 
     startRefinement = time.time()
@@ -343,12 +349,6 @@ if __name__ == '__main__':
             exit(10)
     runtimeRefinement = time.time() - startRefinement
     # # # # # # # # # # # # # # # # # # # # # # # #
-
-    reportFolder = join(reportFolder, splitext(pcapbasename)[0])
-    if not exists(reportFolder):
-        makedirs(reportFolder)
-    else:
-        print("Adding report to existing folder:", reportFolder)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Distance Calculator
@@ -435,8 +435,8 @@ if __name__ == '__main__':
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    relevantSubclusters, eigenVnV, screeKnees = \
-        RelocatePCA.filterRelevantClusters([a.similarSegments for a in collectedSubclusters])
+    # relevantSubclusters, eigenVnV, screeKnees = \
+    #     RelocatePCA.filterRelevantClusters([a.similarSegments for a in collectedSubclusters if isinstance(a, RelocatePCA)])
     # # select one tf
     # tf02 = next(c for c in collectedSubclusters if c.similarSegments.fieldtype == "tf02")
     # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -522,22 +522,20 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withPlots and len(pcaClusterer) > 0:  # nothing to plot with, e. g., "base" refinement
         print("Plot component analyses...")
-        for cid, sc in enumerate(collectedSubclusters):  # type: int, RelocatePCA
-            if cid in relevantSubclusters:
-                relocate = sc.relocateOffsets(reportFolder, pcapName, comparator)
-                plotComponentAnalysis(sc,
-                                      eigenVnV[cid] if cid in eigenVnV else numpy.linalg.eigh(sc.similarSegments.cov),
-                                      relocate)
-                # # print each segment marked in its message
-                # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
-                # for bs in sc.similarSegments.baseSegments:
-                #     markSegNearMatch(inferredSegmentedMessages, bs)
+        for sc in (a for a in collectedSubclusters if isinstance(a, RelocatePCA)):  # type: RelocatePCA
+            relocate = sc.relocateOffsets(reportFolder, pcapName, comparator)
+            plotComponentAnalysis(sc, sc.eigen, relocate)
+            # # print each segment marked in its message
+            # print(sc.similarSegments.fieldtype, "*" if cid in relevantSubclusters else "")
+            # for bs in sc.similarSegments.baseSegments:
+            #     markSegNearMatch(inferredSegmentedMessages, bs)
         # # # # # # # # # # # # # # # # # # # # # # # # #
         print("Plot distances...")
         plotTitle = 'distances-' + "nemezero-segments_DBSCAN-eps{:0.3f}-ms{:d}".format(
             pcaClusterer[0].eps, int(pcaClusterer[0].min_samples))  # TODO: might be misleading for multiple iterations of PCA
         sdp = DistancesPlotter(specimens, plotTitle, False)
-        clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters for segid in
+        clustermask = {segid: segL.similarSegments.fieldtype for segL in collectedSubclusters if isinstance(segL, RelocatePCA)
+                       for segid in
                        dc.segments2index(bs for bs in segL.similarSegments.baseSegments if bs in dc.rawSegments)}
         # clustermask.update({segid: "Noise" for segid in dc.segments2index(noise)})
         clustermask.update({segid: "Noise" for segid in range(len(dc.segments)) if segid not in clustermask})  # TODO: not completely sure if that is the whole truth about the noise
@@ -560,19 +558,21 @@ if __name__ == '__main__':
                  "min dissimilarity", "max dissimilarity", "mean dissimilarity"]
 
     #   ... for all subclusters, including the ones filtered out, for confirmation.
-    for cid, sc in enumerate(collectedSubclusters):
+    for sc in collectedSubclusters:
         # if cid not in relevantSubclusters:
         #     print("Cluster filtered out: " + sc.similarSegments.fieldtype)
         #     for bs in sc.similarSegments.baseSegments:
         #         markSegNearMatch(bs)
 
-        bslen = {bs.length for bs in sc.similarSegments.baseSegments}
+        segmentContext = sc.similarSegments if isinstance(sc, RelocatePCA) else sc
+
+        bslen = {bs.length for bs in segmentContext.baseSegments}
         lendiff = max(bslen) - min(bslen)
 
-        uniqvals = {bs.bytes for bs in sc.similarSegments.baseSegments}
-        internDis = [dis for dis, idx in sc.similarSegments.distancesToMixedLength(dc)]
+        uniqvals = {bs.bytes for bs in segmentContext.baseSegments}
+        internDis = [dis for dis, idx in segmentContext.distancesToMixedLength(dc)]
         ischar = sum([isExtendedCharSeq(seg.bytes)
-                      for seg in sc.similarSegments.baseSegments]) > .5 * len(sc.similarSegments.baseSegments)
+                      for seg in segmentContext.baseSegments]) > .5 * len(segmentContext.baseSegments)
 
         fn = join(reportFolder, scoFile)
         writeheader = not exists(fn)
@@ -581,9 +581,9 @@ if __name__ == '__main__':
             if writeheader:
                 segcsv.writerow(scoHeader)
             segcsv.writerow([
-                pcapName, sc.similarSegments.fieldtype, len(sc.similarSegments.baseSegments),
-                sc.similarSegments.length,
-                repr(cid in relevantSubclusters), lendiff, len(uniqvals), ischar,
+                pcapName, segmentContext.fieldtype, len(segmentContext.baseSegments),
+                segmentContext.length,
+                repr(isinstance(sc, RelocatePCA)), lendiff, len(uniqvals), ischar,
                 min(internDis), max(internDis), numpy.mean(internDis)
             ])
     # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -591,14 +591,24 @@ if __name__ == '__main__':
     with open(join(reportFolder, segFn), "a") as segfile:
         segcsv = csv.writer(segfile)
         for sc in collectedSubclusters:
-            segcsv.writerows([
-                [],
-                ["# Cluster", sc.similarSegments.fieldtype, "Segments", len(sc.similarSegments.baseSegments)],
-                ["-"*10]*4,
-            ])
-            segcsv.writerows(
-                {(seg.bytes.hex(), seg.bytes) for seg in sc.similarSegments.baseSegments}
-            )
+            if isinstance(sc, RelocatePCA):
+                segcsv.writerows([
+                    [],
+                    ["# Cluster", sc.similarSegments.fieldtype, "Segments", len(sc.similarSegments.baseSegments)],
+                    ["-"*10]*4,
+                ])
+                segcsv.writerows(
+                    {(seg.bytes.hex(), seg.bytes) for seg in sc.similarSegments.baseSegments}
+                )
+            else:
+                segcsv.writerows([
+                    [],
+                    ["# Cluster", sc.fieldtype, "Segments", len(sc.baseSegments)],
+                    ["-"*10]*4,
+                ])
+                segcsv.writerows(
+                    {(seg.bytes.hex(), seg.bytes) for seg in sc.baseSegments}
+                )
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
