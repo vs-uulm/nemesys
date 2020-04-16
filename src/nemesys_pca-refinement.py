@@ -15,7 +15,7 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
     originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements, nemetylRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices
+from inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices, SplitFixed
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -42,7 +42,8 @@ refinementMethods = [
     "PCAmoco",  # 2-pass PCA + moco
     "zeroPCA",  # zero+base + 2-pass PCA
     "zero",     # zero+base
-    "zerocharPCAmoco"  # with crop char
+    "zerocharPCAmoco",  # with crop char
+    "zerocharPCAmocoSF"  # with split fixed
     ]
 
 
@@ -461,10 +462,9 @@ if __name__ == '__main__':
             for msg in pcaRound:
                 croppedMsg = CropDistinct(msg, moco).split()
                 refinedSM.append(croppedMsg)
-
             refinedSM = charRefinements(refinedSM)
 
-            # TODO now needs recalculation of segment distances
+            # now needs recalculation of segment distances in dc
         except ClusterAutoconfException as e:
             print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
                   "The original exception message was:\n", e)
@@ -491,7 +491,36 @@ if __name__ == '__main__':
             # decreases FMS slightly for dhcp and smb
             # refinedSM = charRefinements(refinedSM)
 
-            # TODO now needs recalculation of segment distances
+            # now needs recalculation of segment distances in dc
+        except ClusterAutoconfException as e:
+            print(
+                "Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+                "The original exception message was:\n", e)
+            exit(10)
+    elif args.refinement == "zerocharPCAmocoSF":
+        try:
+            # .blend(True) to omit single zeros: in most cases (dns, nbns, smb), quality deteriorates.
+            zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(False) for msg in inferredSegmentedMessages]
+            pcaRound = [CropChars(segs).split() for segs in zeroSlicedMessages]
+            for i in range(2):
+                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
+                pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
+                                                      comparator=comparator, reportFolder=reportFolder,
+                                                      collectEvaluationData=collectedSubclusters)
+
+            # additionally perform most common values refinement
+            moco = CropDistinct.countCommonValues(pcaRound)
+            print([m.hex() for m in moco])
+            refinedSM = list()
+            for msg in pcaRound:
+                croppedMsg = CropDistinct(msg, moco).split()
+                # and: first segments that are longer than 3 and that have the first two bytes being non-zero
+                if croppedMsg[0].length > 3 and croppedMsg[0].bytes[0] != 0 and croppedMsg[0].bytes[1] != 0:
+                    # TODO evaluate
+                    splitfixed = SplitFixed(croppedMsg).split(0, 1)
+                    refinedSM.append(splitfixed)
+                else:
+                    refinedSM.append(croppedMsg)
         except ClusterAutoconfException as e:
             print(
                 "Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "

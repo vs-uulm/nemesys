@@ -555,6 +555,12 @@ class SplitFixed(MessageModifier):
     """
 
     def split(self, segmentID: int, chunkLength: int):
+        """
+
+        :param segmentID: The index of the segment to split within the sequence of segments composing the message
+        :param chunkLength: The fixed length of the target segments in bytes
+        :return: The message segments with the given segment replaced by multiple segments of the given fixed length.
+        """
         selSeg = self.segments[segmentID]
         if chunkLength < selSeg.length:
             newSegs = list()
