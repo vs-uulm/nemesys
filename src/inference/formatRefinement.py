@@ -2155,7 +2155,7 @@ class RelocatePCA(object):
                     if segment.message not in newBounds:
                         newBounds[segment.message] = dict()
                     elif segment in newBounds[segment.message] and newBounds[segment.message][segment] != bounds:
-                        # TODO replace by exception
+                        # TODO replace by exception or solution
                         print("\nSame segment was refined (PCA) multiple times. Needs resolving. Segment is:\n",
                               segment, "Concurrent bounds are:\n",
                               newBounds[segment.message][segment], "and\n",
