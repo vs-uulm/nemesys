@@ -15,7 +15,7 @@ from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Templ
     ClusterAutoconfException
 from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
     originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices, CropChars
+from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices, CropChars, SplitFixed
 from validation import reportWriter
 from visualization.distancesPlotter import DistancesPlotter
 from visualization.simplePrint import *
@@ -37,6 +37,7 @@ refinementMethods = [
     "PCA",      # 2-pass PCA
     "PCA1",     # 1-pass PCA
     "PCAmoco",  # 2-pass PCA+moco
+    "PCAmocoSF",  # 2-pass PCA+moco+splitfirstseg(v2)
     ]
 
 
@@ -343,6 +344,32 @@ if __name__ == '__main__':
 
             # TODO remove for comparability to nemesys_pca-refinement.py ?!?
             # refinedSM = charRefinements(refinedSM)
+        except ClusterAutoconfException as e:
+            print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+                  "The original exception message was:\n", e)
+            exit(10)
+    elif args.refinement == "PCAmocoSF":
+        try:
+            pcaRound = inferredSegmentedMessages
+            for i in range(2):
+                refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
+                pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
+                                                      comparator=comparator, reportFolder=reportFolder,
+                                  collectEvaluationData=collectedSubclusters, retClusterer=pcaClusterer)
+
+            # additionally perform most common values refinement
+            moco = CropDistinct.countCommonValues(pcaRound)
+            print("Common segment values:", [m.hex() for m in moco])
+            refinedSM = list()
+            for msg in pcaRound:
+                croppedMsg = CropDistinct(msg, moco).split()
+                # and: first segments that are longer than 2 and at least two bytes are less than \x10
+                # (that have the first two bytes being non-zero)
+                if croppedMsg[0].length > 2 and sum(b < 0x10 for b in croppedMsg[0].bytes) >= 2:
+                    splitfixed = SplitFixed(croppedMsg).split(0, 1)
+                    refinedSM.append(splitfixed)
+                else:
+                    refinedSM.append(croppedMsg)
         except ClusterAutoconfException as e:
             print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
                   "The original exception message was:\n", e)

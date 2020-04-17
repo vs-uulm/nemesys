@@ -14,9 +14,9 @@ input=input/maxdiff-fromOrig/*-100.pcap
 #input=input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-1000.pcap
 
 
-#refines="base PCA PCA1 PCAmoco"
+#refines="base PCA PCA1 PCAmoco PCAmocoSF"
 #refines="PCA PCAmoco"
-refines="PCAmoco"
+refines="PCAmocoSF"
 #refines="PCA1"
 
 

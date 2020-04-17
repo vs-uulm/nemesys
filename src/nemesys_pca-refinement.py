@@ -43,7 +43,7 @@ refinementMethods = [
     "zeroPCA",  # zero+base + 2-pass PCA
     "zero",     # zero+base
     "zerocharPCAmoco",  # with crop char
-    "zerocharPCAmocoSF"  # with split fixed
+    "zerocharPCAmocoSF"  # with split fixed (v2)
     ]
 
 
@@ -514,9 +514,9 @@ if __name__ == '__main__':
             refinedSM = list()
             for msg in pcaRound:
                 croppedMsg = CropDistinct(msg, moco).split()
-                # and: first segments that are longer than 3 and that have the first two bytes being non-zero
-                if croppedMsg[0].length > 3 and croppedMsg[0].bytes[0] != 0 and croppedMsg[0].bytes[1] != 0:
-                    # TODO evaluate
+                # and: first segments that are longer than 2 and at least two bytes are less than \x10
+                # (that have the first two bytes being non-zero)
+                if croppedMsg[0].length > 2 and sum(b < 0x10 for b in croppedMsg[0].bytes) >= 2:
                     splitfixed = SplitFixed(croppedMsg).split(0, 1)
                     refinedSM.append(splitfixed)
                 else:
