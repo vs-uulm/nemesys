@@ -502,7 +502,7 @@ if __name__ == '__main__':
             # .blend(True) to omit single zeros: in most cases (dns, nbns, smb), quality deteriorates.
             zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(False) for msg in inferredSegmentedMessages]
             pcaRound = [CropChars(segs).split() for segs in zeroSlicedMessages]
-            for i in range(2):
+            for i in range(1):
                 refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
                                                       comparator=comparator, reportFolder=reportFolder,

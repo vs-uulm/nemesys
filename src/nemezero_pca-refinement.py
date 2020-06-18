@@ -351,7 +351,7 @@ if __name__ == '__main__':
     elif args.refinement == "PCAmocoSF":
         try:
             pcaRound = inferredSegmentedMessages
-            for i in range(2):
+            for i in range(1):
                 refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
                 pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC,
                                                       comparator=comparator, reportFolder=reportFolder,
