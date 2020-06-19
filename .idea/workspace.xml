@@ -4,17 +4,16 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="BookmarkManager">
-    <bookmark url="file://$PROJECT_DIR$/src/inference/analyzers.py" line="675" mnemonic="2" />
-    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="88" mnemonic="7" />
-    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="331" mnemonic="8" />
+    <bookmark url="file://$PROJECT_DIR$/src/inference/analyzers.py" line="716" mnemonic="2" />
+    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="98" mnemonic="7" />
+    <bookmark url="file://$PROJECT_DIR$/src/validation/messageParser.py" line="341" mnemonic="8" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/characterize_fieldtypes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/characterize_fieldtypes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/align_on_field_personality.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/align_on_field_personality.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/segments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segments.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualization/multiPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/multiPlotter.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -31,13 +30,46 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="characterize_fieldtypes.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="hirschbergAlignSegments.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="-1211">
+              <caret line="65" column="63" lean-forward="true" selection-start-line="65" selection-start-column="63" selection-end-line="65" selection-end-column="63" />
+              <folding>
+                <element signature="e#0#23#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="align_on_field_personality.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/align_on_field_personality.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="2145">
+              <caret line="143" lean-forward="true" selection-start-line="143" selection-end-line="143" />
+              <folding>
+                <element signature="e#400#424#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="characterize_fieldtypes.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/characterize_fieldtypes.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="469">
-              <caret line="228" column="18" selection-start-line="228" selection-start-column="5" selection-end-line="228" selection-end-column="18" />
+            <state relative-caret-position="394">
+              <caret line="226" column="75" selection-start-line="226" selection-start-column="67" selection-end-line="226" selection-end-column="75" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="segmentHandler.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="949">
+              <caret line="223" column="32" selection-start-line="223" selection-start-column="20" selection-end-line="223" selection-end-column="32" />
               <folding>
-                <element signature="e#569#593#0" expanded="true" />
+                <element signature="e#46#58#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -46,12 +78,35 @@
       <file leaf-file-name="templates.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="679">
-              <caret line="300" column="103" selection-start-line="300" selection-start-column="103" selection-end-line="300" selection-end-column="103" />
+            <state relative-caret-position="462">
+              <caret line="440" column="61" lean-forward="true" selection-start-line="440" selection-start-column="61" selection-end-line="440" selection-end-column="61" />
               <folding>
                 <element signature="e#0#63#0" expanded="true" />
-                <element signature="e#3546#5638#0" />
-                <element signature="e#15413#18325#0" />
+                <element signature="e#377#3483#0" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="analyzers.py" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="536">
+              <caret line="1060" column="23" selection-start-line="1060" selection-start-column="23" selection-end-line="1060" selection-end-column="23" />
+              <folding>
+                <element signature="e#137#149#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="segments.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/inference/segments.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="555">
+              <caret line="541" lean-forward="true" selection-start-line="541" selection-end-line="541" />
+              <folding>
+                <element signature="e#0#11#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -68,26 +123,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>unique</find>
-      <find>fieldendsper</find>
-      <find>fieldendsfrom</find>
-      <find>RawMessage</find>
-      <find>fieldends</find>
-      <find>validation.Messa</find>
-      <find>Message</find>
-      <find>dissectorMatcher</find>
-      <find>fmslist</find>
-      <find>MessageComparator</find>
-      <find>DissectorMatcher</find>
-      <find>low</find>
-      <find>tril</find>
-      <find>font</find>
-      <find>eps</find>
-      <find>tg.clusterer.epsilon</find>
-      <find>stropy</find>
-      <find>nibb</find>
-      <find>DBSCAN</find>
-      <find>pum</find>
       <find>labelForSegment</find>
       <find>cos</find>
       <find>\# fallback for vectors of length 1\n        if len\(segments\[0\]\.values\) \=\= 1\:\n            method \= \'cityblock\'\n\n        if method \=\= \'cosine\'\:\n            \# comparing to zero vectors is undefined in cosine\.\n            \# Its semantically equivalent to a \(small\) horizontal vector\n            segmentValuesMatrix \= numpy\.array\(\n                \[seg\.values if \(numpy\.array\(seg\.values\) \!\= 0\)\.any\(\) else \[1e\-16\]\*len\(seg\.values\) for seg in segments\]\)\n        else\:\n            segmentValuesMatrix \= numpy\.array\(\[seg\.values for seg in segments\]\)\n        segPairSimi \= scipy\.spatial\.distance\.pdist\(segmentValuesMatrix\, method\)\n        \# import IPython\; IPython\.embed\(\)\n        segPairs \= list\(\)\n        for \(segA\, segB\)\, simi in zip\(itertools\.combinations\(segments\, 2\)\, segPairSimi\)\:\n            if numpy\.isnan\(simi\)\:\n                if method \=\= \'cosine\'\:\n                    if segA\.values \=\= segB\.values \\\n                            or numpy\.isnan\(segA\.values\)\.all\(\) and numpy\.isnan\(segB\.values\)\.all\(\)\:\n                        segSimi \= 0\n                    elif numpy\.isnan\(segA\.values\)\.any\(\) or numpy\.isnan\(segB\.values\)\.any\(\)\:\n                        segSimi \= 1\n                        \# TODO better handling of segments with NaN parts\.\n                        \# print\(\'Set max distance for NaN segments with values\: \{\} and \{\}\'\.format\(\n                        \#     segA\.values\, segB\.values\)\)\n                    else\:\n                        raise ValueError\(\'A unresolved zero\-values vector could not be handled by method \' \+ method \+\n                                         \'the segment values are\: \{\}\\nand \{\}\'\.format\(segA\.values\, segB\.values\)\)\n                else\:\n                    raise NotImplementedError\(\'Handling of NaN distances need to be defined for method \' \+ method\)\n            else\:\n                segSimi \= simi\n            segPairs\.append\(InterSegment\(segA\, segB\, segSimi\)\)\n        \# print\(\&quot;    finished\.\&quot;\)\n        return segPairs</find>
@@ -98,6 +133,26 @@
       <find>\|</find>
       <find>text</find>
       <find>distance</find>
+      <find>+----------+----------+-----------+----------+-----------</find>
+      <find>\+</find>
+      <find>Templ</find>
+      <find>UPGMA</find>
+      <find>alignTwoMessages</find>
+      <find>computeDistance</find>
+      <find>score</find>
+      <find>computeSimilarityMatrix</find>
+      <find>len</find>
+      <find>combinations</find>
+      <find>extrema,</find>
+      <find>MDS</find>
+      <find>Pars</find>
+      <find>_raw64</find>
+      <find>ParsingConstants</find>
+      <find>CONSTANTS_</find>
+      <find>_raw</find>
+      <find>raw</find>
+      <find>profile</find>
+      <find>values</find>
     </findStrings>
     <replaceStrings>
       <replace />
@@ -106,6 +161,7 @@
       <replace>TsharkConnector</replace>
       <replace>self.method</replace>
       <replace>,</replace>
+      <replace>|</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/pyshark</dir>
@@ -115,6 +171,7 @@
       <dir>$PROJECT_DIR$/src/</dir>
       <dir>$PROJECT_DIR$/../n-grams</dir>
       <dir>$PROJECT_DIR$/src/inference</dir>
+      <dir>$USER_HOME$/REUP-common/Tools/netzob-official/netzob/lib</dir>
     </dirStrings>
   </component>
   <component name="Git.Settings">
@@ -126,14 +183,6 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/src/dissectorValidation/MessageComparator.py" />
-        <option value="$PROJECT_DIR$/src/dissectorValidation/reportWriter.py" />
-        <option value="$PROJECT_DIR$/src/inferAndCompareTshark.py" />
-        <option value="$PROJECT_DIR$/src/reupMessages/__init__.py" />
-        <option value="$PROJECT_DIR$/src/reupMessages/MessageSegment.py" />
-        <option value="$PROJECT_DIR$/src/analysis_message_segments.py" />
-        <option value="$PROJECT_DIR$/src/analysisVisualization/SingleMessagePlotter.py" />
-        <option value="$PROJECT_DIR$/src/nemesys_field_deviation_plot.py" />
         <option value="$PROJECT_DIR$/src/reupMessages/TemplateGenerator.py" />
         <option value="$PROJECT_DIR$/src/reupMessages/MessageAnalyzer.py" />
         <option value="$PROJECT_DIR$/src/analysisVisualization/DistancesPlotter.py" />
@@ -160,29 +209,37 @@
         <option value="$PROJECT_DIR$/src/utils/baseAlgorithms.py" />
         <option value="$PROJECT_DIR$/src/validation/netzobFormatMatchScore.py" />
         <option value="$PROJECT_DIR$/src/netzob_fms.py" />
-        <option value="$PROJECT_DIR$/src/validation/tsharkConnector.py" />
-        <option value="$PROJECT_DIR$/src/visualization/singlePlotter.py" />
-        <option value="$PROJECT_DIR$/src/validation/messageParser.py" />
-        <option value="$PROJECT_DIR$/src/inference/formatRefinement.py" />
         <option value="$PROJECT_DIR$/src/inference/labeling.py" />
         <option value="$PROJECT_DIR$/src/inference/series.py" />
-        <option value="$PROJECT_DIR$/src/inference/analyzers.py" />
-        <option value="$PROJECT_DIR$/src/visualization/distancesPlotter.py" />
-        <option value="$PROJECT_DIR$/src/validation/dissectorMatcher.py" />
-        <option value="$PROJECT_DIR$/src/inference/segments.py" />
-        <option value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
         <option value="$PROJECT_DIR$/src/visualization/plotter.py" />
         <option value="$PROJECT_DIR$/src/characterize_segments.py" />
         <option value="$PROJECT_DIR$/src/utils/loader.py" />
         <option value="$PROJECT_DIR$/src/visualization/multiPlotter.py" />
-        <option value="$PROJECT_DIR$/src/inference/templates.py" />
+        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch_5.py" />
+        <option value="$PROJECT_DIR$/src/transform_cluster-statistics.py" />
+        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch.md" />
         <option value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
+        <option value="$APPLICATION_CONFIG_DIR$/scratches/scratch.py" />
+        <option value="$PROJECT_DIR$/src/alignment/nwalignsegments.py" />
+        <option value="$PROJECT_DIR$/src/alignment/c_lib/nwaligntokens.c" />
+        <option value="$PROJECT_DIR$/src/inference/formatRefinement.py" />
+        <option value="$PROJECT_DIR$/src/validation/dissectorMatcher.py" />
+        <option value="$PROJECT_DIR$/src/visualization/singlePlotter.py" />
+        <option value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
+        <option value="$PROJECT_DIR$/src/visualization/distancesPlotter.py" />
+        <option value="$PROJECT_DIR$/src/inference/analyzers.py" />
+        <option value="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" />
+        <option value="$PROJECT_DIR$/src/validation/messageParser.py" />
+        <option value="$PROJECT_DIR$/src/validation/tsharkConnector.py" />
+        <option value="$PROJECT_DIR$/src/align_on_field_personality.py" />
+        <option value="$PROJECT_DIR$/src/inference/segments.py" />
+        <option value="$PROJECT_DIR$/src/inference/templates.py" />
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="4">
+  <component name="ProjectFrameBounds" extendedState="6">
     <option name="y" value="30" />
-    <option name="width" value="1720" />
+    <option name="width" value="1280" />
     <option name="height" value="1410" />
   </component>
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
@@ -208,13 +265,79 @@
               <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
               <item name="nemesys" type="462c0819:PsiDirectoryNode" />
               <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="validation" type="462c0819:PsiDirectoryNode" />
+              <item name="inference" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
               <item name="nemesys" type="462c0819:PsiDirectoryNode" />
               <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="visualization" type="462c0819:PsiDirectoryNode" />
+              <item name="utils" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="lib" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="lib" type="462c0819:PsiDirectoryNode" />
+              <item name="includes" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="lib" type="462c0819:PsiDirectoryNode" />
+              <item name="interface" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="lib" type="462c0819:PsiDirectoryNode" />
+              <item name="libNeedleman" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="Inference" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="nemesys" type="b2602c69:ProjectViewProjectNode" />
+              <item name="netzob-official" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="netzob" type="462c0819:PsiDirectoryNode" />
+              <item name="Inference" type="462c0819:PsiDirectoryNode" />
+              <item name="Vocabulary" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
@@ -224,8 +347,9 @@
   </component>
   <component name="PropertiesComponent">
     <property name="SearchEverywhereHistoryKey" value="getoffset&#9;null&#9;null&#10;Bcolors&#9;null&#9;null&#10;bcolor&#9;null&#9;null&#10;getClustersFrom&#9;null&#9;null&#10;getClustersFromLa&#9;null&#9;null&#10;absolute differences&#9;null&#9;null&#10;plot&#9;FILE&#9;file:///home/stephan/git.lab-vs/REUP/specimen-generation/src/plotMessages.py&#10;bitarray&#9;null&#9;null" />
+    <property name="com.intellij.ide.scratch.LRUPopupBuilder$1/New Scratch File" value="Python&#10;Markdown" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="Python" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/src/inference/segments.py" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../students/netzob-discoverer/netzob" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
     <property name="settings.editor.selected.configurable" value="Errors" />
   </component>
@@ -255,7 +379,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.characterize_fieldtypes">
+  <component name="RunManager" selected="Python.align_on_field_personality">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -270,6 +394,24 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="" />
       <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+    </configuration>
+    <configuration name="align_on_field_personality" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="NEMESYS" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/align_on_field_personality.py" />
+      <option name="PARAMETERS" value="input/binaryprotocols_merged_500.pcap -i" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -382,24 +524,6 @@
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
     </configuration>
-    <configuration name="segment" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="NEMESYS" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_message_segments.py" />
-      <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-    </configuration>
     <configuration default="true" type="Tox" factoryName="Tox">
       <module name="NEMESYS" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -490,19 +614,19 @@
     <list>
       <item itemvalue="Python.plot" />
       <item itemvalue="Python.deduplicate-trace" />
-      <item itemvalue="Python.segment" />
       <item itemvalue="Python.nemesys_fms" />
       <item itemvalue="Python.parsePCAP" />
       <item itemvalue="Python.characterize_segments" />
       <item itemvalue="Python.characterize_fieldtypes" />
+      <item itemvalue="Python.align_on_field_personality" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.align_on_field_personality" />
         <item itemvalue="Python.characterize_fieldtypes" />
         <item itemvalue="Python.characterize_segments" />
         <item itemvalue="Python.parsePCAP" />
         <item itemvalue="Python.nemesys_fms" />
-        <item itemvalue="Python.segment" />
       </list>
     </recent_temporary>
   </component>
@@ -531,7 +655,7 @@
     <option name="localTasksCounter" value="2" />
     <servers />
   </component>
-  <component name="TodoView" selected-index="1">
+  <component name="TodoView">
     <todo-panel id="selected-file">
       <is-autoscroll-to-source value="true" />
     </todo-panel>
@@ -541,16 +665,17 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="0" y="30" width="1720" height="1410" extended-state="4" />
+    <frame x="0" y="30" width="2560" height="1410" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.54120445" visible="true" weight="0.2792208" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.5332805" visible="true" weight="0.1866614" />
       <window_info anchor="bottom" id="TODO" order="5" weight="0.29080823" />
       <window_info anchor="bottom" id="Event Log" order="6" sideWeight="0.32754537" side_tool="true" weight="0.28129953" />
+      <window_info id="Find" order="2" sideWeight="0.6307449" weight="0.2898465" />
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.32884312" />
-      <window_info anchor="bottom" id="Python Console" order="8" weight="0.3293919" />
+      <window_info anchor="bottom" id="Python Console" order="8" weight="0.32884312" />
       <window_info anchor="bottom" id="Run" order="1" weight="0.32911393" />
-      <window_info x="502" y="116" width="361" height="583" id="Structure" order="1" sideWeight="0.45879558" side_tool="true" visible="true" weight="0.2792208" />
+      <window_info active="true" x="502" y="116" width="361" height="583" id="Structure" order="1" sideWeight="0.46671948" side_tool="true" visible="true" weight="0.1866614" />
       <window_info anchor="bottom" id="Terminal" order="9" weight="0.32884312" />
       <window_info id="Favorites" order="3" sideWeight="0.44611728" side_tool="true" weight="0.2485242" />
       <window_info anchor="bottom" id="Debug" order="2" sideWeight="0.6724546" weight="0.5095087" />
@@ -566,7 +691,6 @@
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Inspection" order="4" weight="0.4" />
       <window_info anchor="bottom" id="Cvs" order="3" weight="0.25" />
-      <window_info id="Find" order="2" sideWeight="0.6354992" weight="0.2898465" />
       <window_info anchor="right" id="Data View" order="3" weight="0.32952815" />
     </layout>
   </component>
@@ -579,64 +703,61 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/src/validation/tsharkConnector.py</url>
-          <line>67</line>
-          <option name="timeStamp" value="441" />
-        </line-breakpoint>
-      </breakpoints>
       <breakpoints-dialog>
         <breakpoints-dialog />
       </breakpoints-dialog>
-      <option name="time" value="453" />
+      <option name="time" value="471" />
     </breakpoint-manager>
+    <watches-manager>
+      <configuration name="PythonConfigurationType">
+        <watch expression="newSegment.values" />
+      </configuration>
+    </watches-manager>
   </component>
   <component name="debuggerHistoryManager">
     <expressions id="evaluateCodeFragment">
       <expression>
-        <expression-string>[s for t, s in grp]</expression-string>
+        <expression-string>len(originalAnalyzer.message.data) % 4</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>grp</expression-string>
+        <expression-string>len(originalAnalyzer.message.data) / 4</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>grp[1]</expression-string>
+        <expression-string>len(originalAnalyzer.message.data) // 4</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>segGrpHier[0][1]</expression-string>
+        <expression-string>len(originalAnalyzer.message.data)</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>a,b = segGrpHier[0][1]
-a,b</expression-string>
+        <expression-string>newSegment.super()</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>a,b = segGrpHier[0][1]</expression-string>
+        <expression-string>newSegment.values</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>segGrpHier[0]</expression-string>
+        <expression-string>newMessage.values</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>segGrpHier</expression-string>
+        <expression-string>newSegment.analyzer.values</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>m._AbstractMessage__data.hex()</expression-string>
+        <expression-string>list(l4msg.data)</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>CODE_FRAGMENT</evaluation-mode>
       </expression>
@@ -688,196 +809,39 @@ a,b</expression-string>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
     </expressions>
+    <expressions id="evaluateExpression">
+      <expression>
+        <expression-string>type(self.analyzer).__name__</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>type(self.analyzer)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>self.analyzer</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>len(newAnalyzer.message.data)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>len(originalAnalyzer.message.data)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+    </expressions>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/src/plotMessages.py" />
-    <entry file="file://$PROJECT_DIR$/src/entropyHistogram.py" />
-    <entry file="file://$PROJECT_DIR$/src/histotest.py" />
-    <entry file="file://$PROJECT_DIR$/src/messageEntropies.py" />
-    <entry file="file://$PROJECT_DIR$/src/nemesys_absolute-field-histogram.py" />
-    <entry file="file://$PROJECT_DIR$/src/resume_analysis.py" />
-    <entry file="file://$PROJECT_DIR$/src/analysis_message_segments.py" />
-    <entry file="file://$PROJECT_DIR$/src/prep_deduplicate-trace.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1305">
-          <caret line="87" column="24" selection-start-line="87" selection-start-column="24" selection-end-line="87" selection-end-column="24" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/analysisVisualization/simplePrint.py" />
-    <entry file="file://$PROJECT_DIR$/src/reupMessages/labeling.py" />
-    <entry file="file://$PROJECT_DIR$/src/reupMessages/TemplateGenerator.py" />
-    <entry file="file://$PROJECT_DIR$/src/visualization/bcolors.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="75">
-          <caret line="5" column="16" selection-start-line="5" selection-start-column="11" selection-end-line="5" selection-end-column="16" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/lib/python3.5/subprocess.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="410">
-          <caret line="809" column="8" selection-start-line="809" selection-start-column="8" selection-end-line="809" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/ParsedMessage.py" />
-    <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="209">
-          <caret line="102" selection-start-line="102" selection-end-line="102" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/__init__.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" column="41" lean-forward="true" selection-start-line="1" selection-start-column="41" selection-end-line="1" selection-end-column="41" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/lib/python3.5/typing.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="186">
-          <caret line="1851" column="6" selection-start-line="1851" selection-start-column="6" selection-end-line="1851" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" column="51" selection-start-line="1" selection-start-column="51" selection-end-line="1" selection-end-column="51" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/LabelMessages.py" />
-    <entry file="file://$PROJECT_DIR$/src/validation/MessageComparator.py" />
-    <entry file="file://$PROJECT_DIR$/src/check_parse-pcap.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="315">
-          <caret line="28" column="52" selection-start-line="28" selection-start-column="52" selection-end-line="28" selection-end-column="52" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys_field-deviation-plot.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="213">
-          <caret line="47" selection-start-line="47" selection-end-line="47" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/nemesys_fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="33">
-          <caret line="73" selection-start-line="73" selection-end-line="73" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/netzob_fms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="3180">
-          <caret line="226" column="28" selection-start-line="226" selection-start-column="28" selection-end-line="226" selection-end-column="28" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/utils/baseAlgorithms.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="105">
-          <caret line="7" column="13" selection-start-line="7" selection-start-column="13" selection-end-line="7" selection-end-column="13" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
-        <state split_layout="SPLIT">
-          <first_editor relative-caret-position="195">
-            <caret line="13" column="10" selection-start-line="13" selection-start-column="10" selection-end-line="13" selection-end-column="10" />
-          </first_editor>
-          <second_editor />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="35" selection-start-column="35" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/netzobFormatMatchScore.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="545">
-          <caret line="261" selection-start-line="261" selection-end-line="261" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/labeling.py" />
-    <entry file="file://$PROJECT_DIR$/src/inference/series.py" />
-    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/matplotlib/axes/_axes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="230">
-          <caret line="3862" column="8" selection-start-line="3862" selection-start-column="8" selection-end-line="3862" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py" />
-    <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="405">
-          <caret line="33" column="102" selection-start-line="33" selection-start-column="102" selection-end-line="33" selection-end-column="102" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/segments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="456">
-          <caret line="101" column="91" lean-forward="true" selection-start-line="101" selection-start-column="91" selection-end-line="101" selection-end-column="91" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/validation/dissectorMatcher.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="471">
-          <caret line="338" selection-start-line="338" selection-end-line="338" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/characterize_segments.py" />
-    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/kneed/knee_locator.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="645">
-          <caret line="94" column="42" selection-start-line="94" selection-start-column="42" selection-end-line="94" selection-end-column="42" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="242">
-          <caret line="93" column="4" selection-start-line="93" selection-start-column="4" selection-end-line="93" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="422">
-          <caret line="52" column="18" selection-start-line="52" selection-start-column="18" selection-end-line="52" selection-end-column="18" />
-          <folding>
-            <element signature="e#137#149#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Model/Vocabulary/AbstractField.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-60">
           <caret line="23" column="35" lean-forward="true" selection-start-line="23" selection-start-column="35" selection-end-line="23" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/utils/loader.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="975">
-          <caret line="74" column="70" lean-forward="true" selection-start-line="74" selection-start-column="70" selection-end-line="74" selection-end-column="70" />
         </state>
       </provider>
     </entry>
@@ -888,34 +852,10 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="45">
-          <caret line="7" column="6" selection-start-line="7" selection-start-column="6" selection-end-line="7" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="401">
-          <caret line="171" column="64" selection-start-line="171" selection-start-column="60" selection-end-line="171" selection-end-column="64" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="391">
-          <caret line="138" column="83" selection-start-line="138" selection-start-column="79" selection-end-line="138" selection-end-column="83" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/visualization/simplePrint.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="570">
           <caret line="38" column="24" lean-forward="true" selection-start-line="38" selection-start-column="24" selection-end-line="38" selection-end-column="24" />
-          <folding>
-            <element signature="e#0#46#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -926,38 +866,335 @@ a,b</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
+    <entry file="file://$USER_HOME$/.PyCharmCE2018.1/system/python_stubs/-147923168/_csv.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="649">
-          <caret line="84" column="42" selection-start-line="84" selection-start-column="42" selection-end-line="84" selection-end-column="42" />
+        <state relative-caret-position="485">
+          <caret line="136" column="16" selection-start-line="136" selection-start-column="16" selection-end-line="136" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/transform_cluster-statistics.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="75">
+          <caret line="5" column="26" lean-forward="true" selection-start-line="5" selection-start-column="26" selection-end-line="5" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$APPLICATION_CONFIG_DIR$/scratches/scratch.md" />
+    <entry file="file://$APPLICATION_CONFIG_DIR$/scratches/scratch_2.py" />
+    <entry file="file://$APPLICATION_CONFIG_DIR$/scratches/tshark_json.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="555">
+          <caret line="37" column="11" lean-forward="true" selection-start-line="37" selection-start-column="11" selection-end-line="37" selection-end-column="11" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$APPLICATION_CONFIG_DIR$/scratches/netzob_typeconverter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="720">
+          <caret line="48" column="40" lean-forward="true" selection-start-line="48" selection-start-column="40" selection-end-line="48" selection-end-column="40" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$APPLICATION_CONFIG_DIR$/scratches/scratch.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="15">
+          <caret line="1" column="56" selection-start-line="1" selection-start-column="56" selection-end-line="1" selection-end-column="56" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/alignment/nwalignsegments.py" />
+    <entry file="file://$PROJECT_DIR$/src/alignment/c_lib/nwaligntokens.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="7" selection-start-column="7" selection-end-column="7" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/inference/formatRefinement.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" selection-start-line="1" selection-end-line="1" selection-end-column="44" />
+        <state relative-caret-position="279">
+          <caret line="141" column="18" selection-start-line="141" selection-start-column="18" selection-end-line="141" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/labeling.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="732">
+          <caret line="104" column="89" selection-start-line="104" selection-start-column="89" selection-end-line="104" selection-end-column="89" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/utils/loader.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="279">
+          <caret line="49" column="14" selection-start-line="49" selection-start-column="14" selection-end-line="49" selection-end-column="14" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/dissectorMatcher.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="279">
+          <caret line="138" column="14" selection-start-line="138" selection-start-column="14" selection-end-line="138" selection-end-column="14" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/prep_deduplicate-trace.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="279">
+          <caret line="69" column="6" selection-start-line="69" selection-start-column="6" selection-end-line="69" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/nemesys.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="750">
+          <caret line="55" column="6" selection-start-line="55" selection-start-column="6" selection-end-line="55" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/analysis_message_plot.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="255">
+          <caret line="31" column="6" selection-start-line="31" selection-start-column="6" selection-end-line="31" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/plotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="45">
+          <caret line="7" column="6" selection-start-line="7" selection-start-column="6" selection-end-line="7" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/multiPlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="401">
+          <caret line="214" column="8" selection-start-line="214" selection-start-column="8" selection-end-line="214" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/singlePlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="645">
+          <caret line="43" column="40" selection-start-line="43" selection-start-column="40" selection-end-line="43" selection-end-column="40" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/doc/documentation/source/user_guide/inference/vocabular.rst">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="345">
+          <caret line="23" column="9" selection-start-line="23" selection-start-column="9" selection-end-line="23" selection-end-column="9" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/NEWS.rst">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="147" column="23" selection-start-line="147" selection-start-column="23" selection-end-line="147" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/test/src/test_netzob/test_Alignment/test_UPGMA.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="230">
+          <caret line="40" selection-start-line="40" selection-end-line="40" selection-end-column="61" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/lib/libNeedleman/scoreComputation.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="887">
+          <caret line="92" column="37" selection-start-line="92" selection-start-column="21" selection-end-line="92" selection-end-column="37" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Inference/Vocabulary/Format.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="506">
+          <caret line="367" column="30" selection-start-line="367" selection-start-column="30" selection-end-line="367" selection-end-column="30" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/Inference/Vocabulary/FormatOperations/ClusterByAlignment.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="571">
+          <caret line="187" column="59" lean-forward="true" selection-start-line="187" selection-start-column="59" selection-end-line="187" selection-end-column="59" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/lib/libNeedleman/Needleman.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="901">
+          <caret line="268" column="51" selection-start-line="268" selection-start-column="51" selection-end-line="268" selection-end-column="51" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.PyCharmCE2018.1/system/python_stubs/-147923168/builtins.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="3584" column="8" selection-start-line="3584" selection-start-column="8" selection-end-line="3584" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.PyCharmCE2018.1/system/python_stubs/-147923168/itertools.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="100" column="8" selection-start-line="100" selection-start-column="8" selection-end-line="100" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/characterize_segments.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="279">
+          <caret line="36" column="33" selection-start-line="36" selection-start-column="33" selection-end-line="36" selection-end-column="33" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/lib/python3.5/typing.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="1750" column="34" selection-start-line="1750" selection-start-column="26" selection-end-line="1750" selection-end-column="34" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/scipy/spatial/distance.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-4810">
+          <caret line="1382" column="4" selection-start-line="1382" selection-start-column="4" selection-end-line="1382" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/sklearn/decomposition/pca.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="230">
+          <caret line="106" column="6" selection-start-line="106" selection-start-column="6" selection-end-line="106" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.virtualenvs/reup/lib/python3.5/site-packages/sklearn/manifold/__init__.py">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/visualization/distancesPlotter.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="406">
+          <caret line="64" column="20" selection-start-line="64" selection-start-column="13" selection-end-line="64" selection-end-column="20" />
+          <folding>
+            <element signature="e#3#15#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+        <state split_layout="SPLIT">
+          <first_editor />
+          <second_editor />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/messageParser.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="342">
+          <caret line="803" column="74" selection-start-line="803" selection-start-column="74" selection-end-line="803" selection-end-column="74" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/validation/tsharkConnector.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1024">
+          <caret line="189" column="53" selection-start-line="189" selection-start-column="53" selection-end-line="189" selection-end-column="53" />
+          <folding>
+            <element signature="e#0#35#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/check_parse-pcap.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="975">
+          <caret line="72" column="35" lean-forward="true" selection-start-line="72" selection-start-column="35" selection-end-line="72" selection-end-column="35" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/REUP-common/Tools/netzob-official/netzob/setup.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="410">
+          <caret line="60" column="24" selection-start-line="60" selection-start-column="24" selection-end-line="60" selection-end-column="24" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/netzob_fms.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="401">
+          <caret line="58" column="13" selection-start-line="58" selection-start-column="13" selection-end-line="58" selection-end-column="13" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1211">
+          <caret line="65" column="63" lean-forward="true" selection-start-line="65" selection-start-column="63" selection-end-line="65" selection-end-column="63" />
+          <folding>
+            <element signature="e#0#23#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/segmentHandler.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="949">
+          <caret line="223" column="32" selection-start-line="223" selection-start-column="20" selection-end-line="223" selection-end-column="32" />
+          <folding>
+            <element signature="e#46#58#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/inference/templates.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="679">
-          <caret line="300" column="103" selection-start-line="300" selection-start-column="103" selection-end-line="300" selection-end-column="103" />
+        <state relative-caret-position="462">
+          <caret line="440" column="61" lean-forward="true" selection-start-line="440" selection-start-column="61" selection-end-line="440" selection-end-column="61" />
           <folding>
             <element signature="e#0#63#0" expanded="true" />
-            <element signature="e#3546#5638#0" />
-            <element signature="e#15413#18325#0" />
+            <element signature="e#377#3483#0" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/align_on_field_personality.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2145">
+          <caret line="143" lean-forward="true" selection-start-line="143" selection-end-line="143" />
+          <folding>
+            <element signature="e#400#424#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/characterize_fieldtypes.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="469">
-          <caret line="228" column="18" selection-start-line="228" selection-start-column="5" selection-end-line="228" selection-end-column="18" />
+        <state relative-caret-position="394">
+          <caret line="226" column="75" selection-start-line="226" selection-start-column="67" selection-end-line="226" selection-end-column="75" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/segments.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="555">
+          <caret line="541" lean-forward="true" selection-start-line="541" selection-end-line="541" />
           <folding>
-            <element signature="e#569#593#0" expanded="true" />
+            <element signature="e#0#11#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/inference/analyzers.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="536">
+          <caret line="1060" column="23" selection-start-line="1060" selection-start-column="23" selection-end-line="1060" selection-end-column="23" />
+          <folding>
+            <element signature="e#137#149#0" expanded="true" />
           </folding>
         </state>
       </provider>

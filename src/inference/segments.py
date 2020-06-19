@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Union, Type, Any, Tuple, Iterable
+from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence
 from abc import ABC, abstractmethod
 import numpy
 
@@ -12,34 +12,40 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 class MessageAnalyzer(ABC):
     """
-    Subclasses fully describe a specific analysis upon a message and hold the results.
+    Subclasses of this abstract class fully describe a specific analysis upon a message and hold the results.
     """
     _analyzerCache = dict()
 
     U_BYTE = 0
     U_NIBBLE = 1
 
-    _unit = U_BYTE
-    _message = None
-    _analysisArgs = None
-    _values = None
-    _startskip = 0
-
     # TODO per analysis method that does not generate one value per one byte: margins (head, tail) and skip
 
-    def __init__(self, message: AbstractMessage, unit=U_NIBBLE):
+    def __init__(self, message: AbstractMessage, unit=U_BYTE):
         """
         Create object and set the message and the unit-size.
 
         :param message:
         :param unit:
         """
+        assert isinstance(message, AbstractMessage)
         self._message = message
         self._unit = unit
+        self._analysisArgs = tuple()
+        self._values = None
+        self._startskip = 0
 
     @property
     def unit(self):
         return self._unit
+
+    @property
+    @abstractmethod
+    def domain(self) -> Tuple[int, int]:
+        """
+        :return: The value domain (min and max) of the analyzer
+        """
+        raise NotImplementedError("The value domain is not yet defined for this analyzer.")
 
     @property
     def values(self):
@@ -83,6 +89,7 @@ class MessageAnalyzer(ABC):
 
 
     def setAnalysisParams(self, *args):
+        assert isinstance(args, Iterable)
         self._analysisArgs = args
 
 
@@ -327,9 +334,12 @@ class MessageAnalyzer(ABC):
 
 
     @staticmethod
-    def calcEntropy(tokens):
+    def calcEntropy(tokens, alphabet_len = 2):
         """
         Calculates the entropy within `tokens`.
+
+        # len(alphabet) would give a dynamic alphabet length.
+        # when working on bytes, assume 256.
 
         :return: entropy in token list
         """
@@ -342,9 +352,6 @@ class MessageAnalyzer(ABC):
             else:
                 alphabet[x] = 1
 
-        # len(alphabet) would give a dynamic alphabet length.
-        # since we are working on bytes, we assume 256.
-        alphabet_len = 2
         entropy = 0
         for x in alphabet:
             # probability of value in string
@@ -384,13 +391,21 @@ class SegmentAnalyzer(MessageAnalyzer):
     """
     Abstract class to denote analyzers that work on a given subset, i.e. Segment, of a message.
     """
+    @property
+    def domain(self):
+        """
+        The correct domain cannot be determined for analyses of subsets segments.
+        It is depenent e. g. on the length of the segment, which is only known
+        during a call to value(self, start, end).
+        """
+        raise AttributeError("SegmentAnalyzers do not support the querying of the domain.")
+
     def values(self):
         raise TypeError("SegmentAnalyzer subclasses are dependent on the segment the analyzer should refer to. "
                         "Use the function value(start, end) instead.")
 
     def analyze(self):
         pass
-
 
     @abstractmethod
     def value(self, start, end):
@@ -405,8 +420,16 @@ class AbstractSegment(ABC):
     CORR_COSINE  = 1  # Cosine Coefficient
     CORR_PEARSON = 0  # Pearson Product-Moment Correlation Coefficient
 
-    # list of analysis result values for the segment scope
-    values = None  # type: Union[List, numpy.ndarray]
+    def __init__(self):
+        # list of analysis result values for the segment scope
+        self._values = None  # type: Union[List, numpy.ndarray]
+        self.length = None
+
+
+    @property
+    def values(self):
+        return self._values
+
 
     def correlate(self,
                   haystack: Iterable['MessageSegment'],
@@ -478,7 +501,9 @@ class CorrelatedSegment(AbstractSegment):
         :param haystack: A segment where feature should be fitted into.
         :param measure: The similarity measure to use.
         """
-        self.values = values  # type: Union[List, numpy.ndarray]
+        super().__init__()
+        self._values = values  # type: Union[List, numpy.ndarray]
+        self.length = len(values)
         self.feature = feature  # type: AbstractSegment
         self.haystack = haystack  # type: MessageSegment
         self.id = "{:02x}".format(hash(tuple(feature.values)) ^ hash(tuple(haystack.values)))
@@ -526,9 +551,10 @@ class MessageSegment(AbstractSegment):
             where this segment starts.
         :param length: number of bytes which this segment is long.
         """
+        super().__init__()
 
         # calculate values by the given analysis method, if not provided
-        if not analyzer.values:
+        if analyzer.values is None:
             self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
                                                                  analyzer.message, analyzer.analysisParams)
         else:
@@ -553,7 +579,7 @@ class MessageSegment(AbstractSegment):
 
     @property
     def values(self):
-        if super().values:
+        if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
             return self.analyzer.value(self.offset, self.offset+self.length)
@@ -566,6 +592,14 @@ class MessageSegment(AbstractSegment):
         :return: analysis value for the given absolute byte position in the message
         """
         return self.analyzer.values[absoluteBytePosition]
+
+
+    @property
+    def nextOffset(self):
+        """
+        :return: Offset of the subsequent segment (or pointing one position after the message end)
+        """
+        return self.offset + self.length
 
 
     @property
@@ -608,12 +642,14 @@ class MessageSegment(AbstractSegment):
             # any correlation makes only sense for values originating from the same analysis method.
             if type(candidate.analyzer) != type(self.analyzer) \
                     or candidate.analyzer.analysisParams != self.analyzer.analysisParams:
-                raise ValueError('The analysis methods of this MessageSegment ({}({})) and '
-                                 'the haystack to correlate it to ({}({})) are not compatible.'.format(
-                    self.analyzer.__name__, ', '.join([str(a) for a in self.analyzer.analysisParams]),
-                    candidate.analyzer.__name__, ', '.join([str(a) for a in candidate.analyzer.analysisParams])
+                raise ValueError('The analysis methods of this MessageSegment [{} ({})] and '
+                                 'the haystack to correlate it to [{} ({})] are not compatible.'.format(
+                    type(self.analyzer).__name__, ', '.join([str(a) for a in self.analyzer.analysisParams])
+                        if isinstance(candidate.analyzer.analysisParams, Iterable) else 'no parameters',
+                    type(candidate.analyzer).__name__, ', '.join([str(a) for a in candidate.analyzer.analysisParams])
+                        if isinstance(candidate.analyzer.analysisParams, Iterable) else 'no parameters'
                 ))
-            if not candidate.values:
+            if candidate.values is None:
                 candidate.analyzer.analyze()
         if isinstance(candidate, AbstractMessage):  # make a segment from the whole message
             analyzer = MessageAnalyzer.findExistingAnalysis(
@@ -632,13 +668,15 @@ class MessageSegment(AbstractSegment):
 
 
     def __repr__(self):
-        if self.values and isinstance(self.values, list) and len(self.values) > 3:
-            printValues = str(self.values[:3])[:-1] + '...'
+        if self.values is not None and isinstance(self.values, Sequence) and len(self.values) > 3:
+            printValues = ("[{}]".format(", ".join(["{:.3f}".format(v) for v in self.values[:3]]))
+                if isinstance(self.values[0], float) else str(self.values[:3]))[:-1] + '...'
         else:
-            printValues = str(self.values)
+            printValues = "[{}]".format(", ".join(["{:.3f}".format(v) for v in self.values[:3]])) \
+                if isinstance(self.values, Iterable) and isinstance(self.values[0], float) else str(self.values)
 
         return 'MessageSegment {} bytes: {:.16}{}'.format(self.length, self.bytes.hex(),
-            '...' if self.length > 3 else '') + \
+            '...' if self.length > 8 else '') + \
             ' | values: {}'.format(printValues if printValues else 'not set')
 
 

@@ -61,7 +61,7 @@ class MessageComparator(object):
         self.debug = debug
 
         # Cache messages that already have been parsed and labeled
-        self._messageCache = dict()  # type: Dict[bytes, ]
+        self._messageCache = dict()  # type: Dict[netzob.RawMessage, ]
         self._targetlayer = layer
         self._relativeToIP = relativeToIP
         self._failOnUndissectable = failOnUndissectable
@@ -70,9 +70,9 @@ class MessageComparator(object):
 
 
     def _dissectAndLabel(self, messages: Iterable[netzob.RawMessage]) \
-            -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
+            -> Dict[netzob.RawMessage, ParsedMessage]:
         """
-        :param messages: List of messages to be dissected
+        :param messages: List of messages to be dissected - needs to be hashable
         :return: dict of {message: format}, where format is a list of
             2-tuples describing the fields of this L2-message in their byte order
             each 2-tuple contains (field_type, field_length in byte)
@@ -84,16 +84,13 @@ class MessageComparator(object):
             raise NotImplementedError('PCAP Linktype with number {} is unknown'.format(self.baselayer))
 
         labeledMessages = dict()
-        toparse = list()
-        for msg in messages:
-            if msg.data not in self._messageCache:
-                # print("MessageCache miss for {}".format(msg.data))
-                toparse.append(msg)
+        toparse = [msg for msg in messages if msg not in self._messageCache]
+        # for msg in toparse: print("MessageCache miss for {}".format(msg.data))
         mparsed = ParsedMessage.parseMultiple(toparse, self._targetlayer, self._relativeToIP,
                                               failOnUndissectable=self._failOnUndissectable, linktype=self.baselayer)
         for m, p in mparsed.items():
             try:
-                self._messageCache[m.data] = p.getTypeSequence()
+                self._messageCache[m] = p
             except NotImplementedError as e:
                 if self._failOnUndissectable:
                     raise e
@@ -104,19 +101,23 @@ class MessageComparator(object):
                                 m.__class__.__name__)
 
             try:
-                labeledMessages[m] = self._messageCache[m.data]
+                labeledMessages[m] = self._messageCache[m]
             except KeyError:  # something went wrong in the last parsing attempt of m
                 if self._failOnUndissectable:
                     reparsed = ParsedMessage(m, self._targetlayer, self._relativeToIP,
                                              failOnUndissectable=self._failOnUndissectable)
-                    self._messageCache[m.data] = reparsed.getTypeSequence()
-                    labeledMessages[m] = self._messageCache[m.data]
+                    self._messageCache[m] = reparsed
+                    labeledMessages[m] = self._messageCache[m]
 
         return labeledMessages
 
 
     @property
-    def dissections(self):
+    def dissections(self) -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
+        return {message: dissected.getTypeSequence() for message, dissected in self._dissections.items()}
+
+    @property
+    def parsedMessages(self) -> Dict[netzob.RawMessage, ParsedMessage]:
         return self._dissections
 
 

@@ -9,7 +9,35 @@ from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
 
 from validation.messageParser import ParsingConstants
 
-class SpecimenLoader(object):
+class BaseLoader(object):
+    """
+    Wrapper for loading messages from memory as specimens.
+    Prepares and represents messages to support further analysis.
+    Especially useful for on-the-fly creation of test cases.
+    """
+
+    def __init__(self, l5msgs, l1msgs=None):
+        """
+        Load messages from memory. Base class for other loaders, e. g. loading from PCAP file.
+
+        :param l5msgs:
+        :param l1msgs:
+        """
+        if not hasattr(self, 'pcapFileName'):
+            self.pcapFileName = 'from-memory'
+        self.messagePool = OrderedDict()  # type: OrderedDict[AbstractMessage, RawMessage]
+        """maps the message representations for Netzob and tshark
+        dict of { application layer of messages L5Messages : RawMessage }"""
+        if not l1msgs:
+            l1msgs = l5msgs
+        for k, m in zip(l5msgs, l1msgs):
+            self.messagePool[k] = m
+            # TODO replace the above quickfix not to read the file a second time (should we?)
+            # probably we could use msgs = ParsedMessage.parseMultiple(l1msgs); for m in msgs:
+            # ... append(RawMessage(m.protocolbytes))
+
+
+class SpecimenLoader(BaseLoader):
     """
     Wrapper for loading messages from a PCAP as specimens.
     Prepares and represents messages to support further analysis.
@@ -32,24 +60,17 @@ class SpecimenLoader(object):
         if not isfile(pcap):
             raise FileNotFoundError('File not found:', pcap)
         self.pcapFileName = pcap
-        self.messagePool = OrderedDict()  # type: OrderedDict[AbstractMessage, RawMessage]
-        """maps the message representations for Netzob and tshark
-        dict of { application layer of messages L5Messages : RawMessage }"""
 
         if layer < 0:
             # read messages at layer 5 for the Netzob inference
             l5msgs = PCAPImporter.readFile(pcap, importLayer=5).values()  # type: List[L4NetworkMessage]
         else:
             # read messages at given layer for the Netzob inference
-            absLayer = 3 + layer if relativeToIP else layer
+            absLayer = 2 + layer if relativeToIP else layer
             l5msgs = PCAPImporter.readFile(pcap, importLayer=absLayer).values()  # type: List[AbstractMessage]
         # read messages as raw for tshark input
         l1msgs = PCAPImporter.readFile(pcap, importLayer=1).values()  # type: List[RawMessage]
-        for k, m in zip(l5msgs, l1msgs):
-            self.messagePool[k] = m
-            # TODO replace the above quickfix not to read the file a second time (should we?)
-            # probably we could use msgs = ParsedMessage.parseMultiple(l1msgs); for m in msgs:
-            # ... append(RawMessage(m.protocolbytes))
+        super().__init__(l5msgs, l1msgs)
 
 
     def getBaseLayerOfPCAP(self):
@@ -81,3 +102,5 @@ class SpecimenLoader(object):
             the messages in this specimen's pool.
         """
         return max(len(line.data) for line in self.messagePool.keys())
+
+

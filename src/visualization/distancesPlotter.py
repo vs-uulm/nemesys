@@ -5,13 +5,15 @@ import numpy
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
-from typing import List, Any
+from typing import List, Any, Union
 from itertools import compress
+
+from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
 from visualization.plotter import MessagePlotter
 from utils.loader import SpecimenLoader
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import TemplateGenerator, Template
+from inference.templates import Template, DistanceCalculator
 
 
 
@@ -38,25 +40,57 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
-                               labels: List, templates: List=None, plotEdges = False, countMarkers = False):
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, RawMessage, Any]],
+                              distances: numpy.ndarray,
+                              labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
         Plot distances of segments according to (presumably multidimensional) features.
         This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
         arranging the segments relative to each other according to their distances using Multidimensional Scaling (MDS).
         See module `manifold` from package `sklearn`.
 
-        Besides the distances, this function plots the feature values of each given segment above each other;
-        they are colored according to the given labels.
+        If segments is a list of `TypedSegment` or `MessageSegment`, this function plots the feature values of each
+        given segment overlaying each other besides the distances; they are colored according to the given labels.
+
+        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from utils.loader import BaseLoader
+        >>> from inference.analyzers import Value
+        >>>
+        >>> bytedata = [
+        ...     bytes([1, 2, 3, 4]),
+        ...     bytes([   2, 3, 4]),
+        ...     bytes([   1, 3, 4]),
+        ...     bytes([   2, 4   ]),
+        ...     bytes([   2, 3   ]),
+        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
+        ...     bytes([        37,  5, 69       ]),
+        ...     bytes([70, 2, 3, 4]),
+        ...     bytes([3, 2, 3, 4])
+        ...     ]
+        >>> messages  = [RawMessage(bd) for bd in bytedata]
+        >>> specimens = BaseLoader(messages)
+        >>> analyzers = [Value(message) for message in messages]
+        >>> segments  = [TypedSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> for seg in segments[:4]:
+        >>>     seg.fieldtype = "ft1"
+        >>> for seg in segments[4:6]:
+        >>>     seg.fieldtype = "ft2"
+        >>> for seg in segments[6:]:
+        >>>     seg.fieldtype = "ft3"
+        >>> DistanceCalculator.debug = False
+        >>> dc = DistanceCalculator(segments, thresholdFunction=DistanceCalculator.neutralThreshold, thresholdArgs=None)
+        >>> dp = DistancesPlotter(specimens, "test", False)
+        >>> dp.plotManifoldDistances(segments, dc.similarityMatrix(), numpy.array([1,2,3,1,1,0,1,0,2]))
+        >>> dp.writeOrShowFigure()
 
         :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
             segments
-        :param similarities: The precomputed similarity matrix:
+        :param distances: The precomputed similarity matrix:
             symmetric matrix, rows/columns in the order of `segments`
         :param labels: Labels of strings (or ints or any other printable type) identifying the cluster for each segment
         :param templates: Templates of clusters to be printed alongside with the feature values.
-            CURRENTLY UNUSED
+            CURRENTLY UNTESTED
         :param plotEdges: Plot of edges between each pair of segment markers.
             Caution: Adds n^2 lines which takes very long compared to the scatterplot and
             quickly becomes a huge load especially when rendering the plot as PDF.
@@ -71,12 +105,43 @@ class DistancesPlotter(MessagePlotter):
         # self._cm          # label color map
         fcm = cm.cubehelix  # type color map
 
+        # identify unique labels
+        ulab = sorted(set(labels))
+
+        # subsample if segment count is larger than maxSamples
+        maxSamples = 1000
+        originalSegmentCount = len(segments)
+        if originalSegmentCount > 2*maxSamples:
+            import math
+            ratiorev = originalSegmentCount / maxSamples
+            step2keep = math.floor(ratiorev)
+            lab2idx = dict()
+            for idx, lab in enumerate(labels):
+                if lab not in lab2idx:
+                    lab2idx[lab] = list()
+                lab2idx[lab].append(idx)
+            # copy list to remove elements without side-effects
+            segments = segments.copy()
+            # to save the indices to be removed
+            idx2rem = list()
+            # determines a subset evenly distributed over all clusters while honoring the ratio to reduce to.
+            for lab, ics in lab2idx.items():
+                keep = set(ics[::step2keep])
+                idx2rem.extend(set(ics) - keep)
+            idx2rem = sorted(idx2rem, reverse=True)
+            for idx in idx2rem:
+                del segments[idx]
+            labels = numpy.delete(labels, idx2rem, 0)
+            distances = numpy.delete(numpy.delete(distances, idx2rem, 0), idx2rem, 1)
+        else:
+            idx2rem = None
+
         # prepare MDS
         seed = numpy.random.RandomState(seed=3)
         mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
                            dissimilarity="precomputed", n_jobs=1)
-        pos = mds.fit(similarities).embedding_
-        # print(similarities)
+        pos = mds.fit(distances).embedding_
+        # print(distances)
 
         # Rotate the data
         clf = PCA(n_components=2)
@@ -87,15 +152,18 @@ class DistancesPlotter(MessagePlotter):
         fig = self._fig
         axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
 
+        if idx2rem is not None:
+            axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
 
-        # identify unique labels
-        ulab = sorted(set(labels))
         # omit noise in cluster labels if types are plotted anyway.
         if isinstance(segments[0], TypedSegment):
             for l in ulab:
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)
-
+        elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
+            for l in ulab:
+                if l == -1:
+                    ulab.remove(l)
 
         # prepare color space
         cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
@@ -105,7 +173,7 @@ class DistancesPlotter(MessagePlotter):
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
-            # TODO strange "bug" colors scatter plot of clusters (with few/>4? members) erratically;
+            # TODO strange "bug" colors scatter plot of clusters (with few/<=4? members) erratically;
             #   labels for those additional colors are missing then;
             #   however, the number of iterations is correct (identical to the number of unique labels)
             # print(str(c), cIdx[c], lColor)
@@ -118,7 +186,7 @@ class DistancesPlotter(MessagePlotter):
                               lw=0, label=str(l))
             except IndexError as e:
                 print(pos)
-                print(similarities)
+                print(distances)
                 print(segments)
                 raise e
 
@@ -127,8 +195,11 @@ class DistancesPlotter(MessagePlotter):
 
 
         # include field type labels for TypedSegments input
-        if isinstance(segments[0], TypedSegment):
-            ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+        if isinstance(segments[0], (TypedSegment, RawMessage)):
+            if isinstance(segments[0], TypedSegment):
+                ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+            elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
+                ftypes = numpy.array([msg.messageType for msg in segments])  # PP
             # identify unique types
             utyp = sorted(set(ftypes))
             # prepare color space
@@ -143,13 +214,27 @@ class DistancesPlotter(MessagePlotter):
                           s=typsize,
                           lw=0, label=str(ft))
 
-                # TODO is it desired to have colors of clusters or types here?
-                for seg in compress(segments, type_member_mask):
-                    axSeg.plot(seg.values, c=fColor, alpha=0.05)
+                if isinstance(segments[0], TypedSegment):
+                    # TODO is it desired to have colors of clusters or types here?
+                    for seg in compress(segments, type_member_mask):
+                        axSeg.plot(seg.values, c=fColor, alpha=0.05)
+        elif isinstance(segments[0], MessageSegment):
+            for c, l in enumerate(ulab):
+                lColor = self._cm(cIdx[c])
+                class_member_mask = (labels == l)
+                for seg in compress(segments, class_member_mask):
+                    axSeg.plot(seg.values, c=lColor, alpha=0.1)
+        else:
+            axSeg.text(.5, .5, 'nothing to plot\n(message alignment)', horizontalalignment='center')
 
 
         # place the label/type legend at the best position
-        axMDS.legend(scatterpoints=1, loc='best', shadow=False)
+        if isinstance(segments[0], RawMessage):
+            axMDS.legend(bbox_to_anchor=(1.04,1), scatterpoints=1, shadow=False)
+            axSeg.patch.set_alpha(0.0)
+            axSeg.axis('off')
+        else:
+            axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
 
         if plotEdges:
@@ -158,12 +243,12 @@ class DistancesPlotter(MessagePlotter):
             # Plot the edges
             lines = [[pos[i, :], pos[j, :]]
                         for i in range(len(pos)) for j in range(len(pos))]
-            values = numpy.abs(similarities)
+            values = numpy.abs(distances)
             lc = LineCollection(lines,
                                 zorder=0, cmap=plt.cm.Blues,
                                 norm=plt.Normalize(0, values.max()))
             # lc.set_alpha(.1)
-            lc.set_array(similarities.flatten())
+            lc.set_array(distances.flatten())
             lc.set_linewidths(0.5 * numpy.ones(len(segments)))
             axMDS.add_collection(lc)
 
@@ -237,67 +322,38 @@ class DistancesPlotter(MessagePlotter):
 
 
 
-    def plotDistances(self, tg: TemplateGenerator, labels: numpy.ndarray):
+    def plotSegmentDistances(self, dc: DistanceCalculator, labels: numpy.ndarray):
         """
         Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
 
-        # :param segments: Segments of equal lengths to calculate pairwise distances from and plot these.
-        :param tg: A template generator object of segments of one length to derive similarities.
+        :param dc: A template generator object of segments that all have pairwise similarities assigned
+            of which to derive segment groups, similarities, and templates.
         :param labels: list of labels in the order of segments as they are contained in tg.segments.
         """
-        # segments: List[MessageSegment]
-        # tg = TemplateGenerator(segments)  # type: TemplateGenerator
-        """A template generator object of which to derive segment groups, similarities, and templates."""
-
         assert type(labels) == numpy.ndarray
+        assert len(dc.segments) == len(dc.distanceMatrix)  # all have pairwise similarities assigned
 
-        lenGrps = tg._groupByLength()
-        if len(lenGrps) > 1:
-            raise ValueError('Only segments of one single length in the TemplateGenerator are accepted as input.')
-
-        # Keep loop for later extension
-        for lenGrp in lenGrps.values():
-            if len(lenGrp) < 2:
-                continue
-            # # Keep for extension to generate cluster labels
-            # similarities = tg._similaritiesSubset(lenGrp)
-            # labels = tg.getClusterLabels(similarities)
-
-            # Prevent ordering errors (remove if we choose to support multiple plots (lenGrps) at once)
-            assert lenGrp == tg.segments
-
-            ulab = set(labels)
-            clusters = list()
-            for l in ulab:
-                class_member_mask = (labels == l)
-                clusters.append([ seg for seg in compress(lenGrp, class_member_mask) ])
-
-            if len(tg.segments[0].values) > 2:
-                similarities = tg.distanceMatrix
-                self._plotManifoldDistances(lenGrp, similarities, labels)
-            else:
-                self._plot2dDistances(lenGrp, labels)
-
-
-
+        segGroup = dc.segments
+        similarities = dc.distanceMatrix
+        self.plotManifoldDistances(segGroup, similarities, labels)
 
 
     @staticmethod
-    def plotSegmentDistanceDistribution(tg):
+    def plotSegmentDistanceDistribution(dc: DistanceCalculator):
         """
         Plot distribution of distances to identify density boundaries for clusters.
 
-        :param tg:
+        TODO test
+
+        :param dc:
         :return:
         """
+        from utils.baseAlgorithms import tril
         statistics = list()
-        cltrs = tg._groupByLength()
-        for cluster in cltrs.values():
-            similarities = tg._similaritiesSubset(cluster)
-            mask = numpy.tril(numpy.ones(similarities.shape)) != 0
-            statistics.append(
-                similarities[mask]
-            )
+        cltrs = [[dc.segments[idx] for idx, *rest in cluster] for cluster in dc.groupByLength().values()]
+        for cluster in cltrs:
+            similarities = tril(dc.distancesSubset(cluster))
+            statistics.append(tril(similarities))
 
         plt.rc('xtick', labelsize=6)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=6)  # fontsize of the tick labels
@@ -314,3 +370,5 @@ class DistancesPlotter(MessagePlotter):
             ax.set_title(str(len(stat)))
         plt.tight_layout()
         plt.show()
+
+

@@ -5,18 +5,26 @@ To find valid features for identifying field boundaries and to distinguish betwe
 """
 import argparse
 
-from os.path import isfile
+from os.path import isfile, basename
+from itertools import chain
+from collections import Counter
+from tabulate import tabulate
+import IPython
 
 import inference.segmentHandler as sh
+import utils.evaluationHelpers
+from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import TemplateGenerator
+from inference.templates import DistanceCalculator, DBSCANsegmentClusterer
 from validation.dissectorMatcher import MessageComparator
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.distancesPlotter import DistancesPlotter
 
-from characterize_fieldtypes import analyses, segments2clusteredTypes, plotMultiSegmentLines, labelForSegment, filterSegments
+from characterize_fieldtypes import analyses, labelForSegment
+from utils.evaluationHelpers import plotMultiSegmentLines, sigmapertrace
+from inference.segmentHandler import segments2clusteredTypes, filterSegments
 
 
 def removeIdenticalLabels(plt):
@@ -44,15 +52,19 @@ def plotLinesSegmentValues(segments: List[Tuple[str, MessageSegment]]):
     plt.clf()
 
 
+
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Characterize subsequences of messages by multiple metrics and visualize them.')
     parser.add_argument('pcapfilename', help='pcapfilename') # , nargs='+')
     parser.add_argument('-i', '--interactive', help='show interactive plot instead of writing output to file.',
                         action="store_true")
-    parser.add_argument('analysis', type=str,
-                        help='The kind of analysis to apply on the messages. Available methods are: '
-                        + ', '.join(analyses.keys()))
+    parser.add_argument('--analysis', type=str, default="value",
+                        help='The kind of analysis to apply on the messages. Default is "value".'
+                             ' Available methods are: ' + ', '.join(analyses.keys()))
     parser.add_argument('--parameters', '-p', help='Parameters for the analysis.')
     parser.add_argument('--distances', '-d', help='Plot distances instead of features.',
                         action="store_true")
@@ -67,6 +79,10 @@ if __name__ == '__main__':
     analyzerType = analyses[args.analysis]
     analysisArgs = args.parameters
 
+    pcapbasename = basename(args.pcapfilename)
+    sigma = sigmapertrace[pcapbasename] if not args.parameters and pcapbasename in sigmapertrace else \
+        0.9 if not args.parameters else args.parameters
+
     # dissect and label messages
     print("Loading messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=2, relativeToIP=True)
@@ -74,112 +90,116 @@ if __name__ == '__main__':
 
     # segment messages according to true fields from the labels
     print("Segmenting messages...", end=' ')
-    segmentedMessages = sh.annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    segsByLen = sh.groupByLength(segmentedMessages)
+    segmentsPerMsg = sh.bcDeltaGaussMessageSegmentation(specimens, sigma)
+    segmentedMessages = sh.refinements(segmentsPerMsg)
+    segments = list(chain.from_iterable(segmentedMessages))
     print("done.")
 
-
-
-    from tabulate import tabulate
-
     analysisTitle = "{}{}".format(args.analysis, "" if not analysisArgs else " ({})".format(analysisArgs))
-    for length, segments in segsByLen.items():  # type: int, List[MessageSegment]
 
-        #############################
-        if args.count:
-            # count common values:
-            cntr = dict()  # type: Dict[Tuple[float], List[TypedSegment]]
-            for seg in segments:  # type: TypedSegment
-                vkey = tuple(seg.values)
-                if vkey in cntr:
-                    cntr[vkey].append(seg)
-                else:
-                    cntr[vkey] = [seg]
 
-            vlmt = [(vlct, len(elmt)) for vlct,elmt in cntr.items()]
 
-            print('Segment length:', length)
-            moCoTen = sorted(vlmt, key=lambda v: v[1])[:-11:-1]
-            print(tabulate([(
-                mct, featvect,
-                set([(cv.bytes.hex(), cv.fieldtype) for cv in cntr[featvect]])
-            ) for featvect, mct in moCoTen],
-                headers= ['Count', 'Feature', 'Fields']))
+    # count common values
+    if args.count:
+        # segcnt = Counter([seg.bytes for seg in segments])
+        # moco25 = segcnt.most_common(25)
+        # print(tabulate([(featvect.hex(), cntr,
+        #                  sum([msg.data.count(featvect) for msg in specimens.messagePool.keys()]),
+        #                  sum([seg.bytes.count(featvect) for seg in segments])
+        #                  ) for featvect, cntr in moco25],
+        #     headers= ['Feature', 'Count (Inf)', 'Count (Msg)', 'Count (Seg)']))
+        # # [sum([msg.data.count(moco) for msg in specimens.messagePool.keys()]) for moco in moco25]
+        #
+        # # # False Negatives - when only searching for full containment within segments
+        # # featvect = bytes.fromhex("8182")
+        # # inseg = [seg.message for seg in segments if seg.bytes.count(featvect) > 0]
+        # # [msg.data.hex() for msg in set(inmsg) - set(inseg)]
+        #
+        #
+        # # # determine drop (max gradient)
+        # # mocoCnt = [cntr for featvect, cntr in segcnt.most_common()]
+        # # diff2nd = numpy.diff(mocoCnt, 2)
+        # # diff2ndmiX = diff2nd.argmax()
+        # # steepdrop = mocoCnt[diff2ndmiX]
+        # # # --> does not work at all for dns-1000: drop after the first entry, should be at 6 or so.
+        # # from matplotlib import pyplot as plt
+        # # plt.axhline(steepdrop)
+        # # plt.plot(list(diff2nd[:25]))
+        # # plt.plot([c for b, c in moco25])
+        # # plt.text(0,0,"x {}; y {}".format(diff2ndmiX, steepdrop))
+        # # plt.show()
+        # # # so:
+        # # # use message-amount-dependent threshold for frequency:
+        # segFreq = segcnt.most_common()
+        # freqThre = .2 * len(segmentedMessages)
+        # thre = 0
+        # while segFreq[thre][1] > freqThre:
+        #     thre += 1
+        # moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
+        moco = CropDistinct.countCommonValues(segmentedMessages)
 
-            # TODO place labels with most common feature and/or byte values in distance graph
+        # split segment to reinforce most common values
+        newstuff = list()
+        for msg in segmentedMessages:
+            crop = CropDistinct(msg, moco)
+            newmsg = crop.split()
+            newstuff.append(newmsg)
 
-            # [seg.fieldtype for seg in segments]
-            # IPython.embed()
-        #############################
-        else:
-            # filter out segments that contain no relevant feature byte/data
-            filteredSegments = filterSegments(segments)
+            if newmsg != msg:
+                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+                    print("\nINCORRECT SPLIT!\n")
+                    print(" ".join([seg.bytes.hex() for seg in msg]))
+                    print(" ".join([seg.bytes.hex() for seg in newmsg]))
+                    print()
 
-            if length < 3:
-                continue
-            if len(filteredSegments) < 16:
-                print("Too few relevant segments after Filtering for length {}. {} segments remaining:".format(
-                    length, len(filteredSegments)
-                ))
-                for each in filteredSegments:
-                    print("   ", each)
+        # cumulatively merge consecutive clusters that together fulfill the char condition
+        # of inference.segmentHandler.isExtendedCharSeq
+        newstuff2 = list()
+        for msg in newstuff:
+            charmerge = CumulativeCharMerger(msg)
+            newmsg = charmerge.merge()
+            newstuff2.append(newmsg)
+            if newmsg != msg:
+                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+                    print("\nINCORRECT SPLIT!\n")
+
+                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
                 print()
-                continue
-            # if length > 9:
-            #     continue
+                # if newmsg[0].length > 2:
+                #     from inference.segmentHandler import isExtendedCharSeq
+                #     IPython.embed()
 
-            # TODO More Hypotheses:
-            #  small values at fieldend: int
-            #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
-            #  len > 16: chars (pad if all 0)
-            # For a new hypothesis: what are the longest seen ints?
-            #
+        # As a last resort, split the first segment into chunks of equal length. The assumption is, that the
+        #   message type is only dependent on the first bytes if not structural difference is prevalent enough be found.
+        # Can be applied to most protocols without negative side effects, except nbns.
+        # Mostly required a lowered eps for clustering (e.g. factor 0.8)
+        newstuff3 = list()
+        for msg in newstuff2:
+            splitfixed = SplitFixed(msg)
+            newmsg = splitfixed.split(0, 2)
+            newstuff3.append(newmsg)
+            if newmsg != msg:
+                if not b"".join([seg.bytes for seg in msg]) == b"".join([seg.bytes for seg in newmsg]):
+                    print("\nINCORRECT SPLIT!\n")
 
-            print("Calculate distances...")
-            # ftype = 'id'
-            # segments = [seg for seg in segsByLen[4] if seg.fieldtype == ftype]
-            tg = TemplateGenerator(filteredSegments)
-
-            print("Clustering...")
-            # typeGroups = segments2typedClusters(segments,analysisTitle)
-            segmentGroups = segments2clusteredTypes(tg, analysisTitle)
-            # re-extract cluster labels for segments
-            labels = numpy.array([
-                labelForSegment(segmentGroups, seg) for seg in tg.segments
-            ])
-
-            # # if args.distances:
-            print("Plot distances...")
-            sdp = DistancesPlotter(specimens, 'distances-{}-{}-DBSCANe{}'.format(
-                length, analysisTitle, tg.clusterer.epsilon if tg.clusterer else 'n/a'), args.interactive)
-            # sdp.plotDistances(tg, numpy.array([seg.fieldtype for seg in tg.segments]))
-            sdp.plotDistances(tg, labels)
-            sdp.writeOrShowFigure()
+                pm = comparator.parsedMessages[comparator.messages[msg[0].message]]
+                print("DISSECT", " ".join([field for field in pm.getFieldValues()]))
+                print("NEMESYS", " ".join([seg.bytes.hex() for seg in msg]))
+                print("CHRMRGE", " ".join([seg.bytes.hex() for seg in newmsg]))
+                print()
 
 
-            print("Prepare output...")
-            for pagetitle, segmentClusters in segmentGroups:
-                plotMultiSegmentLines(segmentClusters, pagetitle, True)
-
-            typeDict = sh.segments2types(filteredSegments)
-            typeGrp = [(t, [('', s) for s in typeDict[t]]) for t in typeDict.keys()]
-            plotMultiSegmentLines(typeGrp, "{} ({} bytes) fieldtypes".format(analysisTitle, length), True)
-
-            # IPython.embed()
+    if args.interactive:
+        import visualization.simplePrint as sp
+        import utils.evaluationHelpers as eh
+        IPython.embed()
 
     exit()
 
 
-
-
-
-    # # TODO cluster by template generation
-    # print("Templating segments...")
-    # tg = TemplateGenerator(list(chain.from_iterable(segmentedMessages)))
-    # clusters = tg.clusterSimilarSegments()
-
-
-    # #
     # # TODO for each cluster: count the number of fields per type (histograms)
     # for cluster in clusters:
     #     cntr = Counter()
@@ -187,20 +207,6 @@ if __name__ == '__main__':
     #     print("Cluster info: ", len(cluster), " segments of length", cluster[0].length)
     #     pprint(cntr)
     #     print()
-
-
-    # TODO: test (differential) value progression for field type separation
-
-    # TODO: Entropy rate (to identify non-inferable segments)
-
-    # TODO: Value domain per byte/nibble (for chars, flags,...)
-
-    # print("Plotting templates...")
-    # import analysis_message_segments as ams
-    # ams.plotDistances(tg)
-
-    # templates = tg.generateTemplates()
-
 
 
     exit()
@@ -211,6 +217,8 @@ if __name__ == '__main__':
 
     # plot
     mmp = MultiMessagePlotter(specimens, args.analysis, 5, 8, args.interactive)
+    # TODO place labels with most common feature and/or byte values in distance graph
+
     # mmp.plotSegmentsInEachAx(segmentedMessages)
     # mmp.plotSegmentsInEachAx(meanSegments)
     # TODO use transported ftype to color the segments in the plot afterwards.

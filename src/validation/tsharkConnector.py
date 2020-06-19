@@ -17,10 +17,20 @@ class TsharkConnector(object):
 
     # __tsharkline = ["tshark", "-l", "-r", "-", "-T", "json", "-x"]
     # __tsharkline = ["tshark", "-Q", "-a", "duration:20", "-l", "-n", "-i", "-", "-T", "json", "-x"]
-    __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:3600", "-l", "-n", "-i", "-", "-T", "json", "-x",
-                  "-o", "tcp.analyze_sequence_numbers:FALSE"]
-    # __header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, 1)
 
+    # tshark params:
+    # -Q : keep quiet, output only real errors on stderr not some infos
+    # -a duration:600 : stop the process after five minutes
+    # -l : flush output buffering after each packet
+    # -n : Disable network object name resolution (such as hostname, TCP and UDP port names)
+    # -i - : capture on stdin
+    # -T json : set JSON output format
+    # -x : print hex of raw data (and ASCII interpretation)
+    # -o tcp.analyze_sequence_numbers:FALSE :
+    #       prevent error messages associated with the circumstance that it is no true trace tshark gets to dissect
+    #       here. Spares the necessity of restarting the tshark process after every packet.
+    __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:600", "-l", "-n", "-i", "-", "-T", "json", "-x",
+                  "-o", "tcp.analyze_sequence_numbers:FALSE"]
 
     def __init__(self, linktype : int):
         self.__linktype = linktype
@@ -81,12 +91,14 @@ class TsharkConnector(object):
                 time.sleep(.01)
             except ValueError as e:
                 raise e
-        while True:
+        emptywaitcycles = 200
+        while emptywaitcycles > 0:
             line = pipe.readline()
             if line and line != "\n":
                 # print(line.decode("utf-8"), end='')
                 queue.put(line)
             else:
+                emptywaitcycles -= 1
                 # st = time.time()
                 for x in range(5):
                     # sometimes the last "]\n" comes only after a delay
@@ -187,9 +199,13 @@ class TsharkConnector(object):
     def checkTsharkCompatibility():
         versionstring = subprocess.check_output(("tshark", "-v"))
         versionlist = versionstring.split(maxsplit=4)
-        if versionlist[2] not in (b'2.2.6', b'2.6.3'):
-            print("WARNING: Unchecked version of tshark in use! Dissections may be misfunctioning of faulty. "
-                  "Check compatibility of JSON output!\n")
+        if versionlist[2] < b'2.1.1':
+            raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
+                            'dissection parsing. Found tshark version {}. '
+                            'Upgrade!\”'.format(versionlist[2].decode()))
+        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5'):
+            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning of faulty. "
+                  "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
             return versionlist[2], False
         return versionlist[2], True
 
