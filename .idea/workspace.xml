@@ -5,16 +5,7 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/eval-nemesyspca-refine.sh" beforeDir="false" afterPath="$PROJECT_DIR$/eval-nemesyspca-refine.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-ether.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/random-100-continuous.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/random-100-fields.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/random-9999-continuous.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/random-9999-fields.pcap" beforeDir="false" />
-    </list>
+    <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
