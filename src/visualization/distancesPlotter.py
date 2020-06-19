@@ -1,0 +1,316 @@
+
+
+
+import numpy
+import matplotlib.pyplot as plt
+from matplotlib import cm, colors
+
+from typing import List, Any
+from itertools import compress
+
+from visualization.plotter import MessagePlotter
+from utils.loader import SpecimenLoader
+from inference.segments import MessageSegment, TypedSegment
+from inference.templates import TemplateGenerator, Template
+
+
+
+class DistancesPlotter(MessagePlotter):
+    """
+    Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
+    """
+
+    def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
+                 isInteractive: bool=False):
+        super().__init__(specimens, analysisTitle, isInteractive)
+
+        plt.rc('xtick', labelsize=10)  # fontsize of the tick labels
+        plt.rc('ytick', labelsize=10)  # fontsize of the tick labels
+
+        self._fig, self._axes = plt.subplots(1,2, figsize=(10,5))  # type: plt.Figure, numpy.ndarray
+        if not isinstance(self._axes, numpy.ndarray):
+            self._axes = numpy.array(self._axes)
+        self._fig.set_size_inches(16, 9)
+        # self._cm = cm.Set1  # has 9 colors
+        # self._cm = cm.tab20 # 20 colors
+        self._cm = cm.jet  # type: colors.LinearSegmentedColormap
+
+
+
+
+    def _plotManifoldDistances(self, segments: List[MessageSegment], similarities: numpy.ndarray,
+                               labels: List, templates: List=None, plotEdges = False, countMarkers = False):
+        """
+        Plot distances of segments according to (presumably multidimensional) features.
+        This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
+        arranging the segments relative to each other according to their distances using Multidimensional Scaling (MDS).
+        See module `manifold` from package `sklearn`.
+
+        Besides the distances, this function plots the feature values of each given segment above each other;
+        they are colored according to the given labels.
+
+        :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
+            within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
+            segments
+        :param similarities: The precomputed similarity matrix:
+            symmetric matrix, rows/columns in the order of `segments`
+        :param labels: Labels of strings (or ints or any other printable type) identifying the cluster for each segment
+        :param templates: Templates of clusters to be printed alongside with the feature values.
+            CURRENTLY UNUSED
+        :param plotEdges: Plot of edges between each pair of segment markers.
+            Caution: Adds n^2 lines which takes very long compared to the scatterplot and
+            quickly becomes a huge load especially when rendering the plot as PDF.
+        :param countMarkers: add text labels with information at positions with multiple markers
+        """
+        from sklearn import manifold
+        from sklearn.decomposition import PCA
+
+        # plot configuration
+        labsize = 150  # label markers: size factor
+        typsize = 30   # type markers: size factor
+        # self._cm          # label color map
+        fcm = cm.cubehelix  # type color map
+
+        # prepare MDS
+        seed = numpy.random.RandomState(seed=3)
+        mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
+                           dissimilarity="precomputed", n_jobs=1)
+        pos = mds.fit(similarities).embedding_
+        # print(similarities)
+
+        # Rotate the data
+        clf = PCA(n_components=2)
+
+        pos = clf.fit_transform(pos)
+
+
+        fig = self._fig
+        axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
+
+
+        # identify unique labels
+        ulab = sorted(set(labels))
+        # omit noise in cluster labels if types are plotted anyway.
+        if isinstance(segments[0], TypedSegment):
+            for l in ulab:
+                if isinstance(l, str) and "Noise" in l:
+                    ulab.remove(l)
+
+
+        # prepare color space
+        cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
+        if templates is None:
+            templates = ulab
+        # iterate unique labels and scatter plot each of these clusters
+        for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
+            lColor = self._cm(cIdx[c])
+            class_member_mask = (labels == l)
+            # TODO strange "bug" colors scatter plot of clusters (with few/>4? members) erratically;
+            #   labels for those additional colors are missing then;
+            #   however, the number of iterations is correct (identical to the number of unique labels)
+            # print(str(c), cIdx[c], lColor)
+            try:
+                x = list(compress(pos[:, 0].tolist(), class_member_mask))
+                y = list(compress(pos[:, 1].tolist(), class_member_mask))
+                axMDS.scatter(x, y, c=lColor, alpha=.6,
+                              s = labsize,
+                              # s=s-(c*s/len(ulab)),  #
+                              lw=0, label=str(l))
+            except IndexError as e:
+                print(pos)
+                print(similarities)
+                print(segments)
+                raise e
+
+            if isinstance(t, Template):
+                axSeg.plot(t.values, c=lColor, linewidth=4)
+
+
+        # include field type labels for TypedSegments input
+        if isinstance(segments[0], TypedSegment):
+            ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
+            # identify unique types
+            utyp = sorted(set(ftypes))
+            # prepare color space
+            cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
+            # iterate unique types and scatter plot each of these groups
+            for n, ft in enumerate(utyp):  # PP
+                fColor = fcm(cIdx[n])
+                type_member_mask = (ftypes == ft)
+                x = list(compress(pos[:, 0].tolist(), type_member_mask))
+                y = list(compress(pos[:, 1].tolist(), type_member_mask))
+                axMDS.scatter(x, y, c=fColor, alpha=1,
+                          s=typsize,
+                          lw=0, label=str(ft))
+
+                # TODO is it desired to have colors of clusters or types here?
+                for seg in compress(segments, type_member_mask):
+                    axSeg.plot(seg.values, c=fColor, alpha=0.05)
+
+
+        # place the label/type legend at the best position
+        axMDS.legend(scatterpoints=1, loc='best', shadow=False)
+
+
+        if plotEdges:
+            # plotting of edges takes a long time compared to the scatterplot (and especially when rendering the PDF)
+            from matplotlib.collections import LineCollection
+            # Plot the edges
+            lines = [[pos[i, :], pos[j, :]]
+                        for i in range(len(pos)) for j in range(len(pos))]
+            values = numpy.abs(similarities)
+            lc = LineCollection(lines,
+                                zorder=0, cmap=plt.cm.Blues,
+                                norm=plt.Normalize(0, values.max()))
+            # lc.set_alpha(.1)
+            lc.set_array(similarities.flatten())
+            lc.set_linewidths(0.5 * numpy.ones(len(segments)))
+            axMDS.add_collection(lc)
+
+
+        if countMarkers:
+            # Count markers at identical positions and plot text with information about the markers at this position
+            from collections import Counter
+            import math
+            if isinstance(segments[0], TypedSegment):
+                coordCounter = Counter(
+                    [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
+                        segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+                )
+            else:
+                coordCounter = Counter(
+                    [(posX, posY, lab) for lab, posX, posY in zip(
+                        labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
+                )
+            for (posX, posY, lab), cnt in coordCounter.items():
+                if cnt > 1:
+                    theta = hash(str(lab)) % 360
+                    r = 1
+                    posXr = posX + r * math.cos(theta)
+                    posYr = posY + r * math.sin(theta)
+                    axMDS.text(posXr, posYr, "{}: {}".format(lab, cnt), withdash=True)
+
+
+        fig.canvas.toolbar.update()
+
+
+    def _plot2dDistances(self, segments: List[MessageSegment], labels: List,
+                               templates: List = None):
+        fig = self._fig
+        axMDS, axSeg = self._axes
+
+        ulab = sorted(set(labels))
+        cIdx = [each for each in numpy.linspace(0, self._cm.N - 2, len(ulab))]
+
+        if templates is None:
+            templates = ulab
+
+        coords = numpy.array([seg.values for seg in segments])  # type: numpy.ndarray
+
+        s = 150  # size factor
+        for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
+            lColor = self._cm(int(round(cIdx[c])))
+            class_member_mask = (labels == l)
+            try:
+                x = list(compress(coords[:, 0].tolist(), class_member_mask))
+                if coords.shape[1] > 1:
+                    y = list(compress(coords[:, 1].tolist(), class_member_mask))
+                    axMDS.scatter(x, y, c=lColor, alpha=.6,
+                                  # s=s - (c * s / len(ulab)),
+                                  lw=0, label=str(l))
+                else:
+                    axMDS.scatter(x, [0] * len(x), c=lColor, alpha=.6,
+                                  # s=s - (c * s / len(ulab)),
+                                  lw=0, label=str(l))
+            except IndexError as e:
+                print(segments)
+                raise e
+
+            for seg in compress(segments, class_member_mask):
+                axSeg.plot(seg.values, c=lColor, alpha=0.05)
+            if isinstance(t, Template):
+                axSeg.plot(t.values, c=lColor, linewidth=4)
+
+        axMDS.legend(scatterpoints=1, loc='best', shadow=False)
+
+        fig.canvas.toolbar.update()
+
+
+
+    def plotDistances(self, tg: TemplateGenerator, labels: numpy.ndarray):
+        """
+        Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
+
+        # :param segments: Segments of equal lengths to calculate pairwise distances from and plot these.
+        :param tg: A template generator object of segments of one length to derive similarities.
+        :param labels: list of labels in the order of segments as they are contained in tg.segments.
+        """
+        # segments: List[MessageSegment]
+        # tg = TemplateGenerator(segments)  # type: TemplateGenerator
+        """A template generator object of which to derive segment groups, similarities, and templates."""
+
+        assert type(labels) == numpy.ndarray
+
+        lenGrps = tg._groupByLength()
+        if len(lenGrps) > 1:
+            raise ValueError('Only segments of one single length in the TemplateGenerator are accepted as input.')
+
+        # Keep loop for later extension
+        for lenGrp in lenGrps.values():
+            if len(lenGrp) < 2:
+                continue
+            # # Keep for extension to generate cluster labels
+            # similarities = tg._similaritiesSubset(lenGrp)
+            # labels = tg.getClusterLabels(similarities)
+
+            # Prevent ordering errors (remove if we choose to support multiple plots (lenGrps) at once)
+            assert lenGrp == tg.segments
+
+            ulab = set(labels)
+            clusters = list()
+            for l in ulab:
+                class_member_mask = (labels == l)
+                clusters.append([ seg for seg in compress(lenGrp, class_member_mask) ])
+
+            if len(tg.segments[0].values) > 2:
+                similarities = tg.distanceMatrix
+                self._plotManifoldDistances(lenGrp, similarities, labels)
+            else:
+                self._plot2dDistances(lenGrp, labels)
+
+
+
+
+
+    @staticmethod
+    def plotSegmentDistanceDistribution(tg):
+        """
+        Plot distribution of distances to identify density boundaries for clusters.
+
+        :param tg:
+        :return:
+        """
+        statistics = list()
+        cltrs = tg._groupByLength()
+        for cluster in cltrs.values():
+            similarities = tg._similaritiesSubset(cluster)
+            mask = numpy.tril(numpy.ones(similarities.shape)) != 0
+            statistics.append(
+                similarities[mask]
+            )
+
+        plt.rc('xtick', labelsize=6)  # fontsize of the tick labels
+        plt.rc('ytick', labelsize=6)  # fontsize of the tick labels
+        # rows = math.ceil(5* math.sqrt(len(statistics) / 35))
+        # cols = math.ceil(7* math.sqrt(len(statistics) / 35))
+        rows = 4
+        cols = 5
+        fig, axes = plt.subplots(rows, cols, figsize=(8,5))
+        for ax, stat in zip(axes.flat, [s for s in statistics if len(s) > 10]):  # type: plt.Axes, numpy.ndarray
+            ax.hist(stat, bins=50)
+            ax.axvline(x=float(numpy.mean(stat)*3), c='r')
+            ax.axvline(x=float(numpy.mean(stat)+numpy.std(stat)), c='g')
+            ax.axvline(x=float(numpy.mean(stat)+numpy.std(stat)*2.5), c='tab:orange')
+            ax.set_title(str(len(stat)))
+        plt.tight_layout()
+        plt.show()

@@ -4,9 +4,10 @@ def ngrams(sequence, n: int):
     """
     :return: The ngrams of the message in order
     """
+    assert isinstance(n, int)
     mlen = len(sequence)
     ngramlist = ( sequence[start:end] for start, end in
-               zip( range(mlen - n+ 1),
+               zip( range(mlen - n + 1),
                   range(n, mlen + 1)))
     return ngramlist
 

@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Union, Type, Any, Tuple
+from typing import Dict, List, Union, Type, Any, Tuple, Iterable
 from abc import ABC, abstractmethod
 import numpy
 
@@ -27,7 +27,7 @@ class MessageAnalyzer(ABC):
 
     # TODO per analysis method that does not generate one value per one byte: margins (head, tail) and skip
 
-    def __init__(self, message: AbstractMessage, unit=U_BYTE):
+    def __init__(self, message: AbstractMessage, unit=U_NIBBLE):
         """
         Create object and set the message and the unit-size.
 
@@ -97,7 +97,7 @@ class MessageAnalyzer(ABC):
 
     @staticmethod
     def findExistingAnalysis(analyzerclass: type, unit: int,
-                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None):
+                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None) -> 'MessageAnalyzer':
         """
         Efficiently obtain an analyzer by looking for an already existing identical object instance.
 
@@ -132,7 +132,7 @@ class MessageAnalyzer(ABC):
 
 
     @staticmethod
-    def nibblesFromBytes(bytesequence: bytes):
+    def nibblesFromBytes(bytesequence: bytes) -> List[int]:
         """
         Returns a byte sequence representing the nibbles of the input byte sequence.
         Only the 4 least significent bits of the output are set, the first 4 bits are zero.
@@ -142,11 +142,8 @@ class MessageAnalyzer(ABC):
         :param bytesequence:
         :return:
         """
-        nibblesequence = []
-        for char in bytesequence:
-            nibblesequence.append(char >> 4)
-            nibblesequence.append(char & 0x0f)
-        return nibblesequence
+        from itertools import chain
+        return list(chain.from_iterable([(by >> 4, by & 0x0f) for by in bytesequence]))
 
 
     @staticmethod
@@ -383,6 +380,21 @@ class MessageAnalyzer(ABC):
         return valuestats
 
 
+class SegmentAnalyzer(MessageAnalyzer):
+    """
+    Abstract class to denote analyzers that work on a given subset, i.e. Segment, of a message.
+    """
+    def values(self):
+        raise TypeError("SegmentAnalyzer subclasses are dependent on the segment the analyzer should refer to. "
+                        "Use the function value(start, end) instead.")
+
+    def analyze(self):
+        pass
+
+
+    @abstractmethod
+    def value(self, start, end):
+        raise NotImplementedError("Abstract method: Implement!")
 
 
 ### MessageSegment classes #########################################
@@ -395,6 +407,109 @@ class AbstractSegment(ABC):
 
     # list of analysis result values for the segment scope
     values = None  # type: Union[List, numpy.ndarray]
+
+    def correlate(self,
+                  haystack: Iterable['MessageSegment'],
+                  method: int='AbstractSegment.CORR_PEARSON'
+                  ) -> List['CorrelatedSegment']:
+        """
+        The correlation of this object to each entry in haystack is calculated.
+
+        :param haystack: a list of MessageSegments
+        :param method: The method to correlate with (see class constants prefixed with CORR_ for available options)
+        :return:
+        """
+        from utils.baseAlgorithms import ngrams
+        import scipy.spatial.distance
+
+        selfCorrMsgs = list()
+        for hayhay in haystack:
+            # selfConvMsgs[(self, hayhay)] = numpy.divide(  # normalize correlation to the length of self.values
+            #     numpy.correlate(self.values, msgValues, 'valid'),
+            #     len(self.values)*len(self.values)
+            # )
+            # normalizing: https://stackoverflow.com/questions/5639280/why-numpy-correlate-and-corrcoef-return-different-values-and-how-to-normalize
+            # a = (self.values - numpy.mean(self.values)) / (numpy.std(self.values) * len(self.values))
+            # v = (hayhay.values - numpy.mean(hayhay.values)) / numpy.std(hayhay.values)
+            # corr = numpy.convolve(a,v,'valid')
+
+            # selfConvMsgs[(self, hayhay)] =
+            # a = pandas.Series(self.values)
+            # v = pandas.Series(msgValues)
+            # selfConvMsgs[(self, hayhay)] = \
+            #     v.rolling(window=len(self.values)).corr(a)
+
+            try:
+                if method == AbstractSegment.CORR_PEARSON:
+                    measure = CorrelatedSegment.MEASURE_SIMILARITY
+                    corrvalues = [numpy.corrcoef(a, self.values)[0, 1]
+                                  for a in ngrams(hayhay.values, len(self.values))]
+                elif method == AbstractSegment.CORR_COSINE:
+                    measure = CorrelatedSegment.MEASURE_DISTANCE
+                    ng = numpy.array([a for a in ngrams(hayhay.values, len(self.values))])
+                    corrarray = scipy.spatial.distance.cdist(numpy.array([self.values]),
+                                                              ng,
+                                                              'cosine')
+                    corrvalues = list(corrarray[0])
+                elif method == AbstractSegment.CORR_SAD:
+                    measure = CorrelatedSegment.MEASURE_DISTANCE
+                    corrvalues = [numpy.sum(numpy.abs(numpy.subtract(self.values, cand)))
+                                  for cand in ngrams(hayhay.values, len(self.values))
+                                  ]
+                else:
+                    raise ValueError('Invalid correlation method {} given.'.format(method))
+
+                selfCorrMsgs.append(CorrelatedSegment(corrvalues, self, hayhay, measure))
+            except RuntimeWarning as w:
+                raise RuntimeWarning('Message {} with feature {} failed caused by {}'.format(
+                    hayhay, self, w))
+        return selfCorrMsgs
+
+
+class CorrelatedSegment(AbstractSegment):
+    MEASURE_DISTANCE = 0
+    MEASURE_SIMILARITY = 1
+
+    def __init__(self, values: Union[List, numpy.ndarray], feature: AbstractSegment, haystack: 'MessageSegment',
+                 measure:int='CorrelatedSegment.MEASURE_SIMILARITY'):
+        """
+        :param values: List of analysis result values.
+        :param feature: A segment that should be matched against.
+        :param haystack: A segment where feature should be fitted into.
+        :param measure: The similarity measure to use.
+        """
+        self.values = values  # type: Union[List, numpy.ndarray]
+        self.feature = feature  # type: AbstractSegment
+        self.haystack = haystack  # type: MessageSegment
+        self.id = "{:02x}".format(hash(tuple(feature.values)) ^ hash(tuple(haystack.values)))
+        self.measure=measure
+
+    # def argmax(self):
+    #     """
+    #     :return: index of maximum correlation
+    #     """
+    #     return int(numpy.nanargmax(self.values))
+
+    def bestMatch(self):
+        """
+        :return: index of best match
+        """
+        if self.measure == CorrelatedSegment.MEASURE_SIMILARITY:
+            return int(numpy.nanargmax(self.values))
+        else:
+            return int(numpy.nanargmin(self.values))
+
+    def fieldCandidate(self):
+        """
+        Cuts the best fit part from haystack into a separate segment.
+
+        :return: A segment being the best field candidate according to this correlation.
+        """
+        from inference.analyzers import NoneAnalysis
+
+        # TODO There could be more than one close match...
+        # and multiple segments/field candidates of the same type, therefore matching the same feature
+        return MessageSegment(NoneAnalysis(self.haystack.message), self.bestMatch(), len(self.feature.values))
 
 
 class MessageSegment(AbstractSegment):
@@ -414,7 +529,8 @@ class MessageSegment(AbstractSegment):
 
         # calculate values by the given analysis method, if not provided
         if not analyzer.values:
-            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit, analyzer.message, analyzer.analysisParams)
+            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
+                                                                 analyzer.message, analyzer.analysisParams)
         else:
             self.analyzer = analyzer  # type: MessageAnalyzer
             """kind of the generation method for the contained analysis values"""
@@ -439,6 +555,8 @@ class MessageSegment(AbstractSegment):
     def values(self):
         if super().values:
             return super().values
+        if isinstance(self.analyzer, SegmentAnalyzer):
+            return self.analyzer.value(self.offset, self.offset+self.length)
         return self.analyzer.values[self.offset:self.offset+self.length]
 
 

@@ -1,11 +1,12 @@
-from typing import List
-
-# from inference import *  # do this first to prevent a circular import.
-from inference.segments import MessageSegment, HelperSegment
-
 """
 Batch handling of multiple segments.
 """
+
+from typing import List, Dict, Tuple, Union
+
+from inference.segments import MessageSegment, HelperSegment, TypedSegment
+from inference.analyzers import MessageAnalyzer
+
 
 
 def segmentMeans(segmentsPerMsg: List[List]):
@@ -43,6 +44,68 @@ def segmentStdevs(segmentsPerMsg: List[List]):
 def symbolsFromSegments(segmentsPerMsg):
     from netzob.Model.Vocabulary.Symbol import Symbol, Field
     return [Symbol([Field(segment.bytes) for segment in sorted(segSeq, key=lambda f: f.offset)], messages=[segSeq[0].message]) for segSeq in segmentsPerMsg ]
+
+
+def segmentsFromLabels(analyzer, labels) -> List[TypedSegment]:
+    """
+    Segment messages according to true fields from the labels
+    and mark each segment with its true type.
+
+    :param analyzer: An Analyzer for/with a message
+    :param labels: The labels of the true format
+    :return: Segments of the analyzer's message according to the true format
+    """
+    segments = list()
+    offset = 0
+    for ftype, flen in labels:
+        segments.append(TypedSegment(analyzer, offset, flen, ftype))
+        offset += flen
+    return segments
+
+
+def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
+                       unit=MessageAnalyzer.U_BYTE) -> List[List[TypedSegment]]:
+    """
+    :return: list of lists of segments that are annotated with their field type.
+    """
+    segmentedMessages = [segmentsFromLabels(
+        MessageAnalyzer.findExistingAnalysis(analyzerType, unit,
+                                             l4msg, analysisArgs), comparator.dissections[rmsg])
+        for l4msg, rmsg in comparator.messages.items()]
+    return segmentedMessages
+
+
+def groupByLength(segmentedMessages) -> Dict[int, List[MessageSegment]]:
+    """
+    Regroup a list of lists of segments into groups of segments that have equal length
+
+    :param segmentedMessages:
+    :return: dict with length: List[segments] pairs
+    """
+    from itertools import chain
+    segsByLen = dict()
+    for seg in chain.from_iterable(segmentedMessages):  # type: MessageSegment
+        seglen = len(seg.bytes)
+        if seglen not in segsByLen:
+            segsByLen[seglen] = list()
+        segsByLen[seglen].append(seg)
+    return segsByLen
+
+
+def segments2types(segments: List[TypedSegment]) -> Dict[str, List[TypedSegment]]:
+    """
+    Rearrange a list of typed segments into a dict of type: list(segments of that type)
+
+    :param segments:
+    :return:
+    """
+    typegroups = dict()
+    for seg in segments:
+        if seg.fieldtype in typegroups:
+            typegroups[seg.fieldtype].append(seg)
+        else:
+            typegroups[seg.fieldtype] = [seg]
+    return typegroups
 
 
 def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSegment]]:

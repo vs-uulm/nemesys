@@ -14,7 +14,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 
 # The analyzer implementations heavily depend on the MessageAnalyzer base class
 # that itself is deeply intertwined with the MessageSegment class:
-from inference.segments import MessageAnalyzer, MessageSegment
+from inference.segments import MessageAnalyzer, MessageSegment, SegmentAnalyzer
 
 
 class NothingToCompareError(ValueError):
@@ -1154,7 +1154,7 @@ class EntropyWithinNgrams(MessageAnalyzer):
     _n = None
 
     def setAnalysisParams(self, n: Union[int, Tuple[int]]):
-        self._n = n if not isinstance(n, tuple) else n[0]
+        self._n = int(n if not isinstance(n, tuple) else n[0])
         self._startskip = self._n
 
     def analyze(self):
@@ -1230,4 +1230,33 @@ class ValueFrequency(MessageAnalyzer):
         mostFreq = sorted([(frq, val) for val, frq in self._values.items()], key=lambda k: k[0])
         return mostFreq
 
+
+
+class Value(MessageAnalyzer):
+    """
+    Simply returns the byte values of the message.
+    """
+    def analyze(self):
+        """
+        Does nothing.
+        """
+        pass
+
+    @property
+    def values(self):
+        if self.unit == MessageAnalyzer.U_BYTE:
+            return list(self.message.data)
+        else:
+            return MessageAnalyzer.nibblesFromBytes(self.message.data)
+
+
+class Entropy(SegmentAnalyzer):
+    """
+    Calculates the entropy of each message ngrams based on an alphabet of bytes or nibbles (4 bit).
+    """
+    def value(self, start, end):
+        if self._unit == MessageAnalyzer.U_NIBBLE:
+            return [MessageAnalyzer.calcEntropy(MessageAnalyzer.nibblesFromBytes(self.message.data[start:end]))]
+        else:
+            return [MessageAnalyzer.calcEntropy(self.message.data[start:end])]
 

@@ -1,3 +1,10 @@
+"""
+DissectorMatcher, FormatMatchScore, and MessageComparator
+
+Methods to comparison of a list of messages' inferences and their dissections
+and match a message's inference with its dissector in different ways.
+"""
+
 from typing import List, Tuple, Dict, Iterable, Generator
 from collections import OrderedDict
 import copy
@@ -7,6 +14,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
+from inference.segments import TypedSegment
 
 
 class FormatMatchScore(object):
@@ -33,10 +41,11 @@ class FormatMatchScore(object):
 
 class MessageComparator(object):
     """
-    Formal and visual (?) comparison of a list of messages' inferences and their dissections.
+    Formal and visual comparison of a list of messages' inferences and their dissections.
 
-    Requires dissections been done in dissectorMatcher: (re-)move every functionality that requires direct interaction
-    with tshark and knowledge of layer, relativeToIP, and failOnUndissectable.
+    Functions that are closely coupled to the dissection: Interfaces with tshark to configure the call to it by
+    the parameters layer, relativeToIP, and failOnUndissectable and processes the output to directly know the
+    dissection result.
     """
     import utils.loader as sl
 
@@ -332,18 +341,12 @@ class MessageComparator(object):
 
 
 
-
-
-
-
-
-
 class DissectorMatcher(object):
     """
     Incorporates methods to match a message's inference with its dissector in different ways.
 
-    The more low-level methods: Interfaces with tshark output to directly know about the dissection
-    and provide with layer, relativeToIP, and failOnUndissectable to its call.
+    Dissections been are done by MessageComparator so this class does not need direct interaction
+    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
     """
 
     def __init__(self, mc: MessageComparator, inferredSymbol: netzob.Symbol, message:AbstractMessage=None):
