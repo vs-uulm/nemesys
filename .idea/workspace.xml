@@ -6,17 +6,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
-      <change beforePath="$PROJECT_DIR$/.idea/NEMESYS.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/NEMESYS.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/eval-nemesyspca-refine.sh" beforeDir="false" afterPath="$PROJECT_DIR$/eval-nemesyspca-refine.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/input/dns_ictf2010.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-ether.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-100-continuous.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-100-fields.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-9999-continuous.pcap" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/input/random-9999-fields.pcap" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/inference/formatRefinement.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/formatRefinement.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,7 +56,7 @@
     <property name="TODO_SCOPE" value="Open Files" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$1/New Scratch File" value="Python&#10;TEXT&#10;Markdown" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="Python" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/src/inference/segmentHandler.py" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyIntegratedToolsModulesConfigurable" />
   </component>
@@ -343,19 +340,18 @@
     <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
   </component>
   <component name="WindowStateProjectService">
-    <state x="502" y="396" width="800" height="684" key="#Notifications" timestamp="1576154933537">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="502" y="396" width="800" height="684" key="#Notifications/0.30.3440.1410@0.30.3440.1410" timestamp="1576154933537" />
     <state x="355" y="82" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1582898675553">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="141" y="57" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.30.1366.738@0.30.1366.738" timestamp="1579033013280" />
     <state x="355" y="82" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1582898675553" />
-    <state x="590" y="460" width="624" height="557" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1576154943097">
+    <state x="668" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser" timestamp="1586878469682">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="590" y="460" width="624" height="557" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1576154943097" />
+    <state x="668" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1586878469682" />
+    <state x="612" y="624" width="486" height="228" key="#com.jetbrains.python.refactoring.move.PyMoveModuleMembersDialog" timestamp="1586878171873">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="612" y="624" width="486" height="228" key="#com.jetbrains.python.refactoring.move.PyMoveModuleMembersDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1586878171873" />
     <state x="521" y="329" width="668" height="819" key="#nemeftr_cluster-segments" timestamp="1581964719175">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
@@ -371,55 +367,46 @@
     <state x="1464" y="335" width="877" height="605" key="#xdebugger.evaluate" timestamp="1582899641384">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="260" y="120" width="877" height="605" key="#xdebugger.evaluate/0.30.1366.738@0.30.1366.738" timestamp="1579033845956" />
     <state x="1464" y="335" width="959" height="806" key="#xdebugger.evaluate/0.30.3440.1410@0.30.3440.1410" timestamp="1582899641384" />
     <state x="1295" y="130" width="1520" height="1210" key="DiffContextDialog" timestamp="1584292563861">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
     <state x="1295" y="130" width="1520" height="1210" key="DiffContextDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1584292563861" />
-    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl" timestamp="1584292029370">
+    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl" timestamp="1586878154699">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl/0.30.3440.1410@0.30.3440.1410" timestamp="1584292029370" />
+    <state x="643" y="493" width="424" height="491" key="FileChooserDialogImpl/0.30.3440.1410@0.30.3440.1410" timestamp="1586878154699" />
     <state width="1672" height="688" key="GridCell.Tab.0.bottom" timestamp="1582921576232">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.0.bottom/0.30.1366.738@0.30.1366.738" timestamp="1579034467361" />
     <state width="1672" height="688" key="GridCell.Tab.0.bottom/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
     <state width="1672" height="688" key="GridCell.Tab.0.center" timestamp="1582921576232">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.0.center/0.30.1366.738@0.30.1366.738" timestamp="1579034467360" />
     <state width="1672" height="688" key="GridCell.Tab.0.center/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
     <state width="1672" height="688" key="GridCell.Tab.0.left" timestamp="1582921576232">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.0.left/0.30.1366.738@0.30.1366.738" timestamp="1579034467359" />
     <state width="1672" height="688" key="GridCell.Tab.0.left/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
     <state width="1672" height="688" key="GridCell.Tab.0.right" timestamp="1582921576232">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.0.right/0.30.1366.738@0.30.1366.738" timestamp="1579034467361" />
     <state width="1672" height="688" key="GridCell.Tab.0.right/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576232" />
     <state width="1672" height="688" key="GridCell.Tab.1.bottom" timestamp="1582921576234">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.1.bottom/0.30.1366.738@0.30.1366.738" timestamp="1579034467364" />
     <state width="1672" height="688" key="GridCell.Tab.1.bottom/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
     <state width="1672" height="688" key="GridCell.Tab.1.center" timestamp="1582921576234">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.1.center/0.30.1366.738@0.30.1366.738" timestamp="1579034467363" />
     <state width="1672" height="688" key="GridCell.Tab.1.center/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
     <state width="1672" height="688" key="GridCell.Tab.1.left" timestamp="1582921576233">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.1.left/0.30.1366.738@0.30.1366.738" timestamp="1579034467362" />
     <state width="1672" height="688" key="GridCell.Tab.1.left/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576233" />
     <state width="1672" height="688" key="GridCell.Tab.1.right" timestamp="1582921576234">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="1318" height="311" key="GridCell.Tab.1.right/0.30.1366.738@0.30.1366.738" timestamp="1579034467363" />
     <state width="1672" height="688" key="GridCell.Tab.1.right/0.30.3440.1410@0.30.3440.1410" timestamp="1582921576234" />
     <state x="1102" y="417" width="1037" height="737" key="SettingsEditor" timestamp="1585217960008">
       <screen x="0" y="30" width="3440" height="1410" />
@@ -428,34 +415,32 @@
     <state width="1726" height="709" key="XDebugger.FullValuePopup" timestamp="1582898992477">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="685" height="371" key="XDebugger.FullValuePopup/0.30.1366.738@0.30.1366.738" timestamp="1579033625501" />
     <state width="1726" height="709" key="XDebugger.FullValuePopup/0.30.3440.1410@0.30.3440.1410" timestamp="1582898992477" />
     <state x="100" y="130" width="1520" height="1210" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog" timestamp="1584292399089">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
     <state x="100" y="130" width="1520" height="1210" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1584292399089" />
-    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog" timestamp="1580141557388">
+    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog" timestamp="1588060539965">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1580141557388" />
-    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1582980732777">
+    <state x="1098" y="136" width="2104" height="1210" key="com.intellij.history.integration.ui.views.FileHistoryDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1588060539965" />
+    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1586879805487">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1582980732777" />
-    <state x="1438" y="335" width="1484" height="849" key="find.popup" timestamp="1583342336770">
+    <state x="1833" y="377" width="683" height="771" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1586879805487" />
+    <state x="1438" y="335" width="1484" height="849" key="find.popup" timestamp="1586877447897">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="27" y="30" width="1285" height="718" key="find.popup/0.30.1366.738@0.30.1366.738" timestamp="1579033925018" />
-    <state x="1438" y="335" width="1484" height="849" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1583342336770" />
-    <state width="739" height="320" key="javadoc.popup.new" timestamp="1585577447924">
+    <state x="1438" y="335" width="1484" height="849" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1586877447897" />
+    <state width="1033" height="320" key="javadoc.popup.new" timestamp="1590499432260">
+      <screen x="0" y="30" width="4806" height="1410" />
+    </state>
+    <state width="739" height="320" key="javadoc.popup.new/0.30.3440.1410@0.30.3440.1410" timestamp="1590245166080" />
+    <state width="1033" height="320" key="javadoc.popup.new/0.30.4806.1410@0.30.4806.1410" timestamp="1590499432260" />
+    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog" timestamp="1586348301129">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state width="590" height="324" key="javadoc.popup.new/0.30.1366.738@0.30.1366.738" timestamp="1577488306677" />
-    <state width="739" height="320" key="javadoc.popup.new/0.30.3440.1410@0.30.3440.1410" timestamp="1585577447924" />
-    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog" timestamp="1582452216011">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1582452216011" />
+    <state x="599" y="375" width="501" height="726" key="refactoring.ChangeSignatureDialog/0.30.3440.1410@0.30.3440.1410" timestamp="1586348301129" />
     <state x="796" y="351" width="672" height="678" key="search.everywhere.popup" timestamp="1585217731855">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
