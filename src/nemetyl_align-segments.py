@@ -7,12 +7,8 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-import argparse, IPython, pickle, csv
-import time
-from math import ceil
+import argparse, IPython
 from os.path import isfile, splitext, basename, exists, join
-from itertools import chain
-from typing import List, Any, Union
 
 from tabulate import tabulate
 
@@ -21,16 +17,11 @@ from tabulate import tabulate
 # mpl.use('Agg')
 
 from alignment.alignMessages import SegmentedMessages
-from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements, originalRefinements, \
-    baseRefinements, pcaRefinements, pcaMocoRefinements
-from inference.templates import DistanceCalculator, DelegatingDC, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
+from inference.segmentHandler import originalRefinements, baseRefinements, pcaRefinements
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from utils.evaluationHelpers import *
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from characterize_fieldtypes import analyses
 from visualization.multiPlotter import MultiMessagePlotter
-from alignment.clusterMerging import ClusterMerger, ClusterClusterer
+from alignment.clusterMerging import ClusterMerger
 from utils.baseAlgorithms import ecdf
 
 debug = False
