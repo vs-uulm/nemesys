@@ -171,16 +171,17 @@ class DistancesPlotter(MessagePlotter):
             templates = ulab
         # iterate unique labels and scatter plot each of these clusters
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
+            # test with:
+            # color = [list(numpy.random.randint(0, 10, 4) / 10)]
+            # plt.scatter(numpy.random.randint(0,10,4), numpy.random.randint(0,10,4), c=color)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
-            # TODO strange "bug" colors scatter plot of clusters (with exactly 4 members) erratically;
-            #   labels for those additional colors are missing then;
-            #   however, the number of iterations is correct (identical to the number of unique labels)
-            # print(str(c), cIdx[c], lColor)
             try:
                 x = list(compress(pos[:, 0].tolist(), class_member_mask))
                 y = list(compress(pos[:, 1].tolist(), class_member_mask))
-                axMDS.scatter(x, y, c=lColor, alpha=.6,
+                # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                axMDS.scatter(x, y, c=colors.to_rgba_array(lColor), alpha=.6,
                               s = labsize,
                               # s=s-(c*s/len(ulab)),  #
                               lw=0, label=str(l))
@@ -210,17 +211,18 @@ class DistancesPlotter(MessagePlotter):
                 type_member_mask = (ftypes == ft)
                 x = list(compress(pos[:, 0].tolist(), type_member_mask))
                 y = list(compress(pos[:, 1].tolist(), type_member_mask))
-                axMDS.scatter(x, y, c=fColor, alpha=1,
+                # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                axMDS.scatter(x, y, c=colors.to_rgba_array(fColor), alpha=1,
                           s=typsize,
                           lw=0, label=str(ft))
 
                 if isinstance(segments[0], TypedSegment):
-                    # TODO is it desired to have colors of clusters or types here?
                     for seg in compress(segments, type_member_mask):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
-                lColor = self._cm(cIdx[c])
+                lColor = colors.to_rgba_array(self._cm(cIdx[c]))
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)
@@ -298,13 +300,16 @@ class DistancesPlotter(MessagePlotter):
             class_member_mask = (labels == l)
             try:
                 x = list(compress(coords[:, 0].tolist(), class_member_mask))
+
                 if coords.shape[1] > 1:
                     y = list(compress(coords[:, 1].tolist(), class_member_mask))
-                    axMDS.scatter(x, y, c=lColor, alpha=.6,
+                    # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                    # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                    axMDS.scatter(x, y, c=colors.to_rgba_array(lColor), alpha=.6,
                                   # s=s - (c * s / len(ulab)),
                                   lw=0, label=str(l))
                 else:
-                    axMDS.scatter(x, [0] * len(x), c=lColor, alpha=.6,
+                    axMDS.scatter(x, [0] * len(x), c=colors.to_rgba_array(lColor), alpha=.6,
                                   # s=s - (c * s / len(ulab)),
                                   lw=0, label=str(l))
             except IndexError as e:
