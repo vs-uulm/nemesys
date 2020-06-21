@@ -4,7 +4,7 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Union, Dict, Set, Union, Any, Callable
+from typing import List, Tuple, Dict, Set, Union
 from pprint import pprint
 import IPython
 

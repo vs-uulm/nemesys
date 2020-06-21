@@ -6,7 +6,7 @@ from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from scipy.special import comb
 
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from inference.segmentHandler import matrixFromTpairs
 from inference.segments import MessageSegment
 from inference.templates import DistanceCalculator

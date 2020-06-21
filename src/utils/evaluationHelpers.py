@@ -8,10 +8,10 @@ from itertools import chain
 import os, csv, pickle, time
 
 from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import MessageComparator, ParsedMessage
+from validation.dissectorMatcher import MessageComparator
 from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
-    refinements, charRefinements, segmentsFixed
+    refinements, segmentsFixed
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from inference.templates import DistanceCalculator, DelegatingDC, MemmapDC, Template
 
@@ -568,7 +568,7 @@ def calcHexDist(hexA, hexB):
 
 
 def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
-                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filter=False,
+                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filterTrivial=False,
                    refinementCallback:Union[Callable, None] = refinements,
                    disableCache=False) \
         -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
@@ -579,7 +579,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     >>> chainedSegments = dc.rawSegments
 
 
-    :param filter: Filter out **one-byte** segments and such, just consisting of **zeros**.
+    :param filterTrivial: Filter out **one-byte** segments and such just consisting of **zeros**.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
     :return:
     """
@@ -595,7 +595,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     tokenparm = tokenizer if tokenizer != "nemesys" else \
         "{}{:.0f}".format(tokenizer, sigma * 10)
     dccachefn = os.path.join(cacheFolder, 'cache-dc-{}-{}-{}-{}-{}.{}'.format(
-        analysisTitle, tokenparm, "filtered" if filter else "all",
+        analysisTitle, tokenparm, "filtered" if filterTrivial else "all",
         refinementCallback.__name__ if refinementCallback is not None else "raw",
         pcapName, 'ddc'))
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
@@ -642,7 +642,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
         segmentationTime = time.time() - segmentationTime
         print("done.")
 
-        if filter:
+        if filterTrivial:
             # noinspection PyUnboundLocalVariable
             chainedSegments = [seg for seg in chain.from_iterable(segmentedMessages) if
                         seg.length > 1 and set(seg.values) != {0}]

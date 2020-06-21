@@ -6,7 +6,7 @@ from networkx import Graph
 from networkx.algorithms.components.connected import connected_components
 
 from inference.templates import DistanceCalculator, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 
 
@@ -323,7 +323,6 @@ class ClusterMerger(ClusterAligner):
 
     @staticmethod
     def selectMatchingClusters(alignedFieldClasses, matchingConditions):
-        from math import ceil
 
         def lenAndTrue(boolist, length=2, truths=0):
             return len(boolist) <= length and len([a for a in boolist if a]) > truths

@@ -11,7 +11,7 @@ from itertools import compress
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
 from visualization.plotter import MessagePlotter
-from utils.loader import SpecimenLoader, BaseLoader
+from utils.loader import BaseLoader
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import Template, DistanceCalculator
 

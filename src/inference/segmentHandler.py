@@ -8,9 +8,9 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
-from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
+from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
-from inference.templates import TypedTemplate, DistanceCalculator, DelegatingDC
+from inference.templates import TypedTemplate, DistanceCalculator
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -435,6 +435,8 @@ def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
+    from inference.formatRefinement import locateNonPrintable
+
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen

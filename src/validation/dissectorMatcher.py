@@ -16,7 +16,6 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
-from inference.segments import TypedSegment
 
 
 class FormatMatchScore(object):

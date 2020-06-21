@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     inferenceTitle = 'bcDeltaGauss{:.1f}'.format(sigma)  # +hiPlateaus
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-    refinedPerMsg = refinements(segmentsPerMsg)
+    refinedPerMsg = refinements(segmentsPerMsg, None)
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
 

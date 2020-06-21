@@ -277,18 +277,21 @@ if __name__ == '__main__':
     # TODO when manipulating distances, deactivate caching! by adding "True"
     # noinspection PyUnboundLocalVariable
     if args.tokenizer != "nemesys":
+        # noinspection PyUnboundLocalVariable
         specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
             refinementCallback=None
             # , disableCache=True
         )
     elif args.refinement == "original":
+        # noinspection PyUnboundLocalVariable
         specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
             refinementCallback=originalRefinements
             #, disableCache=True
         )
     elif args.refinement == "base":
+        # noinspection PyUnboundLocalVariable
         specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
             args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
             refinementCallback=baseRefinements
@@ -297,6 +300,7 @@ if __name__ == '__main__':
     else:
         print("Unknown refinement", args.refinement, "\nAborting")
         exit(2)
+    # noinspection PyUnboundLocalVariable
     chainedSegments = dc.rawSegments
 
 
@@ -304,6 +308,7 @@ if __name__ == '__main__':
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # if not exists(smcachefn):
+    # noinspection PyUnboundLocalVariable
     print("Calculate distance for {} messages...".format(len(segmentedMessages)))
     dist_calc_messagesTime = time.time()
     sm = SegmentedMessages(dc, segmentedMessages)
@@ -350,7 +355,7 @@ if __name__ == '__main__':
     #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-
+    # noinspection PyUnboundLocalVariable
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
@@ -385,6 +390,8 @@ if __name__ == '__main__':
         # plot distances and message clusters
         print("Plot distances...")
         from visualization.distancesPlotter import DistancesPlotter
+
+        # noinspection PyUnboundLocalVariable
         dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
         dp.plotManifoldDistances(
             [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
@@ -664,7 +671,6 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # TODO fully integrate into/encapsulate in ClusterMerger class
     print("Check for cluster merge candidates...")
-    from utils.evaluationHelpers import printClusterMergeConditions
     # noinspection PyUnreachableCode
     if True:
         # ClusterMerger

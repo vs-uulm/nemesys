@@ -16,10 +16,6 @@ import argparse
 from os.path import isfile, join
 from typing import Dict, Tuple, List
 
-import matplotlib.colors
-import matplotlib.pyplot as plt
-import IPython
-
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 import utils.evaluationHelpers as eh
@@ -165,7 +161,7 @@ if __name__ == '__main__':
         messageClusters = {symname: [[HelperSegment(NoneAnalysis(msg),0,len(msg.data))] for msg in msglist]
                            for symname, msglist in symbMsgs.items()}
 
-        clusterStats, conciseness = eh.writeMessageClusteringStaticstics(
+        clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
         eh.writeCollectiveClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)

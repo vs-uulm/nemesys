@@ -1,5 +1,5 @@
 from typing import List
-from abc import ABC, abstractmethod, ABCMeta
+from abc import ABC, abstractmethod
 
 from inference.segments import MessageSegment
 

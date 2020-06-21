@@ -1,9 +1,5 @@
 from typing import List, Dict, Union, Iterable, Sequence, Tuple, Iterator
-from abc import ABC, abstractmethod
 from os import cpu_count
-from collections import Counter
-from pandas import DataFrame
-from kneed import KneeLocator
 import numpy, scipy.spatial, itertools
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -1710,6 +1706,7 @@ class DelegatingDC(DistanceCalculator):
 
 
 class MemmapDC(DelegatingDC):
+
     maxMemMatrix = 750000
     if parallelDistanceCalc:
         maxMemMatrix /= cpu_count()
@@ -1762,7 +1759,6 @@ class MemmapDC(DelegatingDC):
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from tempfile import NamedTemporaryFile
-        from sys import getsizeof
         from inference.segmentHandler import matrixFromTpairs
 
         tempfile = NamedTemporaryFile()
@@ -1789,6 +1785,10 @@ class MemmapDC(DelegatingDC):
             simtrx.fill(filler)
         return simtrx
 
+
+    @staticmethod
+    def _templates4Paddings(segments: Iterable[MessageSegment]):
+        raise NotImplementedError()
 
 
 def __testing_generateTestSegmentsWithDuplicates():
