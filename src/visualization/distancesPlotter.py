@@ -80,7 +80,7 @@ class DistancesPlotter(MessagePlotter):
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments, thresholdFunction=DistanceCalculator.neutralThreshold, thresholdArgs=None)
         >>> dp = DistancesPlotter(specimens, "test", False)
-        >>> dp.plotManifoldDistances(segments, dc.similarityMatrix(), numpy.array([1,2,3,1,1,0,1,0,2]))
+        >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
         >>> dp.writeOrShowFigure()
 
         :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
@@ -173,7 +173,7 @@ class DistancesPlotter(MessagePlotter):
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
-            # TODO strange "bug" colors scatter plot of clusters (with few/<=4? members) erratically;
+            # TODO strange "bug" colors scatter plot of clusters (with exactly 4 members) erratically;
             #   labels for those additional colors are missing then;
             #   however, the number of iterations is correct (identical to the number of unique labels)
             # print(str(c), cIdx[c], lColor)

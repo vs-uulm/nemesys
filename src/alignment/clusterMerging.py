@@ -1,30 +1,28 @@
-from itertools import chain, combinations
+from itertools import chain, combinations, compress
+from typing import Iterable
 
-from inference.templates import DistanceCalculator, DelegatingDC, Template
+from sklearn.cluster import DBSCAN
+from networkx import Graph
+from networkx.algorithms.components.connected import connected_components
+
+from inference.templates import DistanceCalculator, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
+
 
 
 debug = False
 
 
-class ClusterMerger(object):
+class ClusterAligner(object):
     FC_DYN = b"DYNAMIC"
     FC_GAP = "GAP"
 
-
     def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator):
-        self.mismatchGrace = .2
         self.alignedClusters = alignedClusters
         self.dc = dc
 
-
-    # # # # # # # # # # # # # # # # # # #
-    # An experimentation protocol for design decisions exists!
-    # # # # # # # # # # # # # # # # # # #
-    def alignFieldClasses(self, mmg=(0, -1, 5)):
-        from alignment.hirschbergAlignSegments import NWonSegmentSimilarity
-
+    def generateHirsch(self, mmg=(0, -1, 5)):
         alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in self.alignedClusters.items() if
                          clunu > -1}
         statDynFields = dict()
@@ -43,8 +41,6 @@ class ClusterMerger(object):
                     statDynFields[clunu].append(dynTemp)
         # generate a similarity matrix for field-classes (static-dynamic)
         statDynValues = list(set(chain.from_iterable(statDynFields.values())))
-        statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
-        statDynIndices = {clunu: [statDynValuesMap[fc] for fc in sdf] for clunu, sdf in statDynFields.items()}
 
         # fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
         #               for fcL in statDynValues] for fcK in statDynValues])
@@ -69,9 +65,77 @@ class ClusterMerger(object):
         # fcdc = DistanceCalculator(statDynValues)
         # fcSimMatrix = fcdc.similarityMatrix()
 
-        clusterpairs = combinations(statDynFields.keys(), 2)
         fclassHirsch = HirschbergOnSegmentSimilarity(fcSimMatrix, *mmg)
+        return fclassHirsch, statDynFields, statDynValues
+
+
+    @staticmethod
+    def printShouldMerge(connectedClusters: Iterable[Iterable[int]], clusterStats):   # clusters: Iterable[Tuple[int, int]]
+        print("connected:", connectedClusters)
+
+        print("should merge:")
+        # identify over-specified clusters and list which ones ideally would be merged:
+        clusterMostFreqStats = {stats[1]: [] for stats in clusterStats if stats is not None}
+        # 'cluster_label', 'most_freq_type', 'precision', 'recall', 'cluster_size'
+        for stats in clusterStats:
+            if stats is None:
+                continue
+            cluster_label, most_freq_type, precision, recall, cluster_size = stats
+            clusterMostFreqStats[most_freq_type].append((cluster_label, precision))
+        overspecificClusters = {mft: stat for mft, stat in clusterMostFreqStats.items() if len(stat) > 1}
+        superClusters = list()
+        for mft, stat in overspecificClusters.items():
+            superCluster = [str(label) if precision > 0.5 else "[{}]".format(label) for label, precision in stat]
+            superClusters.append(superCluster)
+            print("    \"{}\"  ({})".format(mft, ", ".join(superCluster)))
+
+        print("missed clusters for merge:")
+        missedmerges = [[ocel[0] for ocel in oc] for oc in overspecificClusters.values()]
+        mergeCandidates = [el for cchain in connectedClusters for el in cchain]
+        for sc in missedmerges:
+            for sidx, selement in reversed(list(enumerate(sc))):
+                if selement in mergeCandidates:
+                    del sc[sidx]
+        print(missedmerges)
+        print()
+
+        return missedmerges
+
+        #     # alignedFieldClasses to look up aligned field candidates from cluster pairs
+        #     # in dhcp-1000, cluster pair 0,7
+        #     from inference.templates import TemplateGenerator
+        #     t0019 = alignedFieldClasses[(0, 7)][0][19]
+        #     t7119 = alignedFieldClasses[(0, 7)][1][19]
+        #     tg0019 = TemplateGenerator.generateTemplatesForClusters(dc, [t0019.baseSegments])[0]
+        #     dc.findMedoid(t0019.baseSegments)
+        #     dc.pairDistance(tg0019.medoid, t7119)
+        #
+        #     # 1:19 should be aligned to 0:21
+        #     tg021 = TemplateGenerator.generateTemplatesForClusters(dc, [alignedFieldClasses[(0, 7)][0][21].baseSegments])[0]
+        #
+        #     dc.pairDistance(tg021.medoid, t7119)
+        #     # 0.37706280402265446
+
+
+
+class ClusterMerger(ClusterAligner):
+
+    def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator):
+        self.mismatchGrace = .2
+        super().__init__(alignedClusters, dc)
+
+
+    # # # # # # # # # # # # # # # # # # #
+    # An experimentation protocol for design decisions exists!
+    # # # # # # # # # # # # # # # # # # #
+    def alignFieldClasses(self, mmg=(0, -1, 5)):
+        fclassHirsch, statDynFields, statDynValues = self.generateHirsch(mmg)
+
+        statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
+        statDynIndices = {clunu: [statDynValuesMap[fc] for fc in sdf] for clunu, sdf in statDynFields.items()}
+
         # fclassHirsch = NWonSegmentSimilarity(fcSimMatrix, *mmg)
+        clusterpairs = combinations(statDynFields.keys(), 2)
         alignedFCIndices = {(clunuA, clunuB): fclassHirsch.align(statDynIndices[clunuA], statDynIndices[clunuB])
                             for clunuA, clunuB in clusterpairs}
         alignedFieldClasses = {clupa: ([statDynValues[a] if a > -1 else ClusterMerger.FC_GAP for a in afciA],
@@ -475,8 +539,6 @@ class ClusterMerger(object):
         print()
 
         # if a chain of matches would merge more than .66 of all clusters, remove that chain
-        from networkx import Graph
-        from networkx.algorithms.components.connected import connected_components
         dracula = Graph()
         dracula.add_edges_from(set(matchingClusters) - set(removeFromMatchingClusters))
         connectedDracula = list(connected_components(dracula))
@@ -499,55 +561,15 @@ class ClusterMerger(object):
         chainedRemains = Graph()
         chainedRemains.add_edges_from(remainingClusters)
         connectedClusters = list(connected_components(chainedRemains))
-        print("connected:", connectedClusters)
 
-        print("should merge:")
-        # identify over-specified clusters and list which ones ideally would be merged:
-        clusterMostFreqStats = {stats[1]: [] for stats in clusterStats if stats is not None}
-        # 'cluster_label', 'most_freq_type', 'precision', 'recall', 'cluster_size'
-        for stats in clusterStats:
-            if stats is None:
-                continue
-            cluster_label, most_freq_type, precision, recall, cluster_size = stats
-            clusterMostFreqStats[most_freq_type].append((cluster_label, precision))
-        overspecificClusters = {mft: stat for mft, stat in clusterMostFreqStats.items() if len(stat) > 1}
-        superClusters = list()
-        for mft, stat in overspecificClusters.items():
-            superCluster = [str(label) if precision > 0.5 else "[{}]".format(label) for label, precision in stat]
-            superClusters.append(superCluster)
-            print("    \"{}\"  ({})".format(mft, ", ".join(superCluster)))
-
-        print("missed clusters for merge:")
-        missedmerges = [[ocel[0] for ocel in oc] for oc in overspecificClusters.values()]
-        mergeCandidates = [el for cchain in connectedClusters for el in cchain]
-        for sc in missedmerges:
-            for sidx, selement in reversed(list(enumerate(sc))):
-                if selement in mergeCandidates:
-                    del sc[sidx]
-        print(missedmerges)
-        print()
-
-        missedmergepairs = [k for k in alignedFieldClasses.keys() if any(
+        # for statistics
+        missedmerges = ClusterClusterer.printShouldMerge(connectedClusters, clusterStats)
+        missedmergepairs = [k for k in remainingClusters if any(
             [k[0] in mc and k[1] in mc or
              k[0] in mc and k[1] in chain.from_iterable([cc for cc in connectedClusters if k[0] in cc]) or
              k[0] in chain.from_iterable([cc for cc in connectedClusters if k[1] in cc]) and k[1] in mc
              for mc in missedmerges]
         )]
-
-        #     # alignedFieldClasses to look up aligned field candidates from cluster pairs
-        #     # in dhcp-1000, cluster pair 0,7
-        #     from inference.templates import TemplateGenerator
-        #     t0019 = alignedFieldClasses[(0, 7)][0][19]
-        #     t7119 = alignedFieldClasses[(0, 7)][1][19]
-        #     tg0019 = TemplateGenerator.generateTemplatesForClusters(dc, [t0019.baseSegments])[0]
-        #     dc.findMedoid(t0019.baseSegments)
-        #     dc.pairDistance(tg0019.medoid, t7119)
-        #
-        #     # 1:19 should be aligned to 0:21
-        #     tg021 = TemplateGenerator.generateTemplatesForClusters(dc, [alignedFieldClasses[(0, 7)][0][21].baseSegments])[0]
-        #
-        #     dc.pairDistance(tg021.medoid, t7119)
-        #     # 0.37706280402265446
 
         singleClusters = {ck: ml for ck, ml in messageClusters.items() if not chainedRemains.has_node(ck)}
         mergedClusters = {str(mergelist):
@@ -555,4 +577,138 @@ class ClusterMerger(object):
                           for mergelist in connectedClusters}
         mergedClusters.update(singleClusters)
 
-        return mergedClusters, missedmergepairs
+        return mergedClusters
+
+
+
+
+class ClusterClusterer(ClusterAligner):
+
+    def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator):
+        super().__init__(alignedClusters, dc)
+        self.clusterOrder = [clunu for clunu in sorted(alignedClusters.keys()) if clunu > -1]
+        self.distances = self.calcClusterDistances()
+
+
+
+    def calcClusterDistances(self, mmg=(0, -1, 5)):
+        from inference.segmentHandler import matrixFromTpairs
+
+        fclassHirsch, statDynFields, statDynValues = self.generateHirsch(mmg)
+
+        statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
+        statDynIndices = {clunu: [statDynValuesMap[fc] for fc in sdf] for clunu, sdf in statDynFields.items()}
+
+        clusterpairs = combinations(self.clusterOrder, 2)   # self.clusterOrder = sorted(statDynFields.keys())
+        nwscores = [(clunuA, clunuB, fclassHirsch.nwScore(statDynIndices[clunuA], statDynIndices[clunuB])[-1])
+                            for clunuA, clunuB in clusterpairs]
+
+        # arrange similarity matrix from nwscores
+        similarityMatrix = matrixFromTpairs(nwscores, self.clusterOrder)
+        # fill diagonal with max similarity per pair
+        for ij in range(similarityMatrix.shape[0]):
+            # The max similarity for a pair is len(shorter) * self._score_match
+            # see Netzob for reference
+            similarityMatrix[ij,ij] = len(statDynIndices[ij]) * fclassHirsch.score_match
+
+        # calculate distance matrix
+        minScore = min(fclassHirsch.score_gap, fclassHirsch.score_match, fclassHirsch.score_mismatch)
+        base = numpy.empty(similarityMatrix.shape)
+        maxScore = numpy.empty(similarityMatrix.shape)
+        for i in range(similarityMatrix.shape[0]):
+            for j in range(similarityMatrix.shape[1]):
+                maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * self._score_match
+                    # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
+                    similarityMatrix[i, i], similarityMatrix[j, j]
+                )
+                minDim = min(len(statDynIndices[i]), len(statDynIndices[j]))
+                base[i, j] = minScore * minDim
+
+        distanceMatrix = 100 - 100 * ((similarityMatrix - base) / (maxScore - base))
+        assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
+        return distanceMatrix
+
+
+    def neighbors(self):
+        neighbors = list()
+        for idx, dists in enumerate(self.distances):  # type: int, numpy.ndarray
+            neighbors.append(sorted([(i, d) for i, d in enumerate(dists) if i != idx], key=lambda x: x[1]))
+        return neighbors
+
+
+    def autoconfigureDBSCAN(self):
+        """
+        Auto configure the clustering parameters epsilon and minPts regarding the input data
+
+        :return: minpts, epsilon
+        """
+        from scipy.ndimage.filters import gaussian_filter1d
+        from math import log, ceil
+
+        neighbors = self.neighbors()
+        sigma = log(len(neighbors))
+        knearest = dict()
+        smoothknearest = dict()
+        seconddiff = dict()
+        seconddiffMax = (0, 0, 0)
+        # can we omit k = 0 ?
+        # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
+        for k in range(0, ceil(log(len(neighbors) ** 2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
+            knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
+            smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
+            # max of second difference (maximum positive curvature) as knee (this not actually the knee!)
+            seconddiff[k] = numpy.diff(smoothknearest[k], 2)
+            seconddiffargmax = seconddiff[k].argmax()
+            diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
+            if 2 * sigma < seconddiffargmax < len(neighbors) - 2 * sigma and diffrelmax > seconddiffMax[2]:
+                seconddiffMax = (k, seconddiffargmax, diffrelmax)
+
+        k = seconddiffMax[0]
+        x = seconddiffMax[1] + 1
+
+        epsilon = smoothknearest[k][x]
+        min_samples = round(sigma)
+        print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
+        return epsilon, min_samples
+
+
+    def clusterMessageTypesDBSCAN(self, eps = 1.5, min_samples = 3) \
+            -> Tuple[Dict[int, List[int]], numpy.ndarray, DBSCAN]:
+        clusterer = DBSCAN(metric='precomputed', eps=eps,
+                         min_samples=min_samples)
+
+        print("Messages: DBSCAN epsilon:", eps, "min samples:", min_samples)
+        clusterClusters, labels = self._postprocessClustering(clusterer)
+        return clusterClusters, labels, clusterer
+
+
+    def _postprocessClustering(self, clusterer: Union[DBSCAN]) \
+            -> Tuple[Dict[int, List[int]], numpy.ndarray]:
+        clusterer.fit(self.distances)
+
+        labels = clusterer.labels_  # type: numpy.ndarray
+        assert isinstance(labels, numpy.ndarray)
+        ulab = set(labels)
+        clusterClusters = dict()
+        for l in ulab:  # type: int
+            class_member_mask = (labels == l)
+            clusterClusters[l] = [seg for seg in compress(self.clusterOrder, class_member_mask)]
+
+        print(len([ul for ul in ulab if ul >= 0]), "Clusters found",
+              "(with noise {})".format(len(clusterClusters[-1]) if -1 in clusterClusters else 0))
+
+        return clusterClusters, labels
+
+    @staticmethod
+    def mergeClusteredClusters(clusterClusters: Dict[int, List[int]],
+                               messageClusters: Dict[int, List[AbstractMessage]]):
+        mergedClusters = {str(mergelist):
+                              list(chain.from_iterable([messageClusters[clunu] for clunu in mergelist]))
+                          for mergelabel, mergelist in clusterClusters.items() if mergelabel > -1}
+        singleClusters = {ck: ml for ck, ml in messageClusters.items() if ck not in chain.from_iterable(clusterClusters.values())}
+        mergedClusters.update(singleClusters)
+        return mergedClusters
+
+
+
+
