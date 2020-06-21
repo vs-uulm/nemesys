@@ -18,7 +18,8 @@ class DistanceCalculator(object):
 
     def __init__(self, segments: Iterable[MessageSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = None,
-                 reliefFactor=.33 # .5 # .33
+                 reliefFactor=.33,
+                 manipulateChars=True
                  ):
         """
         Determine the distance between the given segments.
@@ -68,9 +69,15 @@ class DistanceCalculator(object):
         self._offsets = dict()
         # distance matrix for all rows and columns in order of self._segments
         self._distances = DistanceCalculator._getDistanceMatrix(self._embdedAndCalcDistances(), len(self._quicksegments))
+
         # prepare lookup for matrix indices
         self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
-        # TODO replace _(quick)segments,index() lookups by queries to this lookup-dict
+        # TODO replace _(quick)segments.index() lookups by queries to this lookup-dict
+
+        if manipulateChars:
+            # Manipulate calculated distances for all char/char pairs.
+            self._manipulateChars()
+
 
     @property
     def distanceMatrix(self) -> numpy.ndarray:
@@ -1013,6 +1020,25 @@ class DistanceCalculator(object):
         mid = distSubMatrix.sum(axis=1).argmin()
         return segments[mid]
 
+    def _manipulateChars(self, charMatchGain = .5):
+        """
+        Manipulate (decrease) calculated distances for all char/char pairs.
+
+        :param charMatchGain: Factor to multiply to each distance of a chars-chars pair in self.distanceMatrix.
+            try 0.33 or 0.5 or x
+        :return:
+        """
+        from itertools import combinations
+        from inference.segmentHandler import filterChars
+
+        charsequences = filterChars(self.segments)
+        charindices = self.segments2index(charsequences)
+
+        # for all combinations of pairs from charindices
+        for a, b in combinations(charindices, 2):
+            # decrease distance by factor
+            self._distances[a, b] = self._distances[a, b] * charMatchGain
+            self._distances[b, a] = self._distances[b, a] * charMatchGain
 
 
 class Template(AbstractSegment):
@@ -1347,11 +1373,14 @@ class DelegatingDC(DistanceCalculator):
         """
 
         filteredSegments = uniqueSegments + deduplicatingTemplates
-        super().__init__(filteredSegments)
+        super().__init__(filteredSegments, manipulateChars=manipulateChars)
 
-        if manipulateChars:
-            # Manipulate calculated distances for all char/char pairs.
-            self._templates4chars()
+        # assert symmetric matrix
+        for i in range(self.distanceMatrix.shape[0]):
+            for j in range(self.distanceMatrix.shape[1]):
+                if self.distanceMatrix[i, j] != self.distanceMatrix[j, i]:
+                    print("NOK", i, j)
+                assert self.distanceMatrix[i, j] == self.distanceMatrix[j, i]
 
 
 
@@ -1418,27 +1447,6 @@ class DelegatingDC(DistanceCalculator):
         """
 
         return filteredSegments, templates, mapping
-
-
-    def _templates4chars(self, charMatchGain = .5):
-        """
-        Manipulate (decrease) calculated distances for all char/char pairs.
-
-        :param charMatchGain: Factor to multiply to each distance of a chars-chars pair in self.distanceMatrix.
-            try 0.33 or 0.5 or x
-        :return:
-        """
-        from itertools import combinations
-        from inference.segmentHandler import filterChars
-
-        charsequences = filterChars(self.segments)
-        charindices = self.segments2index(charsequences)
-
-        # for all combinations of pairs from charindices
-        for a, b in combinations(charindices, 2):
-            # decrease distance by factor
-            self._distances[a,b] = self._distances[a,b] * charMatchGain
-
 
     @staticmethod
     def _templates4allZeros(segments: Iterable[MessageSegment]):
