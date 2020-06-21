@@ -29,7 +29,7 @@ from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringSt
     sigmapertrace
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from characterize_fieldtypes import analyses
+from utils.evaluationHelpers import analyses
 from visualization.multiPlotter import MultiMessagePlotter
 from visualization.simplePrint import tabuSeqOfSeg
 from alignment.clusterMerging import ClusterMerger

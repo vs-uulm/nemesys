@@ -247,7 +247,7 @@ class MultiMessagePlotter(MessagePlotter):
                           MessagePlotter.STYLE_CORRELATION + dict(label='Correlation'))
 
         # (segment, haystraw), conv = next(iter(convolutions.items()))
-        #   type: Tuple[MessageSegment, Union[MessageSegment, AbstractMessage
+        #   type: Tuple[MessageSegment, Union[MessageSegment, AbstractMessage]]
         # plt.gca().twinx()
         for ax, series in zip(self._axes.flat, correlations):  # type: plt.Axes, CorrelatedSegment
             humanid = humanhash.humanize(series.id)

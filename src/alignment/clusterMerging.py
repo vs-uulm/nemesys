@@ -1,18 +1,8 @@
 from itertools import chain, combinations
 
-from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
-from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
-from inference.segments import MessageSegment, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC, Template
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
 from inference.analyzers import *
-from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics, \
-    sigmapertrace
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from characterize_fieldtypes import analyses
-from visualization.multiPlotter import MultiMessagePlotter
-from visualization.simplePrint import tabuSeqOfSeg
 
 
 debug = False

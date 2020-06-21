@@ -1,2 +1,2 @@
 
-__all__ = ['analyzers.py', 'segments.py']
+__all__ = ['analyzers', 'segments']

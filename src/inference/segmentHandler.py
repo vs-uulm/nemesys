@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
-from inference.templates import AbstractClusterer, TypedTemplate
+from inference.templates import TypedTemplate
 
 
 def segmentMeans(segmentsPerMsg: List[List]):
@@ -232,79 +232,6 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
             print("Warning: Identity value at {},{} was overwritten by {}".format(row, col, intseg[2]))
     return simtrx
 
-
-def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str) \
-        -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
-    """
-    Cluster segments according to the distance of their feature vectors.
-    Keep and label segments classified as noise.
-
-    :param clusterer: Clusterer object that contains all the segments to be clustered
-    :param analysisTitle: the string to be used as label for the result
-    :param kwargs: arguments for the clusterer
-    :return: List/Tuple structure of annotated analyses, clusters, and segments.
-        List [ of
-            Tuples (
-                 "analysis label",
-                 List [ of cluster
-                    Tuples (
-                        "cluster label",
-                        List [ of segment
-                            Tuples (
-                                "segment label (e. g. field type)",
-                                MessageSegment object
-                            )
-                        ]
-                    )
-                ]
-            )
-        ]
-    """
-    print("Clustering segments...")
-    noise, *clusters = clusterer.clusterSimilarSegments(False)
-    print("{} clusters generated from {} segments".format(len(clusters), len(clusterer.segments)))
-
-    segmentClusters = list()
-    segLengths = set()
-    numNoise = len(noise)
-    if numNoise > 0:
-        noiseSegLengths = {seg.length for seg in noise}
-        outputLengths = [str(slen) for slen in noiseSegLengths]
-        if len(outputLengths) > 5:
-            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
-        segLengths.update(noiseSegLengths)
-        noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
-        try:
-            segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
-                analysisTitle, " ".join(outputLengths), numNoise),
-                                       [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
-                                        for cseg in noise] )) # ''
-        except:
-            import IPython
-            IPython.embed()
-    for cnum, segs in enumerate(clusters):
-        clusterDists = clusterer.distanceCalculator.distancesSubset(segs)
-        typegroups = segments2types(segs)
-        clusterSegLengths = {seg.length for seg in segs}
-        outputLengths = [str(slen) for slen in clusterSegLengths]
-        if len(outputLengths) > 5:
-            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
-        segLengths.update(clusterSegLengths)
-
-        segmentGroups = ('{} ({} bytes), Cluster #{}: {} Seg.s ($d_{{max}}$={:.3f})'.format(
-            analysisTitle, " ".join(outputLengths),
-            cnum, len(segs), clusterDists.max()), list())
-        for ftype, tsegs in typegroups.items():  # [label, segment]
-            segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
-        segmentClusters.append(segmentGroups)
-
-    # print(len(clusters), len(noise))
-
-    segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
-                                                    next(iter(segLengths)) if len(segLengths) == 1 else 'mixedamount',
-                                                    clusterer if clusterer else 'n/a'),
-                          segmentClusters) ]
-    return segmentClusters
 
 
 def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
