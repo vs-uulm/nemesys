@@ -7,12 +7,12 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
+from typing import List, Any, Union, Tuple
 import argparse, IPython, pickle, csv
-import time
-from math import ceil
+import time, numpy
 from os.path import isfile, splitext, basename, exists, join
 from itertools import chain
-from typing import List, Any, Union
+
 
 from tabulate import tabulate
 
@@ -20,11 +20,12 @@ from tabulate import tabulate
 # import matplotlib as mpl
 # mpl.use('Agg')
 
-from alignment.alignMessages import SegmentedMessages
-from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
+from alignment.alignMessages import SegmentedMessages, MessageSegment
+from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements, MessageAnalyzer
 from inference.templates import DistanceCalculator, DelegatingDC
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from utils.evaluationHelpers import *
+from utils.evaluationHelpers import analyses, sigmapertrace, annotateFieldTypes, \
+    writeMessageClusteringStaticstics, writeCollectiveClusteringStaticstics, writePerformanceStatistics
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
 from visualization.multiPlotter import MultiMessagePlotter

@@ -107,7 +107,12 @@ class DistancesPlotter(MessagePlotter):
         fcm = cm.cubehelix  # type color map
 
         # identify unique labels
-        ulab = sorted(set(labels))
+        allabels = set(labels)
+        if all(isinstance(l, numpy.integer) or l.isdigit() for l in allabels if l != "Noise"):
+            ulab = sorted(allabels,
+                          key=lambda l: -1 if l == "Noise" else int(l))
+        else:
+            ulab = sorted(allabels)
 
         # subsample if segment count is larger than maxSamples
         maxSamples = 1000
@@ -229,7 +234,7 @@ class DistancesPlotter(MessagePlotter):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
-                lColor = colors.to_rgba_array(self._cm(cIdx[c]))
+                lColor = self._cm(cIdx[c])
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)

@@ -13,6 +13,7 @@ from inference.segmentHandler import segmentsFromLabels
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from visualization.multiPlotter import MultiMessagePlotter
 
+Element = TypeVar('Element')
 
 
 # available analysis methods
@@ -80,9 +81,10 @@ epsdefault = 2.4
 
 reportFolder = "reports"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
-ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-clustering-statistics.csv')
+ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-cluster-statistics.csv')
 
 
+unknown = "[unknown]"
 
 
 def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], comparator,
@@ -97,7 +99,6 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
     return segmentedMessages
 
 
-# Element = TypeVar('Element')
 def writeMessageClusteringStaticstics(
         clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
         runtitle: str, comparator: MessageComparator):
@@ -165,7 +166,7 @@ def writeMessageClusteringStaticstics(
 
     return prList, conciseness
 
-# Element = TypeVar('Element')
+
 def writeCollectiveClusteringStaticstics(
         clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
         runtitle: str, comparator: MessageComparator):
@@ -240,7 +241,8 @@ def writeCollectiveClusteringStaticstics(
 
 
 def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
-                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False, typeDict = None,
+                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False,
+                          typeDict: Dict[str, List[MessageSegment]] = None,
                           isInteractive=False):
     """
     This is a not awfully important helper function saving the writing of a few lines code.
@@ -253,6 +255,8 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     :param isInteractive:
     :return:
     """
+    from visualization.multiPlotter import MultiMessagePlotter
+
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
     numSegs = 0
@@ -315,15 +319,32 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
     """
     Determine group label of an segment from deep hierarchy of segment clusters/groups.
 
+    A more advanced variant of `numpy.array([seg.fieldtype for seg in tg.segments])`
+
     see #segments2clusteredTypes()
 
-    :param segGrpHier:
-    :param seg:
-    :return:
+    :param segGrpHier: Hierarchy of segment groups
+    :param seg: The segment to label
+    :return: The label of the cluster that the seg is member of
     """
     for name, grp in segGrpHier[0][1]:
         if seg in (s for t, s in grp):
             return name.split(", ", 2)[-1]
+
+    if isinstance(seg, Template):
+        inGroup = None
+        for bs in seg.baseSegments:
+            for name, grp in segGrpHier[0][1]:
+                if bs in (s for t, s in grp):
+                    if inGroup is None or inGroup == name:
+                        inGroup = name
+                    else:
+                        return "[mixed]"
+        if inGroup is not None:
+            return inGroup.split(", ", 2)[-1]
+        else:
+            return "[unknown]"
+
     return False
 
 
