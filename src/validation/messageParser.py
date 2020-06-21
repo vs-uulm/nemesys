@@ -50,6 +50,7 @@ class ParsingConstants226(ParsingConstants):
         'bootp.option.type_raw', 'bootp.option.value_raw', 'bootp.option.end_raw',
 
         'dns.qry.name.len_raw', 'dns.count.labels_raw',
+
         'irc.response_raw', 'irc.request_raw', 'irc.response.num_command_raw', 'irc.ctcp_raw',
         'smtp.command_line_raw', 'smtp.response_raw', 'smb.max_raw',
         'lanman.server_raw', 'dcerpc.cn_ctx_item_raw', 'dcerpc.cn_bind_abstract_syntax_raw', 'dcerpc.cn_bind_trans_raw',
@@ -80,7 +81,7 @@ class ParsingConstants226(ParsingConstants):
     INCLUDE_SUBFIELDS = [
         'bootp.option.type_tree',
 
-        'Queries', 'Answers', 'Additional records',
+        'Queries', 'Answers', 'Additional records', 'Authoritative nameservers',
 
         'irc.request_tree', 'irc.response_tree', 'Command parameters', 'irc',
 
@@ -99,9 +100,11 @@ class ParsingConstants226(ParsingConstants):
         'Maximal Access Rights', 'Guest Maximal Access Rights',
         'Read AndX Request (0x2e)', 'Read AndX Response (0x2e)', 'QUERY_FS_INFO Parameters', 'QUERY_FS_INFO Data',
         'Close Request (0x04)', 'Close Response (0x04)', 'NT Cancel Request (0xa4)', 'NT Trans Request (0xa0)',
-        'NT NOTIFY Setup', 'NT Trans Response (0xa0)', 'Trans2 Response (0x32)', 'NT IOCTL Setup', 'NT IOCTL Data',
+        'NT NOTIFY Setup', 'NT NOTIFY Parameters',
+        'NT Trans Response (0xa0)', 'Trans2 Response (0x32)', 'NT IOCTL Setup', 'NT IOCTL Data', 'Range',
         'Write AndX Request (0x2f)', 'Write AndX Response (0x2f)',
-        'Locking AndX Request (0x24)', 'Echo Request (0x2b)', 'Echo Response (0x2b)',
+        'Locking AndX Request (0x24)', 'Locking AndX Response (0x24)', 'Echo Request (0x2b)', 'Echo Response (0x2b)',
+        'Unlocks', 'Unlock', 'Locks', 'Lock', 'SET_FILE_INFO Parameters', 'SET_FILE_INFO Data'
         # 'dcerpc.cn_ctx_item', 'dcerpc.cn_bind_abstract_syntax', 'dcerpc.cn_bind_trans',
         # 'smb.security_blob_tree', 'gss-api',
         # 'spnego', 'spnego.negTokenInit_element', 'spnego.mechTypes_tree', 'spnego.negHints_element',
@@ -110,8 +113,10 @@ class ParsingConstants226(ParsingConstants):
         ]
 
     # names of field nodes in the json that have a record structure (list[list[tuples], not list[tuples[str, tuple]]).
-    RECORD_STRUCTURE = ['Queries', 'Answers',  # in dns, nbns
-                        'Additional records']  # in nbns
+    RECORD_STRUCTURE = ['Queries', 'Answers',           # in dns, nbns
+                        'Authoritative nameservers',    # in dns
+                        'Additional records',           # in nbns
+                        'Unlocks', 'Locks']             # in smb
 
     # mapping of field names to general value types.
     # see also Wireshark dissector reference: https://www.wireshark.org/docs/dfref/
@@ -123,9 +128,9 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['ntp.flags'] = 'flags'  # bit field
     TYPELOOKUP['ntp.stratum'] = 'flags'  # or 'int'  # 1 byte integer: byte
     TYPELOOKUP['ntp.ppoll'] = 'int'
-    TYPELOOKUP['ntp.precision'] = 'int'  # signed 1 byte integer: sbyte
-    TYPELOOKUP['ntp.rootdelay'] = 'float'  # 4 byte integer: int
-    TYPELOOKUP['ntp.rootdispersion'] = 'float'
+    TYPELOOKUP['ntp.precision'] = 'int'  # signed 1 byte integer: sbyte  -  decimal representation of "float" value, behaves like int
+    TYPELOOKUP['ntp.rootdelay'] = 'int'  # 4 byte integer: int  -  decimal representation of "float" value, behaves like int
+    TYPELOOKUP['ntp.rootdispersion'] = 'int'
     TYPELOOKUP['ntp.refid'] = 'ipv4'  # 'id'  # some id, effectively often an ipv4 is used
     TYPELOOKUP['ntp.reftime'] = 'timestamp'  #
     TYPELOOKUP['ntp.org'] = 'timestamp'
@@ -186,6 +191,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['bootp.client_network_id_major'] = 'int'  # version number; has value: 02
     TYPELOOKUP['bootp.client_network_id_minor'] = 'int'  # version number; has value: 01
     TYPELOOKUP['bootp.option.dhcp_auto_configuration'] = 'enum'  # has value: 01
+    TYPELOOKUP['bootp.option.message'] = 'chars'
 
 
     # dns
@@ -204,6 +210,12 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.resp.ttl'] = 'int'  # has value: 0000003c: unsigned
     TYPELOOKUP['dns.resp.len'] = 'int'  # has value: 0004
     TYPELOOKUP['dns.a'] = 'ipv4'  # has value: 0a10000a
+    TYPELOOKUP['dns.ns'] = 'chars'  # has value: 012a00
+    TYPELOOKUP['dns.ptr.domain_name'] = 'chars'  # has value: 0369726300
+    TYPELOOKUP['dns.rr.udp_payload_size'] = 'int'  # has value: 1000
+    TYPELOOKUP['dns.resp.ext_rcode'] = 'int'  # has value: 00
+    TYPELOOKUP['dns.resp.edns0_version'] = 'int'  # has value: 00
+    TYPELOOKUP['dns.resp.z'] = 'flags'  # has value: 8000
 
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'
@@ -387,6 +399,8 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.echo.data'] = 'bytes'  # has value: 4a6c4a6d4968436c42737200
     TYPELOOKUP['smb.echo.seq_num'] = 'int'  # has value: 0100
     TYPELOOKUP['smb.lock.type'] = 'flags'  # has value: 12
+    TYPELOOKUP['smb.lock.length'] = 'int'
+    TYPELOOKUP['smb.lock.offset'] = 'int'
     TYPELOOKUP['smb.locking.oplock.level'] = 'int'  # has value: 01
     TYPELOOKUP['smb.locking.num_unlocks'] = 'int'  # has value: 0000
     TYPELOOKUP['smb.locking.num_locks'] = 'int'  # has value: 0000
@@ -394,7 +408,9 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb2.ioctl.shadow_copy.num_volumes'] = 'int'  # has value: 00000000
     TYPELOOKUP['smb2.ioctl.shadow_copy.num_labels'] = 'int'  # has value: 00000000
     TYPELOOKUP['smb2.ioctl.shadow_copy.count'] = 'int'  # has value: 02000000
-
+    TYPELOOKUP['smb.unicode_password'] = 'bytes'
+    TYPELOOKUP['smb.trans_data'] = 'bytes'
+    TYPELOOKUP['smb2.unknown'] = 'bytes'  # has value: 0716
 
 # noinspection PyDictCreation
 class ParsingConstants263(ParsingConstants226):
@@ -593,7 +609,8 @@ class ParsedMessage(object):
     """Cache the last used tsharkConnector for reuse."""
 
 
-    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True, failOnUndissectable:bool=True,
+    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True,
+                 failOnUndissectable:bool=True,
                  linktype:int=ParsingConstants.LINKTYPES['ETHERNET']):
         """
         Construct a new ParsedMessage for ``message``.
@@ -681,7 +698,8 @@ class ParsedMessage(object):
 
     @staticmethod
     def _parseMultiple(messages: List[RawMessage], target = None, layer=-1, relativeToIP=False,
-                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET']) \
+                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET'],
+                       maxRecursion: int=3) \
             -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
@@ -699,6 +717,8 @@ class ParsedMessage(object):
         :type target: ParsedMessage
         :param failOnUndissectable: Flag, whether an exception is to be raised if a packet cannot be fully
             dissected or if just a warning is printed instead.
+        :param maxRecursion: The maximum depth of recusive retries. If should be decreased by each recursing call.
+            If it reaches 0 the recursion is terminated with an RuntimeError.
         :return: A dict mapping the input messages to the created ParsedMessage-objects.
         """
         if len(messages) == 0:
@@ -708,8 +728,9 @@ class ParsedMessage(object):
         if not ParsedMessage.__tshark:
             ParsedMessage.__tshark = TsharkConnector(linktype)
         elif ParsedMessage.__tshark.linktype != linktype:
-            ParsedMessage.__tshark.terminate()
+            ParsedMessage.__tshark.terminate(2)
             ParsedMessage.__tshark = TsharkConnector(linktype)
+
 
         prsdmsgs = {}
         n = 1000  # parse in chunks of 1000s
@@ -719,52 +740,76 @@ class ParsedMessage(object):
             # else:
             #     print("Working on message", msgChunk[0])
 
-            for m in msgChunk:
-                if not isinstance(m, RawMessage):
-                    raise TypeError(
-                        "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. Type of provided message was {} from {}".format(
-                            m.__class__.__name__, m.__class__.__module__))
-                ParsedMessage.__tshark.writePacket(m.data)
-            if not ParsedMessage.__tshark.isRunning():
-                raise RuntimeError("tshark could not be called.")
+            # retry writing and parsing to tshark on JSON failure
+            retryCounter = 3
             tjson = None
-            try:
-                tjson = ParsedMessage.__tshark.readPacket()
-            except (ValueError, TimeoutError) as e:
-                print("Need to respawn tshark ({})".format(e))
-                ParsedMessage.__tshark.terminate(2)
-                prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
-                                                             failOnUndissectable, linktype))
+            while retryCounter > 0:
+                for m in msgChunk:
+                    if not isinstance(m, RawMessage):
+                        raise TypeError(
+                            "The messages need to be of type netzob.Model.Vocabulary.Messages.RawMessage. "
+                            "Type of provided message was {} from {}".format(
+                                m.__class__.__name__, m.__class__.__module__))
+                    ParsedMessage.__tshark.writePacket(m.data)
+                if not ParsedMessage.__tshark.isRunning():
+                    raise RuntimeError("tshark could not be called.")
+                tjson = None
+                try:
+                    tjson = ParsedMessage.__tshark.readPacket()
+                except (ValueError, TimeoutError) as e:
+                    print("Need to respawn tshark ({})".format(e))
+                    ParsedMessage.__tshark.terminate(2)
+                    prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
+                                                                 failOnUndissectable, linktype))
+                    print("Stopped for raised exception:", e)
+                    # IPython.embed()
 
-            # parse json
-            try:
-                if tjson is None:
-                    print("Empty dissection received.")
-                    continue  # TODO do we need to fail in some way?
-                dissectjson = json.loads(tjson, object_pairs_hook = list)
-                for paketjson, m in zip(dissectjson, msgChunk):
-                    if target:
-                        pm = target  # for one single target
-                    else:
-                        pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
-                                           failOnUndissectable=failOnUndissectable)
-                    try:
-                        pm._parseJSON(paketjson)
-                        prsdmsgs[m] = pm
-                    except DissectionTemporaryFailure as e:
-                        print("Need to respawn tshark ({})".format(e))
-                        ParsedMessage.__tshark.terminate(2)
-                        # TODO prevent an infinite recursion
-                        prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP))
-                        break  # continue with next chunk. The rest of the current chunk was taken care of the above
-                        # slice in the recursion parameter
-                    except DissectionInsufficient as e:
-                        pm._fieldsflat = tuple()
-                        print(e, "\nCurrent message: {}\nContinuing with next message.".format(m))
-                        continue
+                # Parse JSON:
+                try:
+                    if tjson is None:
+                        print("Empty dissection received.")
+                        raise json.JSONDecodeError("Empty dissection received.", "", 0)
+                    # iterate each main JSON node alongside the corresponding message from the chunk written to tshark
+                    dissectjson = json.loads(tjson, object_pairs_hook = list)
+                    for paketjson, m in zip(dissectjson, msgChunk):
+                        if target:
+                            pm = target  # for one single target
+                        else:
+                            # Prevent individual tshark call for parsing by creating a
+                            #   ParsedMessage with message set to None...
+                            pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
+                                               failOnUndissectable=failOnUndissectable)
+                            # ... and set the message afterwards
+                            pm.message = m
+                        try:
+                            pm._parseJSON(paketjson)
+                            prsdmsgs[m] = pm
+                        except DissectionTemporaryFailure as e:
+                            # Retry tshark, e.g., in case of the "No IP layer" exception
+                            print("Need to respawn tshark ({})".format(e))
+                            ParsedMessage.__tshark.terminate(2)
+                            # Prevent an infinite recursion of ParsedMessage._parseMultiple
+                            if maxRecursion > 0:
+                                prsdmsgs.update(ParsedMessage._parseMultiple(
+                                    msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP,
+                                    maxRecursion=maxRecursion-1))
+                            else:
+                                raise RuntimeError("ParsedMessage._parseMultiple exceeded its recursion limit.")
+                            break   # continue with next chunk. The rest of the current chunk
+                                    # was taken care of by the above slice in the recursion parameter
+                        except DissectionInsufficient as e:
+                            pm._fieldsflat = tuple()
+                            print(e, "\nCurrent message: {}\nContinuing with next message.".format(m))
+                            continue
 
-            except json.JSONDecodeError:
-                print("Parsing failed for multiple messages for JSON:\n" + tjson)
+
+                    # parsing worked for this chunk so go on with the next.
+                    break  # the while
+                except json.JSONDecodeError:
+                    retryCounter += 1
+                    print("Parsing failed for multiple messages for JSON. Retrying.")
+            if retryCounter == 0:
+                print("Parsing failed for multiple messages for JSON:\n" + tjson if tjson else "[none]")
                 # There is no typical reason known, when this happens, so handle it manually.
                 IPython.embed()
 
@@ -785,6 +830,8 @@ class ParsedMessage(object):
 
         :param dissectjson: The output of json.loads(), with ``object_pairs_hook = list``
         """
+        import subprocess
+
         sourcekey = '_source'
         layerskey = 'layers'
         framekey = 'frame'
@@ -800,16 +847,16 @@ class ParsedMessage(object):
                         self.protocols = protocolsvalue.split(':')
                         if self.relativeToIP and 'ip' not in self.protocols:
                             errortext = "No IP layer could be identified in a message of the trace."
-                            print(errortext, "\n\nPlease investigate yourself:")
-                            IPython.embed()
-                            raise ValueError(errortext)
+                            raise DissectionTemporaryFailure(errortext)
                         absLayNum = (self.layernumber if self.layernumber >= 0 else len(self.protocols) - 1) \
                             if not self.relativeToIP else (self.protocols.index('ip') + self.layernumber)
                         try:
                             # protocolname is e.g. 'ntp'
                             self.protocolname = self.protocols[absLayNum]
                         except IndexError as e:
-                            print(absLayNum, 'missing in', self.protocols)
+                            ptxt = " ".join([absLayNum, 'missing in', self.protocols])
+                            print(ptxt)
+                            subprocess.run(["spd-say", ptxt])
                             IPython.embed()
                             raise e
                         self._dissectfull = ParsedMessage._getElementByName(layersvalue, self.protocolname)
@@ -840,6 +887,7 @@ class ParsedMessage(object):
                         if not isinstance(self._dissectfull, list):
                             print ("Undifferentiated protocol content for protocol ", self.protocolname,
                                    "\nDissector JSON is: ", self._dissectfull)
+                            subprocess.run(["spd-say", "'Undifferenzierter Protokolinhalt!'"])
                             IPython.embed()  # TODO how to handle this in general without the need for interaction?
                             raise DissectionInsufficient("Undifferentiated protocol content for protocol ", self.protocolname,
                                    "\nDissector JSON is: ", self._dissectfull)
@@ -864,6 +912,7 @@ class ParsedMessage(object):
                         try:
                             ParsedMessage._reassemblePostProcessing(self)
                         except DissectionIncomplete as e:
+                            print("Known message dissection is", ", ".join(ds[0] for ds in dissectsub))
                             print("Too long unknown message trail found. Rest is:", e.rest,
                                   "\nfor Wireshark filter: {}".format(':'.join([b1 + b2 for b1, b2 in
                                                                                 zip(self.protocolbytes[::2],
@@ -874,10 +923,11 @@ class ParsedMessage(object):
 
                         # validate dissection
                         if not "".join(self.getFieldValues()) == self.protocolbytes:
-
+                            print("Known message dissection is", ", ".join(ds[0] for ds in dissectsub))
                             print('Dissection is incomplete:\nDissector result:',
                                   '{}\nOriginal  packet: {}\nself is of type ParsedMessage'.format(
                                       "".join(self.getFieldValues()), self.protocolbytes))
+                            subprocess.run(["spd-say", "'Dissection unvollständig!'"])
                             IPython.embed()
 
                             raise DissectionIncomplete('Dissection is incomplete:\nDissector result: {}\n'
@@ -1323,7 +1373,7 @@ class ParsedMessage(object):
     @staticmethod
     def closetshark():
         if ParsedMessage.__tshark:
-            ParsedMessage.__tshark.terminate()
+            ParsedMessage.__tshark.terminate(2)
 
 
     ###  #############################################
@@ -1419,3 +1469,30 @@ class ParsedMessage(object):
     @property
     def messagetype(self):
         return MessageTypeIdentifiers.typeOfMessage(self)
+
+
+    def __getstate__(self):
+        """
+        Include required class arribute in pickling.
+
+        :return: The dict of this object for use in pickle.dump()
+        """
+        statecopy = self.__dict__.copy()
+        statecopy["_ParsedMessage_CLASS___tshark"] = ParsedMessage.__tshark
+        return statecopy
+
+
+    def __setstate__(self, state):
+        """
+        Include required class arribute in pickling.
+
+        :param state: The dict of this object got from pickle.load()
+        """
+        # TODO This could be made more efficient by just referencing the class variable once for all instances
+        #  by some external wrapper method/class managed by utils.evaluationHelpers.cacheAndLoadDC for pickling
+        ParsedMessage.__tshark = state["_ParsedMessage_CLASS___tshark"]
+        del state["_ParsedMessage_CLASS___tshark"]
+        self.__dict__.update(state)
+
+
+

@@ -7,11 +7,10 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-from typing import List, Any, Union, Tuple
-import argparse, IPython, pickle, csv
+from typing import List, Tuple
+import argparse, IPython, csv
 import time, numpy
 from os.path import isfile, splitext, basename, exists, join
-from itertools import chain
 
 
 from tabulate import tabulate
@@ -21,13 +20,11 @@ from tabulate import tabulate
 # mpl.use('Agg')
 
 from alignment.alignMessages import SegmentedMessages, MessageSegment
-from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements, MessageAnalyzer
-from inference.templates import DistanceCalculator, DelegatingDC
+from inference.segmentHandler import originalRefinements, baseRefinements
+from inference.templates import DistanceCalculator
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from utils.evaluationHelpers import analyses, sigmapertrace, annotateFieldTypes, \
-    writeMessageClusteringStaticstics, writeCollectiveClusteringStaticstics, writePerformanceStatistics
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
+from utils.evaluationHelpers import analyses, cacheAndLoadDC, \
+    writeIndividualMessageClusteringStaticstics, writeCollectiveMessageClusteringStaticstics, writePerformanceStatistics
 from visualization.multiPlotter import MultiMessagePlotter
 from alignment.clusterMerging import ClusterMerger
 
@@ -38,6 +35,12 @@ analysis_method = 'value'
 distance_method = 'canberra'
 tokenizers = ('tshark', '4bytesfixed', 'nemesys')
 roundingprecision = 10**8
+
+# refinement methods
+refinementMethods = [
+    "original", # WOOT2018 paper
+    "base",     # moco+splitfirstseg
+    ]
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -57,6 +60,8 @@ def relign(segseqA, segseqB):
 def columnOfAlignment(alignedSegments: List[List[MessageSegment]], colnum: int):
     return [msg[colnum] for msg in alignedSegments]
 
+
+# noinspection PyShadowingNames
 def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]], colnum: int):
     """
     Similarities of entries 1 to n of one column to its first (not None) entry.
@@ -86,6 +91,8 @@ def printSegDist(d2ft: List[Tuple[MessageSegment, float]]):
     print(tabulate([(s.bytes.hex() if isinstance(s, MessageSegment) else "-", d) for s, d in d2ft],
                    headers=['Seg (hex)', 'Distance'], floatfmt=".4f"))
 
+
+# noinspection PyShadowingNames
 def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
             coordA: Tuple[int, int], coordB: Tuple[int, int]):
     """
@@ -103,6 +110,8 @@ def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
     print(segB)
     return dc.pairDistance(segA, segB)
 
+
+# noinspection PyShadowingNames
 def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
     return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
 
@@ -168,7 +177,7 @@ def epsautoconfeval(epsilon):
         # ksteepeststats.append((k, seconddiff[k].max(), diffrelmax))
     # print(tabulate(ksteepeststats, headers=("k", "max(f'')", "max(f'')/f")))
 
-    # prepare to plot the smoothed nearest neigbor distribution and its second derivative
+    # prepare to plot the smoothed nearest neighbor distribution and its second derivative
     k = seconddiffMax[0]
     x = seconddiffMax[1] + 1
 
@@ -234,7 +243,9 @@ if __name__ == '__main__':
                         action="store_true")
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
-                                                          'default: 0.6')
+                                                          'default: 0.9')
+    parser.add_argument('-r', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
+                        default="base")
     parser.add_argument('--split', help='Use old split-clusters implementation.',
                         action="store_true")
     parser.add_argument('-p', '--with-plots',
@@ -248,6 +259,8 @@ if __name__ == '__main__':
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
         exit(1)
+    pcapbasename = basename(args.pcapfilename)
+
     analyzerType = analyses[analysis_method]
     analysisArgs = None
     analysisTitle = analysis_method
@@ -259,73 +272,43 @@ if __name__ == '__main__':
         exit(2)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # cache the DistanceCalculator to the filesystem
+    # cache/load the DistanceCalculator to the filesystem
     # # # # # # # # # # # # # # # # # # # # # # # #
-    pcapbasename = basename(args.pcapfilename)
-    sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
-        0.9 if not args.sigma else args.sigma
-    pcapName = splitext(pcapbasename)[0]
+    # TODO when manipulating distances, deactivate caching! by adding "True"
     # noinspection PyUnboundLocalVariable
-    tokenparm = tokenizer if tokenizer != "nemesys" else \
-        "{}{:.0f}".format(tokenizer, sigma * 10)
-    dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
-    smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
-    # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn):  # TODO when manipulating distances, deactivate! caching by:    or True
-        # dissect and label messages
-        print("Load messages from {}...".format(pcapName))
-        specimens = SpecimenLoader(args.pcapfilename, 2, True)
-        comparator = MessageComparator(specimens, 2, True, debug=debug)
-
-        print("Segmenting messages...", end=' ')
-        segmentationTime = time.time()
-        # select tokenizer by command line parameter
-        if tokenizer == "tshark":
-            # 1. segment messages according to true fields from the labels
-            segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-        elif tokenizer == "4bytesfixed":
-            # 2. segment messages into fixed size chunks for testing
-            segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
-        elif tokenizer == "nemesys":
-            # 3. segment messages by NEMESYS
-            segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-            segmentedMessages = refinements(segmentsPerMsg)
-            segmentedMessages = [[
-                MessageSegment(MessageAnalyzer.findExistingAnalysis(
-                    analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in segmentedMessages]
-            segments = list(chain.from_iterable(segmentedMessages))
-
-        segmentationTime = time.time() - segmentationTime
-        print("done.")
-
-        # noinspection PyUnboundLocalVariable
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
-
-        print("Calculate distance for {} segments...".format(len(chainedSegments)))
-        # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
-        dist_calc_segmentsTime = time.time()
-        dc = DelegatingDC(chainedSegments)
-        dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
-        with open(dccachefn, 'wb') as f:
-            pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
+    if args.tokenizer != "nemesys":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=None
+            # , disableCache=True
+        )
+    elif args.refinement == "original":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=originalRefinements
+            #, disableCache=True
+        )
+    elif args.refinement == "base":
+        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
+            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
+            refinementCallback=baseRefinements
+            #, disableCache=True
+        )
     else:
-        print("Load distances from cache file {}".format(dccachefn))
-        segmentedMessages, comparator, dc = pickle.load(open(dccachefn, 'rb'))
-        if not (isinstance(comparator, MessageComparator)
-                and isinstance(dc, DistanceCalculator)):
-            print('Loading of cached distances failed.')
-            exit(10)
-        specimens = comparator.specimens
-        chainedSegments = list(chain.from_iterable(segmentedMessages))
-        segmentationTime, dist_calc_segmentsTime = None, None
-    # # # # # # # # # # # # # # # # # # # # # # # #
+        print("Unknown refinement", args.refinement, "\nAborting")
+        exit(2)
+    chainedSegments = dc.rawSegments
 
+
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # if not exists(smcachefn):
     print("Calculate distance for {} messages...".format(len(segmentedMessages)))
     dist_calc_messagesTime = time.time()
     sm = SegmentedMessages(dc, segmentedMessages)
     dist_calc_messagesTime = time.time() - dist_calc_messagesTime
+    # smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     #     with open(smcachefn, 'wb') as f:
     #         pickle.dump(sm, f, pickle.HIGHEST_PROTOCOL)
     # else:
@@ -344,7 +327,6 @@ if __name__ == '__main__':
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
     # retrieve manually determined epsilon value
-    pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
     if tokenizer == "nemesys":
         eps = eps * .8
@@ -376,14 +358,15 @@ if __name__ == '__main__':
     minCsize = numpy.log(len(segmentedMessages))
 
 
+    # TODO test run due to writeCollective(Message)ClusteringStaticstics implementation change!
     # # # # # # # # # # # # # # # # # # # # # # # #
     # write message clustering statistics to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
-    clusterStats, conciseness = writeMessageClusteringStaticstics(
+    clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
         messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # #
-    writeCollectiveClusteringStaticstics(
+    writeCollectiveMessageClusteringStaticstics(
         messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # # min cluster size
@@ -392,7 +375,7 @@ if __name__ == '__main__':
     filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
     filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                       if len(v) < minCsize for s in v)
-    writeCollectiveClusteringStaticstics(
+    writeCollectiveMessageClusteringStaticstics(
         filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -449,10 +432,7 @@ if __name__ == '__main__':
             comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
         # in-place split of clusters in alignedClusters and messageClusters
         cSplitter.split()
-        print(labels)
         labels = cSplitter.labels
-        print(labels)
-
 
         # # # # # # # # # # # # # # # # # # # # # # # #
         if withplots:
@@ -471,11 +451,11 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
         # write message clustering statistics to csv
         # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeMessageClusteringStaticstics(
+        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # min cluster size
@@ -486,7 +466,7 @@ if __name__ == '__main__':
         filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
         filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -517,7 +497,7 @@ if __name__ == '__main__':
             print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
 
             valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                                for fidx, segs in enumerate(fields)}
+                                for fidx, segs in enumerate(fields)}  # type: Dict[int, Counter]
             pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
                  if 1 < vCnt <= freqThresh  # knee
                  and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
@@ -654,11 +634,11 @@ if __name__ == '__main__':
         # # # # # # # # # # # # # # # # # # # # # # # #
         # write message clustering statistics to csv
         # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeMessageClusteringStaticstics(
+        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # min cluster size
@@ -669,7 +649,7 @@ if __name__ == '__main__':
         filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
         filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
             tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
         # # # # # # # # # # # # # # # # # # # # # # # #
@@ -698,13 +678,13 @@ if __name__ == '__main__':
         matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
         mergedClusters = clustermerger.mergeClusters(
             messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
+        mergedClusterStats, mergedConciseness = writeIndividualMessageClusteringStaticstics(
             mergedClusters, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
             comparator)
         # # # # # # # #
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             mergedClusters, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
@@ -715,7 +695,7 @@ if __name__ == '__main__':
         filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
         filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
                                           if len(v) < minCsize for s in v)
-        writeCollectiveClusteringStaticstics(
+        writeCollectiveMessageClusteringStaticstics(
             filteredMerged, groundtruth,
             "merged-{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
@@ -796,6 +776,7 @@ if __name__ == '__main__':
     # write alignments to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
     reportFolder = "reports"
+    pcapName = splitext(pcapbasename)[0]
     fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
     csvpath = join(reportFolder, fileNameS + '.csv')
     if not exists(csvpath):
