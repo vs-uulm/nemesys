@@ -111,6 +111,11 @@ class ParsingConstants226(ParsingConstants):
     RECORD_STRUCTURE = ['Queries', 'Answers',  # in dns, nbns
                         'Additional records']  # in nbns
 
+    # mapping of field names to general value types.
+    # see also Wireshark dissector reference: https://www.wireshark.org/docs/dfref/
+    TYPELOOKUP = {'delimiter': 'chars',
+                  'data.data': 'unknown'}
+    """:type: Dict[str, str]"""
 
     # ntp
     TYPELOOKUP['ntp.flags'] = 'flags'  # bit field
