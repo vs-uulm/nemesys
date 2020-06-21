@@ -9,10 +9,11 @@ from scipy.special import comb
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
 from inference.segmentHandler import matrixFromTpairs
 from inference.segments import MessageSegment
+from inference.templates import DistanceCalculator
 
 
 class SegmentedMessages(object):
-    def __init__(self, dc, segmentedMessages):
+    def __init__(self, dc: DistanceCalculator, segmentedMessages: Sequence[Tuple[MessageSegment]]):
         self._score_match = None
         self._score_mismatch = None
         self._score_gap = None
@@ -129,11 +130,12 @@ class SegmentedMessages(object):
                 maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * self._score_match
                     # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
                     similarityMatrix[i, i], similarityMatrix[j, j]
-                )
+                )  # == nu in paper
                 minDim = min(len(self._segmentedMessages[i]), len(self._segmentedMessages[j]))
-                base[i, j] = minScore * minDim
+                base[i, j] = minScore * minDim  # == mu in paper
 
         distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
+        # distanceMatrix = 100 - 100 * ((similarityMatrix + base) / (maxScore - base))
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 

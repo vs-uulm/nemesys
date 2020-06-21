@@ -23,25 +23,21 @@ from tabulate import tabulate
 from alignment.alignMessages import SegmentedMessages
 from inference.formatRefinement import CropDistinct, CumulativeCharMerger, SplitFixed
 from inference.segmentHandler import segmentsFixed, bcDeltaGaussMessageSegmentation, refinements
-from inference.segments import MessageSegment, MessageAnalyzer
-from inference.templates import DistanceCalculator, DelegatingDC, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
-from inference.analyzers import *
-from utils.evaluationHelpers import annotateFieldTypes, writeMessageClusteringStaticstics, writePerformanceStatistics, \
-    sigmapertrace
+from inference.templates import DistanceCalculator, DelegatingDC
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from utils.evaluationHelpers import *
 from validation.dissectorMatcher import MessageComparator
 from utils.loader import SpecimenLoader
-from utils.evaluationHelpers import analyses
 from visualization.multiPlotter import MultiMessagePlotter
-from visualization.simplePrint import tabuSeqOfSeg
-from alignment.clusterMerging import ClusterMerger, ClusterClusterer
+from alignment.clusterMerging import ClusterMerger
+
 
 debug = False
-withplots = False
 
 analysis_method = 'value'
 distance_method = 'canberra'
 tokenizers = ('tshark', '4bytesfixed', 'nemesys')
+roundingprecision = 10**8
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -121,8 +117,8 @@ def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
 
 def epsautoconfeval(epsilon):
     """
-    # investigate distance properties for clustering autoconfiguration
-    # plots of k-nearest-neighbor distance histogram and "knee"
+    investigate distance properties for clustering autoconfiguration
+    plots of k-nearest-neighbor distance histogram and "knee"
 
     See SegmentedMessages#autoconfigureDBSCAN
 
@@ -140,7 +136,7 @@ def epsautoconfeval(epsilon):
 
     neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
 
-    mmp = MultiMessagePlotter(specimens, tokenizer + "-k-nearest-neighbor-distance-distribution", 1, 2,
+    mmp = MultiMessagePlotter(specimens, tokenizer + "-knn-distance-funtion", 1, 2,
                               isInteractive=False)
     mmp.axes[0].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
     mmp.axes[1].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
@@ -151,33 +147,8 @@ def epsautoconfeval(epsilon):
         knearest = sorted([nfori[k][1] for nfori in neighbors])
         mmp.plotToSubfig(1, knearest, alpha=.4, label="k={}".format(k))
 
-    # # kneedle approach
-    # # unusable results. does not find a knee!
-    # from kneed import KneeLocator
-    # kneeK = dict()
-    # for k in range(*krange):
-    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
-    #     mmp.plotToSubfig(0, knearest, alpha=.1)  # , label="k={}".format(k)
-    #
-    #     kneel = KneeLocator(range(len(knearest)), knearest, curve='convex', direction='increasing')
-    #     kneeX = kneel.knee
-    #     kneeK[knearest[kneeX]] = k
-    #
-    # kneeDists = list(kneeK.keys())
-    # bestEpsMatchIdx = numpy.argmin([abs(kneeDist-epsilon) for kneeDist in kneeDists])
-    # bestEpsMatchDist = kneeDists[bestEpsMatchIdx]
+    # # kneedle approach: yields unusable results. does not find a knee!
 
-    # # range of distances for a k-neighborhood, determines the maximum range of distances
-    # # results do not correlate with a suitable choice of k compared to manual introspection.
-    # distrange4k = list()
-    # for k in range(*krange):
-    #     knearest = sorted([nfori[k][1] for nfori in neighbors])
-    #     distrange4k.append((k, max(knearest) - min(knearest)))
-    # maxdran = max([dran[1] for dran in distrange4k])
-    # maxkran = [dran[0] for dran in distrange4k if dran[1] == maxdran][0]
-    # mmp.textInEachAx(["max range {:.2f} at k={}".format(maxdran, maxkran)])
-    # mmp.axes[0].axhline(bestEpsMatchDist, linestyle='dashed', color='blue', alpha=.4,
-    #                     label="kneedle {:.2f} of k={}".format(bestEpsMatchDist, kneeK[bestEpsMatchDist]))
 
     # smoothing approach
     from scipy.ndimage.filters import gaussian_filter1d
@@ -273,8 +244,15 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.6')
-    # TODO toggle filtering on/off
+    parser.add_argument('--split', help='Split clusters based on fields with rare values before merge step.',
+                        action="store_true")
+    parser.add_argument('-p', '--with-plots',
+                        help='Generate plots.',
+                        action="store_true")
     args = parser.parse_args()
+    withplots = args.with_plots
+
+    print("\n\n")
 
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
@@ -289,7 +267,9 @@ if __name__ == '__main__':
         print("Unsupported tokenizer:", args.tokenizer, "allowed values are:", tokenizers)
         exit(2)
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # cache the DistanceCalculator to the filesystem
+    # # # # # # # # # # # # # # # # # # # # # # # #
     pcapbasename = basename(args.pcapfilename)
     sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
         0.9 if not args.sigma else args.sigma
@@ -300,7 +280,7 @@ if __name__ == '__main__':
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
     smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
     # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if not exists(dccachefn):  # TODO when manipulating distances, deactivate caching!  or True
+    if not exists(dccachefn):  # TODO when manipulating distances, deactivate! caching by:    or True
         # dissect and label messages
         print("Load messages from {}...".format(pcapName))
         specimens = SpecimenLoader(args.pcapfilename, 2, True)
@@ -320,6 +300,7 @@ if __name__ == '__main__':
             segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
             segmentedMessages = refinements(segmentsPerMsg)
 
+            # TODO integrate into refinements()
             moco = CropDistinct.countCommonValues(segmentedMessages)
             newstuff = list()
             for msg in segmentedMessages:
@@ -342,7 +323,6 @@ if __name__ == '__main__':
                     analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
                 for seg in msg] for msg in newstuff3]
             segments = list(chain.from_iterable(segmentedMessages))
-            # print([seg for seg in segments if not isinstance(seg.values, int)])
 
         segmentationTime = time.time() - segmentationTime
         print("done.")
@@ -367,6 +347,7 @@ if __name__ == '__main__':
         specimens = comparator.specimens
         chainedSegments = list(chain.from_iterable(segmentedMessages))
         segmentationTime, dist_calc_segmentsTime = None, None
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
     # if not exists(smcachefn):
     print("Calculate distance for {} messages...".format(len(segmentedMessages)))
@@ -381,14 +362,15 @@ if __name__ == '__main__':
     #     if not isinstance(sm, SegmentedMessages):
     #         print('Loading of cached message distances failed.')
     #         exit(11)
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
     cluster_params_autoconfTime = time.time()
     eps, min_samples = sm.autoconfigureDBSCAN()
     cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
     # DEBUG and TESTING
-    #
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # retrieve manually determined epsilon value
     pcapbasename = basename(args.pcapfilename)
     # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
@@ -397,9 +379,12 @@ if __name__ == '__main__':
     if withplots:
         epsConfirm = epsautoconfeval(eps)
     # DEBUG and TESTING
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # cluster and align messages and calculate statistics of it
+    # # # # # # # # # # # # # # # # # # # # # # # #
     print('Clustering messages...')
     cluster_messagesTime = time.time()
     messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps, min_samples=3)
@@ -409,17 +394,37 @@ if __name__ == '__main__':
     # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
     # plotTitle = "{}-{} mcs {} ms {}".format(
     #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-    # IPython.embed()
-
-
-    # write message clustering statistics to csv
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
-    clusterStats, conciseness = writeMessageClusteringStaticstics(messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
-        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
+
+    minCsize = numpy.log(len(segmentedMessages))
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # write message clustering statistics to csv
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    clusterStats, conciseness = writeMessageClusteringStaticstics(
+        messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
+        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    # # # # # # # #
+    writeCollectiveClusteringStaticstics(
+        messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
+        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    # # # # # # # # min cluster size
+    noisekey = 'Noise' if 'Noise' in messageClusters else -1
+    filteredClusters = {k: v for k, v in messageClusters.items() if len(v) >= minCsize}
+    filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
+    filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
+                                      if len(v) < minCsize for s in v)
+    writeCollectiveClusteringStaticstics(
+        filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
+        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
 
     if withplots:
         # plot distances and message clusters
@@ -431,7 +436,10 @@ if __name__ == '__main__':
             sm.distances, labels)  # segmentedMessages
         dp.writeOrShowFigure()
 
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # align cluster members
+    # # # # # # # # # # # # # # # # # # # # # # # #
     align_messagesTime = time.time()
     alignedClusters = dict()
     alignedClustersHex = dict()
@@ -445,6 +453,7 @@ if __name__ == '__main__':
         alignedClustersHex[clunu] = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
     print()
     align_messagesTime = time.time() - align_messagesTime
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
@@ -455,18 +464,252 @@ if __name__ == '__main__':
 
 
 
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # split clusters based on fields without rare values
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    if args.split:
+        from alignment.clusterSplitting import *
+
+        cSplitter = RelaxedExoticClusterSplitter(6 if not tokenizer == "tshark" else 3,
+                                    alignedClusters, messageClusters, sm)
+        cSplitter.activateCVSout("{}-{}-eps={:.2f}-min_samples={}".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
+        # in-place split of clusters in alignedClusters and messageClusters
+        cSplitter.split()
+        labels = cSplitter.labels
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        if withplots:
+            # plot distances and message clusters
+            print("Plot distances...")
+            from visualization.distancesPlotter import DistancesPlotter
+
+            dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
+            dp.plotManifoldDistances(
+                [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+                sm.distances, labels)  # segmentedMessages
+            dp.writeOrShowFigure()
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # clusterStats for merger
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # write message clustering statistics to csv
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        clusterStats, conciseness = writeMessageClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # #
+        writeCollectiveClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # min cluster size
+
+        noisekey = 'Noise' if 'Noise' in messageClusters else -1
+        filteredClusters = {k: v for k, v in messageClusters.items()
+                            if len(v) >= minCsize }
+        filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
+        filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
+                                          if len(v) < minCsize for s in v)
+        writeCollectiveClusteringStaticstics(
+            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+    else:
+        from collections import Counter
+
+        exoticValueStats = "reports/exotic-values-statistics.csv"
+        fieldLenThresh = 6 if not tokenizer == "tshark" else 3
+
+        clusterReplaceMap = dict()
+        for aNum, aClu in alignedClusters.items():
+            if aNum == -1:
+                continue
+            cPrec = next(cs[2] for cs in clusterStats if cs is not None and cs[0] == aNum)
+            freqThresh = numpy.floor(numpy.log(len(aClu)))  # numpy.round(numpy.log(len(aClu)))
+            fields = [fld for fld in zip(*aClu)]  # type: List[List[MessageSegment]]
+            distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
+            # amount of distinct values per field
+            valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
+
+            print("\nCluster", aNum, "of size", len(aClu),
+                  "- threshold", numpy.log(len(aClu)))
+            print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
+
+            valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
+                                for fidx, segs in enumerate(fields)}
+            pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
+                 if 1 < vCnt <= freqThresh  # knee
+                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
+                 and not any(val.length > fieldLenThresh for val in fields[fidx] if val is not None)  # omit fields longer than 3/4
+                 and not any(set(val.values) == {0} for val in fields[fidx] if val is not None)  # omit fields that have zeros
+                 and not any(cnt <= freqThresh
+                             for cnt in valCounts4fields[fidx].values())]  # remove fields with exotic values
+
+            preExotic = [fidx for fidx, vCnt in enumerate(valAmount4fields)
+                 if 1 < vCnt <= freqThresh  # knee
+                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
+                 and not any([val.length > fieldLenThresh for val in fields[fidx] if val is not None])  # omit fields longer than 3/4
+                 and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
+                         ]
+
+            for fidx in preExotic:
+                scnt = sorted(valCounts4fields[fidx].values())
+                diffmax = (numpy.diff(scnt).argmax()+1) if len(scnt) > 1 else "-"
+                csvWriteHead = False if exists(exoticValueStats) else True
+                with open(exoticValueStats, 'a') as csvfile:
+                    exoticcsv = csv.writer(csvfile)  # type: csv.writer
+                    if csvWriteHead:
+                        exoticcsv.writerow([
+                            'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
+                            'num_vals',
+                            'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
+                            'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
+                        ])
+                    fieldParameters = [ "{}-{}-eps={:.2f}-min_samples={}".format(
+                                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+                            comparator.specimens.pcapFileName,
+                            aNum, cPrec, len(aClu), fidx, len(scnt)]
+                    if len(scnt) > 1:
+                        exoticcsv.writerow([
+                            *fieldParameters, diffmax, scnt[diffmax],
+                            sum(scnt[:diffmax]), sum(scnt[diffmax:]),
+                            numpy.mean(scnt[:diffmax]), numpy.mean(scnt[diffmax:]),
+                            numpy.std(scnt[:diffmax]), numpy.std(scnt[diffmax:]),
+                            numpy.median(scnt[:diffmax]), numpy.median(scnt[diffmax:])
+                        ])
+                    else:
+                        exoticcsv.writerow(fieldParameters + [""] * 10)
+
+
+
+            newExotic = list()
+            for fidx in preExotic:
+                scnt = sorted(valCounts4fields[fidx].values())
+                if len(scnt) > 1:
+                    if scnt[0] > freqThresh >= len(scnt):
+                        newExotic.append(fidx)
+                        continue
+
+                    # the pivot index and value to split the sorted list of type amounts
+                    # iVal, pVal = next((i, cnt) for i, cnt in enumerate(scnt) if cnt > freqThresh)
+                    iVal = numpy.diff(scnt).argmax() + 1
+                    # the special case of any(cnt <= freqThresh for cnt in scnt) is relaxedly included here
+                    numValues_u = len(scnt) - iVal
+                    # if there are no or only one frequent value, do not split
+                    if numValues_u > 1:
+                        pVal = scnt[iVal]
+                        mean_u = numpy.mean(scnt[iVal:])
+                        halfsRatio =  sum(scnt[:iVal]) / sum(scnt[iVal:])
+                        if halfsRatio < 0.1 and mean_u > 2 * len(aClu) / numpy.log(len(aClu)):
+                            newExotic.append(fidx)
+
+
+            addExotics = set(newExotic) - set(pivotFieldIds)
+            remExotics = set(pivotFieldIds) - set(newExotic)
+            if not len(addExotics) == len(remExotics) == 0:
+                print("pivot field changes due to new exotics:")
+                print("  add fields:", addExotics)
+                print("  remove fields:", remExotics)
+            # print info only if we do not split
+            if len(newExotic) == 0:
+                print("no pivot fields left")
+                # exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
+                #                    for fidx, vCnt in enumerate(valAmount4fields)]
+                continue  # conditions not met for splitting: next cluster
+            elif len(newExotic) > 2:
+                print("too many pivot fields:", len(newExotic))
+                continue  # conditions not met for splitting: next cluster
+
+
+            print(newExotic)
+            # split clusters
+            clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
+            for msgsegs in aClu:
+                # concatenate multiple distinct field combinations
+                pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
+                                   for pId in newExotic])
+                if pivotVals not in clusterSplits:
+                    clusterSplits[pivotVals] = list()
+                clusterSplits[pivotVals].append(msgsegs)
+            clusterReplaceMap[aNum] = clusterSplits
+            print("replace cluster", aNum, "by")
+            print(tabulate((clusterSplits.keys())))
+
+
+        # replace clusters by their splits
+        for aNum, clusterSplits in clusterReplaceMap.items():
+            for nci, cluSpl in enumerate(clusterSplits.values()):  # type: int, List[Tuple[MessageSegment]]
+                # newCluLabel = (aNum+1) * 100 + nci
+                newCluLabel = "{}s{}".format(aNum, nci)
+
+                msgs = [next(seg for seg in msgsegs if seg is not None).message for msgsegs in cluSpl]
+                messageClusters[newCluLabel] = [msgsegs for msgsegs in messageClusters[aNum]
+                                                if msgsegs[0].message in msgs]
+
+                clusteralignment, alignedsegments = sm.alignMessageType(messageClusters[newCluLabel])
+                alignedClusters[newCluLabel] = alignedsegments
+
+            del alignedClusters[aNum]
+            del messageClusters[aNum]
+
+        # labels for distance plot
+        msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
+        labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        if withplots:
+            # plot distances and message clusters
+            print("Plot distances...")
+            from visualization.distancesPlotter import DistancesPlotter
+
+            dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
+            dp.plotManifoldDistances(
+                [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+                sm.distances, labels)  # segmentedMessages
+            dp.writeOrShowFigure()
+
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # clusterStats for merger
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        # write message clustering statistics to csv
+        # # # # # # # # # # # # # # # # # # # # # # # #
+        clusterStats, conciseness = writeMessageClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # #
+        writeCollectiveClusteringStaticstics(
+            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # min cluster size
+
+        noisekey = 'Noise' if 'Noise' in messageClusters else -1
+        filteredClusters = {k: v for k, v in messageClusters.items()
+                            if len(v) >= minCsize }
+        filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
+        filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
+                                          if len(v) < minCsize for s in v)
+        writeCollectiveClusteringStaticstics(
+            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
+            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+        # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
 
 
 
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # check for cluster merge candidates
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # TODO fully integrate into/encapsulate in ClusterMerger class
     print("Check for cluster merge candidates...")
     from utils.evaluationHelpers import printClusterMergeConditions
-
-
     # noinspection PyUnreachableCode
     if True:
         # ClusterMerger
@@ -485,7 +728,26 @@ if __name__ == '__main__':
             "merged-{}-{}-eps={:.2f}-min_samples={}".format(
                 tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
             comparator)
-    else:  # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
+        # # # # # # # #
+        writeCollectiveClusteringStaticstics(
+            mergedClusters, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+        # # # # # # # # min cluster size
+        noisekey = 'Noise' if 'Noise' in mergedClusters else -1
+        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= minCsize}
+        filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
+        filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
+                                          if len(v) < minCsize for s in v)
+        writeCollectiveClusteringStaticstics(
+            filteredMerged, groundtruth,
+            "merged-{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
+                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            comparator)
+    else:
+        # # # # # # # # # # # # # # # # # # # # #
+        # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
         # ClusterClusterer
         clusterclusterer = ClusterClusterer(alignedClusters, dc)
         # clusterDists = clusterclusterer.calcClusterDistances()
@@ -519,7 +781,27 @@ if __name__ == '__main__':
         dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
         dp.writeOrShowFigure()
 
+    # # overwrite existing variables
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # messageClusters = mergedClusters
+    #
+    # # align clusters that have been merged
+    # mergedAligned = dict()
+    # for cLabel, clusterMerges in messageClusters.items():  # type: Union[int, str], List[Tuple[MessageSegment]]
+    #     if cLabel not in alignedClusters:
+    #         clusteralignment, alignedsegments = sm.alignMessageType(clusterMerges)
+    #         mergedAligned[cLabel] = alignedsegments
+    #     else:
+    #         mergedAligned[cLabel] = alignedClusters[cLabel]
+    # alignedClusters = mergedAligned
+    # del mergedAligned
+    #
+    # # labels for distance plot
+    # msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
+    # labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
+
     # END # of # check for cluster merge candidates #
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
@@ -535,11 +817,9 @@ if __name__ == '__main__':
 
 
 
-
-
-
-
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # write alignments to csv
+    # # # # # # # # # # # # # # # # # # # # # # # #
     reportFolder = "reports"
     fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
     csvpath = join(reportFolder, fileNameS + '.csv')
@@ -549,12 +829,16 @@ if __name__ == '__main__':
             symbolcsv = csv.writer(csvfile)
             for clunu, clusg in alignedClusters.items():
                 symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
-                symbolcsv.writerows([sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg)
+                symbolcsv.writerows(
+                    [groundtruth[comparator.messages[next(seg for seg in msg if seg is not None).message]]]
+                    + [sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg
+                )
                 symbolcsv.writerow(["---"] * 5)
     else:
         print("Symbols not saved. File {} already exists.".format(csvpath))
         if not args.interactive:
             IPython.embed()
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
     writePerformanceStatistics(
         specimens, clusterer,
@@ -571,33 +855,4 @@ if __name__ == '__main__':
 
 
 
-
-
-
-
-
-
-
-# For future use:
-    # # TODO cluster by template generation
-    # print("Templating segments...")
-    # tg = TemplateGenerator(list(chain.from_iterable(segmentedMessages)))
-    # clusters = tg.clusterSimilarSegments()
-
-    # print("Plotting templates...")
-    # import analysis_message_segments as ams
-    # ams.plotSegmentDistances(tg)
-
-    # templates = tg.generateTemplates()
-
-    # TODO More Hypotheses:
-    #  small values at fieldend: int
-    #  all 0 values with variance vector starting with -255: 0-pad (validate what's the predecessor-field?)
-    #  len > 16: chars (pad if all 0)
-    # For a new hypothesis: what are the longest seen ints?
-    #
-
-    # TODO: Entropy rate (to identify non-inferable segments)
-
-    # TODO: Value domain per byte/nibble (for chars, flags,...)
 
