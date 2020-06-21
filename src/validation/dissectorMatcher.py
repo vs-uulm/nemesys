@@ -9,6 +9,8 @@ from typing import List, Tuple, Dict, Iterable, Generator
 from collections import OrderedDict
 import copy
 
+from numpy import argmin
+
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
@@ -29,7 +31,7 @@ class FormatMatchScore(object):
     matchGain = None
     specificy = None
     nearWeights = None
-    meanDistance = None
+    meanDistance = None  # mean of "near" distances
     trueCount = None
     inferredCount = None
     exactCount = None
@@ -412,11 +414,8 @@ class DissectorMatcher(object):
             ininscope = [infe for infe in self.__inferredFields if piv[0] <= infe <= piv[1]]
             if len(ininscope) == 0:
                 continue
-            inmindist = ininscope[0]
-            if len(ininscope) > 1:
-                for infe in ininscope:
-                    inmindist = min(abs(dife - infe), inmindist)
-            nearmatches[dife] = inmindist
+            closest = argmin([abs(dife - infe) for infe in ininscope]).astype(int)
+            nearmatches[dife] = ininscope[closest]
         return nearmatches
 
 
@@ -623,13 +622,14 @@ class DissectorMatcher(object):
             fms.specificyPenalty = specificyPenalty
             fms.matchGain = matchGain
             fms.nearWeights = nearweights
-            fms.meanDistance = numpy.mean(list(nearestdistances.values()))
+            fms.meanDistance = numpy.mean(list(nearestdistances.values())) if len(nearestdistances) > 0 else numpy.nan
             fms.trueCount = fieldcount
             fms.inferredCount = inferredcount
             fms.exactCount = exactcount
             fms.nearCount = nearcount
             fms.specificy = fieldcount - inferredcount
             fms.exactMatches = exactmatches
+            fms.nearMatches = nearmatches
 
             fmslist.append(fms)
         return fmslist
