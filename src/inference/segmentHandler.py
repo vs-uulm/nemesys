@@ -182,6 +182,8 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]]):
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
 
+    TODO reevaluate all usages!
+
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in on list per message
     """
@@ -189,13 +191,23 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]]):
 
     print("Refine segmentation...")
 
-    refinedPerMsg = [
-            # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
-            refine.ResplitConsecutiveChars(
-                refine.MergeConsecutiveChars(m).merge()
-            ).split()
-        for m in segmentsPerMsg]
-    return refinedPerMsg
+    refinedPerMsg = list()
+    for msg in segmentsPerMsg:
+        # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
+        charsMerged = refine.MergeConsecutiveChars(msg).merge()
+        charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
+        refinedPerMsg.append(charSplited)
+
+    # for tests use test_segment-refinements.py
+    moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
+    newstuff = list()
+    for msg in refinedPerMsg:
+        croppedMsg = refine.CropDistinct(msg, moco).split()
+        charmerged = refine.CumulativeCharMerger(croppedMsg).merge()
+        splitfixed = refine.SplitFixed(charmerged).split(0, 1)
+        newstuff.append(splitfixed)
+
+    return newstuff
 
 
 T = TypeVar('T')

@@ -1,7 +1,10 @@
 from typing import Tuple, Iterable, Sequence
+from tabulate import tabulate
+
+from netzob.Common.Utils.MatrixList import MatrixList
 
 from inference.segments import MessageSegment
-from netzob.Common.Utils.MatrixList import MatrixList
+from inference.templates import DistanceCalculator
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):
@@ -52,6 +55,17 @@ def alignDescreteValues(listA: list, listB: list) -> Tuple[list, list]:
 
 
 def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
-    from tabulate import tabulate
     print(tabulate(((sg.bytes.hex() if sg is not None else '' for sg in msg) for msg in sequence),
                    headers=range(len(sequence[0])), showindex="always", disable_numparse=True))
+
+
+
+def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
+    """
+    Prints tabulated hex representations of (aligned) sequences of indices.
+
+    :param dc: DistanceCalculator to use for resolving indices to MessageSegment objects.
+    :param segseq: list of segment indices (from raw segment list) per message.
+    """
+    print(tabulate([[dc.segments[s].bytes.hex() if s != -1 else None for s in m]
+                        for m in segseq], disable_numparse=True, headers=range(len(segseq[0]))))
