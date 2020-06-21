@@ -6,6 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/analysis_message_plot.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/analyze_fieldtype_separation.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/characterize_segments.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/contents.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -355,6 +360,12 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="generate field lists of the same message either inferred and dissected" />
     <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="719" y="457" width="728" height="556" key="find.popup" timestamp="1592744309853">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="719" y="457" width="728" height="556" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592744309853" />
   </component>
   <component name="XDebuggerManager">
     <watches-manager>
