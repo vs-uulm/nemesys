@@ -1,5 +1,5 @@
 import math
-from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence
+from typing import Dict, List, Union, Type, Any, Tuple, Iterable, Sequence, TypeVar
 from abc import ABC, abstractmethod
 import numpy
 
@@ -425,11 +425,34 @@ class AbstractSegment(ABC):
         self._values = None  # type: Union[List, numpy.ndarray]
         self.length = None
 
-
     @property
     def values(self):
         return self._values
 
+    T = TypeVar('T')
+    def fillCandidate(self, candidate: T) -> T:
+        """
+        If applicable, this method shall ensure that the candidate segment has a filled analyzer that is compatible to
+        the one of the current segment instance. Otherwise it should asure that the value property is set to meaningful
+        content. This base implementation just checks whether candidate has values set to not None otherwise raises an
+        exception.
+
+        :param candidate:
+        :return:
+        """
+        if self.values is None:
+            raise ValueError("Analysis value missing of", self)
+        return candidate
+
+    @property
+    @abstractmethod
+    def analyzer(self) -> MessageAnalyzer:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def bytes(self) -> bytes:
+        raise NotImplementedError()
 
     def correlate(self,
                   haystack: Iterable['MessageSegment'],
@@ -437,6 +460,8 @@ class AbstractSegment(ABC):
                   ) -> List['CorrelatedSegment']:
         """
         The correlation of this object to each entry in haystack is calculated.
+
+        Depreciated: For all relevant use cases this is replaced by inference.templates.DistanceCalculator#embedSegment
 
         :param haystack: a list of MessageSegments
         :param method: The method to correlate with (see class constants prefixed with CORR_ for available options)
@@ -536,6 +561,18 @@ class CorrelatedSegment(AbstractSegment):
         # and multiple segments/field candidates of the same type, therefore matching the same feature
         return MessageSegment(NoneAnalysis(self.haystack.message), self.bestMatch(), len(self.feature.values))
 
+    @property
+    def analyzer(self):
+        raise NotImplementedError("Analyzer not available for CorrelatedSegment.")
+
+    @property
+    def bytes(self) -> bytes:
+        """
+        Byte values are undefined for CorrelatedSegment.
+        """
+        raise RuntimeError("Byte values are undefined for CorrelatedSegment.")
+
+
 
 class MessageSegment(AbstractSegment):
     """
@@ -555,10 +592,10 @@ class MessageSegment(AbstractSegment):
 
         # calculate values by the given analysis method, if not provided
         if analyzer.values is None:
-            self.analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
+            self._analyzer = MessageAnalyzer.findExistingAnalysis(type(analyzer), analyzer.unit,
                                                                  analyzer.message, analyzer.analysisParams)
         else:
-            self.analyzer = analyzer  # type: MessageAnalyzer
+            self._analyzer = analyzer  # type: MessageAnalyzer
             """kind of the generation method for the contained analysis values"""
 
         if not isinstance(offset, int):
@@ -578,11 +615,21 @@ class MessageSegment(AbstractSegment):
 
 
     @property
+    def analyzer(self):
+        return self._analyzer
+
+
+    @analyzer.setter
+    def analyzer(self, analyzer):
+        self._analyzer = analyzer
+
+
+    @property
     def values(self):
         if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
-            return self.analyzer.value(self.offset, self.offset+self.length)
+            return self.analyzer.values(self.offset, self.offset+self.length)
         return self.analyzer.values[self.offset:self.offset+self.length]
 
 

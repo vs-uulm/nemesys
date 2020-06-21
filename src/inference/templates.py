@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Iterable, Sequence, Tuple
+from typing import List, Dict, Union, Iterable, Sequence, Tuple, Any, Type
 import numpy, scipy.spatial, itertools
 from abc import ABC, abstractmethod
 
@@ -16,7 +16,7 @@ class DistanceCalculator(object):
     debug = False
     offsetCutoff = 6
 
-    def __init__(self, segments: Iterable[MessageSegment], method='canberra',
+    def __init__(self, segments: Iterable[AbstractSegment], method='canberra',
                  thresholdFunction = None, thresholdArgs = None,
                  reliefFactor=.33,
                  manipulateChars=True
@@ -72,7 +72,6 @@ class DistanceCalculator(object):
 
         # prepare lookup for matrix indices
         self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
-        # TODO replace _(quick)segments.index() lookups by queries to this lookup-dict
 
         if manipulateChars:
             # Manipulate calculated distances for all char/char pairs.
@@ -114,6 +113,7 @@ class DistanceCalculator(object):
         return self._distances
 
     def similarityMatrix(self) -> numpy.ndarray:
+        # noinspection PyUnresolvedReferences
         """
         Converts the distances into similarities using the knowledge about distance method and analysis type.
 
@@ -181,6 +181,7 @@ class DistanceCalculator(object):
 
     @property
     def offsets(self) -> Dict[Tuple[int, int], int]:
+        # noinspection PyUnresolvedReferences
         """
         >>> from tabulate import tabulate
         >>> import math
@@ -271,7 +272,8 @@ class DistanceCalculator(object):
         # is set in the constructor and should therefore be always valid.
         return self._offsets
 
-    def segments2index(self, segmentList: Iterable[MessageSegment]) -> List[int]:
+    def segments2index(self, segmentList: Iterable[AbstractSegment]) -> List[int]:
+        # noinspection PyUnresolvedReferences
         """
         Look up the indices of the given segments.
 
@@ -296,6 +298,7 @@ class DistanceCalculator(object):
 
 
     def pairDistance(self, A: MessageSegment, B: MessageSegment) -> numpy.float64:
+        # noinspection PyUnresolvedReferences
         """
         Retrieve the distance between two segments.
 
@@ -336,7 +339,7 @@ class DistanceCalculator(object):
         b = self._seg2idx[B]
         return self._distances[a,b]
 
-    def distancesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
+    def distancesSubset(self, As: Sequence[AbstractSegment], Bs: Sequence[AbstractSegment] = None) \
             -> numpy.ndarray:
         """
         Retrieve a matrix of pairwise distances for two lists of segments.
@@ -415,6 +418,7 @@ class DistanceCalculator(object):
 
     @staticmethod
     def __prepareValuesMatrix(segments: List[Tuple[int, int, Tuple[float]]], method) -> Tuple[str, numpy.ndarray]:
+        # noinspection PyUnresolvedReferences,PyProtectedMember
         """
         Prepare a values matrix as input for distance calculation. This means extracting the values from all segments
         and placing them into an array. The preparation also includes handling of cosine zero vectors.
@@ -477,6 +481,7 @@ class DistanceCalculator(object):
     def _calcDistances(segments: List[Tuple[int, int, Tuple[float]]], method='canberra') -> List[
         Tuple[int, int, float]
     ]:
+        # noinspection PyProtectedMember,PyTypeChecker
         """
         Calculates pairwise distances for all input segments.
         The values of all segments have to be of the same length!
@@ -554,6 +559,7 @@ class DistanceCalculator(object):
 
     @staticmethod
     def _getDistanceMatrix(distances: List[Tuple[int, int, float]], segmentCount: int) -> numpy.ndarray:
+        # noinspection PyProtectedMember
         """
         Arrange the representation of the pairwise similarities of the input parameter in an symmetric array.
         The order of the matrix elements in each row and column is the same as in self._segments.
@@ -607,6 +613,7 @@ class DistanceCalculator(object):
     @staticmethod
     def embedSegment(shortSegment: Tuple[int, int, Tuple[float]], longSegment: Tuple[int, int, Tuple[float]],
                      method='canberra'):
+        # noinspection PyTypeChecker
         """
         Embed shorter segment in longer one to determine a "partial" similarity-based distance between the segments.
         Enumerates all possible shifts of overlaying the short above of the long segment and returns the minimum
@@ -893,7 +900,8 @@ class DistanceCalculator(object):
             distanceMax['sqeuclidean'] = dimensions * domainSize**2
         return 1 / distanceMax[method]
 
-    def neigbors(self, segment: MessageSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
+    def neigbors(self, segment: AbstractSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
+        # noinspection PyUnresolvedReferences
         """
 
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
@@ -989,7 +997,8 @@ class DistanceCalculator(object):
         else:
             raise FileNotFoundError("Cache file " + dccachefn + " not found.")
 
-    def saveCached(self, analysisTitle: str, tokenizer: str, comparator: 'MessageComparator', segmentedMessages: List[Tuple[MessageSegment]]):
+    def saveCached(self, analysisTitle: str, tokenizer: str,
+                   comparator: 'MessageComparator', segmentedMessages: List[Tuple[MessageSegment]]):
         """
         cache the DistanceCalculator and necessary auxiliary objects comparator and segmentedMessages to the filesystem
 
@@ -1009,7 +1018,7 @@ class DistanceCalculator(object):
             raise FileExistsError("Cache file" + dccachefn + " already exists. Abort saving.")
 
 
-    def findMedoid(self, segments: List[MessageSegment]) -> MessageSegment:
+    def findMedoid(self, segments: List[AbstractSegment]) -> AbstractSegment:
         """
         Find the medoid closest describing the given list of segments.
 
@@ -1031,6 +1040,7 @@ class DistanceCalculator(object):
         from itertools import combinations
         from inference.segmentHandler import filterChars
 
+        assert all((isinstance(seg, AbstractSegment) for seg in self.segments))
         charsequences = filterChars(self.segments)
         charindices = self.segments2index(charsequences)
 
@@ -1048,7 +1058,7 @@ class Template(AbstractSegment):
     """
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
-                 baseSegments: List[MessageSegment],
+                 baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         """
         :param values: The values of the template (e. g. medoid or mean)
@@ -1062,7 +1072,7 @@ class Template(AbstractSegment):
         else:
             self._values = values
             self.medoid = None
-        self.baseSegments = baseSegments  # list/cluster of MessageSegments this template was generated from.
+        self.baseSegments = list(baseSegments)  # list/cluster of MessageSegments this template was generated from.
         self.checkSegmentsAnalysis()
         self._method = method
         self.length = len(self._values)
@@ -1071,6 +1081,11 @@ class Template(AbstractSegment):
     @property
     def bytes(self):
         return bytes(self._values) if isinstance(self._values, Iterable) else None
+
+
+    @property
+    def analyzer(self):
+        return self.baseSegments[0].analyzer
 
 
     def checkSegmentsAnalysis(self):
@@ -1129,6 +1144,7 @@ class Template(AbstractSegment):
 
 
     def distancesToMixedLength(self, dc: DistanceCalculator=None):
+        # noinspection PyTypeChecker
         """
         Get distances to the medoid of this template.
         If no DistanceCalculator is given. does not support a threshold function.
@@ -1236,6 +1252,8 @@ class Template(AbstractSegment):
 
     def toColor(self):
         """
+        The colors are not collision resistant.
+
         :return: A fixed-length color-coded visual representation of this template,
             NOT representing the template value itself!
         """
@@ -1243,7 +1261,7 @@ class Template(AbstractSegment):
         # return '{:02x}'.format(oid % 0xffff)
         import visualization.bcolors as bcolors
         # Template
-        return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)  # TODO caveat collisions
+        return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)
 
     def __repr__(self):
         if self.values is not None and isinstance(self.values, (list, tuple)) and len(self.values) > 3:
@@ -1257,7 +1275,7 @@ class Template(AbstractSegment):
 class TypedTemplate(Template):
 
     def __init__(self, values: Union[List[Union[float, int]], numpy.ndarray, MessageSegment],
-                 baseSegments: List[MessageSegment],
+                 baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
         from inference.segments import TypedSegment
 
@@ -1317,7 +1335,7 @@ class DelegatingDC(DistanceCalculator):
     and other segment types for which hypothesis-driven distance values are more appropriate (like textual fields).
     """
 
-    def __init__(self, segments: Iterable[MessageSegment], manipulateChars = True):
+    def __init__(self, segments: Sequence[MessageSegment], reliefFactor=.33, manipulateChars = True):
         """
         Determine the distance between the given segments using representatives
         to delegate groups of similar segments to.
@@ -1373,7 +1391,7 @@ class DelegatingDC(DistanceCalculator):
         """
 
         filteredSegments = uniqueSegments + deduplicatingTemplates
-        super().__init__(filteredSegments, manipulateChars=manipulateChars)
+        super().__init__(filteredSegments, reliefFactor=reliefFactor, manipulateChars=manipulateChars)
 
         # assert symmetric matrix
         for i in range(self.distanceMatrix.shape[0]):
@@ -1387,6 +1405,7 @@ class DelegatingDC(DistanceCalculator):
     @staticmethod
     def _templates4duplicates(segments: Sequence[MessageSegment]) -> Tuple[
            List[AbstractSegment], List[Template], Dict[MessageSegment, int]]:
+        # noinspection PyProtectedMember,PyUnresolvedReferences
         """
         Filter segments that are identical regarding their feature vector and replace them by templates.
 
@@ -1436,9 +1455,9 @@ class DelegatingDC(DistanceCalculator):
         else:
             templates = [Template(f, s) for f, s in duplicates.items()]
 
-        # we need this here already to improve performance,
-        # although it is generated in the super-constructor also afterwards
-        seg2idx = {seg: idx for idx, seg in enumerate(segments)}
+        # # we need this here already to improve performance,
+        # # although it is generated in the super-constructor also afterwards
+        # seg2idx = {seg: idx for idx, seg in enumerate(segments)}
 
         uniqCount = len(filteredSegments)
         mapping = {s: tidx+uniqCount for tidx, t in enumerate(templates) for s in t.baseSegments}  # type: Dict[MessageSegment, int]
@@ -1455,6 +1474,7 @@ class DelegatingDC(DistanceCalculator):
 
         # filter out segments that resulted in no relevant feature data, i. e.,
         # (0, .., 0) | (nan, .., nan) | or a mixture of both
+        # noinspection PyUnusedLocal
         filteredSegments = [s for s in filteredSegments if
                             numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
         raise NotImplementedError()
@@ -1465,6 +1485,7 @@ class DelegatingDC(DistanceCalculator):
 
 
     def segments2index(self, segmentList: Iterable[MessageSegment]):
+        # noinspection PyUnresolvedReferences
         """
         Look up the indices of the given segments.
         Resolves MessageSegments directly and Templates generated of similar segments to their representative's index
@@ -1573,6 +1594,7 @@ class DelegatingDC(DistanceCalculator):
 
     def representativesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
             -> Tuple[numpy.ndarray, List[AbstractSegment], List[AbstractSegment]]:
+        # noinspection PyUnresolvedReferences
         """
         Retrieve a matrix of pairwise distances for two lists of segments, making use also of representatives if any.
 

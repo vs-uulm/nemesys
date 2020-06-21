@@ -12,6 +12,8 @@ import time
 from math import ceil
 from os.path import isfile, splitext, basename, exists, join
 from itertools import chain
+from typing import List, Any, Union
+
 from tabulate import tabulate
 
 # # change drawing toolkit for matplotlib (to be set before the pyplot import)
@@ -83,7 +85,7 @@ def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegme
     nonepos = [idx for idx, seg in enumerate(column) if seg is None]
     stripedcol = [seg for seg in column if seg is not None]
 
-    dists2first = ["- (reference)"] + dc.distancesSubset(stripedcol[0:1], stripedcol[1:]).tolist()[0]
+    dists2first = ["- (reference)"] + list(dc.distancesSubset(stripedcol[0:1], stripedcol[1:]).tolist())[0]  # type: List[Union[str, None]]
 
     # re-insert Nones
     for idx in nonepos:
@@ -224,7 +226,7 @@ def epsautoconfeval(epsilon):
 
     ax0twin = mmp.axes[0].twinx()
     # mmp.plotToSubfig(ax0twin, seconddiff[k], linestyle='dotted', color='cyan', alpha=.4)
-    mmp.plotToSubfig(ax0twin, [None] + seconddiff[k].tolist(), linestyle='dotted',
+    mmp.plotToSubfig(ax0twin, [None] + list(seconddiff[k].tolist()), linestyle='dotted',
                      color='magenta', alpha=.4)
 
     # epsilon = knearest[k][x]
@@ -292,6 +294,7 @@ if __name__ == '__main__':
     sigma = sigmapertrace[pcapbasename] if not args.sigma and pcapbasename in sigmapertrace else \
         0.9 if not args.sigma else args.sigma
     pcapName = splitext(pcapbasename)[0]
+    # noinspection PyUnboundLocalVariable
     tokenparm = tokenizer if tokenizer != "nemesys" else \
         "{}{:.0f}".format(tokenizer, sigma * 10)
     dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'ddc')
@@ -344,6 +347,7 @@ if __name__ == '__main__':
         segmentationTime = time.time() - segmentationTime
         print("done.")
 
+        # noinspection PyUnboundLocalVariable
         chainedSegments = list(chain.from_iterable(segmentedMessages))
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))

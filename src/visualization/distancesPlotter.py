@@ -11,7 +11,7 @@ from itertools import compress
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
 from visualization.plotter import MessagePlotter
-from utils.loader import SpecimenLoader
+from utils.loader import SpecimenLoader, BaseLoader
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import Template, DistanceCalculator
 
@@ -22,7 +22,7 @@ class DistancesPlotter(MessagePlotter):
     Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
     """
 
-    def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
+    def __init__(self, specimens: BaseLoader, analysisTitle: str,
                  isInteractive: bool=False):
         super().__init__(specimens, analysisTitle, isInteractive)
 
@@ -35,6 +35,7 @@ class DistancesPlotter(MessagePlotter):
         self._fig.set_size_inches(16, 9)
         # self._cm = cm.Set1  # has 9 colors
         # self._cm = cm.tab20 # 20 colors
+        # noinspection PyUnresolvedReferences
         self._cm = cm.jet  # type: colors.LinearSegmentedColormap
 
 
@@ -83,7 +84,7 @@ class DistancesPlotter(MessagePlotter):
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
         >>> dp.writeOrShowFigure()
 
-        :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
+        :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
             segments
         :param distances: The precomputed similarity matrix:
@@ -201,9 +202,12 @@ class DistancesPlotter(MessagePlotter):
                 ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
             elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
                 ftypes = numpy.array([msg.messageType for msg in segments])  # PP
+            else:
+                ftypes = set()
             # identify unique types
             utyp = sorted(set(ftypes))
             # prepare color space
+            # noinspection PyUnresolvedReferences
             cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
             # iterate unique types and scatter plot each of these groups
             for n, ft in enumerate(utyp):  # PP
@@ -246,6 +250,7 @@ class DistancesPlotter(MessagePlotter):
             lines = [[pos[i, :], pos[j, :]]
                         for i in range(len(pos)) for j in range(len(pos))]
             values = numpy.abs(distances)
+            # noinspection PyUnresolvedReferences
             lc = LineCollection(lines,
                                 zorder=0, cmap=plt.cm.Blues,
                                 norm=plt.Normalize(0, values.max()))

@@ -2,6 +2,7 @@ from typing import Dict, Tuple, List, Any, Union
 
 import numpy
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 from visualization.plotter import MessagePlotter
 from inference.segments import MessageSegment, TypedSegment, MessageAnalyzer
@@ -283,7 +284,7 @@ class MultiMessagePlotter(MessagePlotter):
         import matplotlib.cm
 
         # make the leftover axes invisible
-        for ax in self._axes.flat:
+        for ax in self._axes.flat:  # type: plt.Axes
             ax.axis('off')
 
         # SEgment GRoup for PLot
@@ -291,6 +292,9 @@ class MultiMessagePlotter(MessagePlotter):
                 enumerate(zip(self._axes.flat, segmentGroups)):  # type: (plt.Axes, List[Tuple[str, TypedSegment]])
             ax.set_title(title, fontdict={'fontsize': 'x-small'})
             ax.axis('on')
+            vdomain = segmentGroups[0][1][0][1].analyzer.domain
+            ax.set_ylim(*vdomain)
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
 
             if numpy.all([numpy.all(numpy.isnan(cseg.values)) for label, cseg in segrpl]):
                 ax.text(0.5, 0.5, 'nan', fontdict={'size': 'xx-large'})

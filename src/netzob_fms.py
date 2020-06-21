@@ -60,8 +60,8 @@ def getNetzobInference(l5msgs: List[AbstractMessage], minEquivalence=45):
 
 
 # noinspection PyShadowingNames
-def iterSimilarities(minSimilarity=40, maxSimilarity=60):
-    # type: () -> Dict[int, Tuple[Dict[netzob.Symbol, List[List[Tuple[str, int]]]], float]]
+def iterSimilarities(minSimilarity=40, maxSimilarity=60) \
+        -> Dict[int, Tuple[Dict[netzob.Symbol, List[List[Tuple[str, int]]]], float]]:
     """
     Iterate input parameter similarity threshold for clustering (minEquivalence = 0...100).
 
