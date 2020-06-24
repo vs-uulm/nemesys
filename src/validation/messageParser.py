@@ -4,7 +4,7 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict, Set, Iterable
 
 import IPython
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
@@ -12,6 +12,7 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMess
 from validation.tsharkConnector import TsharkConnector
 
 
+# noinspection PyDictCreation
 class ParsingConstants(object):
     """
     Class to hold constants necessary for the interpretation of the tshark dissectors.
@@ -27,12 +28,20 @@ class ParsingConstants(object):
         # IEEE802_11 = 105
     }
 
+    # mapping of field names to general value types.
+    # see also Wireshark dissector reference: https://www.wireshark.org/docs/dfref/
+    TYPELOOKUP = {'delimiter': 'chars',
+                  'data.data': 'unknown'}
+    """:type: Dict[str, str]"""
+
 
 # noinspection PyDictCreation
 class ParsingConstants226(ParsingConstants):
     """
     Class to hold constants necessary for the interpretation of the tshark dissectors.
     Version for tshark 2.2.6 and compatible.
+
+    TODO Determine up to which exact tshark version this JSON output format is used.
     """
 
     COMPATIBLE_TO = b'2.2.6'
@@ -105,7 +114,8 @@ class ParsingConstants226(ParsingConstants):
     # mapping of field names to general value types.
     # see also Wireshark dissector reference: https://www.wireshark.org/docs/dfref/
     TYPELOOKUP = {'delimiter': 'chars',
-                  'data.data' : 'unknown'}
+                  'data.data': 'unknown'}
+    """:type: Dict[str, str]"""
 
     # ntp
     TYPELOOKUP['ntp.flags'] = 'flags'  # bit field
@@ -142,7 +152,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['bootp.server'] = 'chars'
     TYPELOOKUP['bootp.file'] = 'chars'
     TYPELOOKUP['bootp.cookie'] = 'bytes'
-    TYPELOOKUP['bootp.option.type'] = 'int'
+    TYPELOOKUP['bootp.option.type'] = 'chars'  # contains the whole option! bootp.option.type_tree should be walked!
     TYPELOOKUP['bootp.option.padding'] = 'pad'
 
     # dns
@@ -359,7 +369,9 @@ class ParsingConstants226(ParsingConstants):
 # noinspection PyDictCreation
 class ParsingConstants263(ParsingConstants226):
     """
-    Compatibility for tshark 2.6.3
+    Compatibility for tshark 2.6.3 to 2.6.5
+
+    TODO Determine starting from which exact tshark version this JSON output format is used.
 
     "_raw" field node values list
     # h - hex bytes
@@ -369,11 +381,144 @@ class ParsingConstants263(ParsingConstants226):
     # t - type
     see line 262ff: https://github.com/wireshark/wireshark/blob/3a514caaf1e3b36eb284c3a566d489aba6df5392/tools/json2pcap/json2pcap.py
     """
-    COMPATIBLE_TO = b'2.6.3'
+    COMPATIBLE_TO = b'2.6.5'
 
     pass
 
 
+class MessageTypeIdentifiers(object):
+    # fields or combinations of field that identify a message type for a specific protocol
+    FOR_PROTCOL = {
+        'bootp' : [ {  # careful: values are hex-strings (so one byte is two positions long)
+            'field': 'bootp.option.type',
+            'filter': lambda v: v[:4] == '3501',  # "bootp option" dhcp
+            'select': lambda w: w[-2:]            # dhcp message type
+        } ],
+        'dns'   : ['dns.flags', 'dns.qry.type'],
+        'nbns'  : ['nbns.flags'],
+        'nbss'  : ['nbss.type', {
+            'field': 'smb.cmd',
+            'filter': lambda v: v != 'ff',
+            'select': lambda w: w
+        }, {
+            'field': 'smb.flags',
+            'filter': lambda v: True,
+            'select': lambda w: (int.from_bytes(bytes.fromhex(w), "big") & 128) != 0  # first bit denotes request/response
+        }],
+        'ntp'   : ['ntp.flags', 'ntp.stratum']
+    }
+
+    NAMED_TYPES = {  # assumes hex bytes are lower-case
+        'bootp.option.type' : {
+            '01': 'Discover',
+            '02': 'Offer',
+            '03': 'Request',
+            '04': 'Decline',
+            '05': 'ACK',
+            '07': 'Release',
+            '08': 'Inform',
+        },
+        'nbss.type' : {
+            '00': 'SMB'
+        },
+        'dns.flags' : {
+            '0100': 'Standard query',
+            '8182': 'Response (failure)',
+            '8183': 'Response (no such name)',
+            '8580': 'Response (success)',
+        },
+        'dns.qry.type': {
+            '0001': 'A',
+            '0002': 'NS',
+            '0010': 'TXT',
+            '001c': 'AAAA',
+            '000f': 'MX',
+            '000c': 'PTR',
+            '0006': 'SOA',
+            '0021': 'SRV',
+        },
+        'smb.cmd': {
+            '04': 'Close (0x04)',
+            '24': 'Locking AndX Request (0x24)',
+            '2b': 'Echo Request (0x2b)',
+            '2e': 'Read AndX (0x2e)',
+            '2f': 'Write AndX Response (0x2f)',
+            'a0': 'NT Trans (0xa0)',
+            'a2': 'NT Create AndX (0xa2)',
+            'a4': 'NT Cancel (0xa4)',
+            '71': 'Tree Disconnect (0x71)',
+            '72': 'Negotiate Protocol (0x72)',
+            '73': 'Session Setup AndX (0x73)',
+            '74': 'Logoff AndX (0x74)',
+            '75': 'Tree Connect AndX (0x75)',
+        },
+        'smb.flags': {  # first bit == 0 denotes request
+            True: 'response',
+            False: 'request',
+        },
+        'nbns.flags': {
+            '0110': 'Name query',
+            '2810': 'Registration',
+            '2910': 'Registration (recursion)',
+            '3010': 'Release',
+            '8500': 'Response',
+        },
+        'ntp.flags': {
+            '13': 'v2 client',
+            '19': 'v3 symmetric active',
+            '1b': 'v3 client',
+            '1c': 'v3 server',
+            '23': 'v4 client',
+            '24': 'v4 server',
+            '25': 'v4 broadcast',
+            'd9': 'v3 symmetric active (unsynchronized, MAC)',
+            'db': 'v3 client (unsynchronized)',
+            'dc': 'v3 server (unsynchronized)',
+            'e3': 'v4 client (unsynchronized, MAC)',
+            'e4': 'v4 server (unsynchronized)',
+            'e5': 'v4 broadcast (unsynchronized)',
+        },
+        # 'ntp.stratum': {
+        #     '00': '',
+        #     '03': '',
+        #     '04': '',
+        #     '05': '',
+        #     '06': '',
+        # }
+    }
+
+    @staticmethod
+    def __resolveTypeName(fieldname: str, fieldvalue: str):
+        return MessageTypeIdentifiers.NAMED_TYPES[fieldname][fieldvalue] \
+            if fieldname in MessageTypeIdentifiers.NAMED_TYPES \
+               and fieldvalue in MessageTypeIdentifiers.NAMED_TYPES[fieldname] \
+            else "{}={}".format(fieldname, fieldvalue)
+
+    @staticmethod
+    def typeOfMessage(message: 'ParsedMessage'):
+        if message.protocolname in MessageTypeIdentifiers.FOR_PROTCOL:
+            idFields = MessageTypeIdentifiers.FOR_PROTCOL[message.protocolname]
+            resolvedTypeName = []
+            for ifield in idFields:
+                if isinstance(ifield, dict):  # complex type identifiers with filter and selector
+                    ifv = message.getValuesByName(ifield['field'])
+                    if not ifv:
+                        continue  # to next field
+                    for idvalue in ifv:
+                        if ifield['filter'](idvalue):
+                            selectedid = ifield['select'](idvalue)
+                            resolvedTypeName.append(
+                                MessageTypeIdentifiers.__resolveTypeName(ifield['field'], selectedid))
+                else:  # simple identifier
+                    selectedid = message.getValuesByName(ifield)
+                    for ifv in selectedid:
+                        resolvedTypeName.append(MessageTypeIdentifiers.__resolveTypeName(ifield, ifv))
+            if len(resolvedTypeName) > 0:
+                return ":".join(resolvedTypeName)
+
+        # message identifier not known (outer if-statement)
+        # or filter never matched (if-statement inside dict handling branch)
+        raise Exception("No message type identifier known for protocol {}".format(message.protocolname))
 
 
 class DissectionInvalidError(Exception):
@@ -440,6 +585,7 @@ class ParsedMessage(object):
         self.protocolname = None
         self.protocolbytes = None
         self._fieldsflat = None
+        self._dissectfull = None
         self.__failOnUndissectable = failOnUndissectable
         self.__constants = None
         if message:
@@ -475,6 +621,8 @@ class ParsedMessage(object):
 
 
     ###  #############################################
+    ###  Parsing stuff
+    ###  #############################################
 
 
     def _parse(self, linktype = ParsingConstants.LINKTYPES['ETHERNET']):
@@ -489,8 +637,7 @@ class ParsedMessage(object):
     @staticmethod
     def parseMultiple(messages: List[RawMessage], layer=-1, relativeToIP=False,
                                          failOnUndissectable=True,
-                      linktype=ParsingConstants.LINKTYPES['ETHERNET']):
-        # type: () -> dict[RawMessage, 'ParsedMessage']
+                      linktype=ParsingConstants.LINKTYPES['ETHERNET']) -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
@@ -507,8 +654,8 @@ class ParsedMessage(object):
 
     @staticmethod
     def _parseMultiple(messages: List[RawMessage], target = None, layer=-1, relativeToIP=False,
-                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET']):
-        # type: () -> dict[RawMessage, 'ParsedMessage']
+                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET']) \
+            -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
@@ -519,7 +666,6 @@ class ParsedMessage(object):
         >>> pms = ParsedMessage.parseMultiple(pkt)
 
         :param messages: List of raw messages to parse
-        :type messages: list[RawMessage]
         :param target: The object to call _parseJSON() on for each message,
             Prevalently makes sense for parsing a one-message list (see :func:`_parse()`).
             ``None`` results in creating a new ParsedMessage for each item in ``messages``.
@@ -537,7 +683,6 @@ class ParsedMessage(object):
         elif ParsedMessage.__tshark.linktype != linktype:
             ParsedMessage.__tshark.terminate()
             ParsedMessage.__tshark = TsharkConnector(linktype)
-
 
         prsdmsgs = {}
         n = 1000  # parse in chunks of 1000s
@@ -626,6 +771,11 @@ class ParsedMessage(object):
                     protocolsvalue = ParsedMessage._getElementByName(framevalue, protocolskey)
                     if isinstance(protocolsvalue, str):
                         self.protocols = protocolsvalue.split(':')
+                        if self.relativeToIP and 'ip' not in self.protocols:
+                            errortext = "No IP layer could be identified in a message of the trace."
+                            print(errortext, "\n\nPlease investigate yourself:")
+                            IPython.embed()
+                            raise ValueError(errortext)
                         absLayNum = (self.layernumber if self.layernumber >= 0 else len(self.protocols) - 1) \
                             if not self.relativeToIP else (self.protocols.index('ip') + self.layernumber)
                         try:
@@ -658,7 +808,6 @@ class ParsedMessage(object):
                                     self._dissectfull += dissectsub
                                 # else:
                                 #     print("Bogus protocol layer ignored: {}".format(embedded))
-                        # TODO include some kind of handling of protocols encapsulated in the target, like nbss or tcp
 
                         # happens for some malformed packets with too few content e.g. irc with only "\r\n" payload
                         if not isinstance(self._dissectfull, list):
@@ -685,7 +834,6 @@ class ParsedMessage(object):
                             self.protocolbytes = self.protocolbytes[0]
                         # field keys, filter for those ending with '_raw' into fieldnames
                         self._fieldsflat = ParsedMessage._walkSubTree(self._dissectfull)
-                        # IPython.embed()
                         try:
                             ParsedMessage._reassemblePostProcessing(self)
                         except DissectionIncomplete as e:
@@ -1065,6 +1213,37 @@ class ParsedMessage(object):
     }
 
 
+    @staticmethod
+    def __getCompatibleConstants():
+        """
+        Retrieve the ParsingConstants compatible to specific versions of tshark.
+
+        TODO Determine at which exact tshark version the JSON output format is changed.
+
+        :return: Appropriate ParsingConstants class
+        """
+        if ParsedMessage.__tshark.version <= ParsingConstants226.COMPATIBLE_TO:
+            return ParsingConstants226
+        elif ParsedMessage.__tshark.version <= ParsingConstants263.COMPATIBLE_TO:
+            return ParsingConstants263
+        else:
+            return ParsingConstants263
+
+
+    ###  #############################################
+    ###  Management stuff
+    ###  #############################################
+
+    @staticmethod
+    def closetshark():
+        if ParsedMessage.__tshark:
+            ParsedMessage.__tshark.terminate()
+
+
+    ###  #############################################
+    ###  Output handling stuff
+    ###  #############################################
+
     def printUnknownTypes(self):
         """
         Utility method to find which new protocols field types need to be added.
@@ -1087,30 +1266,26 @@ class ParsedMessage(object):
                 print("TYPELOOKUP['{:s}'] = '???'  # has value: {:s}".format(fieldname, fieldvalue))
 
 
-    def getFieldNames(self):
-        # type: () -> list[str]
+    def getFieldNames(self) -> List[str]:
         """
         :return: The list of field names of this ParsedMessage.
         """
         return [fk for fk, fv in self._fieldsflat]
 
 
-    def getFieldValues(self):
-        # type: () -> list[str]
+    def getFieldValues(self) -> List[str]:
         """
         :return: The list of field values (hexstrings) of this ParsedMessage.
         """
         return [fv for fk, fv in self._fieldsflat]
 
-    def getFieldSequence(self):
-        # type: () -> list[tuple[str, int]]
+    def getFieldSequence(self) -> List[Tuple[str, int]]:
         """
         :return: The list of field names and their field lengths of this ParsedMessage.
         """
         return [(fk, len(fv)//2) for fk, fv in self._fieldsflat]
 
-    def getTypeSequence(self):
-        # type: () -> tuple[tuple[str, int]]
+    def getTypeSequence(self) -> Tuple[Tuple[str, int]]:
         """
         :return: The list of field types and their field lengths of this ParsedMessage.
         """
@@ -1126,8 +1301,7 @@ class ParsedMessage(object):
             retVal.append((CONSTANTS_CLASS.TYPELOOKUP[fk], len(fv)//2))
         return tuple(retVal)
 
-    def getValuesOfTypes(self):
-        # type: () -> dict[str, set[str]]
+    def getValuesOfTypes(self) -> Dict[str, Set[str]]:
         """
         :return: A mapping of all field types and their unique values (hexstrings) in this ParsedMessage.
         """
@@ -1146,25 +1320,16 @@ class ParsedMessage(object):
 
     def getValuesByName(self, fieldname):
         """
-        Retrieve value(s) of a given field name in this message.
+        Retrieve values of a given field name in this message.
 
         :param fieldname: The field name to look for in the dissection.
-        :return: the value, or list of values if multiple fields with the field name exist
+        :return: list of values for all fields with the given fieldname, empty list if non found.
         """
-        return ParsedMessage._getElementByName(self._fieldsflat, fieldname)
+        element = ParsedMessage._getElementByName(self._fieldsflat, fieldname)
+        if not element:
+            return []
+        return element if isinstance(element, list) else [element]
 
-
-    @staticmethod
-    def closetshark():
-        if ParsedMessage.__tshark:
-            ParsedMessage.__tshark.terminate()
-
-
-    @staticmethod
-    def __getCompatibleConstants():
-        if ParsedMessage.__tshark.version <= ParsingConstants226.COMPATIBLE_TO:
-            return ParsingConstants226
-        elif ParsedMessage.__tshark.version <= ParsingConstants263.COMPATIBLE_TO:
-            return ParsingConstants263
-        else:
-            raise ParsingConstants
+    @property
+    def messagetype(self):
+        return MessageTypeIdentifiers.typeOfMessage(self)

@@ -22,16 +22,21 @@ class MessagePlotter(object):
         """
         Define basic properties to plot messages.
 
-        :param specimens: The original message specimens this plot contains.
-        :param analysisTitle: The title of this analysis.
+        :param specimens: The pool of messages, the data to be plotted originated from.
+        :param analysisTitle: A freely chosen title to be printed on the plot and used for the filename.
         :param isInteractive: Whether the plot should be interactive or written to file.
         """
         plt.rc('xtick', labelsize=4)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=4)  # fontsize of the tick labels
+        plt.rc('legend', frameon=False)
 
         self._specimens = specimens
         self._title = analysisTitle
         self._interactive = isInteractive
+
+    @property
+    def title(self) -> str:
+        return self._title
 
 
     def writeOrShowFigure(self):
@@ -42,10 +47,11 @@ class MessagePlotter(object):
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
         plotfile = join('reports', '{}_{}.pdf'.format(self._title, pcapName))
 
+        plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))
         plt.tight_layout(rect=[0,0,1,.95])
 
-        if not exists(plotfile) and not self._interactive:
+        if not self._interactive and not exists(plotfile):
             plt.savefig(plotfile)
             print('plot written to file', plotfile)
         else:
@@ -78,4 +84,5 @@ class MessagePlotter(object):
         :param compareValue: The second list of values of another analysis result
         """
         ax.fill_between(range(len(analysisResult)), analysisResult, compareValue, color='b', alpha=.4)
+
 

@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List, Any
+from typing import Dict, Tuple, List, Any, Union
 
 import numpy
 import matplotlib.pyplot as plt
@@ -15,13 +15,41 @@ class MultiMessagePlotter(MessagePlotter):
     from utils.loader import SpecimenLoader
 
     def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
-                 nrows: int, ncols: int,
+                 nrows: int, ncols: int=None,
                  isInteractive: bool=False):
+        """
+        :param nrows: The number of rows the sheet should have. If ncols is not set, this is interpreted
+            as the expected count of plots and the number of rows and cols are determined automatically.
+        :param ncols: The number of columns the sheet should have, or None if nrows contains
+            the expected count of plots.
+        """
         super().__init__(specimens, analysisTitle, isInteractive)
+        if ncols is None:
+            nrows, ncols = MultiMessagePlotter._autoconfRowsCols(nrows)
         self._fig, self._axes = plt.subplots(nrows=nrows, ncols=ncols)  # type: plt.Figure, numpy.ndarray
         if not isinstance(self._axes, numpy.ndarray):
             self._axes = numpy.array(self._axes)
         self._fig.set_size_inches(16, 9)
+
+
+    @property
+    def axes(self) -> List[plt.Axes]:
+        return self._axes.flat
+
+
+    @staticmethod
+    def _autoconfRowsCols(plotCount):
+        """
+        Automatically determines sensible values for rows and cols based on
+        """
+        from math import ceil
+        ncols = 5 if plotCount > 4 else ceil(plotCount / 2)
+        nrows = (plotCount // ncols)
+        if not plotCount % ncols == 0:
+            nrows += 1
+        if nrows < 3:
+            nrows = 3
+        return nrows, ncols
 
 
     def setFigureSize(self, w, h):
@@ -44,6 +72,17 @@ class MultiMessagePlotter(MessagePlotter):
             else:
                 ax.plot(values, **linestyle)
             ax.autoscale(tight=True)
+
+
+    def textInEachAx(self, textList: List[str]):
+        for ax, text in zip(self._axes.flat, textList):
+            if text is None:
+                continue
+            left, right = ax.get_xlim()
+            marginH = (right-left) * 0.05
+            top, bottom = ax.get_ylim()
+            marginV = (bottom - top) * 0.05
+            ax.text(left + marginH, top + marginV, text)
 
 
     def scatterInEachAx(self, valuesList: List[Tuple[List, List]], marker='_'):
@@ -192,6 +231,53 @@ class MultiMessagePlotter(MessagePlotter):
             MessagePlotter.fillDiffToCompare(ax, analysisResult, compareValue)
 
 
+    from inference.segments import CorrelatedSegment
+
+    def plotCorrelations(self,
+            correlations: List[CorrelatedSegment]):
+        """
+        Plot the given correlations and their messages.
+
+        :param correlations: List of segment correlations.
+        """
+        import humanhash
+        from inference.segments import CorrelatedSegment
+
+        self.plotInEachAx([series.values for series in correlations],
+                          MessagePlotter.STYLE_CORRELATION + dict(label='Correlation'))
+
+        # (segment, haystraw), conv = next(iter(convolutions.items()))
+        #   type: Tuple[MessageSegment, Union[MessageSegment, AbstractMessage]]
+        # plt.gca().twinx()
+        for ax, series in zip(self._axes.flat, correlations):  # type: plt.Axes, CorrelatedSegment
+            humanid = humanhash.humanize(series.id)
+            shift = series.bestMatch()  # TODO multiple ones
+
+            MessagePlotter.color_y_axis(ax, 'green')
+            ax.set_title("{} {:.3E}".format(humanid, series.values[shift]), fontdict={'fontsize': 'x-small'})
+
+            bvax = ax.twinx()
+            # original position: range(segment.offset, segment.offset + len(segment.values))
+            segX = range(shift, shift+len(series.feature.values))
+            bvax.fill_between(segX, series.haystack.values[shift : shift+len(series.feature.values)],
+                              series.feature.values, facecolor='red', alpha=.3)
+            bvax.plot(segX, series.feature.values,
+                      linewidth=.6, alpha=1, c='red',
+                      label='Segment')
+
+            MessagePlotter.color_y_axis(bvax, 'blue')
+            if isinstance(series.haystack, MessageSegment):
+                bvax.plot(series.haystack.values, linewidth=.6, alpha=.6, c='blue', label='Bitvariances')
+            else:
+                raise NotImplementedError('Should not be necessary.')
+            #     analyzer = MessageAnalyzer.findExistingAnalysis(type(series.haystack.analyzer), MessageAnalyzer.U_BYTE,
+            #                                                     series.haystack, series.haystack.analyzer.analysisParams)
+            #     bvax.plot(analyzer.values,
+            #               linewidth=.6, alpha=.6, c='blue', label='Bitvariances')
+
+        plt.figlegend()
+
+
     def plotMultiSegmentLines(self, segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
                               colorPerLabel=False):
         import matplotlib.cm
@@ -225,3 +311,25 @@ class MultiMessagePlotter(MessagePlotter):
                         newHandles.append(handle)
                 ax.legend(newHandles, newLabels)
 
+
+    def plotToSubfig(self, subfigid: Union[int, plt.Axes], values: Union[List, numpy.ndarray], **plotkwArgs):
+        """
+        Plot values to selected subfigure.
+
+        :param subfigid: Subfigure id to plot to.
+        :param values: Values to plot.
+        :param plotkwArgs: kwargs directly passed through to the pyplot plot function.
+        """
+        ax2plot2 = subfigid if isinstance(subfigid, plt.Axes) else self._axes.flat[subfigid]
+        ax2plot2.plot(values, **plotkwArgs)
+
+
+    def histoToSubfig(self, subfigid: int, data, **kwargs):
+        self._axes.flat[subfigid].hist(data, **kwargs)
+        self._axes.flat[subfigid].legend()
+
+
+    def writeOrShowFigure(self):
+        for sf in self.axes:
+            sf.legend()
+        super().writeOrShowFigure()
