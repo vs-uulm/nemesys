@@ -11,7 +11,7 @@ from itertools import compress
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
 from visualization.plotter import MessagePlotter
-from utils.loader import SpecimenLoader
+from utils.loader import SpecimenLoader, BaseLoader
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import Template, DistanceCalculator
 
@@ -22,7 +22,7 @@ class DistancesPlotter(MessagePlotter):
     Plot distances between points of high dimensionality using manifold data embedding into a 2-dimensional plot.
     """
 
-    def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
+    def __init__(self, specimens: BaseLoader, analysisTitle: str,
                  isInteractive: bool=False):
         super().__init__(specimens, analysisTitle, isInteractive)
 
@@ -35,6 +35,7 @@ class DistancesPlotter(MessagePlotter):
         self._fig.set_size_inches(16, 9)
         # self._cm = cm.Set1  # has 9 colors
         # self._cm = cm.tab20 # 20 colors
+        # noinspection PyUnresolvedReferences
         self._cm = cm.jet  # type: colors.LinearSegmentedColormap
 
 
@@ -83,7 +84,7 @@ class DistancesPlotter(MessagePlotter):
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
         >>> dp.writeOrShowFigure()
 
-        :param segments: If segments is a list of `TypedSegment`s, field types are marked as small markers
+        :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
             segments
         :param distances: The precomputed similarity matrix:
@@ -171,16 +172,17 @@ class DistancesPlotter(MessagePlotter):
             templates = ulab
         # iterate unique labels and scatter plot each of these clusters
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
+            # test with:
+            # color = [list(numpy.random.randint(0, 10, 4) / 10)]
+            # plt.scatter(numpy.random.randint(0,10,4), numpy.random.randint(0,10,4), c=color)
             lColor = self._cm(cIdx[c])
             class_member_mask = (labels == l)
-            # TODO strange "bug" colors scatter plot of clusters (with exactly 4 members) erratically;
-            #   labels for those additional colors are missing then;
-            #   however, the number of iterations is correct (identical to the number of unique labels)
-            # print(str(c), cIdx[c], lColor)
             try:
                 x = list(compress(pos[:, 0].tolist(), class_member_mask))
                 y = list(compress(pos[:, 1].tolist(), class_member_mask))
-                axMDS.scatter(x, y, c=lColor, alpha=.6,
+                # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                axMDS.scatter(x, y, c=colors.to_rgba_array(lColor), alpha=.6,
                               s = labsize,
                               # s=s-(c*s/len(ulab)),  #
                               lw=0, label=str(l))
@@ -200,9 +202,12 @@ class DistancesPlotter(MessagePlotter):
                 ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
             elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
                 ftypes = numpy.array([msg.messageType for msg in segments])  # PP
+            else:
+                ftypes = set()
             # identify unique types
             utyp = sorted(set(ftypes))
             # prepare color space
+            # noinspection PyUnresolvedReferences
             cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
             # iterate unique types and scatter plot each of these groups
             for n, ft in enumerate(utyp):  # PP
@@ -210,17 +215,18 @@ class DistancesPlotter(MessagePlotter):
                 type_member_mask = (ftypes == ft)
                 x = list(compress(pos[:, 0].tolist(), type_member_mask))
                 y = list(compress(pos[:, 1].tolist(), type_member_mask))
-                axMDS.scatter(x, y, c=fColor, alpha=1,
+                # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                axMDS.scatter(x, y, c=colors.to_rgba_array(fColor), alpha=1,
                           s=typsize,
                           lw=0, label=str(ft))
 
                 if isinstance(segments[0], TypedSegment):
-                    # TODO is it desired to have colors of clusters or types here?
                     for seg in compress(segments, type_member_mask):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
-                lColor = self._cm(cIdx[c])
+                lColor = colors.to_rgba_array(self._cm(cIdx[c]))
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)
@@ -244,6 +250,7 @@ class DistancesPlotter(MessagePlotter):
             lines = [[pos[i, :], pos[j, :]]
                         for i in range(len(pos)) for j in range(len(pos))]
             values = numpy.abs(distances)
+            # noinspection PyUnresolvedReferences
             lc = LineCollection(lines,
                                 zorder=0, cmap=plt.cm.Blues,
                                 norm=plt.Normalize(0, values.max()))
@@ -298,13 +305,16 @@ class DistancesPlotter(MessagePlotter):
             class_member_mask = (labels == l)
             try:
                 x = list(compress(coords[:, 0].tolist(), class_member_mask))
+
                 if coords.shape[1] > 1:
                     y = list(compress(coords[:, 1].tolist(), class_member_mask))
-                    axMDS.scatter(x, y, c=lColor, alpha=.6,
+                    # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
+                    # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
+                    axMDS.scatter(x, y, c=colors.to_rgba_array(lColor), alpha=.6,
                                   # s=s - (c * s / len(ulab)),
                                   lw=0, label=str(l))
                 else:
-                    axMDS.scatter(x, [0] * len(x), c=lColor, alpha=.6,
+                    axMDS.scatter(x, [0] * len(x), c=colors.to_rgba_array(lColor), alpha=.6,
                                   # s=s - (c * s / len(ulab)),
                                   lw=0, label=str(l))
             except IndexError as e:

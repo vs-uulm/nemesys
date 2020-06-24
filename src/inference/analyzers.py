@@ -9,7 +9,7 @@ import numpy
 import pandas
 from bitarray import bitarray
 from typing import Dict, List, Tuple, Union, Type
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from scipy.ndimage.filters import gaussian_filter1d
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -1167,7 +1167,7 @@ class ValueProgression(MessageAnalyzer):
     @property
     @abstractmethod
     def domain(self):
-        super().domain()
+        return super().domain
 
     @abstractmethod
     def analyze(self):
@@ -1301,7 +1301,7 @@ class ValueVariance(MessageAnalyzer):
 class VarianceAmplitude(MessageAnalyzer):
     @property
     def domain(self):
-        pass
+        return None
 
     def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
         super().__init__(message, unit)

@@ -131,7 +131,7 @@ def groupByLength(segmentedMessages: Iterable) -> Dict[int, List[MessageSegment]
     return segsByLen
 
 
-def segments2types(segments: List[TypedSegment]) -> Dict[str, List[TypedSegment]]:
+def segments2types(segments: Iterable[TypedSegment]) -> Dict[str, List[TypedSegment]]:
     """
     Rearrange a list of typed segments into a dict of type: list(segments of that type)
 
@@ -234,7 +234,7 @@ def matrixFromTpairs(distances: List[Tuple[T,T,float]], segmentOrder: Sequence[T
 
 
 
-def filterSegments(segments: List[MessageSegment]) -> List[MessageSegment]:
+def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     """
     Filter input segment for only those segments that are adding relevant information for further analysis.
 
@@ -280,7 +280,7 @@ def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
                 # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
             )
 
-def filterChars(segments: List[MessageSegment], meanCorridor=(50, 115), minLen=6):
+def filterChars(segments: Iterable[MessageSegment], meanCorridor=(50, 115), minLen=6):
     """
     Filter segments by some hypotheses about what might be a char sequence:
         1. Segment is larger than minLen
