@@ -13,6 +13,7 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMess
 from validation.tsharkConnector import TsharkConnector
 
 
+# noinspection PyDictCreation
 class ParsingConstants(object):
     """
     Class to hold constants necessary for the interpretation of the tshark dissectors.
@@ -730,7 +731,6 @@ class ParsedMessage(object):
         elif ParsedMessage.__tshark.linktype != linktype:
             ParsedMessage.__tshark.terminate(2)
             ParsedMessage.__tshark = TsharkConnector(linktype)
-
 
         prsdmsgs = {}
         n = 1000  # parse in chunks of 1000s
