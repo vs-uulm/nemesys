@@ -1,6 +1,6 @@
-# NEMESYS
+# NEMESYS and NEMETYL
 
-#### NEtwork MEssage Syntax analysYS
+#### NEMESYS: NEtwork MEssage Syntax analysYS
 and 
 #### Format Match Score
 
@@ -11,28 +11,46 @@ https://www.usenix.org/conference/woot18/presentation/kleber
 
 ###### On usage please cite as:
 
-*S. Kleber, H. Kopp, und F. Kargl*: „NEMESYS: Network Message Syntax Reverse Engineering by Analysis of the Intrinsic Structure of Individual Messages“, in 12th USENIX Workshop on Offensive Technologies, Baltimore, MD, USA, 2018.
+*S. Kleber, H. Kopp, and F. Kargl*: „NEMESYS: Network Message Syntax Reverse Engineering by Analysis of the Intrinsic Structure of Individual Messages“, in 12th USENIX Workshop on Offensive Technologies, Baltimore, MD, USA, 2018.
 
 [BibTeX](https://www.usenix.org/biblio/export/bibtex/220576)
 
 
 
+#### NEMETYL: NEtwork MEssage TYpe identification by aLignment
 
-## Release: WOOT18
+**Paper authors:** Stephan Kleber, Rens W. van der Heijden, and Frank Kargl, *Institute of Distributed Systems, Ulm University*
+
+https://arxiv.org/abs/2002.03391
+
+###### On usage please cite as:
+
+*S. Kleber, R. W. van der Heijden, and F. Kargl:* „Message Type Identification of Binary Network Protocols using Continuous Segment Similarity“, in IEEE International Conference on Computer Communications, 2020.
+
+
+
+
+
+
+## Release: INFOCOM2020
 
 **Code author:** Stephan Kleber ([stephan.kleber@uni-ulm.de](mailto:stephan.kleber@uni-ulm.de)), *Institute of Distributed Systems, Ulm University*
 
-NEMESYS is a novel method to infer structure from network messages of binary protocols. 
-The method derives field boundaries from the distribution of value changes throughout individual messages. 
-Our method exploits the intrinsic features of structure which are contained within each single message
+**NEMESYS** is a novel method to infer structure from network messages of binary protocols. The method derives field boundaries from the distribution of value changes throughout individual messages. Our method exploits the intrinsic features of structure which are contained within each single message
 instead of comparing multiple messages with each other. 
 
-Additionally, this repository contains the reference implementation for calculating the Format Match Score: 
-It is the first quantitative measure of the quality of a message format inference. 
+Additionally, this repository contains the reference implementation for calculating the **Format Match Score**: It is the first quantitative measure of the quality of a message format inference.
 
-NEMESYS and FMS are indented to be used as a library to be integrated into your own scripts.
-However, you can also use it interactively with your favorite python shell.
-Have a look into `nemesys.py` resp. `nemesys_fms.py` to get an impression of the basic functionality and how to call it.
+**NEMETYL** is a novel method for discriminating protocol message types from each other. It uses structural features of binary protocols inferred by NEMESYS to accurately recognize structural patterns and cluster messages based on their common structure.
+
+NEMESYS, FMS, and NEMETYL are indented to be used as a library to be integrated into your own scripts. However, you can also use it interactively with your favorite python shell.
+Have a look into `nemesys.py`, `nemesys_fms.py`, resp. `nemetyl_align-segments.py` to get an impression of the basic functionality and how to call it.
+
+
+
+## Disclaimer
+
+This is highly experimental software and by no means guaranteed to be fit for productive use. In particular, it has not been tested with varying platforms, python environments, and dependencies. If you run into any problems during deployment and usage, please feel highly encouraged to provide feedback or ask questions via eMail ([stephan.kleber@uni-ulm.de](mailto:stephan.kleber@uni-ulm.de)), via github issue, or a pull request.
 
 
 
@@ -110,6 +128,16 @@ and write FMS and other evaluation data to reports and plots.
 
 
 
+### nemetyl_*
+
+Infer message types from PCAPs using Canberra dissimilarity as feature to determine segment similarity. Similar segments are then aligned in multiple messages and clustered based on their alignment scores. The clusters denote the inferred message types of similar structure.
+
+* `nemetyl_align-segments.py`
+
+  Run NEMETYL and write the analysis results to a subfolder of `reports/`.
+
+
+
 ### netzob_*
 Infer PCAP with Netzob and compare the result to the tshark dissector of the protocol.
 
@@ -117,6 +145,10 @@ Infer PCAP with Netzob and compare the result to the tshark dissector of the pro
   Run [Netzob](https://github.com/netzob/) and validate it by calculating the FMS for each inferred message.
   Writes the results as text files to a timestamped subfolder of `reports/` 
 
+* `netzob_messagetypes.py`
 
+  Infer PCAP with Netzob and compare the result to the tshark dissector of the protocol.
+
+  
 
 

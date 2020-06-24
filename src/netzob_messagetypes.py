@@ -16,17 +16,15 @@ import argparse
 from os.path import isfile, join
 from typing import Dict, Tuple, List
 
-import matplotlib.colors
-import matplotlib.pyplot as plt
-import IPython
-
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
+import utils.evaluationHelpers as eh
+from inference.segments import HelperSegment
+from inference.analyzers import NoneAnalysis
 
 from utils.loader import SpecimenLoader
 from validation.messageParser import ParsedMessage
-from validation.dissectorMatcher import MessageComparator, DissectorMatcher
-import validation.netzobFormatMatchScore as FMS
+from validation.dissectorMatcher import MessageComparator
 
 
 debug = True
@@ -87,55 +85,6 @@ def iterSimilarities(minSimilarity=40, maxSimilarity=60) \
 
 
 
-#################################################
-
-
-# noinspection PyShadowingNames,PyShadowingNames,PyShadowingNames
-def findFormatExamples(theshSymbols):
-    """
-    Distinct datatypes per Symbol or Message-List
-
-    for each similarityThreshold's each Symbol determine contained tformats and a sample message of it
-    dict ( thresh : dict ( symb : list( tuple(tshark_format), l5msg ) ) )
-
-    **depreciated** in favor of new approach of iterSimilarities()
-
-    :param theshSymbols: dict ( thresh : dict ( symb : ... )
-    :return:
-    """
-    formatsInSymbols = dict()
-    for thresh, symbqual in theshSymbols:
-        formatsInSymbols[thresh] = dict()
-        for symb, rest in symbqual.items():
-            formatsInSymbols[thresh][symb] = list()
-            for msg in symb.messages:  # the L5Messages
-                # only retain unique formats (a list of tuples of primitives can simply be compared)
-                if tformats[specimens.messagePool[msg]] not in (fmt for fmt, msg in formatsInSymbols[thresh][symb]):
-                    formatsInSymbols[thresh][symb].append((tformats[specimens.messagePool[msg]], msg))  # the format for message msg
-
-
-def reduceBitsToBytes(formatdescbit):
-    """
-    Reduce length precicion from bits to bytes in a field-length tuple list derived from Scapy.
-
-    **depreciated** since not needed without scapy
-
-    :param formatdescbit: list of tuples (fieldtype, fieldlengthInBits)
-    :return: list of tuples (fieldtype, fieldlengthInBytes)
-    """
-    formatdescbyte = list()
-    bittoalign = 0
-    for ftype, length in formatdescbit:
-        bytesnum = length / 8
-        overbit = length % 8
-        bittoalign = (overbit + bittoalign) % 8
-        bytesnum += (overbit + bittoalign) / 8
-        if bytesnum == 0:
-            continue  # jump to next field, since current is too small (< 8 bit) to retain
-        formatdescbyte.append((ftype, bytesnum))
-    return formatdescbyte
-
-#################################################
 
 
 
@@ -174,15 +123,17 @@ if __name__ == '__main__':
     threshSymbTfmt = {t: s for t, (s, r) in threshSymbTfmtTime.items()}
     threshTime = {t: r for t, (s, r) in threshSymbTfmtTime.items()}
 
-    print('\nCalculate Format Match Score...')
+    print('\nCalculate Cluster Statistics...')
     swstart = time.time()
 
     if args.profile:
         import cProfile #, pstats
         prof = cProfile.Profile()
         prof.enable()
-    # (thresh, msg) : fms
-    formatmatchmetrics = DissectorMatcher.thresymbolListsFMS(comparator, threshSymbTfmt)
+    # here goes the extraction of messages from the symbols
+    threshSymbMsgs = {t: {n: [msg for msg in s.messages]
+                          for n, s in enumerate(syme.keys())} for t, syme in threshSymbTfmt.items()}
+
     if args.profile:
         # noinspection PyUnboundLocalVariable
         prof.disable()
@@ -201,57 +152,26 @@ if __name__ == '__main__':
     print('\nPrepare output data...')
     swstart = time.time()
 
-    # per tformat stats: dict ( message: list((t,s),(t,s)) )
-    tformats = comparator.dissections
-    distinctFormats = MessageComparator.uniqueFormats(tformats.values())
+    # compare symbols' messages to true message types
+    groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
+    eh.clStatsFile = join(eh.reportFolder, 'messagetype-netzob-statistics.csv')
+    eh.ccStatsFile = join(eh.reportFolder, 'messagetype-combined-netzob-statistics.csv')
+    for thresh, symbMsgs in threshSymbMsgs.items():
+        # place each msg in tuple of one dummy segment
+        messageClusters = {symname: [[HelperSegment(NoneAnalysis(msg),0,len(msg.data))] for msg in msglist]
+                           for symname, msglist in symbMsgs.items()}
 
-    # Format Match Score per format and symbol per threshold
-    qpfSimilarity = dict()  # lists of x-values of each distinctFormat
-    qualityperformat = dict()  # lists of y-values of each distinctFormat
-    for df in distinctFormats:
-        qualityperformat[df] = list()  # FMS per format
-        qpfSimilarity[df] = list()
-    for (thresh, msg), metrics in formatmatchmetrics.items():  # per threshold
-        qualityperformat[metrics.trueFormat].append(metrics.score)
-        qpfSimilarity[metrics.trueFormat].append(thresh)
-
-    # TODO biggest/most correct cluster per threshold
-    # TODO format correctness, consiseness, (coverage) of each symbol
-
-    # ## Output
-    # FMS.printFMS(formatmatchmetrics, False)
-    # plot_scatter3d(underOverSpecific, formatMatchScore, similarityThreshold)
-    scoreStats = FMS.MessageScoreStatistics(comparator)
-    scoreStats.printMinMax(formatmatchmetrics)
-
-    # experimental
-    # plt.ion()
-
-    # Format Match Score per format and symbol per threshold
-    xkcdc = list(matplotlib.colors.XKCD_COLORS.values())
-    for i, df in enumerate(distinctFormats):
-        plt.scatter(qpfSimilarity[df], qualityperformat[df], c=xkcdc[i], alpha=0.5, marker=r'.',
-                    label="Format {:d} ".format(i))  # + repr(df))
-    plt.ticklabel_format(style="plain")
-    plt.xlabel("Similarity Theshold")
-    plt.ylabel("Format Match Score")
-    plt.legend(loc=2)
-
-    print('Prepared in {:.3f}s'.format(time.time() - swstart))
-    print('Writing report...')
-    swstart = time.time()
-
-    reportFolder = FMS.writeReport(formatmatchmetrics, plt, threshTime,specimens, comparator)
-    if args.profile:
-        prof.dump_stats(join(reportFolder, 'profiling-netzob-pathparser.profile'))
-    print('Written in {:.3f}s'.format(time.time() - swstart))
+        clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
+            messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
+        eh.writeCollectiveClusteringStaticstics(
+            messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
 
     ParsedMessage.closetshark()
 
-    # interactive stuff
-    # plt.show()
-    print("\nAll truths are easy to understand once they are discovered; the point is to discover them. -- Galileo Galilei\n")
-    IPython.embed()
+    # # interactive stuff
+    # # plt.show()
+    # print("\nAll truths are easy to understand once they are discovered; the point is to discover them. -- Galileo Galilei\n")
+    # IPython.embed()
 
 
 

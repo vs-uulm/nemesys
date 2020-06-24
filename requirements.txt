@@ -1,3 +1,9 @@
+humanhash
+netzob
+bitarray
+hdbscan
+sklearn
+numpy
 cython
 scapy
 IPython
