@@ -5,12 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/analysis_message_plot.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/analyze_fieldtype_separation.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/characterize_segments.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/contents.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/alignment/alignMessages.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/alignMessages.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/formatRefinement.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/formatRefinement.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/segmentHandler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segmentHandler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/validation/messageParser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/messageParser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,6 +56,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SearchEverywhereHistoryKey" value="getoffset&#9;null&#9;null&#10;Bcolors&#9;null&#9;null&#10;bcolor&#9;null&#9;null&#10;getClustersFrom&#9;null&#9;null&#10;getClustersFromLa&#9;null&#9;null&#10;absolute differences&#9;null&#9;null&#10;plot&#9;FILE&#9;file:///home/stephan/git.lab-vs/REUP/specimen-generation/src/plotMessages.py&#10;bitarray&#9;null&#9;null" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$1/New Scratch File" value="Python&#10;Markdown" />
@@ -362,10 +370,26 @@
     <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
   </component>
   <component name="WindowStateProjectService">
-    <state x="719" y="457" width="728" height="556" key="find.popup" timestamp="1592744309853">
+    <state x="851" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser" timestamp="1592767076709">
       <screen x="0" y="30" width="3440" height="1410" />
     </state>
-    <state x="719" y="457" width="728" height="556" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592744309853" />
+    <state x="851" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1592767076709" />
+    <state x="777" y="577" width="521" height="323" key="ANALYSIS_DLG_com.intellij.analysis.BaseAnalysisAction$1" timestamp="1592767320731">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="777" y="577" width="521" height="323" key="ANALYSIS_DLG_com.intellij.analysis.BaseAnalysisAction$1/0.30.3440.1410@0.30.3440.1410" timestamp="1592767320731" />
+    <state x="719" y="457" width="975" height="556" key="find.popup" timestamp="1592955461604">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="719" y="457" width="975" height="556" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592955461604" />
+    <state width="739" height="320" key="javadoc.popup.new" timestamp="1592957146439">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state width="739" height="320" key="javadoc.popup.new/0.30.3440.1410@0.30.3440.1410" timestamp="1592957146439" />
+    <state x="706" y="351" width="672" height="678" key="search.everywhere.popup" timestamp="1592955209225">
+      <screen x="0" y="30" width="3440" height="1410" />
+    </state>
+    <state x="706" y="351" width="672" height="678" key="search.everywhere.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592955209225" />
   </component>
   <component name="XDebuggerManager">
     <watches-manager>
