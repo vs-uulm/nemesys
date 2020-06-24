@@ -576,8 +576,6 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     """
     cache or load the DistanceCalculator to or from the filesystem
 
-    >>> chainedSegments = dc.rawSegments
-
 
     :param filterTrivial: Filter out **one-byte** segments and such just consisting of **zeros**.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
@@ -657,6 +655,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
             dc = MemmapDC(chainedSegments)
         else:
             dc = DelegatingDC(chainedSegments)
+        assert chainedSegments == dc.rawSegments
         dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
         try:
             with open(dccachefn, 'wb') as f:

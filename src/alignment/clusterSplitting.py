@@ -58,10 +58,11 @@ class ClusterSplitter(object):
         """
         Activate writing of exotic field statistics to CSV for evaluation.
 
-        >>> recs = RelaxedExoticClusterSplitter()
-        >>> recs.activateCVSout("{}-{}-eps={:.2f}-min_samples={}".format(
-        ...            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-        ...            comparator.specimens.pcapFileName, {cs[0] : cs[2] for cs in clusterStats})
+        Example:
+            >>> recs = RelaxedExoticClusterSplitter()  # doctest: +SKIP
+            >>> recs.activateCVSout("{}-{}-eps={:.2f}-min_samples={}".format(  # doctest: +SKIP
+            ...         tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
+            ...         comparator.specimens.pcapFileName, {cs[0] : cs[2] for cs in clusterStats})
 
         :param clusterPrecisions:
         :param runtitle:

@@ -81,12 +81,19 @@ def segmentsFixed(length: int, comparator,
     """
     Segment messages into fixed size chunks.
 
-    >>> segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
+    >>> from utils.loader import SpecimenLoader
+    >>> from validation.dissectorMatcher import MessageComparator
+    >>> from inference.analyzers import Value
+    >>> from inference.segmentHandler import segmentsFixed
+    >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
+    >>> comparator = MessageComparator(specimens, 2, True, debug=False)
+    >>> segmentedMessages = segmentsFixed(4, comparator, Value, None)
     >>> areIdentical = True
     >>> for msgsegs in segmentedMessages:
-    >>>     msg = msgsegs[0].message
-    >>>     msgbytes = b"".join([seg.bytes for seg in ])
-    >>>     areIdentical = areIdentical and msgbytes == msg.data
+    ...     msg = msgsegs[0].message
+    ...     msgbytes = b"".join([seg.bytes for seg in msgsegs])
+    ...     areIdentical = areIdentical and msgbytes == msg.data
+    >>> print(areIdentical)
     True
 
     :param length: Fixed length for all segments. Overhanging segments at the end that are shorter than length

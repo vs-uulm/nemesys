@@ -1388,8 +1388,10 @@ class ParsedMessage(object):
         Example:
         >>> from netzob.all import *
         >>> from validation.messageParser import ParsedMessage
-        >>> dhcp = PCAPImporter.readFile("../input/dhcp_SMIA2011101X_deduped-100.pcap", importLayer=1).values()
-        >>> pms = ParsedMessage.parseMultiple(dhcp)
+        >>> dns = PCAPImporter.readFile("../input/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
+        >>> pms = ParsedMessage.parseMultiple(dns)
+        Ignored sub field: dns.id_tree
+        Ignored sub field: dns.id_tree
         >>> for parsed in pms.values(): parsed.printUnknownTypes()
         """
         CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()

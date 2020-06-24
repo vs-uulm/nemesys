@@ -73,16 +73,18 @@ class DistancesPlotter(MessagePlotter):
         >>> analyzers = [Value(message) for message in messages]
         >>> segments  = [TypedSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
         >>> for seg in segments[:4]:
-        >>>     seg.fieldtype = "ft1"
+        ...     seg.fieldtype = "ft1"
         >>> for seg in segments[4:6]:
-        >>>     seg.fieldtype = "ft2"
+        ...     seg.fieldtype = "ft2"
         >>> for seg in segments[6:]:
-        >>>     seg.fieldtype = "ft3"
+        ...     seg.fieldtype = "ft3"
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments, thresholdFunction=DistanceCalculator.neutralThreshold, thresholdArgs=None)
+        Calculated distances for 37 segment pairs in ... seconds.
         >>> dp = DistancesPlotter(specimens, "test", False)
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
-        >>> dp.writeOrShowFigure()
+        >>> # comment out writing of file for doctest
+        >>> # dp.writeOrShowFigure()
 
         :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled

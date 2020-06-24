@@ -130,7 +130,7 @@ class HirschbergOnSegmentSimilarity(Alignment):
         >>> m1 = [1,4,0]
         >>> hirsch = HirschbergOnSegmentSimilarity(simtx)
         >>> print(hirsch.nwScore(m0, m1))
-        [-20.  -10.   23.4  57.4]
+        [-4.  -2.   3.9  9.9]
 
         :param tokensX: List of indices in the similarity matrix, representing message X
         :param tokensY: List of indices of in the similarity matrix, representing message Y

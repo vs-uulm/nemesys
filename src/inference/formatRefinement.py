@@ -474,8 +474,20 @@ class CumulativeCharMerger(MessageModifier):
         """
         Perform the merging.
 
-        >>> bytes.fromhex("00000000000002")
-        >>> bytes.fromhex("613205")
+        >>> from utils.loader import SpecimenLoader
+        >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from inference.formatRefinement import CumulativeCharMerger
+        >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
+        >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
+        Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
+        >>> for messageSegments in segmentsPerMsg:
+        ...     ccm = CumulativeCharMerger(messageSegments)
+        ...     ccmmsg = ccm.merge()
+        ...     if ccmmsg != messageSegments:
+        ...         sgms = b''.join([m.bytes for m in ccmmsg])
+        ...         sgss = b''.join([m.bytes for m in messageSegments])
+        ...         if sgms != sgss:
+        ...             print("Mismatch!")
 
         :return: a new set of segments after the input has been merged
         """
