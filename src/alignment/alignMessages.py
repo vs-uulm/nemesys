@@ -6,13 +6,14 @@ from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from scipy.special import comb
 
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from inference.segmentHandler import matrixFromTpairs
 from inference.segments import MessageSegment
+from inference.templates import DistanceCalculator
 
 
 class SegmentedMessages(object):
-    def __init__(self, dc, segmentedMessages):
+    def __init__(self, dc: DistanceCalculator, segmentedMessages: Sequence[Tuple[MessageSegment]]):
         self._score_match = None
         self._score_mismatch = None
         self._score_gap = None
@@ -75,7 +76,7 @@ class SegmentedMessages(object):
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
-        Calculated distances for 37 segment pairs.
+        Calculated distances for 37 segment pairs in ... seconds.
         >>> m0 = segments[:3]
         >>> m1 = segments[3:5]
         >>> m2 = segments[5:9]
@@ -108,7 +109,7 @@ class SegmentedMessages(object):
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
-        Calculated distances for 37 segment pairs.
+        Calculated distances for 37 segment pairs in ... seconds.
         >>> m0 = segments[:3]
         >>> m1 = segments[3:5]
         >>> m2 = segments[5:9]
@@ -129,11 +130,12 @@ class SegmentedMessages(object):
                 maxScore[i, j] = min(  # The max similarity for a pair is len(shorter) * self._score_match
                     # the diagonals contain the max score match for the pair, calculated in _calcSimilarityMatrix
                     similarityMatrix[i, i], similarityMatrix[j, j]
-                )
+                )  # == nu in paper
                 minDim = min(len(self._segmentedMessages[i]), len(self._segmentedMessages[j]))
-                base[i, j] = minScore * minDim
+                base[i, j] = minScore * minDim  # == mu in paper
 
         distanceMatrix = 100 - 100*((similarityMatrix-base) / (maxScore-base))
+        # distanceMatrix = 100 - 100 * ((similarityMatrix + base) / (maxScore - base))
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 
@@ -215,8 +217,12 @@ class SegmentedMessages(object):
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
-        Calculated distances for 37 segment pairs.
-        >>> sm = SegmentedMessages(dc, segments)
+        Calculated distances for 37 segment pairs in ... seconds.
+        >>> msgcluster = [segments[:3], segments[3:5], segments[5:9]]
+        >>> sm = SegmentedMessages(dc, msgcluster)
+        Calculate message alignment scores for 3 messages and 3 pairs  .
+        finished in 0.00 seconds.
+        Calculate message similarity from alignment scores...
         >>> indicesalignment, alignedsegments = sm.alignMessageType(msgcluster)
         >>> hexclualn = [[dc.segments[s].bytes.hex() if s != -1 else None for s in m] for m in indicesalignment]
         >>> hexalnseg = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]

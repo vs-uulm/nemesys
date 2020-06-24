@@ -1,7 +1,6 @@
 from os.path import splitext, basename, join, exists
 from typing import List
 
-
 import matplotlib.pyplot as plt
 
 
@@ -44,8 +43,10 @@ class MessagePlotter(object):
         If isInteractive was set to true, show the plot in a window, else write it to a file,
         if none of the same name already exists. Closes all figures afterwards.
         """
+        from utils.evaluationHelpers import reportFolder
+
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
-        plotfile = join('reports', '{}_{}.pdf'.format(self._title, pcapName))
+        plotfile = join(reportFolder, '{}_{}.pdf'.format(self._title, pcapName))
 
         plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))

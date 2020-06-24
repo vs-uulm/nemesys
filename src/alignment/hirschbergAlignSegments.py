@@ -7,9 +7,9 @@ debug = False
 
 class Alignment(ABC):
 
-    SCORE_GAP = -5
-    SCORE_MATCH = 5  # use as factor, to multiply with the similarity matrix.
-    SCORE_MISMATCH = -1
+    SCORE_GAP = -1
+    SCORE_MATCH = 1  # use as factor, to multiply with the similarity matrix.
+    SCORE_MISMATCH = 0
 
     def __init__(self, similarityMatrix, score_gap=SCORE_GAP, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH):
         """
@@ -130,7 +130,7 @@ class HirschbergOnSegmentSimilarity(Alignment):
         >>> m1 = [1,4,0]
         >>> hirsch = HirschbergOnSegmentSimilarity(simtx)
         >>> print(hirsch.nwScore(m0, m1))
-        [-20.  -10.   23.4  57.4]
+        [-4.  -2.   3.9  9.9]
 
         :param tokensX: List of indices in the similarity matrix, representing message X
         :param tokensY: List of indices of in the similarity matrix, representing message Y

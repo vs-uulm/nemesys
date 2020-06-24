@@ -11,7 +11,7 @@ from itertools import compress
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
 from visualization.plotter import MessagePlotter
-from utils.loader import SpecimenLoader, BaseLoader
+from utils.loader import BaseLoader
 from inference.segments import MessageSegment, TypedSegment
 from inference.templates import Template, DistanceCalculator
 
@@ -73,16 +73,18 @@ class DistancesPlotter(MessagePlotter):
         >>> analyzers = [Value(message) for message in messages]
         >>> segments  = [TypedSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
         >>> for seg in segments[:4]:
-        >>>     seg.fieldtype = "ft1"
+        ...     seg.fieldtype = "ft1"
         >>> for seg in segments[4:6]:
-        >>>     seg.fieldtype = "ft2"
+        ...     seg.fieldtype = "ft2"
         >>> for seg in segments[6:]:
-        >>>     seg.fieldtype = "ft3"
+        ...     seg.fieldtype = "ft3"
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments, thresholdFunction=DistanceCalculator.neutralThreshold, thresholdArgs=None)
+        Calculated distances for 37 segment pairs in ... seconds.
         >>> dp = DistancesPlotter(specimens, "test", False)
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
-        >>> dp.writeOrShowFigure()
+        >>> # comment out writing of file for doctest
+        >>> # dp.writeOrShowFigure()
 
         :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
@@ -107,7 +109,12 @@ class DistancesPlotter(MessagePlotter):
         fcm = cm.cubehelix  # type color map
 
         # identify unique labels
-        ulab = sorted(set(labels))
+        allabels = set(labels)
+        if all(isinstance(l, numpy.integer) or l.isdigit() for l in allabels if l != "Noise"):
+            ulab = sorted(allabels,
+                          key=lambda l: -1 if l == "Noise" else int(l))
+        else:
+            ulab = sorted(allabels)
 
         # subsample if segment count is larger than maxSamples
         maxSamples = 1000
@@ -163,8 +170,11 @@ class DistancesPlotter(MessagePlotter):
                     ulab.remove(l)
         elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
             for l in ulab:
-                if l == -1:
-                    ulab.remove(l)
+                try:
+                    if int(l) == -1:
+                        ulab.remove(l)
+                except ValueError as e:
+                    pass  # not a problem, just keep the cluster, since its not noise.
 
         # prepare color space
         cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
@@ -226,7 +236,7 @@ class DistancesPlotter(MessagePlotter):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
             for c, l in enumerate(ulab):
-                lColor = colors.to_rgba_array(self._cm(cIdx[c]))
+                lColor = self._cm(cIdx[c])
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)

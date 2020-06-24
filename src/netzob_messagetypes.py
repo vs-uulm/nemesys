@@ -16,10 +16,6 @@ import argparse
 from os.path import isfile, join
 from typing import Dict, Tuple, List
 
-import matplotlib.colors
-import matplotlib.pyplot as plt
-import IPython
-
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 import utils.evaluationHelpers as eh
@@ -134,8 +130,9 @@ if __name__ == '__main__':
         import cProfile #, pstats
         prof = cProfile.Profile()
         prof.enable()
-    # TODO here goes the extraction of messages from the symbols
-    threshSymbMsgs = {t: {n: [msg for msg in s.messages] for n, s in enumerate(syme.keys())} for t, syme in threshSymbTfmt.items()}
+    # here goes the extraction of messages from the symbols
+    threshSymbMsgs = {t: {n: [msg for msg in s.messages]
+                          for n, s in enumerate(syme.keys())} for t, syme in threshSymbTfmt.items()}
 
     if args.profile:
         # noinspection PyUnboundLocalVariable
@@ -155,15 +152,18 @@ if __name__ == '__main__':
     print('\nPrepare output data...')
     swstart = time.time()
 
-    # TODO compare symbols' messages to true message types
+    # compare symbols' messages to true message types
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
     eh.clStatsFile = join(eh.reportFolder, 'messagetype-netzob-statistics.csv')
+    eh.ccStatsFile = join(eh.reportFolder, 'messagetype-combined-netzob-statistics.csv')
     for thresh, symbMsgs in threshSymbMsgs.items():
         # place each msg in tuple of one dummy segment
         messageClusters = {symname: [[HelperSegment(NoneAnalysis(msg),0,len(msg.data))] for msg in msglist]
                            for symname, msglist in symbMsgs.items()}
 
-        clusterStats, conciseness = eh.writeMessageClusteringStaticstics(
+        clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
+            messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
+        eh.writeCollectiveClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
 
     ParsedMessage.closetshark()

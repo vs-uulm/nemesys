@@ -6,7 +6,7 @@ from networkx import Graph
 from networkx.algorithms.components.connected import connected_components
 
 from inference.templates import DistanceCalculator, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, NWonSegmentSimilarity
+from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from inference.analyzers import *
 
 
@@ -24,7 +24,7 @@ class ClusterAligner(object):
 
     def generateHirsch(self, mmg=(0, -1, 5)):
         alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in self.alignedClusters.items() if
-                         clunu > -1}
+                         clunu != -1}
         statDynFields = dict()
         for clunu, alfi in alignedFields.items():
             statDynFields[clunu] = list()
@@ -44,8 +44,8 @@ class ClusterAligner(object):
 
         # fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
         #               for fcL in statDynValues] for fcK in statDynValues])
-
         # use medoid distance in fcSimMatrix instead of fixed value (0.5)
+
         fcSimMatrix = numpy.array([[
             # 1.0 if fcL.bytes == fcK.bytes else
             1.0 - 0.4 * fcL.distToNearest(fcK.baseSegments, self.dc)  # DYN-DYN similarity
@@ -323,7 +323,6 @@ class ClusterMerger(ClusterAligner):
 
     @staticmethod
     def selectMatchingClusters(alignedFieldClasses, matchingConditions):
-        from math import ceil
 
         def lenAndTrue(boolist, length=2, truths=0):
             return len(boolist) <= length and len([a for a in boolist if a]) > truths
@@ -586,7 +585,7 @@ class ClusterClusterer(ClusterAligner):
 
     def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator):
         super().__init__(alignedClusters, dc)
-        self.clusterOrder = [clunu for clunu in sorted(alignedClusters.keys()) if clunu > -1]
+        self.clusterOrder = [clunu for clunu in sorted(alignedClusters.keys()) if clunu != -1]
         self.distances = self.calcClusterDistances()
 
 
@@ -704,7 +703,7 @@ class ClusterClusterer(ClusterAligner):
                                messageClusters: Dict[int, List[AbstractMessage]]):
         mergedClusters = {str(mergelist):
                               list(chain.from_iterable([messageClusters[clunu] for clunu in mergelist]))
-                          for mergelabel, mergelist in clusterClusters.items() if mergelabel > -1}
+                          for mergelabel, mergelist in clusterClusters.items() if mergelabel != -1}
         singleClusters = {ck: ml for ck, ml in messageClusters.items() if ck not in chain.from_iterable(clusterClusters.values())}
         mergedClusters.update(singleClusters)
         return mergedClusters
