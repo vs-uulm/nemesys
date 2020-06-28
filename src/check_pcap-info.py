@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from os.path import isfile, basename
 from tabulate import tabulate
 
-from utils.loader import SpecimenLoader
+from nemere.utils.loader import SpecimenLoader
 
 
 def countByteFrequency():

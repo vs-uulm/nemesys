@@ -4,10 +4,10 @@ from tabulate import tabulate
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.segments import MessageSegment, TypedSegment, AbstractSegment
-from inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
-from inference.templates import DistanceCalculator, Template
-from visualization import bcolors as bcolors
+from nemere.inference.segments import MessageSegment, TypedSegment
+from nemere.inference.fieldTypes import BaseTypeMemento, RecognizedField, RecognizedVariableLengthField
+from nemere.inference.templates import DistanceCalculator, Template
+from nemere.visualization import bcolors as bcolors
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):

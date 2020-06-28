@@ -7,7 +7,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
 
-from validation.messageParser import ParsingConstants
+from nemere.validation.messageParser import ParsingConstants
 
 class BaseLoader(object):
     """
@@ -68,7 +68,7 @@ class SpecimenLoader(BaseLoader):
         """
         Load the messages from the PCAP file of the given name.
 
-        >>> from utils.loader import SpecimenLoader
+        >>> from nemere.utils.loader import SpecimenLoader
         >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
         >>> firstmessage = list(sl.messagePool.items())[0]
         >>> print(firstmessage[0].data.hex())  # the whole message

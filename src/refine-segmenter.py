@@ -5,12 +5,12 @@ from typing import List
 
 import IPython
 
-from inference.segmentHandler import originalRefinements, baseRefinements, pcaPcaRefinements, pcaMocoRefinements, \
-    isExtendedCharSeq, symbolsFromSegments
-from inference.segments import MessageAnalyzer, MessageSegment
-from validation import reportWriter
-from validation.dissectorMatcher import DissectorMatcher
-from utils.evaluationHelpers import analyses, cacheAndLoadDC, annotateFieldTypes, reportFolder
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, pcaPcaRefinements, \
+    pcaMocoRefinements, isExtendedCharSeq, symbolsFromSegments
+from nemere.inference.segments import MessageSegment
+from nemere.validation import reportWriter
+from nemere.validation.dissectorMatcher import DissectorMatcher
+from nemere.utils.evaluationHelpers import analyses, cacheAndLoadDC, annotateFieldTypes, reportFolder
 
 debug = False
 

@@ -5,23 +5,27 @@ segment messages by NEMESYS and cluster
 import argparse, IPython
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
-from typing import Union, Any
+from typing import Any
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
-    ClusterAutoconfException
-from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
-    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices, CropChars, SplitFixed
-from validation import reportWriter
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.simplePrint import *
-from utils.evaluationHelpers import *
-from validation.dissectorMatcher import FormatMatchScore
-from validation.dissectorMatcher import DissectorMatcher
+import numpy
+
+from nemere.inference.analyzers import Value
+from nemere.inference.segments import MessageSegment
+from nemere.inference.templates import DBSCANsegmentClusterer, Template, FieldTypeContext, \
+    ClusterAutoconfException, DistanceCalculator, MemmapDC
+from nemere.inference.segmentHandler import symbolsFromSegments, isExtendedCharSeq, \
+    baseRefinements, pcaRefinements, pcaPcaRefinements
+from nemere.inference.formatRefinement import RelocatePCA, CropDistinct, BlendZeroSlices, CropChars, SplitFixed
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation import reportWriter
+from nemere.visualization.simplePrint import *
+from nemere.utils.evaluationHelpers import *
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.validation.dissectorMatcher import DissectorMatcher
 
 debug = False
 

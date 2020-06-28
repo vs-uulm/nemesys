@@ -1,6 +1,7 @@
-from typing import Hashable, List, Iterable
+from typing import Hashable, Iterable
 import numpy, uuid
 from tabulate import tabulate
+
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 

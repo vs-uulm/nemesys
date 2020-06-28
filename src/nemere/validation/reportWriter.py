@@ -12,8 +12,8 @@ from itertools import chain
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import FormatMatchScore, MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator
 
 
 def calcScoreStats(scores: Iterable[float]) -> Tuple[float, float, float, float, float]:

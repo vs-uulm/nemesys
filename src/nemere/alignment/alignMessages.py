@@ -6,10 +6,10 @@ from hdbscan import HDBSCAN
 from sklearn.cluster import DBSCAN
 from scipy.special import comb
 
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity, Alignment
-from inference.segmentHandler import matrixFromTpairs
-from inference.segments import MessageSegment
-from inference.templates import DistanceCalculator, MemmapDC
+from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from nemere.inference.segmentHandler import matrixFromTpairs
+from nemere.inference.segments import MessageSegment
+from nemere.inference.templates import DistanceCalculator, MemmapDC
 
 
 class SegmentedMessages(object):
@@ -71,8 +71,8 @@ class SegmentedMessages(object):
         """
         Calculate a similarity matrix of messages from nwscores yielded by HirschbergOnSegmentSimilarity.
 
-        >>> from utils.baseAlgorithms import generateTestSegments
-        >>> from inference.templates import DistanceCalculator
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DistanceCalculator
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -104,8 +104,8 @@ class SegmentedMessages(object):
         """
         For clustering, convert the nwscores-based similarity matrix to a distance measure.
 
-        >>> from utils.baseAlgorithms import generateTestSegments
-        >>> from inference.templates import DistanceCalculator
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DistanceCalculator
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -213,8 +213,8 @@ class SegmentedMessages(object):
         Messages segments of one cluster aligned to the medoid ("segments that is most similar too all segments")
         of the cluster.
 
-        >>> from utils.baseAlgorithms import generateTestSegments
-        >>> from inference.templates import DistanceCalculator
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DistanceCalculator
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -288,7 +288,7 @@ class SegmentedMessages(object):
 
         :return: minpts, epsilon
         """
-        from utils.baseAlgorithms import autoconfigureDBSCAN
+        from nemere.utils.baseAlgorithms import autoconfigureDBSCAN
         # can we omit k = 0 ?
         # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
         epsilon, min_samples, k = autoconfigureDBSCAN(self.neighbors())

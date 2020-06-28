@@ -3,9 +3,10 @@ from typing import Type, Union, Any, Tuple, Iterable, List, Dict
 import numpy
 import scipy.spatial
 
-from inference.analyzers import Value
-from inference.segments import MessageAnalyzer, MessageSegment, TypedSegment
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
+
+from nemere.inference.analyzers import Value
+from nemere.inference.segments import MessageAnalyzer, MessageSegment, TypedSegment
 
 
 
@@ -84,8 +85,8 @@ class FieldTypeMemento(BaseTypeMemento):
         """
 
         There is some rounding error so the stdev is not entierely identical to the diagonal of the covariance matrix.
-        >>> from inference.templates import FieldTypeTemplate
-        >>> from inference.segments import MessageSegment
+        >>> from nemere.inference.templates import FieldTypeTemplate
+        >>> from nemere.inference.segments import MessageSegment
         >>> bs = [MessageSegment(None, 0, 1)]
         >>> ftt = FieldTypeTemplate(bs)
         >>> numpy.round(ftt.stdev, 8) == numpy.round(ftt.cov.diagonal(), 8)
@@ -394,7 +395,7 @@ class FieldTypeRecognizer(object):
 
         :return: list of recognized char sequences with the constant confidence of 0.2
         """
-        from inference.segmentHandler import isExtendedCharSeq
+        from nemere.inference.segmentHandler import isExtendedCharSeq
 
         confidence = 0.2
         offset = 0
@@ -584,7 +585,7 @@ class FieldTypeQuery(object):
         return aStart <= bStart < aEnd or bStart < aEnd <= bEnd
 
 
-    from inference.segments import TypedSegment
+    from nemere.inference.segments import TypedSegment
     def matchStatistics(self, segmentedMessage: List[TypedSegment]):
         """
         Generate lists for statistics of true and false positives and false negatives.
@@ -595,7 +596,7 @@ class FieldTypeQuery(object):
         """
         assert segmentedMessage[0].message == self.message
 
-        from inference.segmentHandler import segments2types
+        from nemere.inference.segmentHandler import segments2types
         typedSegments = segments2types(segmentedMessage)
         nonConflicting = self.resolveConflicting()
 

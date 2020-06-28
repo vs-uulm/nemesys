@@ -8,9 +8,9 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
-from inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
-from inference.analyzers import MessageAnalyzer
-from inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
+from nemere.inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
+from nemere.inference.analyzers import MessageAnalyzer
+from nemere.inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -175,7 +175,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     """
     Segment message by determining inflection points of gauss-filtered bit congruence deltas.
 
-    >>> from utils.loader import SpecimenLoader
+    >>> from nemere.utils.loader import SpecimenLoader
     >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
     Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
@@ -185,7 +185,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
 
     :return: Segmentation of the specimens in the pool.
     """
-    from inference.analyzers import BitCongruenceDeltaGauss
+    from nemere.inference.analyzers import BitCongruenceDeltaGauss
 
     print('Segmentation by inflections of sigma-{:.1f}-gauss-filtered bit-variance.'.format(
         sigma
@@ -222,7 +222,7 @@ def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceC
     :return: refined segments in list per message
     """
     from itertools import chain
-    from inference.formatRefinement import RelocatePCA, CropDistinct
+    from nemere.inference.formatRefinement import RelocatePCA, CropDistinct
 
     print("Refine segmentation (+ moco refinements)...")
 
@@ -258,7 +258,7 @@ def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs)
     :return: refined segments in list per message
     """
     from itertools import chain
-    from inference.formatRefinement import RelocatePCA
+    from nemere.inference.formatRefinement import RelocatePCA
 
     print("Refine segmentation (PCA refinements)...")
 
@@ -281,7 +281,7 @@ def pcaPcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwar
     :return: refined segments in list per message
     """
     from itertools import chain
-    from inference.formatRefinement import RelocatePCA
+    from nemere.inference.formatRefinement import RelocatePCA
 
     print("Refine segmentation (PCA refinements)...")
 
@@ -305,7 +305,7 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (base refinements)...")
 
@@ -328,7 +328,7 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
 
 
 def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (zero-slices refinements)...")
 
@@ -348,7 +348,7 @@ def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> Li
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (nemetyl refinements)...")
 
@@ -383,7 +383,7 @@ def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (char refinements)...")
 
@@ -411,7 +411,7 @@ def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (WOOT18 refinements)...")
 
@@ -655,7 +655,7 @@ def locateNonPrintable(bstring: bytes) -> List[int]:
     :param bstring: a string of bytes
     :return: position of bytes not in \t, \n, \r or between >= 0x20 and <= 0x7e
     """
-    from inference.formatRefinement import isPrintableChar
+    from nemere.inference.formatRefinement import isPrintableChar
 
     npr = list()
     for idx, bchar in enumerate(bstring):

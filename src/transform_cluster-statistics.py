@@ -9,9 +9,9 @@ and outputs scoreTable.csv
 
 import csv, os
 from tabulate import tabulate
-from typing import Dict, Tuple, List
+from typing import Dict, List
 
-from utils.evaluationHelpers import reportFolder, scStatsFile
+from nemere.utils.evaluationHelpers import reportFolder, scStatsFile
 
 cols = [
     #   0           1           2               3               4                5           6          7

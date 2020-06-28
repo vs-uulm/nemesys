@@ -10,8 +10,8 @@ from os.path import isfile
 from sys import exit
 import IPython
 
-from validation.messageParser import ParsedMessage
-from utils.loader import SpecimenLoader
+from nemere.validation.messageParser import ParsedMessage
+from nemere.utils.loader import SpecimenLoader
 
 if __name__ == '__main__':
     parser = ArgumentParser(

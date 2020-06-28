@@ -16,19 +16,15 @@ import argparse
 from os.path import isfile, join
 from typing import Dict, Tuple, List
 
-import matplotlib.colors
-import matplotlib.pyplot as plt
-import IPython
-
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
-import utils.evaluationHelpers as eh
-from inference.segments import HelperSegment
-from inference.analyzers import NoneAnalysis
 
-from utils.loader import SpecimenLoader
-from validation.messageParser import ParsedMessage
-from validation.dissectorMatcher import MessageComparator
+import nemere.utils.evaluationHelpers as eh
+from nemere.inference.segments import HelperSegment
+from nemere.inference.analyzers import NoneAnalysis
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.messageParser import ParsedMessage
+from nemere.validation.dissectorMatcher import MessageComparator
 
 
 debug = True

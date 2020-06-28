@@ -10,19 +10,22 @@ Similar fields are then aligned.
 import argparse, IPython
 from os.path import isfile, splitext, basename, exists, join
 
+import numpy
 from tabulate import tabulate
 
 # # change drawing toolkit for matplotlib (to be set before the pyplot import)
 # import matplotlib as mpl
 # mpl.use('Agg')
 
-from alignment.alignMessages import SegmentedMessages
-from inference.segmentHandler import originalRefinements, baseRefinements, pcaRefinements
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from utils.evaluationHelpers import *
-from visualization.multiPlotter import MultiMessagePlotter
-from alignment.clusterMerging import ClusterMerger
-from utils.baseAlgorithms import ecdf
+from nemere.alignment.alignMessages import SegmentedMessages
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, pcaRefinements, pcaMocoRefinements
+from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from nemere.inference.segments import MessageSegment
+from nemere.inference.templates import DistanceCalculator
+from nemere.utils.evaluationHelpers import *
+from nemere.visualization.multiPlotter import MultiMessagePlotter
+from nemere.alignment.clusterMerging import ClusterMerger
+from nemere.utils.baseAlgorithms import ecdf
 
 debug = False
 
@@ -513,7 +516,7 @@ if __name__ == '__main__':
     if withplots:
         # plot distances and message clusters
         print("Plot distances...")
-        from visualization.distancesPlotter import DistancesPlotter
+        from nemere.visualization.distancesPlotter import DistancesPlotter
         dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
         dp.plotManifoldDistances(
             [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
@@ -552,7 +555,7 @@ if __name__ == '__main__':
     # split clusters based on fields without rare values
     # # # # # # # # # # # # # # # # # # # # # # # #
     if not args.split:
-        from alignment.clusterSplitting import *
+        from nemere.alignment.clusterSplitting import *
 
         cSplitter = RelaxedExoticClusterSplitter(6 if not tokenizer == "tshark" else 3,
                                     alignedClusters, messageClusters, sm)
@@ -567,7 +570,7 @@ if __name__ == '__main__':
         if withplots:
             # plot distances and message clusters
             print("Plot distances...")
-            from visualization.distancesPlotter import DistancesPlotter
+            from nemere.visualization.distancesPlotter import DistancesPlotter
 
             dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
             dp.plotManifoldDistances(
@@ -750,7 +753,7 @@ if __name__ == '__main__':
         if withplots:
             # plot distances and message clusters
             print("Plot distances...")
-            from visualization.distancesPlotter import DistancesPlotter
+            from nemere.visualization.distancesPlotter import DistancesPlotter
 
             dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
             dp.plotManifoldDistances(
@@ -793,7 +796,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # TODO fully integrate into/encapsulate in ClusterMerger class
     print("Check for cluster merge candidates...")
-    from utils.evaluationHelpers import printClusterMergeConditions
+    from nemere.utils.evaluationHelpers import printClusterMergeConditions
     # noinspection PyUnreachableCode
     if True:
         # ClusterMerger
@@ -850,7 +853,7 @@ if __name__ == '__main__':
             comparator)
 
         from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        from visualization.distancesPlotter import DistancesPlotter
+        from nemere.visualization.distancesPlotter import DistancesPlotter
         typedClusterDummys = list()
         for clunu in clusterclusterer.clusterOrder:
             clusta = None

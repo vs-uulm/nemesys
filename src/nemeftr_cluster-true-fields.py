@@ -20,15 +20,14 @@ from itertools import chain
 from matplotlib import pyplot as plt
 import numpy
 
-from utils.evaluationHelpers import analyses, annotateFieldTypes, labelForSegment, \
+from nemere.utils.evaluationHelpers import analyses, annotateFieldTypes, labelForSegment, \
     plotMultiSegmentLines, writeCollectiveClusteringStaticstics
-from inference.templates import DBSCANsegmentClusterer, MemmapDC, DelegatingDC, ClusterAutoconfException
-
-from inference.segmentHandler import segments2types, segments2clusteredTypes, isExtendedCharSeq
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.singlePlotter import SingleMessagePlotter
+from nemere.inference.templates import DBSCANsegmentClusterer, MemmapDC, DelegatingDC, ClusterAutoconfException
+from nemere.inference.segmentHandler import segments2types, segments2clusteredTypes, isExtendedCharSeq
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.singlePlotter import SingleMessagePlotter
 
 debug = False
 

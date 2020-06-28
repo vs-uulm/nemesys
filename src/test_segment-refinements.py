@@ -15,24 +15,18 @@ from collections import Counter
 from tabulate import tabulate
 import IPython
 
-import inference.segmentHandler as sh
-import utils.evaluationHelpers
-from inference.formatRefinement import MergeConsecutiveChars, ResplitConsecutiveChars,\
-    CropDistinct, CumulativeCharMerger, SplitFixed, RelocateZeros
-from utils.loader import SpecimenLoader
-from inference.analyzers import *
-from inference.segments import MessageSegment, TypedSegment
-from inference.templates import DistanceCalculator, DBSCANsegmentClusterer
-from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
-from validation import reportWriter
-from visualization.multiPlotter import MultiMessagePlotter
-from visualization.distancesPlotter import DistancesPlotter
+import nemere.inference.segmentHandler as sh
+from nemere.inference.formatRefinement import MergeConsecutiveChars, ResplitConsecutiveChars, CumulativeCharMerger
+from nemere.utils.loader import SpecimenLoader
+from nemere.inference.analyzers import *
+from nemere.inference.segments import MessageSegment
+from nemere.validation.dissectorMatcher import MessageComparator, DissectorMatcher
+from nemere.validation import reportWriter
+from nemere.visualization.multiPlotter import MultiMessagePlotter
+from nemere.utils.evaluationHelpers import sigmapertrace
+from nemere.inference.segmentHandler import symbolsFromSegments
 
-from characterize_fieldtypes import analyses, labelForSegment
-from utils.evaluationHelpers import plotMultiSegmentLines, sigmapertrace
-from inference.segmentHandler import filterSegments, symbolsFromSegments
-
-
+from characterize_fieldtypes import analyses
 
 
 def removeIdenticalLabels(plt):
@@ -288,8 +282,8 @@ if __name__ == '__main__':
 
 
     if args.interactive:
-        import visualization.simplePrint as sp
-        import utils.evaluationHelpers as eh
+        import nemere.visualization.simplePrint as sp
+        import nemere.utils.evaluationHelpers as eh
         IPython.embed()
 
     exit()

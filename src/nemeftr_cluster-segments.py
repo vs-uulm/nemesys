@@ -12,12 +12,15 @@ from math import log
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
 import matplotlib.pyplot as plt
+import numpy
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, TypedTemplate, FieldTypeContext,  ClusterAutoconfException
-from inference.segmentHandler import baseRefinements, originalRefinements, \
+from nemere.inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, TypedTemplate, Template,\
+    ClusterAutoconfException
+from nemere.inference.segments import MessageSegment, TypedSegment
+from nemere.inference.segmentHandler import baseRefinements, originalRefinements, pcaMocoRefinements, \
     pcaPcaRefinements, zeroBaseRefinements, isExtendedCharSeq, zeroPCARefinements
-from visualization.distancesPlotter import DistancesPlotter
-from utils.evaluationHelpers import *
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.utils.evaluationHelpers import *
 
 debug = False
 

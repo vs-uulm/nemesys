@@ -4,21 +4,19 @@ Generates the segments to evaluate this calculation optimization from groundtrut
 """
 
 import argparse, IPython
-from os.path import isfile, basename, splitext
+from os.path import isfile
 from itertools import chain
 from tabulate import tabulate
 from math import ceil, floor
 
-from inference.templates import DistanceCalculator
-from inference.segments import TypedSegment
-from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, \
-    filterSegments
-from utils.evaluationHelpers import annotateFieldTypes
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from visualization.multiPlotter import MultiMessagePlotter
-from visualization.distancesPlotter import DistancesPlotter
+from nemere.inference.templates import DistanceCalculator
+from nemere.inference.segments import TypedSegment
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import segments2types, filterSegments
+from nemere.utils.evaluationHelpers import annotateFieldTypes
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.visualization.multiPlotter import MultiMessagePlotter
 
 
 debug = False

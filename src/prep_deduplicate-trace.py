@@ -4,14 +4,17 @@ Limit the number of message in a trace to a fixed value of unique packets (PACKE
 This way, generates comparable traces as evaluation input.
 """
 
-import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
-logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
-from scapy.all import *
 import argparse
 from os.path import exists,isfile,splitext
 from collections import OrderedDict
 
-from validation.messageParser import ParsingConstants
+import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+from scapy.layers.inet import IP
+from scapy.layers.l2 import Ether
+from scapy.all import sniff, wrpcap
+
+from nemere.validation.messageParser import ParsingConstants
 
 PACKET_LIMIT = 1000
 

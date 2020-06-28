@@ -10,7 +10,7 @@ import IPython
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
 
-from validation.tsharkConnector import TsharkConnector
+from nemere.validation.tsharkConnector import TsharkConnector
 
 
 class ParsingConstants(object):

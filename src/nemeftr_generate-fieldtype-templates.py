@@ -11,19 +11,17 @@ FieldTypeTemplates are generated to persist the specific field type characterist
 """
 import argparse, IPython
 from os.path import isfile, basename
-from itertools import chain
 
-from inference.templates import DBSCANsegmentClusterer, DelegatingDC, DistanceCalculator, FieldTypeTemplate
-from inference.fieldTypes import FieldTypeMemento
-from inference.segments import TypedSegment, HelperSegment
-from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, \
-    filterSegments
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.multiPlotter import MultiMessagePlotter, PlotGroups
-from utils.evaluationHelpers import *
+from nemere.inference.templates import DBSCANsegmentClusterer, DelegatingDC, FieldTypeTemplate
+from nemere.inference.fieldTypes import FieldTypeMemento
+from nemere.inference.segments import TypedSegment
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import segments2types
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.multiPlotter import MultiMessagePlotter, PlotGroups
+from nemere.utils.evaluationHelpers import *
 
 
 debug = False

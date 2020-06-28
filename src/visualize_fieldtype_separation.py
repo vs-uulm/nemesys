@@ -13,15 +13,14 @@ import argparse
 from itertools import chain
 from os.path import isfile
 
-from inference.analyzers import *
-from inference.segmentHandler import segments2types, filterSegments
-from inference.segments import TypedSegment
-from inference.templates import DistanceCalculator, Template, TemplateGenerator, DelegatingDC, MemmapDC
-from utils.evaluationHelpers import annotateFieldTypes
-from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import MessageComparator
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.multiPlotter import MultiMessagePlotter
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import segments2types
+from nemere.inference.templates import Template, TemplateGenerator, MemmapDC
+from nemere.utils.evaluationHelpers import annotateFieldTypes
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.multiPlotter import MultiMessagePlotter
 
 debug = False
 

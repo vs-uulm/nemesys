@@ -5,23 +5,25 @@ segment messages by NEMESYS and cluster
 import argparse, IPython
 from os.path import isfile, basename, join, splitext, exists
 from os import makedirs
-from typing import Union, Any
+from typing import Any
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from collections import Counter
+import numpy
 
-from inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, TypedTemplate, FieldTypeContext, \
-    ClusterAutoconfException
-from inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
-    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements, nemetylRefinements
-from inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices, SplitFixed
-from validation import reportWriter
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.simplePrint import *
-from utils.evaluationHelpers import *
-from validation.dissectorMatcher import FormatMatchScore
-from validation.dissectorMatcher import DissectorMatcher
+from nemere.inference.segments import MessageSegment
+from nemere.inference.templates import DBSCANsegmentClusterer, FieldTypeTemplate, Template, FieldTypeContext, \
+    ClusterAutoconfException, DelegatingDC, MemmapDC
+from nemere.inference.segmentHandler import symbolsFromSegments, wobbleSegmentInMessage, isExtendedCharSeq, \
+    originalRefinements, baseRefinements, pcaRefinements, pcaPcaRefinements, zeroBaseRefinements, nemetylRefinements, \
+    charRefinements
+from nemere.inference.formatRefinement import RelocatePCA, CropDistinct, CropChars, BlendZeroSlices, SplitFixed
+from nemere.validation import reportWriter
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.simplePrint import *
+from nemere.utils.evaluationHelpers import *
+from nemere.validation.dissectorMatcher import DissectorMatcher
 
 debug = False
 
@@ -261,7 +263,7 @@ def wobble(interestingClusters):
         wobClusterer.eps = wobClusterer.eps * 0.8
         wobNoise, *wobClusters = wobClusterer.clusterSimilarSegments(False)
 
-        from utils.baseAlgorithms import tril
+        from nemere.utils.baseAlgorithms import tril
         print("Wobbled cluster distances:")
         print(tabulate([(clunu, wobDC.distancesSubset(wobclu).max(), tril(wobDC.distancesSubset(wobclu)).mean())
                         for clunu, wobclu in enumerate(wobClusters)],

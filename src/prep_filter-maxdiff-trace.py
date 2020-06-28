@@ -23,16 +23,15 @@ import numpy
 import scapy.all as sy
 from tabulate import tabulate
 
-from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
-from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
-from netzob.Model.Vocabulary.Messages.L3NetworkMessage import L3NetworkMessage
-from netzob.Model.Vocabulary.Messages.L2NetworkMessage import L2NetworkMessage
+from netzob.Model.Vocabulary.Messages.RawMessage import AbstractMessage
 
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, zeroBaseRefinements, MessageSegment, DelegatingDC
-from inference.analyzers import Value
-from utils.loader import SpecimenLoader, BaseLoader
-from validation.dissectorMatcher import MessageComparator
-from validation.messageParser import ParsedMessage
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, zeroBaseRefinements
+from nemere.inference.segments import MessageSegment
+from nemere.inference.templates import DelegatingDC
+from nemere.inference.analyzers import Value
+from nemere.utils.loader import SpecimenLoader, BaseLoader
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.validation.messageParser import ParsedMessage
 
 PACKET_LIMIT = 100
 sigma = 1.2

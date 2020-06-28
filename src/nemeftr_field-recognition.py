@@ -6,22 +6,24 @@ and persisted in FieldTypeMementos contained in FieldTypeRecognizer.
 Moreover, contains an (unused) method to evaluate subsequence frequency analysis as means to identify common field types.
 """
 
-import argparse
+import argparse, numpy
 from collections import OrderedDict
-
 from os.path import isfile, basename
 from tabulate import tabulate
 import IPython
 
-from inference.segmentHandler import symbolsFromSegments
-from inference.trackingBIDE import BIDEracker
+from nemere.inference.segmentHandler import symbolsFromSegments
+from nemere.inference.segments import TypedSegment, MessageAnalyzer
+from nemere.inference.trackingBIDE import BIDEracker
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation import reportWriter
+from nemere.validation.dissectorMatcher import DissectorMatcher, MessageComparator
+from nemere.inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
+from nemere.visualization.simplePrint import printFieldContext, printMarkedBytesInMessage
+from nemere.visualization.multiPlotter import MultiMessagePlotter
+from nemere.utils.evaluationHelpers import *
+
 from nemesys_fms import mapQualities2Messages
-from validation import reportWriter
-from validation.dissectorMatcher import DissectorMatcher
-from inference.fieldTypes import FieldTypeMemento, FieldTypeRecognizer, FieldTypeQuery, RecognizedField
-from visualization.simplePrint import printFieldContext, printMarkedBytesInMessage
-from visualization.multiPlotter import MultiMessagePlotter
-from utils.evaluationHelpers import *
 
 # fix the analysis method to VALUE
 analysisTitle = 'value'

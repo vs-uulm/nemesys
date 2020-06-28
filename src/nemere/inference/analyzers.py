@@ -16,7 +16,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 # The analyzer implementations heavily depend on the MessageAnalyzer base class
 # that itself is deeply intertwined with the MessageSegment class:
-from inference.segments import MessageAnalyzer, MessageSegment, SegmentAnalyzer
+from nemere.inference.segments import MessageAnalyzer, MessageSegment, SegmentAnalyzer
 
 
 class NothingToCompareError(ValueError):
@@ -428,7 +428,7 @@ class BitCongruenceNgramMean(BitCongruence):
         """
         if not self._n:
             raise ParametersNotSet('Analysis parameter missing: N-gram size ("n").')
-        from utils.baseAlgorithms import ngrams
+        from nemere.utils.baseAlgorithms import ngrams
 
         super().analyze()
         self._ngramMean = [float(numpy.mean(bcn)) for bcn in ngrams(self._values, self._n)]

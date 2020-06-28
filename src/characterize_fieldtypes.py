@@ -4,8 +4,8 @@ Evaluate clustering methods and parameters for identifying field data types by c
 Segments are generated using groundtruth from dissectors.
 
 TODO CAVEAT and cleanup:
-	Very old state without epsilon autoconfiguration and default epsilon values based on a code state
-	prior to the fixing of the "precomputed dissimilarity matrix bug".
+    Very old state without epsilon autoconfiguration and default epsilon values based on a code state
+    prior to the fixing of the "precomputed dissimilarity matrix bug".
 
 Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
 These segments get analyzed by the given analysis method which is used as feature to determine their similarity.
@@ -17,18 +17,17 @@ import argparse, IPython
 from os.path import isfile, basename
 from itertools import chain
 
-from utils.loader import SpecimenLoader
-from utils.baseAlgorithms import tril
-from utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, plotMultiSegmentLines, \
-    labelForSegment
-from inference.templates import TemplateGenerator, DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer, DelegatingDC
-from inference.segments import TypedSegment
-from inference.analyzers import *
-from inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, \
-    filterSegments
-from validation.dissectorMatcher import MessageComparator
-from visualization.distancesPlotter import DistancesPlotter
-from visualization.singlePlotter import SingleMessagePlotter
+from nemere.utils.loader import SpecimenLoader
+from nemere.utils.baseAlgorithms import tril
+from nemere.utils.evaluationHelpers import epspertrace, epsdefault, analyses, annotateFieldTypes, \
+    plotMultiSegmentLines, labelForSegment
+from nemere.inference.templates import DistanceCalculator, DBSCANsegmentClusterer, HDBSCANsegmentClusterer
+from nemere.inference.segments import TypedSegment
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import groupByLength, segments2types, segments2clusteredTypes, filterSegments
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.singlePlotter import SingleMessagePlotter
 
 
 debug = False
@@ -126,7 +125,7 @@ def evaluateFieldTypeClustering(filteredSegments, eps, thresholdFunction, thresh
         #     lenMasks[seg.length][idx] = True
         #
         from tabulate import tabulate
-        from inference.templates import Template
+        from nemere.inference.templates import Template
         # # field type change for labels
         # segFieldtypes = [seg.fieldtype if pseg.fieldtype != seg.fieldtype else '' for seg, pseg in
         #                  zip(filteredSegments, filteredSegments[:1] + filteredSegments)]

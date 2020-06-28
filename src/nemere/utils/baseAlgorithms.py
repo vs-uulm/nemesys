@@ -44,8 +44,8 @@ def tril(arrayIn: numpy.ndarray) -> numpy.ndarray:
 
 def generateTestSegments():
     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-    from inference.analyzers import Value
-    from inference.segments import MessageSegment
+    from nemere.inference.analyzers import Value
+    from nemere.inference.segments import MessageSegment
 
     bytedata = [
         bytes([1, 2, 3, 4]),

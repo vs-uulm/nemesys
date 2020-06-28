@@ -3,14 +3,14 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from utils.evaluationHelpers import reportFolder
+from nemere.utils.evaluationHelpers import reportFolder
 
 
 class MessagePlotter(object):
     """
     Define basic functions and properties to plot messages.
     """
-    from utils.loader import SpecimenLoader
+    from nemere.utils.loader import SpecimenLoader
 
     STYLE_MAINLINE     = { 'linewidth': .6, 'alpha': .6, 'c': 'red' }
     STYLE_BLUMAINLINE =  { 'linewidth': .6, 'alpha': .6, 'c': 'blue'}

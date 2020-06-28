@@ -2,7 +2,7 @@ from typing import List, Tuple
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-import inference.templates as TG
+import nemere.inference.templates as TG
 
 
 class SegmentLabel(object):

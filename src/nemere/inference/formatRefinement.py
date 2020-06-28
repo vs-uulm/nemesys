@@ -8,13 +8,13 @@ import numpy
 from kneed import KneeLocator
 from tabulate import tabulate
 import IPython
+
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.segments import MessageSegment
-from inference.segmentHandler import isExtendedCharSeq
-from inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template, \
-    ClusterAutoconfException
-from validation.dissectorMatcher import MessageComparator
+from nemere.inference.segments import MessageSegment
+from nemere.inference.segmentHandler import isExtendedCharSeq
+from nemere.inference.templates import FieldTypeContext, DBSCANsegmentClusterer, DistanceCalculator, Template, ClusterAutoconfException
+from nemere.validation.dissectorMatcher import MessageComparator
 
 
 def isPrintableChar(char: int):
@@ -93,9 +93,9 @@ class MergeConsecutiveChars(Merger):
     Merge consecutive segments completely consisting of printable-char values into a text field.
     Printable chars are defined as: \t, \n, \r, >= 0x20 and <= 0x7e
 
-    >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
-    >>> from utils.loader import SpecimenLoader
-    >>> import inference.formatRefinement as refine
+    >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+    >>> from nemere.utils.loader import SpecimenLoader
+    >>> import nemere.inference.formatRefinement as refine
     >>> from tabulate import tabulate
     >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
@@ -265,9 +265,9 @@ class Resplit2LeastFrequentPair(MessageModifier):
         Needs only to be called once before all segments of one inference pass can be refined.
         A different inference required to run this method again before refinement by this class.
 
-        >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
-        >>> from utils.loader import SpecimenLoader
-        >>> import inference.formatRefinement as refine
+        >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from nemere.utils.loader import SpecimenLoader
+        >>> import nemere.inference.formatRefinement as refine
         >>> from tabulate import tabulate
         >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
@@ -1843,7 +1843,7 @@ class RelocatePCA(object):
         :param newBounds: Dict of all input messages, with a Dict mapping each segment to a list of its bounds.
         :return: reference to the newBounds Dict
         """
-        from visualization.simplePrint import markSegmentInMessage
+        from nemere.visualization.simplePrint import markSegmentInMessage
 
         for message, segsbounds in newBounds.items():
             # Below, by list(chain(...)) create a copy to iterate, so we can delete stuff in the original bound lists.
@@ -2286,7 +2286,7 @@ class CropChars(MessageModifier):
 
         :return: List of char and non-char segments for the message
         """
-        from inference.fieldTypes import FieldTypeRecognizer
+        from nemere.inference.fieldTypes import FieldTypeRecognizer
 
         ftrecog = FieldTypeRecognizer(self.segments[0].analyzer)
         # RecognizedFields or type char using isExtendedCharSeq
