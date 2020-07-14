@@ -1,11 +1,11 @@
+numpy
+cython
 bitarray
 netzob
 humanhash
-numpy
 kneed
 scikit-learn
 hdbscan
-cython
 scapy
 IPython
 matplotlib

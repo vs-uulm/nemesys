@@ -40,6 +40,7 @@ Have a look into `nemesys.py` resp. `nemesys_fms.py` to get an impression of the
 ## Requirements
 * Python 3
 * Install packages listed in requirements.txt: `pip install -r requirements.txt`
+	* This necessitates to install libpcap for pcapy: `sudo apt-get install libpcap-dev`
 * Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)
   -- ~~currently NOT the official~~ [~~"next" branch~~](https://github.com/netzob/netzob/tree/next/netzob)! --
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
@@ -50,6 +51,8 @@ Have a look into `nemesys.py` resp. `nemesys_fms.py` to get an impression of the
   report further working versions e. g. per github issue)  
   *Note: NEMESYS can be used without tshark as long as no FMS validation (in package `validation`) 
   against a real dissector is required.*
+  
+  Place your user in the "wireshark" group to enable tshark to run: `sudo gpasswd -a $USER wireshark`
 
 
 
