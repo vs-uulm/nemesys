@@ -332,13 +332,13 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.deduplicate-trace" />
-      <item itemvalue="Python.plot" />
       <item itemvalue="Python.align_on_field_personality" />
       <item itemvalue="Python.characterize_fieldtypes" />
       <item itemvalue="Python.characterize_segments" />
+      <item itemvalue="Python.deduplicate-trace" />
       <item itemvalue="Python.nemesys_fms" />
       <item itemvalue="Python.parsePCAP" />
+      <item itemvalue="Python.plot" />
     </list>
     <recent_temporary>
       <list>
