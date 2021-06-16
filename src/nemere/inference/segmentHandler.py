@@ -8,10 +8,9 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
-from inference.formatRefinement import locateNonPrintable
-from inference.segments import MessageSegment, HelperSegment, TypedSegment
-from inference.analyzers import MessageAnalyzer
-from inference.templates import TypedTemplate, DistanceCalculator
+from nemere.inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
+from nemere.inference.analyzers import MessageAnalyzer
+from nemere.inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -82,10 +81,10 @@ def segmentsFixed(length: int, comparator,
     """
     Segment messages into fixed size chunks.
 
-    >>> from utils.loader import SpecimenLoader
-    >>> from validation.dissectorMatcher import MessageComparator
-    >>> from inference.analyzers import Value
-    >>> from inference.segmentHandler import segmentsFixed
+    >>> from nemere.utils.loader import SpecimenLoader
+    >>> from nemere.validation.dissectorMatcher import MessageComparator
+    >>> from nemere.inference.analyzers import Value
+    >>> from nemere.inference.segmentHandler import segmentsFixed
     >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
     >>> comparator = MessageComparator(specimens, 2, True, debug=False)
     >>> segmentedMessages = segmentsFixed(4, comparator, Value, None)
@@ -183,7 +182,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     """
     Segment message by determining inflection points of gauss-filtered bit congruence deltas.
 
-    >>> from utils.loader import SpecimenLoader
+    >>> from nemere.utils.loader import SpecimenLoader
     >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
     Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
@@ -193,7 +192,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
 
     :return: Segmentation of the specimens in the pool.
     """
-    from inference.analyzers import BitCongruenceDeltaGauss
+    from nemere.inference.analyzers import BitCongruenceDeltaGauss
 
     print('Segmentation by inflections of sigma-{:.1f}-gauss-filtered bit-variance.'.format(
         sigma
@@ -249,7 +248,7 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (base refinements)...")
 
@@ -271,7 +270,7 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     return newstuff
 
 
-def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -442,6 +441,8 @@ def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
+    from nemere.inference.formatRefinement import locateNonPrintable
+
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen

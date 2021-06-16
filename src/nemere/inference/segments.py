@@ -134,7 +134,7 @@ class MessageAnalyzer(ABC):
         """
         :return: the ngrams of the message in order
         """
-        from utils.baseAlgorithms import ngrams
+        from nemere.utils.baseAlgorithms import ngrams
         return ngrams(self._message.data, n)
 
 
@@ -467,7 +467,7 @@ class AbstractSegment(ABC):
         :param method: The method to correlate with (see class constants prefixed with CORR_ for available options)
         :return:
         """
-        from utils.baseAlgorithms import ngrams
+        from nemere.utils.baseAlgorithms import ngrams
         import scipy.spatial.distance
 
         selfCorrMsgs = list()
@@ -555,7 +555,7 @@ class CorrelatedSegment(AbstractSegment):
 
         :return: A segment being the best field candidate according to this correlation.
         """
-        from inference.analyzers import NoneAnalysis
+        from nemere.inference.analyzers import NoneAnalysis
 
         # TODO There could be more than one close match...
         # and multiple segments/field candidates of the same type, therefore matching the same feature

@@ -4,16 +4,17 @@ import numpy
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from visualization.plotter import MessagePlotter
-from inference.segments import MessageSegment, TypedSegment, MessageAnalyzer
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
+
+from nemere.visualization.plotter import MessagePlotter
+from nemere.inference.segments import MessageSegment, TypedSegment, MessageAnalyzer
 
 
 class MultiMessagePlotter(MessagePlotter):
     """
     Different methods to plot data of many messages individually in one big figure.
     """
-    from utils.loader import SpecimenLoader
+    from nemere.utils.loader import SpecimenLoader
 
     def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
                  nrows: int, ncols: int=None,
@@ -232,7 +233,7 @@ class MultiMessagePlotter(MessagePlotter):
             MessagePlotter.fillDiffToCompare(ax, analysisResult, compareValue)
 
 
-    from inference.segments import CorrelatedSegment
+    from nemere.inference.segments import CorrelatedSegment
 
     def plotCorrelations(self,
             correlations: List[CorrelatedSegment]):
@@ -242,7 +243,7 @@ class MultiMessagePlotter(MessagePlotter):
         :param correlations: List of segment correlations.
         """
         import humanhash
-        from inference.segments import CorrelatedSegment
+        from nemere.inference.segments import CorrelatedSegment
 
         self.plotInEachAx([series.values for series in correlations],
                           MessagePlotter.STYLE_CORRELATION + dict(label='Correlation'))

@@ -10,8 +10,8 @@ import argparse, time
 from os.path import isfile
 import IPython
 
-from utils.loader import SpecimenLoader
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
+from nemere.utils.loader import SpecimenLoader
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
 
 
 

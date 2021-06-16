@@ -14,9 +14,9 @@ from numpy import argmin
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-import visualization.bcolors as bcolors
-from validation.messageParser import ParsedMessage, ParsingConstants
-from inference.segments import MessageSegment, TypedSegment
+import nemere.visualization.bcolors as bcolors
+from nemere.validation.messageParser import ParsedMessage, ParsingConstants
+from nemere.inference.segments import MessageSegment, TypedSegment
 
 
 class FormatMatchScore(object):
@@ -49,7 +49,7 @@ class MessageComparator(object):
     the parameters layer, relativeToIP, and failOnUndissectable and processes the output to directly know the
     dissection result.
     """
-    import utils.loader as sl
+    import nemere.utils.loader as sl
 
     __messageCellCache = dict()  # type: Dict[(netzob.Symbol, AbstractMessage), List]
 
@@ -210,7 +210,7 @@ class MessageComparator(object):
             Use None to create an open slice (up to the beginning or end of the message).
         :return:
         """
-        import visualization.bcolors as bc
+        import nemere.visualization.bcolors as bc
 
         l2msg = self.messages[message]
         tformat = self.dissections[l2msg]
@@ -302,7 +302,7 @@ class MessageComparator(object):
 
         :param symbols: Inferred symbols
         """
-        import visualization.bcolors as bc
+        import nemere.visualization.bcolors as bc
 
         for symfes in self.__prepareMessagesForPPrint(symbols):
             for msg, tfe, ife in symfes:

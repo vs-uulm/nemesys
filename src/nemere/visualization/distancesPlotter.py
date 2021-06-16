@@ -1,6 +1,3 @@
-
-
-
 import numpy
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
@@ -10,10 +7,10 @@ from itertools import compress
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
-from visualization.plotter import MessagePlotter
-from utils.loader import BaseLoader
-from inference.segments import MessageSegment, TypedSegment
-from inference.templates import Template, TypedTemplate, DistanceCalculator
+from nemere.visualization.plotter import MessagePlotter
+from nemere.utils.loader import BaseLoader
+from nemere.inference.segments import MessageSegment, TypedSegment
+from nemere.inference.templates import Template, TypedTemplate, DistanceCalculator
 
 
 
@@ -52,8 +49,8 @@ class DistancesPlotter(MessagePlotter):
         given segment overlaying each other besides the distances; they are colored according to the given labels.
 
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from utils.loader import BaseLoader
-        >>> from inference.analyzers import Value
+        >>> from nemere.utils.loader import BaseLoader
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = [
         ...     bytes([1, 2, 3, 4]),
@@ -81,8 +78,7 @@ class DistancesPlotter(MessagePlotter):
         Calculated distances for 37 segment pairs in ... seconds.
         >>> dp = DistancesPlotter(specimens, "test", False)
         >>> dp.plotManifoldDistances(segments, dc.distanceMatrix, numpy.array([1,2,3,1,1,0,1,0,2]))
-        >>> # comment out writing of file for doctest
-        >>> # dp.writeOrShowFigure()
+        >>> dp.writeOrShowFigure()  # doctest: +SKIP
 
         :param segments: If `segments` is a list of `TypedSegment`s, field types are marked as small markers
             within the label marker. labels containing "Noise" then are not explicitly marked like the other labeled
@@ -369,7 +365,7 @@ class DistancesPlotter(MessagePlotter):
         :param dc:
         :return:
         """
-        from utils.baseAlgorithms import tril
+        from nemere.utils.baseAlgorithms import tril
         statistics = list()
         cltrs = [[dc.segments[idx] for idx, *rest in cluster] for cluster in dc.groupByLength().values()]
         for cluster in cltrs:

@@ -12,12 +12,12 @@ from os import makedirs
 import matplotlib.pyplot as plt
 import IPython
 
-from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
-from utils.loader import SpecimenLoader
-from inference.analyzers import *
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
-    originalRefinements, baseRefinements, symbolsFromSegments
-from validation import reportWriter
+from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
+from nemere.utils.loader import SpecimenLoader
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
+    baseRefinements, originalRefinements, symbolsFromSegments
+from nemere.validation import reportWriter
 
 
 debug = False
@@ -77,7 +77,7 @@ def bcDeltaPlot(bcdg_mmm: List[BitCongruenceDeltaGauss]):
 
     :param bcdg_mmm: Example message analysis results to plot. Expects three elements in the list.
     """
-    from visualization.multiPlotter import MultiMessagePlotter
+    from nemere.visualization.multiPlotter import MultiMessagePlotter
 
     fieldEnds = [comparator.fieldEndsPerMessage(bcdg.message) for bcdg in bcdg_mmm]
 

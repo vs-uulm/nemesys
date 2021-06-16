@@ -8,8 +8,8 @@ import numpy, csv
 from collections import Counter
 from tabulate import tabulate
 
-from inference.segments import MessageSegment
-from alignment.alignMessages import SegmentedMessages
+from nemere.inference.segments import MessageSegment
+from nemere.alignment.alignMessages import SegmentedMessages
 
 
 debug = True

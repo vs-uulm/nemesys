@@ -13,8 +13,8 @@ from netzob import all as netzob
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import FormatMatchScore, MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator
 
 def printFMS(
         formatmatchmetrics: Dict[Tuple[int, netzob.Symbol, List[tuple]], Tuple[int, int, int, int, int]],

@@ -7,13 +7,13 @@ from netzob.all import RawMessage
 from itertools import chain
 import os, csv, pickle, time
 
-from utils.loader import SpecimenLoader
-from validation.dissectorMatcher import MessageComparator
-from inference.analyzers import *
-from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
-    refinements, segmentsFixed
-from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
-from inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, \
+    segmentsFixed
+from nemere.inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
+from nemere.inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
 
 Element = TypeVar('Element')
 
@@ -240,6 +240,7 @@ def writeCollectiveClusteringStaticstics(
 
     noise = []
     noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
+    # print("noisekey", noisekey)
     if noisekey is not None:
         noise = clusters[noisekey]
         clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
@@ -330,7 +331,7 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     :param isInteractive:
     :return:
     """
-    from visualization.multiPlotter import MultiMessagePlotter
+    from nemere.visualization.multiPlotter import MultiMessagePlotter
 
     mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
     mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
@@ -339,7 +340,7 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     if typeDict:  # calculate conciseness, correctness = precision, and recall
         import os, csv
         from collections import Counter
-        from inference.templates import Template
+        from nemere.inference.templates import Template
 
         # mapping from each segment in typeDict to the corresponding cluster and true type,
         # considering representative templates
@@ -490,7 +491,7 @@ def segmentInfo(comparator: MessageComparator, segment: MessageSegment):
 
 
 def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions, dc, diff=True):
-    from inference.templates import Template
+    from nemere.inference.templates import Template
     from tabulate import tabulate
 
     cluTable = [(clunu, *[fv.bytes.hex() if isinstance(fv, MessageSegment) else
@@ -571,9 +572,9 @@ def searchSeqOfSeg(sequence: Sequence[Union[MessageSegment, Sequence[MessageSegm
 
 def calcHexDist(hexA, hexB):
     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-    from inference.analyzers import Value
-    from inference.segments import MessageSegment
-    from inference.templates import DistanceCalculator
+    from nemere.inference.analyzers import Value
+    from nemere.inference.segments import MessageSegment
+    from nemere.inference.templates import DistanceCalculator
 
     bytedata = [bytes.fromhex(hexA),bytes.fromhex(hexB)]
     messages = [RawMessage(bd) for bd in bytedata]

@@ -1,12 +1,12 @@
-from typing import Tuple, Iterable, Sequence, Union
+from typing import Tuple, Iterable, Sequence, Dict, List, Union
 from tabulate import tabulate
 
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from inference.segments import MessageSegment
-from inference.templates import DistanceCalculator, Template
-from visualization import bcolors as bcolors
+from nemere.inference.segments import MessageSegment, TypedSegment
+from nemere.inference.templates import DistanceCalculator, Template
+from nemere.visualization import bcolors as bcolors
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):

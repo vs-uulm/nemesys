@@ -7,7 +7,7 @@ class MessagePlotter(object):
     """
     Define basic functions and properties to plot messages.
     """
-    from utils.loader import SpecimenLoader
+    from nemere.utils.loader import SpecimenLoader
 
     STYLE_MAINLINE     = { 'linewidth': .6, 'alpha': .6, 'c': 'red' }
     STYLE_BLUMAINLINE =  { 'linewidth': .6, 'alpha': .6, 'c': 'blue'}
@@ -47,7 +47,7 @@ class MessagePlotter(object):
         If isInteractive was set to true, show the plot in a window, else write it to a file,
         if none of the same name already exists. Closes all figures afterwards.
         """
-        from utils.evaluationHelpers import reportFolder
+        from nemere.utils.evaluationHelpers import reportFolder
 
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
         plotfile = join(reportFolder, '{}_{}.pdf'.format(self._title, pcapName))

@@ -4,13 +4,13 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
+from typing import List, Tuple, Union, Dict, Set, Union, Any, Callable
 from pprint import pprint
-from typing import List, Tuple, Dict, Set, Union
-
 import IPython
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
-from validation.tsharkConnector import TsharkConnector
+
+from nemere.validation.tsharkConnector import TsharkConnector
 
 
 class ParsingConstants(object):
@@ -1467,3 +1467,30 @@ class ParsedMessage(object):
     @property
     def messagetype(self):
         return MessageTypeIdentifiers.typeOfMessage(self)
+
+
+    def __getstate__(self):
+        """
+        Include required class arribute in pickling.
+
+        :return: The dict of this object for use in pickle.dump()
+        """
+        statecopy = self.__dict__.copy()
+        statecopy["_ParsedMessage_CLASS___tshark"] = ParsedMessage.__tshark
+        return statecopy
+
+
+    def __setstate__(self, state):
+        """
+        Include required class arribute in pickling.
+
+        :param state: The dict of this object got from pickle.load()
+        """
+        # TODO This could be made more efficient by just referencing the class variable once for all instances
+        #  by some external wrapper method/class managed by utils.evaluationHelpers.cacheAndLoadDC for pickling
+        ParsedMessage.__tshark = state["_ParsedMessage_CLASS___tshark"]
+        del state["_ParsedMessage_CLASS___tshark"]
+        self.__dict__.update(state)
+
+
+

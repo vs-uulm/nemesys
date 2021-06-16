@@ -96,9 +96,9 @@ class MergeConsecutiveChars(Merger):
     Merge consecutive segments completely consisting of printable-char values into a text field.
     Printable chars are defined as: \t, \n, \r, >= 0x20 and <= 0x7e
 
-    >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
-    >>> from utils.loader import SpecimenLoader
-    >>> import inference.formatRefinement as refine
+    >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+    >>> from nemere.utils.loader import SpecimenLoader
+    >>> import nemere.inference.formatRefinement as refine
     >>> from tabulate import tabulate
     >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
@@ -268,9 +268,9 @@ class Resplit2LeastFrequentPair(MessageModifier):
         Needs only to be called once before all segments of one inference pass can be refined.
         A different inference required to run this method again before refinement by this class.
 
-        >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
-        >>> from utils.loader import SpecimenLoader
-        >>> import inference.formatRefinement as refine
+        >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from nemere.utils.loader import SpecimenLoader
+        >>> import nemere.inference.formatRefinement as refine
         >>> from tabulate import tabulate
         >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)

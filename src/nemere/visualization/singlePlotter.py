@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 
 from netzob.Model.Vocabulary.Symbol import Symbol
 
-from visualization.plotter import MessagePlotter
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
+from nemere.visualization.plotter import MessagePlotter
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
 
 
 # noinspection PyMethodMayBeStatic
@@ -83,7 +83,7 @@ class SingleMessagePlotter(MessagePlotter):
 
 
     def heatMapFieldComparison(self, comparator: MessageComparator, symbols: List[Symbol]):
-        from validation.dissectorMatcher import DissectorMatcher
+        from nemere.validation.dissectorMatcher import DissectorMatcher
         from collections import OrderedDict, Counter
 
         matchers = OrderedDict()  # type: OrderedDict[symbol, Tuple[List, List, DissectorMatcher]]
@@ -199,7 +199,7 @@ class SingleMessagePlotter(MessagePlotter):
         :param symbols:
         :return:
         """
-        from validation.dissectorMatcher import MessageComparator
+        from nemere.validation.dissectorMatcher import MessageComparator
         from collections import Counter
         from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 

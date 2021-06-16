@@ -11,10 +11,10 @@ from os.path import isfile
 import matplotlib.pyplot as plt
 import IPython
 
-from validation.dissectorMatcher import MessageComparator
-from utils.loader import SpecimenLoader
-from visualization.singlePlotter import SingleMessagePlotter
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
+from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.visualization.singlePlotter import SingleMessagePlotter
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
 
 
 debug = False

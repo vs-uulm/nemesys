@@ -23,10 +23,10 @@ import IPython
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-from utils.loader import SpecimenLoader
-from validation.messageParser import ParsedMessage
-from validation.dissectorMatcher import MessageComparator, DissectorMatcher
-import validation.netzobFormatMatchScore as FMS
+from nemere.utils.loader import SpecimenLoader
+from nemere.validation.messageParser import ParsedMessage
+from nemere.validation.dissectorMatcher import MessageComparator, DissectorMatcher
+import nemere.validation.netzobFormatMatchScore as FMS
 
 
 debug = True

@@ -5,9 +5,9 @@ from sklearn.cluster import DBSCAN
 from networkx import Graph
 from networkx.algorithms.components.connected import connected_components
 
-from inference.templates import DistanceCalculator, Template
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from inference.analyzers import *
+from nemere.inference.templates import DistanceCalculator, Template
+from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from nemere.inference.analyzers import *
 
 
 
@@ -399,8 +399,8 @@ class ClusterMerger(ClusterAligner):
                       matchingClusters, matchingConditions):
         import IPython
         from tabulate import tabulate
-        from utils.evaluationHelpers import printClusterMergeConditions
-        from inference.templates import Template
+        from nemere.utils.evaluationHelpers import printClusterMergeConditions
+        from nemere.inference.templates import Template
 
         remDue2gaps = [
             clunuAB for clunuAB in matchingClusters
@@ -588,7 +588,7 @@ class ClusterClusterer(ClusterAligner):
 
 
     def calcClusterDistances(self, mmg=(0, -1, 5)):
-        from inference.segmentHandler import matrixFromTpairs
+        from nemere.inference.segmentHandler import matrixFromTpairs
 
         fclassHirsch, statDynFields, statDynValues = self.generateHirsch(mmg)
 

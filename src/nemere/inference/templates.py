@@ -3,8 +3,9 @@ from os import cpu_count
 import numpy, scipy.spatial, itertools
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
-from inference.analyzers import MessageAnalyzer, Value
-from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment, HelperSegment, TypedSegment
+
+from nemere.inference.analyzers import MessageAnalyzer, Value
+from nemere.inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment, HelperSegment, TypedSegment
 
 
 debug = False
@@ -32,8 +33,8 @@ class DistanceCalculator(object):
         """
         Determine the distance between the given segments.
 
-        >>> from inference.analyzers import Value
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = bytes([1,2,3,4])
         >>> message = RawMessage(bytedata)
@@ -92,7 +93,7 @@ class DistanceCalculator(object):
         The order of the matrix elements in each row and column is the same as in self.segments.
 
         >>> from tabulate import tabulate
-        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -333,7 +334,7 @@ class DistanceCalculator(object):
         """
         Retrieve a matrix of pairwise distances for two lists of segments.
 
-        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -376,7 +377,7 @@ class DistanceCalculator(object):
         Used in constructor.
 
         >>> from pprint import pprint
-        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -552,7 +553,7 @@ class DistanceCalculator(object):
         Used in constructor.
 
         >>> from tabulate import tabulate
-        >>> from inference.templates import DistanceCalculator
+        >>> from nemere.inference.templates import DistanceCalculator
         >>> testdata =  [(3, 3, 0.0),
         ...              (0, 3, 0.80835755871765202),
         ...              (5, 3, 1.0),
@@ -586,7 +587,7 @@ class DistanceCalculator(object):
         :return: The distance matrix for the given similarities.
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
-        from inference.segmentHandler import matrixFromTpairs
+        from nemere.inference.segmentHandler import matrixFromTpairs
         simtrx = matrixFromTpairs(distances, range(segmentCount),
                                   incomparable=-1)  # TODO handle incomparable values (resolve and replace the negative value)
         return simtrx
@@ -972,7 +973,7 @@ class DistanceCalculator(object):
         :return: A cached DistanceCalculator or None
         """
         import pickle
-        from validation.dissectorMatcher import MessageComparator
+        from nemere.validation.dissectorMatcher import MessageComparator
 
         dccacheexists, dccachefn = DistanceCalculator._checkCacheFile(analysisTitle, tokenizer, pcapfilename)
 
@@ -1029,7 +1030,7 @@ class DistanceCalculator(object):
         :return:
         """
         from itertools import combinations
-        from inference.segmentHandler import filterChars
+        from nemere.inference.segmentHandler import filterChars
 
         assert all((isinstance(seg, AbstractSegment) for seg in self.segments))
         charsequences = filterChars(self.segments)
@@ -1147,8 +1148,8 @@ class Template(AbstractSegment):
 
         >>> from tabulate import tabulate
         >>> from scipy.spatial.distance import cdist
-        >>> from utils.baseAlgorithms import generateTestSegments
-        >>> from inference.templates import DistanceCalculator, Template
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DistanceCalculator, Template
         >>> listOfSegments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(listOfSegments)
@@ -1251,7 +1252,7 @@ class Template(AbstractSegment):
         """
         oid = hash(self)
         # return '{:02x}'.format(oid % 0xffff)
-        import visualization.bcolors as bcolors
+        import nemere.visualization.bcolors as bcolors
         # Template
         return bcolors.colorizeStr('{:02x}'.format(oid % 0xffff), oid % 0xff)
 
@@ -1272,7 +1273,7 @@ class TypedTemplate(Template):
     def __init__(self, values: Union[Tuple[Union[float, int]], MessageSegment],
                  baseSegments: Iterable[AbstractSegment],
                  method='canberra'):
-        from inference.segments import TypedSegment
+        from nemere.inference.segments import TypedSegment
 
         super().__init__(values, baseSegments, method)
         ftypes = {bs.fieldtype for bs in baseSegments if isinstance(bs, TypedSegment)}
@@ -1674,7 +1675,7 @@ class MemmapDC(DelegatingDC):
         Used in constructor.
 
         >>> from tabulate import tabulate
-        >>> from inference.templates import DistanceCalculator
+        >>> from nemere.inference.templates import DistanceCalculator
         >>> testdata =  [(3, 3, 0.0),
         ...              (0, 3, 0.80835755871765202),
         ...              (5, 3, 1.0),
@@ -1709,7 +1710,7 @@ class MemmapDC(DelegatingDC):
             -1 for each undefined element, 0 in the diagonal, even if not given in the input.
         """
         from tempfile import NamedTemporaryFile
-        from inference.segmentHandler import matrixFromTpairs
+        from nemere.inference.segmentHandler import matrixFromTpairs
 
         tempfile = NamedTemporaryFile()
         distancesSwap = numpy.memmap(tempfile.name, dtype=numpy.float16, mode="w+", shape=(segmentCount,segmentCount))
@@ -1744,7 +1745,7 @@ def __testing_generateTestSegmentsWithDuplicates():
     :return: List of message segments.
     """
     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-    from inference.analyzers import Value
+    from nemere.inference.analyzers import Value
     bytedata = [
         bytes([1, 2, 3, 4]),
         bytes([2, 3, 4]),
