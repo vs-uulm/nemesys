@@ -1,7 +1,8 @@
-from typing import List
 from abc import ABC, abstractmethod
+from typing import List
 
 from inference.segments import MessageSegment
+
 
 def isPrintableChar(char: int):
     if 0x20 <= char <= 0x7e or char in ['\t', '\n', '\r']:
@@ -45,7 +46,7 @@ class MessageModifier(ABC):
 
     def __init__(self, segments: List[MessageSegment]):
         """
-        :param segments: in offset order
+        :param segments: The segments of one message in offset order
         """
         self.segments = segments
 
@@ -141,10 +142,12 @@ class RelocateSplits(MessageModifier, ABC):
                 segc = segmentStack.pop()
                 # TODO: this is char specific only!
                 if not isPrintable(segc.bytes):
+                    # cancel split relocation
                     mangledSegments.append(segc)
                     continue
 
                 if mangledSegments:
+                    # integrate segment to the left into center
                     segl = mangledSegments[-1]
                     if segl.offset + segl.length == segc.offset:
                         splitpos = self.toTheLeft(segl)
@@ -164,6 +167,7 @@ class RelocateSplits(MessageModifier, ABC):
                                 print("{} and {}".format(mangledSegments[-1] if mangledSegments else 'Empty', segc))
 
                 if segmentStack:
+                    # integrate segment to the right into center
                     segr = segmentStack[-1]
                     if segc.offset + segc.length == segr.offset:
                         splitpos = self.toTheRight(segr)
@@ -413,12 +417,16 @@ class CropDistinct(MessageModifier):
         from itertools import chain
         segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
         segFreq = segcnt.most_common()
-        freqThre = .2 * len(segmentedMessages)
+        freqThre = .1 * len(segmentedMessages)
         thre = 0
-        while segFreq[thre][1] > freqThre:
+        while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
-        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0}]  # omit \x00-sequences
-        return moco
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > 1]  # omit \x00-sequences and 1-byte long segments
+        # return moco
+
+        # omit all sequences that have common subsequences
+        mocoShort = [m for m in moco if not any(m != c and m.find(c) > -1 for c in moco)]
+        return mocoShort
 
     def split(self):
         newmsg = list()

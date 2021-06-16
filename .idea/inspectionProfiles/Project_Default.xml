@@ -74,6 +74,8 @@
       <option name="ignoredIdentifiers">
         <list>
           <option value="netzob.all" />
+          <option value="matplotlib.cm.Set1" />
+          <option value="matplotlib.cm.cubehelix" />
         </list>
       </option>
     </inspection_tool>

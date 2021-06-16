@@ -13,7 +13,7 @@ from inference.analyzers import *
 from inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, \
     refinements, segmentsFixed
 from inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
-from inference.templates import DistanceCalculator, DelegatingDC, MemmapDC, Template
+from inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
 
 Element = TypeVar('Element')
 
@@ -21,7 +21,6 @@ Element = TypeVar('Element')
 # available analysis methods
 analyses = {
     'bcpnm': BitCongruenceNgramMean,
-    # 'bcpnv': BitCongruenceNgramStd,  in branch inference-experiments
     'bc': BitCongruence,
     'bcd': BitCongruenceDelta,
     'bcdg': BitCongruenceDeltaGauss,
@@ -201,6 +200,7 @@ def writeIndividualClusterStatistics(
         ])
 
     return prList, conciseness
+
 
 
 def writeCollectiveClusteringStaticstics(
@@ -473,6 +473,22 @@ def writePerformanceStatistics(specimens, clusterer, algos,
             ])
 
 
+def segmentInfo(comparator: MessageComparator, segment: MessageSegment):
+    pm = comparator.parsedMessages[comparator.messages[segment.message]]
+    print(pm.messagetype)
+
+    fs = pm.getFieldSequence()
+    fsnum = 0
+    offset = 0
+    while offset < segment.offset:
+        offset += fs[fsnum][1]
+        fsnum += 1
+    print(fs[fsnum][0])
+    print(pm.getTypeSequence()[fsnum][0])
+    print(segment.bytes)
+    print(segment.bytes.hex())
+
+
 def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions, dc, diff=True):
     from inference.templates import Template
     from tabulate import tabulate
@@ -577,7 +593,7 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     cache or load the DistanceCalculator to or from the filesystem
 
 
-    :param filterTrivial: Filter out **one-byte** segments and such just consisting of **zeros**.
+    :param filterTrivial: Filter out **one-byte** segments and such, just consisting of **zeros**.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
     :return:
     """

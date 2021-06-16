@@ -3,7 +3,6 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-
 class MessagePlotter(object):
     """
     Define basic functions and properties to plot messages.
@@ -25,6 +24,7 @@ class MessagePlotter(object):
         :param analysisTitle: A freely chosen title to be printed on the plot and used for the filename.
         :param isInteractive: Whether the plot should be interactive or written to file.
         """
+        # self._figure = plt.figure()
         plt.rc('xtick', labelsize=4)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=4)  # fontsize of the tick labels
         plt.rc('legend', frameon=False)
@@ -36,6 +36,10 @@ class MessagePlotter(object):
     @property
     def title(self) -> str:
         return self._title
+
+    # @property
+    # def figure(self):
+    #     return self._figure
 
 
     def writeOrShowFigure(self):
@@ -58,6 +62,7 @@ class MessagePlotter(object):
         else:
             plt.show()
         plt.close('all')
+        # del self._figure
 
 
     @staticmethod

@@ -15,7 +15,8 @@ import IPython
 from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from utils.loader import SpecimenLoader
 from inference.analyzers import *
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
+from inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
+    originalRefinements, baseRefinements, symbolsFromSegments
 from validation import reportWriter
 
 
@@ -54,7 +55,7 @@ def writeResults(tikzcode: str, specimens: SpecimenLoader, inferenceTitle: str, 
 
     absFolder = abspath(folder)
     if not isdir(absFolder):
-        raise NotADirectoryError("The reports folder {:d} is not a directory. Reports cannot be written there.".format(
+        raise NotADirectoryError("The reports folder {} is not a directory. Reports cannot be written there.".format(
             absFolder))
 
     pcapName = splitext(basename(specimens.pcapFileName))[0]
@@ -142,7 +143,8 @@ if __name__ == '__main__':
     startsegmentation = time.time()
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
     runtimeSegmentation = time.time() - startsegmentation
-    refinedPerMsg = refinements(segmentsPerMsg, None)
+    # refinedPerMsg = originalRefinements(segmentsPerMsg)
+    refinedPerMsg = baseRefinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))

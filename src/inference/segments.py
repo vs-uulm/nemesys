@@ -421,12 +421,12 @@ class AbstractSegment(ABC):
     CORR_PEARSON = 0  # Pearson Product-Moment Correlation Coefficient
 
     def __init__(self):
-        # list of analysis result values for the segment scope
-        self._values = None  # type: Union[List, numpy.ndarray]
+        self._values = None  # type: Union[Tuple, None]
+        """list of analysis result values for the segment scope"""
         self.length = None
 
     @property
-    def values(self):
+    def values(self) -> Tuple:
         return self._values
 
     T = TypeVar('T')
@@ -437,8 +437,8 @@ class AbstractSegment(ABC):
         content. This base implementation just checks whether candidate has values set to not None otherwise raises an
         exception.
 
-        :param candidate:
-        :return:
+        :param candidate: Segment for which to ensure a compatible analyzer or meaningful values.
+        :return: The candidate asured to have compatible analyzer/values.
         """
         if self.values is None:
             raise ValueError("Analysis value missing of", self)
@@ -518,7 +518,7 @@ class CorrelatedSegment(AbstractSegment):
     MEASURE_DISTANCE = 0
     MEASURE_SIMILARITY = 1
 
-    def __init__(self, values: Union[List, numpy.ndarray], feature: AbstractSegment, haystack: 'MessageSegment',
+    def __init__(self, values: Tuple, feature: AbstractSegment, haystack: 'MessageSegment',
                  measure:int='CorrelatedSegment.MEASURE_SIMILARITY'):
         """
         :param values: List of analysis result values.
@@ -527,7 +527,7 @@ class CorrelatedSegment(AbstractSegment):
         :param measure: The similarity measure to use.
         """
         super().__init__()
-        self._values = values  # type: Union[List, numpy.ndarray]
+        self._values = values  # type: Tuple
         self.length = len(values)
         self.feature = feature  # type: AbstractSegment
         self.haystack = haystack  # type: MessageSegment
@@ -601,7 +601,7 @@ class MessageSegment(AbstractSegment):
         if not isinstance(offset, int):
             raise ValueError('Offset is not an int.')
         if not isinstance(length, int):
-            raise ValueError('Length is not an int.')
+            raise ValueError('Length is not an int. Its representation is ', repr(length))
         if offset >= len(self.message.data):
             raise ValueError('Offset {} too large for message of length {}.'.format(offset, len(self.message.data)))
         if offset+length-1 > len(self.message.data):
@@ -612,6 +612,10 @@ class MessageSegment(AbstractSegment):
         """byte offset of the first byte in message this segment is related to"""
         self.length = length
         """byte count of the segment this object represents in the originating message"""
+
+
+    def __len__(self):
+        return self.length
 
 
     @property
@@ -629,8 +633,8 @@ class MessageSegment(AbstractSegment):
         if super().values is not None:
             return super().values
         if isinstance(self.analyzer, SegmentAnalyzer):
-            return self.analyzer.values(self.offset, self.offset+self.length)
-        return self.analyzer.values[self.offset:self.offset+self.length]
+            return tuple(self.analyzer.values(self.offset, self.offset+self.length))
+        return tuple(self.analyzer.values[self.offset:self.offset+self.length])
 
 
     def valueat(self, absoluteBytePosition: int):
@@ -743,13 +747,13 @@ class HelperSegment(MessageSegment):
         return self._values
 
     @values.setter
-    def values(self, values):
+    def values(self, values: Tuple):
         self._values = values
 
 
 class TypedSegment(MessageSegment):
     """
-    Segment class that knows the type of field data contained
+    Segment class that knows the type of field data contained.
     """
 
     def __init__(self, analyzer: MessageAnalyzer,

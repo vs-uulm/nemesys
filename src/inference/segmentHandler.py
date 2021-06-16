@@ -8,6 +8,7 @@ from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
+from inference.formatRefinement import locateNonPrintable
 from inference.segments import MessageSegment, HelperSegment, TypedSegment
 from inference.analyzers import MessageAnalyzer
 from inference.templates import TypedTemplate, DistanceCalculator
@@ -108,7 +109,7 @@ def segmentsFixed(length: int, comparator,
     """
     segments = list()
     for l4msg, rmsg in comparator.messages.items():
-        if len(l4msg.data) % length == 0:
+        if len(l4msg.data) % length == 0:  # exclude the overlap
             lastOffset = len(l4msg.data)
         else:
             lastOffset = (len(l4msg.data) // length) * length
@@ -215,7 +216,7 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculat
     TODO reevaluate all usages!
 
     :param segmentsPerMsg: a list of one list of segments per message.
-    :return: refined segments in on list per message
+    :return: refined segments in list per message
     """
     import inference.formatRefinement as refine
 
@@ -270,7 +271,7 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     return newstuff
 
 
-def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
+def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -301,7 +302,7 @@ def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> Li
     return newstuff
 
 
-def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[Sequence[MessageSegment]]:
+def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -442,8 +443,6 @@ def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
-    from inference.formatRefinement import locateNonPrintable
-
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen

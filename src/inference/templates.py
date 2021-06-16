@@ -3,7 +3,6 @@ from os import cpu_count
 import numpy, scipy.spatial, itertools
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
-
 from inference.analyzers import MessageAnalyzer, Value
 from inference.segments import MessageSegment, AbstractSegment, CorrelatedSegment, HelperSegment, TypedSegment
 
@@ -15,7 +14,6 @@ parallelDistanceCalc = False
 activate parallel/multi-processor calculation of dissimilarities 
 in inference.templates.DistanceCalculator#_embdedAndCalcDistances
 """
-
 
 
 class DistanceCalculator(object):
@@ -654,6 +652,7 @@ class DistanceCalculator(object):
             maxOffset = longSegment[1] - shortSegment[1]
 
         subsets = list()
+        # TODO overlapping offset from -1
         for offset in range(0, maxOffset + 1):
             offSegment = longSegment[2][offset:offset + shortSegment[1]]
             subsets.append((-1, shortSegment[1], offSegment))
@@ -723,17 +722,17 @@ class DistanceCalculator(object):
         ... ], floatfmt=".2f"))
         ...
         -  ---------------------------  ------------  ----
-        3  [1, 2, 3, 4]                 [2, 3, 4]     0.21
-        3  [1, 2, 3, 4]                 [1, 3, 4]     0.30
-        2  [1, 3, 4]                    [2, 4]        0.37
-        3  [37, 5, 69]                  [1, 2, 3, 4]  0.75
-        4  [20, 30, 37, 50, 69, 2, 30]  [0, 0, 0, 0]  1.00
-        2  [1, 2, 3, 4]                 [2, 4]        0.44
-        2  [1, 2, 3, 4]                 [2, 3]        0.40
-        3  [20, 30, 37, 50, 69, 2, 30]  [37, 5, 69]   0.58
-        4  [1, 2, 3, 4]                 [0, 0, 0, 0]  1.00
-        2  [2, 4]                       [2, 3]        0.07
-        4  [1, 2, 3, 4]                 [3, 2, 3, 4]  0.12
+        3  (1, 2, 3, 4)                 (2, 3, 4)     0.21
+        3  (1, 2, 3, 4)                 (1, 3, 4)     0.30
+        2  (1, 3, 4)                    (2, 4)        0.37
+        3  (37, 5, 69)                  (1, 2, 3, 4)  0.75
+        4  (20, 30, 37, 50, 69, 2, 30)  (0, 0, 0, 0)  1.00
+        2  (1, 2, 3, 4)                 (2, 4)        0.44
+        2  (1, 2, 3, 4)                 (2, 3)        0.40
+        3  (20, 30, 37, 50, 69, 2, 30)  (37, 5, 69)   0.58
+        4  (1, 2, 3, 4)                 (0, 0, 0, 0)  1.00
+        2  (2, 4)                       (2, 3)        0.07
+        4  (1, 2, 3, 4)                 (3, 2, 3, 4)  0.12
         -  ---------------------------  ------------  ----
 
         :return: List of Tuples
@@ -1265,7 +1264,6 @@ class Template(AbstractSegment):
         return "Template {} bytes: {} | #base {}".format(self.length, printValues, len(self.baseSegments))
 
 
-
 class TypedTemplate(Template):
     """
     Template for the representation of a segment type.
@@ -1346,26 +1344,26 @@ class DelegatingDC(DistanceCalculator):
         Calculated distances for 23 segment pairs in ... seconds.
         >>> print(tabulate(enumerate(ddc.segments)))
         -  ----------------------------------------------------------------
-        0  MessageSegment 4 bytes at (0, 4): 01020304 | values: [1, 2, 3...
-        1  MessageSegment 3 bytes at (0, 3): 020304 | values: [2, 3, 4]
-        2  MessageSegment 3 bytes at (0, 3): 250545 | values: [37, 5, 69]
-        3  MessageSegment 4 bytes at (0, 4): 00000000 | values: [0, 0, 0...
-        4  MessageSegment 4 bytes at (0, 4): 03020304 | values: [3, 2, 3...
+        0  MessageSegment 4 bytes at (0, 4): 01020304 | values: (1, 2, 3...
+        1  MessageSegment 3 bytes at (0, 3): 020304 | values: (2, 3, 4)
+        2  MessageSegment 3 bytes at (0, 3): 250545 | values: (37, 5, 69)
+        3  MessageSegment 4 bytes at (0, 4): 00000000 | values: (0, 0, 0...
+        4  MessageSegment 4 bytes at (0, 4): 03020304 | values: (3, 2, 3...
         5  Template 2 bytes: (2, 4) | #base 2
         6  Template 7 bytes: (20, 30, 37... | #base 3
         -  ----------------------------------------------------------------
         >>> print(tabulate(enumerate(dc.segments)))
         -  -------------------------------------------------------------------------
-        0  MessageSegment 4 bytes at (0, 4): 01020304 | values: [1, 2, 3...
-        1  MessageSegment 3 bytes at (0, 3): 020304 | values: [2, 3, 4]
-        2  MessageSegment 2 bytes at (0, 2): 0204 | values: [2, 4]
-        3  MessageSegment 2 bytes at (0, 2): 0204 | values: [2, 4]
-        4  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
-        5  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
-        6  MessageSegment 3 bytes at (0, 3): 250545 | values: [37, 5, 69]
-        7  MessageSegment 4 bytes at (0, 4): 00000000 | values: [0, 0, 0...
-        8  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
-        9  MessageSegment 4 bytes at (0, 4): 03020304 | values: [3, 2, 3...
+        0  MessageSegment 4 bytes at (0, 4): 01020304 | values: (1, 2, 3...
+        1  MessageSegment 3 bytes at (0, 3): 020304 | values: (2, 3, 4)
+        2  MessageSegment 2 bytes at (0, 2): 0204 | values: (2, 4)
+        3  MessageSegment 2 bytes at (0, 2): 0204 | values: (2, 4)
+        4  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
+        5  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
+        6  MessageSegment 3 bytes at (0, 3): 250545 | values: (37, 5, 69)
+        7  MessageSegment 4 bytes at (0, 4): 00000000 | values: (0, 0, 0...
+        8  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
+        9  MessageSegment 4 bytes at (0, 4): 03020304 | values: (3, 2, 3...
         -  -------------------------------------------------------------------------
 
         :param segments: List of segments to calculate pairwise distances from.
@@ -1403,23 +1401,22 @@ class DelegatingDC(DistanceCalculator):
         >>> segments = __testing_generateTestSegmentsWithDuplicates()
         >>> t4d = DelegatingDC._templates4duplicates(segments)
         >>> pprint(t4d[0])
-        [MessageSegment 4 bytes at (0, 4): 01020304 | values: [1, 2, 3...,
-         MessageSegment 3 bytes at (0, 3): 020304 | values: [2, 3, 4],
-         MessageSegment 3 bytes at (0, 3): 250545 | values: [37, 5, 69],
-         MessageSegment 4 bytes at (0, 4): 00000000 | values: [0, 0, 0...,
-         MessageSegment 4 bytes at (0, 4): 03020304 | values: [3, 2, 3...]
+        [MessageSegment 4 bytes at (0, 4): 01020304 | values: (1, 2, 3...,
+         MessageSegment 3 bytes at (0, 3): 020304 | values: (2, 3, 4),
+         MessageSegment 3 bytes at (0, 3): 250545 | values: (37, 5, 69),
+         MessageSegment 4 bytes at (0, 4): 00000000 | values: (0, 0, 0...,
+         MessageSegment 4 bytes at (0, 4): 03020304 | values: (3, 2, 3...]
         >>> pprint(t4d[1])
         [Template 2 bytes: (2, 4) | #base 2, Template 7 bytes: (20, 30, 37... | #base 3]
         >>> pprint([sorted(((k, t4d[2][k]) for k in t4d[2].keys()), key=lambda x: x[1])])
-        [[(MessageSegment 2 bytes at (0, 2): 0204 | values: [2, 4], 5),
-          (MessageSegment 2 bytes at (0, 2): 0204 | values: [2, 4], 5),
-          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...,
+        [[(MessageSegment 2 bytes at (0, 2): 0204 | values: (2, 4), 5),
+          (MessageSegment 2 bytes at (0, 2): 0204 | values: (2, 4), 5),
+          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...,
            6),
-          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...,
+          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...,
            6),
-          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...,
+          (MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...,
            6)]]
-
 
 
         :param segments: Segments to filter
@@ -1512,10 +1509,11 @@ class DelegatingDC(DistanceCalculator):
         ddc: 7 dc: 10
         >>> print(tabulate(enumerate(ddc.segments[-1].baseSegments)))
         -  -------------------------------------------------------------------------
-        0  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
-        1  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
-        2  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: [20, 30, 37...
+        0  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
+        1  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
+        2  MessageSegment 7 bytes at (0, 7): 141e253245021e | values: (20, 30, 37...
         -  -------------------------------------------------------------------------
+
 
 
         :return: All unique segments and representatives for "feature-identical" segments in this object.
@@ -1661,7 +1659,6 @@ class DelegatingDC(DistanceCalculator):
 
 
 class MemmapDC(DelegatingDC):
-
     maxMemMatrix = 750000
     if parallelDistanceCalc:
         maxMemMatrix /= cpu_count()

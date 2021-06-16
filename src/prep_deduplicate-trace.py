@@ -11,6 +11,8 @@ import argparse
 from os.path import exists,isfile,splitext
 from collections import OrderedDict
 
+from validation.messageParser import ParsingConstants
+
 PACKET_LIMIT = 1000
 
 class Deduplicate(object):
@@ -47,9 +49,6 @@ class Deduplicate(object):
             else:
                 targetpacket = packet[self.TARGETLAYER][2]
 
-            # Netzob does not support raw frames, so add ethernet dummy if necessary
-            if self.TARGETLAYER != 0 and not isinstance(packet[0], Ether):
-                packet = Ether(src='0',dst='0')/packet
 
             self.unique_packets[str(targetpacket)] = packet
             if len(self.unique_packets) >= PACKET_LIMIT:
@@ -59,7 +58,7 @@ class Deduplicate(object):
                 layername = TARGETLAYER + ' + 2'
             else:
                 layername = TARGETLAYER
-            print('Network layer ' + str(layername) + ' not available in the following packet:')
+            print('Protocol layer ' + str(layername) + ' not available in the following packet:')
             print('\n\n' + repr(packet) + '\n\n')
         return False
 
@@ -71,7 +70,16 @@ def main(filename, outputfile, targetlayer, packetlimit):
     # sniff has the advantage to NOT read the whole file into the memory initially. This saves memory for huge pcaps.
     sniff(offline=filename,stop_filter=dedup.dedup,store=0)
 
-    wrpcap(outputfile, dedup.unique_packets.values())
+    # get the first packet (we assume all have the same linktype)
+    eplpkt = next(iter(dedup.unique_packets.values()))
+    if isinstance(eplpkt, Ether):
+        lt = ParsingConstants.LINKTYPES["ETHERNET"] # 0x1
+    elif isinstance(eplpkt, IP):
+        lt = ParsingConstants.LINKTYPES["RAW_IP"] # 0x65
+    else:
+        raise Exception("Check linktype.")
+
+    wrpcap(outputfile, dedup.unique_packets.values(), linktype=lt)
     print("Deduplication of {:s} of pcap written to {:s}".format(
         str(TARGETLAYER) if not isinstance(TARGETLAYER, str) else TARGETLAYER + ' + 2',
         outfile))

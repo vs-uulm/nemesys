@@ -74,7 +74,7 @@ class ClusterSplitter(object):
         self.__clusterPrecisions = clusterPrecisions
 
 
-    def _writeCSVline(self, aNum: Hashable, clusterSize, exotic, valCounts4fields: Dict[int, int]):
+    def _writeCSVline(self, aNum: Hashable, clusterSize, exotic, valCounts4fields: Dict[int, Counter]):
         """
         Writing of the set of lines for one cluster of exotic field statistics to CSV for evaluation.
 
@@ -127,7 +127,7 @@ class ClusterSplitter(object):
         :return: Pivots to split the cluster.
         """
         valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                            for fidx, segs in enumerate(fields)}
+                            for fidx, segs in enumerate(fields)}  # type: Dict[int, Counter]
         distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
         # amount of distinct values per field
         valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
@@ -179,7 +179,7 @@ class ClusterSplitter(object):
             if aNum == -1:
                 continue
             freqThresh = numpy.floor(numpy.log(len(aClu)))  # numpy.round(numpy.log(len(aClu)))
-            fields = [fld for fld in zip(*aClu)]  # type: List[List[MessageSegment]]
+            fields = [fld for fld in zip(*aClu)]  # type: List[Tuple[MessageSegment]]
             assert len(fields[0]) == len(aClu)
 
             print("\nCluster {} of size {} - threshold {:.2f}".format(aNum, len(aClu), numpy.log(len(aClu))))

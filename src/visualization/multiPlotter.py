@@ -337,3 +337,77 @@ class MultiMessagePlotter(MessagePlotter):
                     newHandles.append(handle)
             sf.legend(newHandles, newLabels)
         super().writeOrShowFigure()
+
+
+
+class PlotGroups:
+    """
+    Helper object to generate input for visualization.multiPlotter.MultiMessagePlotter#plotMultiSegmentLines
+
+    Use PlotGroups#plotsList output for MultiMessagePlotter#plotMultiSegmentLines
+        or iterate PlotGroups#canvasList to print multiple pages.
+    """
+
+    def __init__(self, canvasTitle=None):
+        """
+
+        :param canvasTitle: create a first canvas.
+        """
+        self.plotGroups = list()  # type: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]
+        """:var             
+        List [ of
+            Tuples (
+                 "canvas label",
+                 List [ of cluster
+                    Tuples (
+                        "plot label",
+                        List [ of segment
+                            Tuples (
+                                "colored label (e. g. field type)",
+                                MessageSegment object
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]"""
+        if canvasTitle is not None:
+            self.plotGroups.append((canvasTitle, list()))
+
+    @property
+    def canvasList(self) -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
+        return self.plotGroups
+
+    def plotsList(self, cid = 0) -> List[Tuple[str, List[Tuple[str, TypedSegment]]]]:
+        """
+        for one page only
+
+        :param cid: Canvas ID
+        :return:
+        """
+        return self.plotGroups[cid][1]
+
+    def segmentList(self, cid, pid) -> List[Tuple[str, TypedSegment]]:
+        """
+        :param cid: Canvas ID
+        :param pid: Plot ID
+        :return:
+        """
+        # noinspection PyTypeChecker
+        return self.plotGroups[cid][1][pid][1]
+
+    def appendCanvas(self, title: str,
+                     plots: List[Tuple[str, List[Tuple[str, TypedSegment]]]] = None):
+        aPlots = plots if plots is not None else list()
+        self.plotGroups.append((title, aPlots))
+        return len(self.plotGroups) - 1
+
+    def appendPlot(self, cid: int, title: str,
+                   segments: List[Tuple[str, TypedSegment]] = None):
+        aSegments = segments if segments is not None else list()
+        self.plotGroups[cid][1].append((title, aSegments))
+        return len(self.plotGroups[cid][1]) - 1
+
+    def appendSegment(self, cid: int, pid: int, title: str, segment: TypedSegment):
+        self.plotGroups[cid][1][pid][1].append((title, segment))
+        return len(self.plotGroups[cid][1][pid][1]) - 1

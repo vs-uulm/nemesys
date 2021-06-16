@@ -163,7 +163,7 @@ if __name__ == '__main__':
 
         clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
-        eh.writeCollectiveClusteringStaticstics(
+        eh.writeCollectiveMessageClusteringStaticstics(
             messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
 
     ParsedMessage.closetshark()

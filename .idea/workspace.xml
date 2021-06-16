@@ -5,24 +5,85 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" afterDir="false" />
+      <change afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/.idea/netzob.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/other.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/eval-nemetyl-messagetype.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/eval-netzob-messagetype.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-10000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/binaryprotocols_maxdiff-fromOrig-500.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-mixed.pcapng" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-rawip.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-rawip.pcapng" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dhcp_SMIA2011101X-filtered_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dhcp_SMIA2011101X-filtered_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010-new_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010-new_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/nbns_SMIA20111010-one_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/nbns_SMIA20111010-one_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/ntp_SMIA-20111010_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/ntp_SMIA-20111010_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/smb_SMIA20111010-one-rigid1_maxdiff-100-encap.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/smb_SMIA20111010-one-rigid1_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/strip_encapsulation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/NEMESYS.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/NEMESYS.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/Sources.md" beforeDir="false" afterPath="$PROJECT_DIR$/input/Sources.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-1000.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-9911.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/dns_ictf2010_deduped-9911-10000.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/ntp_SMIA-20111010_deduped-9995.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/ntp_SMIA-20111010_deduped-9995-10000.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/alignment/alignMessages.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/alignMessages.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/alignment/clusterMerging.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/clusterMerging.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/hirschbergAlignSegments.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/formatRefinement.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/formatRefinement.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/segmentHandler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segmentHandler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inference/segments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segments.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nemesys_fms.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/nemesys_fms.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nemetyl_align-segments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/nemetyl_align-segments.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/netzob_messagetypes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/netzob_messagetypes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/prep_deduplicate-trace.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/prep_deduplicate-trace.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/baseAlgorithms.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/baseAlgorithms.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/utils/loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/validation/messageParser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/messageParser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/validation/reportWriter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/reportWriter.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/visualization/multiPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/multiPlotter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/visualization/plotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/plotter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/visualization/simplePrint.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/simplePrint.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager">
+    <option name="groupingKeys">
+      <option value="directory" />
+      <option value="repository" />
+    </option>
   </component>
   <component name="CreatePatchCommitExecutor">
     <option name="PATCH_PATH" value="" />
@@ -52,7 +113,6 @@
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
-    <option name="showExcludedFiles" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
@@ -111,6 +171,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/align_on_field_personality.py" />
       <option name="PARAMETERS" value="input/binaryprotocols_merged_500.pcap -i" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -132,6 +193,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/characterize_fieldtypes.py" />
       <option name="PARAMETERS" value="input/binaryprotocols_merged_500.pcap value" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -153,6 +215,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/characterize_segments.py" />
       <option name="PARAMETERS" value="input/binaryprotocols_merged_500.pcap progdiff" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -174,6 +237,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/prep_deduplicate-trace.py" />
       <option name="PARAMETERS" value="$USER_HOME$/REUP-common/trace-collection/sources/SMIA_2011-10-10_08_632834000_file1-splits/nbns/nbns_SMIA20111010-one.pcap -p 10000" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -195,6 +259,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/nemesys_fms.py" />
       <option name="PARAMETERS" value="input/hide/smb_SMIA20111010-one_deduped-100.pcap" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -216,6 +281,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/check_parse-pcap.py" />
       <option name="PARAMETERS" value="input/dns_ictf2010_deduped-100.pcap -l 2 -r" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -237,6 +303,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_message_plot.py" />
       <option name="PARAMETERS" value="input/ntp_SMIA-20111010_deduped-100.pcap bcDelta" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -255,6 +322,7 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="_new_regexPattern" value="&quot;&quot;" />
       <option name="_new_additionalArguments" value="&quot;&quot;" />
       <option name="_new_target" value="&quot;.&quot;" />
@@ -270,6 +338,7 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="_new_additionalArguments" value="&quot;&quot;" />
       <option name="_new_target" value="&quot;.&quot;" />
       <option name="_new_targetType" value="&quot;PATH&quot;" />
@@ -284,7 +353,9 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_parameters" value="&quot;&quot;" />
       <option name="_new_additionalArguments" value="&quot;&quot;" />
       <option name="_new_target" value="&quot;.&quot;" />
       <option name="_new_targetType" value="&quot;PATH&quot;" />
@@ -365,31 +436,33 @@
       </list>
     </option>
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="generate field lists of the same message either inferred and dissected" />
     <option name="LAST_COMMIT_MESSAGE" value="generate field lists of the same message either inferred and dissected" />
-  </component>
-  <component name="WindowStateProjectService">
-    <state x="851" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser" timestamp="1592767076709">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="851" y="454" width="374" height="569" key="#com.intellij.ide.util.MemberChooser/0.30.3440.1410@0.30.3440.1410" timestamp="1592767076709" />
-    <state x="777" y="577" width="521" height="323" key="ANALYSIS_DLG_com.intellij.analysis.BaseAnalysisAction$1" timestamp="1592767320731">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="777" y="577" width="521" height="323" key="ANALYSIS_DLG_com.intellij.analysis.BaseAnalysisAction$1/0.30.3440.1410@0.30.3440.1410" timestamp="1592767320731" />
-    <state x="719" y="457" width="975" height="556" key="find.popup" timestamp="1592955461604">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="719" y="457" width="975" height="556" key="find.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592955461604" />
-    <state width="739" height="320" key="javadoc.popup.new" timestamp="1592957146439">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state width="739" height="320" key="javadoc.popup.new/0.30.3440.1410@0.30.3440.1410" timestamp="1592957146439" />
-    <state x="706" y="351" width="672" height="678" key="search.everywhere.popup" timestamp="1592955209225">
-      <screen x="0" y="30" width="3440" height="1410" />
-    </state>
-    <state x="706" y="351" width="672" height="678" key="search.everywhere.popup/0.30.3440.1410@0.30.3440.1410" timestamp="1592955209225" />
   </component>
   <component name="XDebuggerManager">
     <watches-manager>
@@ -397,6 +470,9 @@
         <watch expression="newSegment.values" />
       </configuration>
     </watches-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/nemesys$.coverage" NAME=" Coverage Results" MODIFIED="1622924810032" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
   </component>
   <component name="debuggerHistoryManager">
     <expressions id="evaluateCodeFragment">

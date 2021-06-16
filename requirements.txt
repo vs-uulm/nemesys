@@ -1,9 +1,10 @@
-humanhash
-netzob
 bitarray
-hdbscan
-sklearn
+netzob
+humanhash
 numpy
+kneed
+scikit-learn
+hdbscan
 cython
 scapy
 IPython

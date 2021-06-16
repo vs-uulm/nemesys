@@ -36,6 +36,27 @@ class BaseLoader(object):
             # probably we could use msgs = ParsedMessage.parseMultiple(l1msgs); for m in msgs:
             # ... append(RawMessage(m.protocolbytes))
 
+    def getBaseLayerOfPCAP(self):
+        """
+        see ParsingConstants.LINKTYPES
+
+        :return: Determine lowest encapulating layer of PCAP.
+        """
+        try:
+            # looking at just one message should reveal lowest encapulating layer of the whole PCAP
+            al5msg = next(iter(self.messagePool.keys()))
+        except StopIteration:
+            raise ValueError('No message could be imported. See previous errors for more details.')
+        if al5msg.l2Protocol == 'Ethernet':
+            return ParsingConstants.LINKTYPES['ETHERNET']
+        elif al5msg.l2Protocol == 'None':  # no ethernet
+            if al5msg.l3Protocol == 'IP':
+                return ParsingConstants.LINKTYPES['RAW_IP']  # IP
+            else:
+                raise NotImplementedError("Linktype on layer 3 unknown. Protocol is {}".format(al5msg.l3Protocol))
+        else:
+            raise NotImplementedError("Linktype on layer 2 unknown. Protocol is {}".format(al5msg.l2Protocol))
+
 
 class SpecimenLoader(BaseLoader):
     """
@@ -74,29 +95,6 @@ class SpecimenLoader(BaseLoader):
         # read messages as raw for tshark input
         l1msgs = PCAPImporter.readFile(pcap, importLayer=1).values()  # type: List[RawMessage]
         super().__init__(l5msgs, l1msgs)
-
-
-    def getBaseLayerOfPCAP(self):
-        """
-        see ParsingConstants.LINKTYPES
-
-        :return: Determine lowest encapulating layer of PCAP.
-        """
-        try:
-            # looking at just one message should reveal lowest encapulating layer of the whole PCAP
-            al5msg = next(iter(self.messagePool.keys()))
-        except StopIteration:
-            raise ValueError('No message could be imported. See previous errors for more details.')
-        if al5msg.l2Protocol == 'Ethernet':
-            return ParsingConstants.LINKTYPES['ETHERNET']
-        elif al5msg.l2Protocol == 'None':  # no ethernet
-            if al5msg.l3Protocol == 'IP':
-                return ParsingConstants.LINKTYPES['RAW_IP']  # IP
-            else:
-                raise NotImplementedError("Linktype on layer 3 unknown. Protocol is {}".format(al5msg.l3Protocol))
-        else:
-            raise NotImplementedError("Linktype on layer 2 unknown. Protocol is {}".format(al5msg.l2Protocol))
-
 
     @property
     def maximumMessageLength(self):

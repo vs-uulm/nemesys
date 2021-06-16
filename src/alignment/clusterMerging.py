@@ -36,15 +36,12 @@ class ClusterAligner(object):
                     # The association to the original message is lost for the other segments in this field!
                     statDynFields[clunu].append(fvalsGapless[0])
                 else:
-                    dynTemp = Template(list(ClusterMerger.FC_DYN), fvalsGapless)
+                    dynTemp = Template(tuple(ClusterMerger.FC_DYN), fvalsGapless)
                     dynTemp.medoid = self.dc.findMedoid(dynTemp.baseSegments)
                     statDynFields[clunu].append(dynTemp)
         # generate a similarity matrix for field-classes (static-dynamic)
         statDynValues = list(set(chain.from_iterable(statDynFields.values())))
 
-        # fcSimMatrix = numpy.array([[0 if fcL.bytes != fcK.bytes else 0.5 if isinstance(fcL, Template) else 1
-        #               for fcL in statDynValues] for fcK in statDynValues])
-        # use medoid distance in fcSimMatrix instead of fixed value (0.5)
 
         fcSimMatrix = numpy.array([[
             # 1.0 if fcL.bytes == fcK.bytes else
@@ -184,7 +181,7 @@ class ClusterMerger(ClusterAligner):
                         segAtSTA = alignedFC[0][fid + 1] if afcB == ClusterMerger.FC_GAP else alignedFC[1][fid + 1]
                     else:
                         print("tertium non datur.")
-                        segAtSTA = None  # type: MessageSegment
+                        segAtSTA = None  # type: Union[MessageSegment, None]
                         IPython.embed()
                     changes.append((fid, (
                         fid-1 if segAtGAP.offset > segAtSTA.offset else fid+1,

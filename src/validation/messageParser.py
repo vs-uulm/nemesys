@@ -4,16 +4,15 @@ Interpret fields and data types for comparison to an inference result.
 """
 
 import json
-from typing import List, Tuple, Dict, Set, Union
 from pprint import pprint
+from typing import List, Tuple, Dict, Set, Union
+
 import IPython
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
-
 from validation.tsharkConnector import TsharkConnector
 
 
-# noinspection PyDictCreation
 class ParsingConstants(object):
     """
     Class to hold constants necessary for the interpretation of the tshark dissectors.
@@ -732,6 +731,7 @@ class ParsedMessage(object):
             ParsedMessage.__tshark.terminate(2)
             ParsedMessage.__tshark = TsharkConnector(linktype)
 
+
         prsdmsgs = {}
         n = 1000  # parse in chunks of 1000s
         for iteration, msgChunk in enumerate([messages[i:i + n] for i in range(0, len(messages), n)]):
@@ -887,7 +887,6 @@ class ParsedMessage(object):
                         if not isinstance(self._dissectfull, list):
                             print ("Undifferentiated protocol content for protocol ", self.protocolname,
                                    "\nDissector JSON is: ", self._dissectfull)
-                            subprocess.run(["spd-say", "'Undifferenzierter Protokolinhalt!'"])
                             IPython.embed()  # TODO how to handle this in general without the need for interaction?
                             raise DissectionInsufficient("Undifferentiated protocol content for protocol ", self.protocolname,
                                    "\nDissector JSON is: ", self._dissectfull)
@@ -927,7 +926,6 @@ class ParsedMessage(object):
                             print('Dissection is incomplete:\nDissector result:',
                                   '{}\nOriginal  packet: {}\nself is of type ParsedMessage'.format(
                                       "".join(self.getFieldValues()), self.protocolbytes))
-                            subprocess.run(["spd-say", "'Dissection unvollständig!'"])
                             IPython.embed()
 
                             raise DissectionIncomplete('Dissection is incomplete:\nDissector result: {}\n'
@@ -1388,10 +1386,8 @@ class ParsedMessage(object):
         Example:
         >>> from netzob.all import *
         >>> from validation.messageParser import ParsedMessage
-        >>> dns = PCAPImporter.readFile("../input/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
-        >>> pms = ParsedMessage.parseMultiple(dns)
-        Ignored sub field: dns.id_tree
-        Ignored sub field: dns.id_tree
+        >>> dhcp = PCAPImporter.readFile("../input/dhcp_SMIA2011101X_deduped-100.pcap", importLayer=1).values()
+        >>> pms = ParsedMessage.parseMultiple(dhcp)
         >>> for parsed in pms.values(): parsed.printUnknownTypes()
         """
         CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
@@ -1471,30 +1467,3 @@ class ParsedMessage(object):
     @property
     def messagetype(self):
         return MessageTypeIdentifiers.typeOfMessage(self)
-
-
-    def __getstate__(self):
-        """
-        Include required class arribute in pickling.
-
-        :return: The dict of this object for use in pickle.dump()
-        """
-        statecopy = self.__dict__.copy()
-        statecopy["_ParsedMessage_CLASS___tshark"] = ParsedMessage.__tshark
-        return statecopy
-
-
-    def __setstate__(self, state):
-        """
-        Include required class arribute in pickling.
-
-        :param state: The dict of this object got from pickle.load()
-        """
-        # TODO This could be made more efficient by just referencing the class variable once for all instances
-        #  by some external wrapper method/class managed by utils.evaluationHelpers.cacheAndLoadDC for pickling
-        ParsedMessage.__tshark = state["_ParsedMessage_CLASS___tshark"]
-        del state["_ParsedMessage_CLASS___tshark"]
-        self.__dict__.update(state)
-
-
-

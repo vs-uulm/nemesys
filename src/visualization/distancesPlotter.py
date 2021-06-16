@@ -13,7 +13,7 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 from visualization.plotter import MessagePlotter
 from utils.loader import BaseLoader
 from inference.segments import MessageSegment, TypedSegment
-from inference.templates import Template, DistanceCalculator
+from inference.templates import Template, TypedTemplate, DistanceCalculator
 
 
 
@@ -39,9 +39,7 @@ class DistancesPlotter(MessagePlotter):
         self._cm = cm.jet  # type: colors.LinearSegmentedColormap
 
 
-
-
-    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, RawMessage, Any]],
+    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
                               distances: numpy.ndarray,
                               labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
         """
@@ -144,6 +142,7 @@ class DistancesPlotter(MessagePlotter):
         else:
             idx2rem = None
 
+
         # prepare MDS
         seed = numpy.random.RandomState(seed=3)
         mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
@@ -164,7 +163,7 @@ class DistancesPlotter(MessagePlotter):
             axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
 
         # omit noise in cluster labels if types are plotted anyway.
-        if isinstance(segments[0], TypedSegment):
+        if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
             for l in ulab:
                 if isinstance(l, str) and "Noise" in l:
                     ulab.remove(l)
@@ -207,11 +206,11 @@ class DistancesPlotter(MessagePlotter):
 
 
         # include field type labels for TypedSegments input
-        if isinstance(segments[0], (TypedSegment, RawMessage)):
-            if isinstance(segments[0], TypedSegment):
-                ftypes = numpy.array([seg.fieldtype for seg in segments])  # PP
-            elif isinstance(segments[0], RawMessage) and segments[0].messageType != 'Raw':
-                ftypes = numpy.array([msg.messageType for msg in segments])  # PP
+        if any(isinstance(seg, (TypedSegment, TypedTemplate, RawMessage)) for seg in segments):
+            if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
+                ftypes = numpy.array([seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else "[unknown]" for seg in segments])  # PP
+            elif any(isinstance(seg, RawMessage) and seg.messageType != 'Raw' for seg in segments):
+                ftypes = numpy.array([msg.messageType if isinstance(msg, RawMessage) and msg.messageType != 'Raw' else "[unknown]" for msg in segments])  # PP
             else:
                 ftypes = set()
             # identify unique types
@@ -231,7 +230,7 @@ class DistancesPlotter(MessagePlotter):
                           s=typsize,
                           lw=0, label=str(ft))
 
-                if isinstance(segments[0], TypedSegment):
+                if isinstance(segments[0], (TypedSegment, TypedTemplate)):
                     for seg in compress(segments, type_member_mask):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
         elif isinstance(segments[0], MessageSegment):
@@ -274,12 +273,14 @@ class DistancesPlotter(MessagePlotter):
             # Count markers at identical positions and plot text with information about the markers at this position
             from collections import Counter
             import math
-            if isinstance(segments[0], TypedSegment):
+            if isinstance(segments[0], (TypedSegment, TypedTemplate)):
+                # TODO for TypedTemplates we rather need to count the number of base segments, so for now this is not accurate
                 coordCounter = Counter(
                     [(posX, posY, seg.fieldtype) for seg, lab, posX, posY in zip(
                         segments, labels, pos[:, 0].tolist(), pos[:, 1].tolist())]
                 )
             else:
+                # TODO for Templates we rather need to count the number of base segments, so for now this is not accurate
                 coordCounter = Counter(
                     [(posX, posY, lab) for lab, posX, posY in zip(
                         labels, pos[:, 0].tolist(), pos[:, 1].tolist())]

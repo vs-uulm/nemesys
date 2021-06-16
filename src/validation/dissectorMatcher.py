@@ -5,7 +5,7 @@ Methods to comparison of a list of messages' inferences and their dissections
 and match a message's inference with its dissector in different ways.
 """
 
-from typing import List, Tuple, Dict, Iterable, Generator
+from typing import List, Tuple, Dict, Iterable, Generator, Union
 from collections import OrderedDict
 import copy
 
@@ -16,7 +16,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
-from inference.segments import TypedSegment
+from inference.segments import MessageSegment, TypedSegment
 
 
 class FormatMatchScore(object):
@@ -197,6 +197,78 @@ class MessageComparator(object):
         return distinctFormats
 
 
+    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int]=None,
+                           mark: Union[Tuple[int,int], MessageSegment]=None,
+                           messageSlice: Tuple[Union[int,None],Union[int,None]]=None):
+        """
+
+        :param message: The message from which to print the byte hex values. Also used to look up the
+            true field boundaries to mark by spaces between in the printed byte hex values.
+        :param inferredFieldEnds: The field ends that should be visualized by color changes.
+        :param mark: Start and end indices of a range to mark by underlining.
+        :param messageSlice: Tuple used as parameters of the slice builtin to select a subset of all messages to print.
+            Use None to create an open slice (up to the beginnin or end of the message).
+        :return:
+        """
+        import visualization.bcolors as bc
+
+        l2msg = self.messages[message]
+        tformat = self.dissections[l2msg]
+        tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
+        msglen = len(message.data)
+        absSlice = (
+            messageSlice[0] if messageSlice is not None and messageSlice[0] is not None else 0,
+            messageSlice[1] if messageSlice is not None and messageSlice[1] is not None else msglen
+        )
+        dataSnip = message.data if messageSlice is None else message.data[slice(*messageSlice)]
+
+
+        ife = [0] + sorted(inferredFieldEnds if inferredFieldEnds is not None else self.fieldEndsPerMessage(message))
+        ife += [msglen] if ife[-1] < msglen else []
+
+        if mark is not None:
+            if isinstance(mark, MessageSegment):
+                mark = mark.offset, mark.nextOffset
+            assert mark[0] >= absSlice[0], repr(mark) + repr(messageSlice)
+            assert mark[1] <= absSlice[1], repr(mark) + repr(messageSlice)
+
+        hexdata = list()  # type: List[str]
+        lastcolor = None
+        for po, by in enumerate(dataSnip, absSlice[0]):
+            # end mark
+            if mark is not None and po == mark[1]:
+                hexdata.append(bc.ENDC)
+                # restart color after mark end
+                if lastcolor is not None and lastcolor < po and po not in ife:
+                    hexdata.append(bc.eightBitColor(lastcolor % 231 + 1))
+
+            # have a space in place of each true field end in the hex data.
+            if po in tfe:
+                hexdata.append(' ')
+
+            # have a different color per each inferred field
+            if po in ife:
+                if po > 0:
+                    lastcolor = None
+                    hexdata.append(bc.ENDC)
+                    # restart mark after color change
+                    if mark is not None and mark[0] < po < mark[1]:
+                        hexdata.append(bc.UNDERLINE)
+                if po < absSlice[1]:
+                    lastcolor = po
+                    hexdata.append(bc.eightBitColor(po % 231 + 1))
+
+            # start mark
+            if mark is not None and po == mark[0]:
+                hexdata.append(bc.UNDERLINE)
+
+            # add the actual value
+            hexdata.append('{:02x}'.format(by))
+        hexdata.append(bc.ENDC)
+
+        print(''.join(hexdata))
+
+
     def __prepareMessagesForPPrint(self, symbols: Iterable[netzob.Symbol]) \
             -> List[List[Tuple[AbstractMessage, List[int], List[int]]]]:
         """
@@ -340,8 +412,100 @@ class MessageComparator(object):
         return texcode
 
 
+    def segment2typed(self, segment: MessageSegment) -> Tuple[float, Union[TypedSegment, MessageSegment]]:
+        parsedMessage = self.parsedMessages[self.messages[segment.message]]
+        fieldSequence = list()
+        off = 0
+        for _, l in parsedMessage.getFieldSequence():
+            off += l
+            fieldSequence.append(off)
+        # fieldSequence = self.fieldEndsPerMessage(segment.message)
+        # print(".", end="")
+
+        # the largest true offset smaller or equal to the given segment start
+        beforeOff = max([0] + [trueOff for trueOff in fieldSequence if trueOff <= segment.offset])
+        # the smallest true offset larger or equal to the given segment end
+        afterOff = min([trueOff for trueOff in fieldSequence if trueOff >= segment.nextOffset] +
+                       [len(segment.message.data)])
+        # true offsets fully enclosed in the inferred segment
+        enclosed = sorted(trueOff for trueOff in fieldSequence if segment.offset < trueOff < segment.nextOffset)
+
+        # longest overlap
+        overlapStart, overlapEnd = 0, 0
+        for start, end in zip([segment.offset] + enclosed, enclosed + [segment.nextOffset]):
+            if overlapEnd - overlapStart < end - start:
+                overlapStart, overlapEnd = start, end
+
+        # if more than half of the longest overlap is outside of the inferred segment, there is no type match
+        if overlapStart == segment.offset and (overlapEnd - beforeOff)/(overlapEnd - overlapStart) <= .5 \
+                or overlapEnd == segment.nextOffset and (afterOff - overlapStart)/(overlapEnd - overlapStart) <= .5:
+            # no true field with sufficient overlap exists
+            return 0.0, segment
+
+        overlapRatio = (overlapEnd - overlapStart) / segment.length
+
+        assert overlapEnd > 0, "No possible overlap could be found. Investigate!"
+        trueEnd = afterOff if overlapEnd == segment.nextOffset else overlapEnd
+
+        if not trueEnd in fieldSequence:
+            print("Field sequence is not matching any possible overlap. Investigate!")
+            import IPython; IPython.embed()
+        assert trueEnd in fieldSequence, "Field sequence is not matching any possible overlap. Investigate!"
+        overlapIndex = fieldSequence.index(trueEnd)
+
+        fieldtype = parsedMessage.getTypeSequence()[overlapIndex][0]
+
+        # return a typed version of the segment and the ratio of overlapping bytes to the segment length
+        return overlapRatio, TypedSegment(segment.analyzer, segment.offset, segment.length, fieldtype)
 
 
+    def lookupField(self, segment: MessageSegment):
+        """
+        Look up the field name for a segment.
+
+        TODO caveat: returns "close matches" without any notification,
+            i. e., the first offset of the segment's message fields that is not less than the segment's offset,
+            regardless of its length.
+
+        :param segment: The segment to look up
+        :return: Message type (from MessageTypeIdentifiers in messageParser.py),
+            field name (from tshark nomenclature),
+            field type (from ParsingConstants in messageParser.py)
+        """
+        pm = self.parsedMessages[self.messages[segment.message]]
+        fs = pm.getFieldSequence()
+        fsnum, offset = 0, 0
+        while offset < segment.offset:
+            offset += fs[fsnum][1]
+            fsnum += 1
+        return pm.messagetype, fs[fsnum][0], pm.getTypeSequence()[fsnum][0]
+
+
+    def segmentInfo(self, segment: MessageSegment):
+        """
+        Print the infos about the given segment
+
+        :param segment: The segment to look up
+        """
+        pmLookup = self.lookupField(segment)
+        print("Message type:", pmLookup[0])
+        print("Field name:  ", pmLookup[1])
+        print("Field type:  ", pmLookup[2])
+        print("Byte values: ", segment.bytes)
+        print("Hex values:  ", segment.bytes.hex())
+
+
+    def lookupValues4FieldName(self, fieldName: str):
+        """
+        Lookup the values for a given field name in all messages.
+
+        :param fieldName: name of field (according to tshark nomenclature)
+        :return: List of values of all fields carrying the given field name
+        """
+        values = list()
+        for pm in self.parsedMessages.values():
+            values.extend(pm.getValuesByName(fieldName))
+        return values
 
 
 class DissectorMatcher(object):
