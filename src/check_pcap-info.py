@@ -1,7 +1,10 @@
 """
 Parse PCAP, print some statistics and infos about it and open a IPython shell.
 """
-import IPython
+from itertools import chain
+from typing import List, Sequence
+
+import IPython, numpy
 from argparse import ArgumentParser
 from os.path import isfile, basename
 from tabulate import tabulate
@@ -16,6 +19,9 @@ def countByteFrequency():
     bytefreq = Counter(chain.from_iterable(msg.data for msg in specimens.messagePool.keys()))
     return bytefreq.most_common()
 
+
+def meanByteDiff(messages: Sequence) -> List[List[float]]:
+    return [[numpy.diff(list(msg.data)).mean()] for msg in messages]
 
 
 if __name__ == '__main__':
@@ -42,8 +48,10 @@ if __name__ == '__main__':
     print("Most frequent byte values:")
     print(tabulate(
         ((hex(b), o) for b, o in countByteFrequency()[:10])
-        , headers=["byte value", "occurences"]))
-
+        , headers=["byte value", "occurrences"]))
+    print("Mean difference between bytes per message:",
+          numpy.mean(list(chain.from_iterable(meanByteDiff(specimens.messagePool.keys())))))
+    # print(tabulate(meanByteDiff(specimens.messagePool.keys())))
 
     if args.interactive:
         print('Loaded PCAP in: specimens')

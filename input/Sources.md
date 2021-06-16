@@ -122,8 +122,12 @@ with parameters:
   ```
 * with `mergecap -F pcap -w binaryprotocols_merged_XXX.pcap INFILES`
 
+## Private/Own recordings
 
-
-
-
+* wlan monitor captures wardriving through Biberach
+* C_SEEMOO/wlan-mgt-priv.pcapng merged from C_SEEMOO/wlan-mgt by mergecap
+* from this is filtered: wlan-beacons-priv.pcapng 
+  * `wlan.fc.type_subtype == 0x0008 && !_ws.expert`
+  * (very common SSIDs could be reduced by `!(wlan.ssid == "HZN241577234" || wlan.ssid == "Fritzle")` ) but we didn't
+  * `python ~/Dokumente/git.lab-vs/REUP/nemesys/src/prep_filter-maxdiff-trace.py -l2 -p100[|0|00] wlan-beacons-priv.pcapng`
 

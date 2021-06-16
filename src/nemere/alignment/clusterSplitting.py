@@ -2,7 +2,7 @@
 Module to split clusters based on fields with high frequency values.
 """
 
-from os.path import exists
+from os.path import exists, join
 from typing import List, Union, Tuple, Dict, Hashable
 import numpy, csv
 from collections import Counter
@@ -10,7 +10,8 @@ from tabulate import tabulate
 
 from nemere.inference.segments import MessageSegment
 from nemere.alignment.alignMessages import SegmentedMessages
-
+from nemere.utils.evaluationHelpers import reportFolder
+from nemere.utils.reportWriter import IndividualClusterReport
 
 debug = True
 
@@ -23,9 +24,7 @@ class ClusterSplitter(object):
     Class to split clusters based on fields without rare values.
     It uses static constraints about what is determined to be a rare value (#__getPivotFieldIds()).
     """
-
-    exoticValueStats = "reports/exotic-values-statistics.csv"
-
+    exoticValueStats = join(reportFolder, "exotic-values-statistics.csv")
 
     def __init__(self, fieldLenThresh: int,
                  alignedClusters: Dict[Hashable, List[Tuple[MessageSegment]]],
@@ -54,7 +53,7 @@ class ClusterSplitter(object):
         self.__clusterPrecisions = None
 
 
-    def activateCVSout(self, runtitle: str, trace: str, clusterPrecisions: Dict[Hashable, float]):
+    def activateCVSout(self, runtitle: Union[str, Dict], trace: str, clusterPrecisions: Dict[Hashable, float]):
         """
         Activate writing of exotic field statistics to CSV for evaluation.
 
@@ -89,6 +88,19 @@ class ClusterSplitter(object):
             cPrec = self.__clusterPrecisions[aNum]
             print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
 
+            headers = [
+                          'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
+                          'num_vals', 'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
+                          'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
+                      ]
+            if not isinstance(self.__runtitle, str):
+                infCols = IndividualClusterReport.inferenceColumns(self.__runtitle)
+                headers = list(infCols.keys()) + headers
+                infParams = list(infCols.values())
+            else:
+                headers = ['run_title'] + headers
+                infParams = [self.__runtitle]
+
             for fidx in exotic:
                 scnt = sorted(valCounts4fields[fidx].values())
                 diffmax = (numpy.diff(scnt).argmax() + 1) if len(scnt) > 1 else "-"
@@ -96,13 +108,8 @@ class ClusterSplitter(object):
                 with open(ClusterSplitter.exoticValueStats, 'a') as csvfile:
                     exoticcsv = csv.writer(csvfile)  # type: csv.writer
                     if csvWriteHead:
-                        exoticcsv.writerow([
-                            'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
-                            'num_vals',
-                            'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
-                            'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
-                        ])
-                    fieldParameters = [self.__runtitle, self.__trace,
+                        exoticcsv.writerow(headers)
+                    fieldParameters = [*infParams, self.__trace,
                         aNum, cPrec, clusterSize, fidx, len(scnt)]
                     if len(scnt) > 1:
                         exoticcsv.writerow([

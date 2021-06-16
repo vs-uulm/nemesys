@@ -36,6 +36,19 @@ debug = True
 minThresh = 75
 maxThresh = 75
 
+
+# optimal similarity threshold for some evaluation traces (from -100s):
+optThresh = {
+    "dhcp_SMIA2011101X-filtered_maxdiff-"   : 76,
+    "dns_ictf2010_maxdiff-"                 : 51,
+    "dns_ictf2010-new_maxdiff-"             : 50,
+    "nbns_SMIA20111010-one_maxdiff-"        : 53,
+    "ntp_SMIA-20111010_maxdiff-"            : 66,
+    "smb_SMIA20111010-one-rigid1_maxdiff-"  : 53,
+}
+
+
+
 def getNetzobInference(l5msgs: List[AbstractMessage], minEquivalence=45):
     """
     Imports the application layer messages from a PCAP and applies Format.clusterByAlignment() to them.
@@ -108,10 +121,10 @@ def findFormatExamples(theshSymbols):
         formatsInSymbols[thresh] = dict()
         for symb, rest in symbqual.items():
             formatsInSymbols[thresh][symb] = list()
-            for msg in symb.messages:  # the L5Messages
+            for l5msg in symb.messages:  # the L5Messages
                 # only retain unique formats (a list of tuples of primitives can simply be compared)
-                if tformats[specimens.messagePool[msg]] not in (fmt for fmt, msg in formatsInSymbols[thresh][symb]):
-                    formatsInSymbols[thresh][symb].append((tformats[specimens.messagePool[msg]], msg))  # the format for message msg
+                if tformats[specimens.messagePool[l5msg]] not in (fmt for fmt, msg in formatsInSymbols[thresh][symb]):
+                    formatsInSymbols[thresh][symb].append((tformats[specimens.messagePool[l5msg]], l5msg))  # the format for message msg
 
 
 def reduceBitsToBytes(formatdescbit):
@@ -147,6 +160,9 @@ if __name__ == '__main__':
     parser.add_argument('--smax', type=int, help='maximum similarity threshold to iterate. Omit to only infer at the threshold of smin')
     parser.add_argument('-p', '--profile', help='profile the netzob run.',
                         action="store_true")
+    parser.add_argument('-i', '--interactive', help='Show interactive plot instead of writing output to file and '
+                                                    'open ipython prompt after finishing the analysis.',
+                        action="store_true")
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
                              '(typically the payload of a transport protocol).')
@@ -165,11 +181,17 @@ if __name__ == '__main__':
                                failOnUndissectable=False, debug=debug)
     print('Loaded and dissected in {:.3f}s'.format(time.time() - swstart))
 
-    print('\nNetzob Inference ...')
+    print(f'\nNetzob Inference of {specimens.pcapFileName}...')
     # dict ( similaritythreshold : dict ( symbol : (quality, fieldcount, exactf, nearf, uospecific) ) )
     if args.smin:
         minThresh = args.smin
         maxThresh = args.smax if args.smax else args.smin
+    else:
+        # use optimum for trace if a value is known
+        for pcap, simthr in optThresh.items():
+            if pcap in specimens.pcapFileName:
+                minThresh = maxThresh = simthr
+                break
     threshSymbTfmtTime = iterSimilarities(minThresh, maxThresh)
     threshSymbTfmt = {t: s for t, (s, r) in threshSymbTfmtTime.items()}
     threshTime = {t: r for t, (s, r) in threshSymbTfmtTime.items()}
@@ -212,8 +234,10 @@ if __name__ == '__main__':
         qualityperformat[df] = list()  # FMS per format
         qpfSimilarity[df] = list()
     for (thresh, msg), metrics in formatmatchmetrics.items():  # per threshold
-        qualityperformat[metrics.trueFormat].append(metrics.score)
-        qpfSimilarity[metrics.trueFormat].append(thresh)
+        # ignore parsing errors
+        if metrics.score is not None:
+            qualityperformat[metrics.trueFormat].append(metrics.score)
+            qpfSimilarity[metrics.trueFormat].append(thresh)
 
     # TODO biggest/most correct cluster per threshold
     # TODO format correctness, consiseness, (coverage) of each symbol
@@ -233,7 +257,7 @@ if __name__ == '__main__':
         plt.scatter(qpfSimilarity[df], qualityperformat[df], c=xkcdc[i], alpha=0.5, marker=r'.',
                     label="Format {:d} ".format(i))  # + repr(df))
     plt.ticklabel_format(style="plain")
-    plt.xlabel("Similarity Theshold")
+    plt.xlabel("Similarity Threshold")
     plt.ylabel("Format Match Score")
     plt.legend(loc=2)
 
@@ -249,9 +273,11 @@ if __name__ == '__main__':
     ParsedMessage.closetshark()
 
     # interactive stuff
-    # plt.show()
-    print("\nAll truths are easy to understand once they are discovered; the point is to discover them. -- Galileo Galilei\n")
-    IPython.embed()
+    if args.interactive:
+        # plt.show()
+        print("\nAll truths are easy to understand once they are discovered; the point is to discover them. "
+              "-- Galileo Galilei\n")
+        IPython.embed()
 
 
 

@@ -12,3 +12,9 @@ matplotlib
 pandas
 scipy
 tabulate
+networkx
+gitpython
+colorhash
+
+pcapy
+xlwt

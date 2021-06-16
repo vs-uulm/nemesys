@@ -32,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
                              '(typically the payload of a transport protocol).')
-    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
+    parser.add_argument('-r', '--relativeToIP', default=True, action='store_true')
     parser.add_argument('-c', '--columns', type=int, default=2,
                         help='Adjust width/aspect ratio for use in one USENIX column wide plot (1) or '
                              'for one USENIX column sideways leaving space for the caption (2)')

@@ -1,7 +1,8 @@
 import subprocess, io, struct, time
 from queue import Queue
 from tempfile import NamedTemporaryFile
-from typing import Dict
+from typing import Dict, Union
+
 
 class TsharkConnector(object):
     """
@@ -35,10 +36,10 @@ class TsharkConnector(object):
 
     def __init__(self, linktype : int):
         self.__linktype = linktype
-        self.__tshark = None  # type: subprocess.Popen
+        self.__tshark = None  # type: Union[subprocess.Popen, None]
         self.__tsharkqueue = Queue()
-        self.__tempfile = None  # type: io.BufferedRandom
-        self.__tempreader = None  # type: io.BufferedReader
+        self.__tempfile = None  # type: Union[io.BufferedRandom, None]
+        self.__tempreader = None  # type: Union[io.BufferedReader, None]
         self.__version = None
 
 
@@ -129,12 +130,15 @@ class TsharkConnector(object):
         readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
         readThread.start()
         # print("Wait for queue...")
+        # Wait for queue to fill from the tshark-pipe
         for timeout in range(20):
             if self.__tsharkqueue.empty():
                 time.sleep(.01)
+                # print("Wait a little...")
             else:
                 break
-        readThread.join(2.0)
+        print("Wait for tshark output (max 20s)...")
+        readThread.join(20.0)
 
         if readThread.is_alive() or self.__tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")
@@ -238,8 +242,8 @@ class TsharkConnector(object):
             raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
                             'dissection parsing. Found tshark version {}. '
                             'Upgrade!\”'.format(versionlist[2].decode()))
-        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5', b'2.6.8'):
-            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning of faulty. "
+        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5', b'2.6.8', b'3.2.3', b'3.2.5'):
+            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning or faulty. "
                   "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
             return versionlist[2], False
         return versionlist[2], True

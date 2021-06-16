@@ -77,7 +77,7 @@ class BitCongruence(MessageAnalyzer):
         """
         Bitwise congruence: Simple Matching [Sokal & Michener]
 
-        not unit-dependant, token-dependent: always compares tokenwise
+        not unit-dependent, token-dependent: always compares tokenwise
 
         :param tokenlist: list of tokens between which the bit congruence is calculated
         :return: list of congruences from index i = 1 to n between bits of i-1 and i
@@ -245,7 +245,7 @@ class BitCongruenceDeltaGauss(BitCongruenceDelta):
     def analyze(self):
         from collections import Sequence
         if not self._analysisArgs or not isinstance(self._analysisArgs, Sequence):
-            raise ParametersNotSet('Analysis parameter missing: horizon and sigma.')
+            raise ParametersNotSet('Analysis parameter missing: sigma.')
         sigma, = self._analysisArgs
         super().analyze()
         self._bcdvalues = self._values
@@ -307,7 +307,6 @@ class BitCongruenceDeltaGauss(BitCongruenceDelta):
         for cutCurr, cutNext in zip(cutPositions[:-1], cutPositions[1:]):
             segments.append(MessageSegment(self, cutCurr, cutNext-cutCurr))
         return segments
-
 
     def extrema(self) -> List[Tuple[int, bool]]:
         """
@@ -1002,7 +1001,7 @@ class Autocorrelation(MessageAnalyzer):
     """
     def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
         super().__init__(message, unit)
-        self._am = None  # type: MessageAnalyzer
+        self._am = None  # type: Union[MessageAnalyzer, None]
 
     @property
     def domain(self):

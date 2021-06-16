@@ -11,22 +11,33 @@ class Alignment(ABC):
     SCORE_MATCH = 1  # use as factor, to multiply with the similarity matrix.
     SCORE_MISMATCH = 0
 
-    def __init__(self, similarityMatrix, score_gap=SCORE_GAP, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH):
+    def __init__(self, similarityMatrix, score_gap=SCORE_GAP, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH,
+                 similaritiesScoreDomain=False):
         """
         :param similarityMatrix: normalized similarity matrix (0..1) of segments
             with 1 meaning identity and 0 maximum dissimilarity.
+            :param similaritiesScoreDomain: Set to True, if similarityMatrix is already streched to the range between
+                score_mismatch and score_match. For multiple alignments with the same similarityMatrix, this greatly
+                increases performance (runtime and memory).
         """
         self.score_gap = score_gap
         self.score_match = score_match
         self.score_mismatch = score_mismatch
-        self._similarities = similarityMatrix \
-                             * (self.score_match - self.score_mismatch) + self.score_mismatch
+        if similaritiesScoreDomain:
+            self._similarities = similarityMatrix
+        else:
+            self._similarities = type(self).scoreDomainSimilarityMatrix(similarityMatrix,
+                                                                        self.score_mismatch, self.score_match)
         """
         matrix of similarities: higher values denote closer match
 
         TODO: usable value domain and/or 
         "mismatch penalty" that reaches into negative values for bad matches needs to be determined
         """
+
+    @staticmethod
+    def scoreDomainSimilarityMatrix(similarityMatrix, score_mismatch=SCORE_MISMATCH, score_match=SCORE_MATCH):
+        return similarityMatrix * (score_match - score_mismatch) + score_mismatch
 
     @abstractmethod
     def align(self, message0: List[int], message1: List[int]):
@@ -81,7 +92,7 @@ class HirschbergOnSegmentSimilarity(Alignment):
                 messageA.append(x)
                 messageB.append(-1)  # gap
         elif len(message0) == 1 or len(message1) == 1:
-            nwalign = NWonSegmentSimilarity(self._similarities)
+            nwalign = NWonSegmentSimilarity(self._similarities, similaritiesScoreDomain=True)
             haligned = nwalign.align(message0, message1)
             # print("NW:")
             # print(tabulate(haligned))
@@ -148,6 +159,8 @@ class HirschbergOnSegmentSimilarity(Alignment):
         for x in range(1, len(tokensX)+1):  # init array
             score[1,0] = score[0,0] + self.score_gap
             for y in range(1, len(tokensY)+1):
+                # TODO if we optimize this some time, we must not copy the self._similarities matrix for each process!
+                # see https://research.wmz.ninja/articles/2018/03/on-sharing-large-arrays-when-using-pythons-multiprocessing.html
                 scoreSub = score[0,y-1] + self._similarities[tokensX[x-1], tokensY[y-1]]
                 scoreDel = score[0,y] + self.score_gap
                 scoreIns = score[1,y-1] + self.score_gap

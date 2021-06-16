@@ -4,11 +4,14 @@ DissectorMatcher, FormatMatchScore, and MessageComparator
 Methods to comparison of a list of messages' inferences and their dissections
 and match a message's inference with its dissector in different ways.
 """
-
-from typing import List, Tuple, Dict, Iterable, Generator, Union
+from abc import ABC, abstractmethod
+from itertools import chain
+from typing import List, Tuple, Dict, Iterable, Generator, Union, Sequence
 from collections import OrderedDict
 import copy
 
+import math, numpy
+from netzob.Model.Vocabulary.Messages.L2NetworkMessage import L2NetworkMessage
 from numpy import argmin
 
 from netzob import all as netzob
@@ -19,29 +22,54 @@ from nemere.validation.messageParser import ParsedMessage, ParsingConstants
 from nemere.inference.segments import MessageSegment, TypedSegment
 
 
+# TODO find a suitable value
+# messageparsetimeout = 600
+messageparsetimeout = 60*120
+
+def stop_process_pool(executor):
+    for pid, process in executor._processes.items():
+        process.terminate()
+    executor.shutdown()
+
+class WatchdogTimeout(Exception):
+    pass
+
 class FormatMatchScore(object):
     """
     Object to hold all relevant data of an FMS.
     """
-    message = None
-    symbol = None
-    trueFormat = None
-    score = None
-    specificyPenalty = None
-    matchGain = None
-    specificy = None
-    nearWeights = None
-    meanDistance = None  # mean of "near" distances
-    trueCount = None
-    inferredCount = None
-    exactCount = None
-    nearCount = None
-    exactMatches = None
-    nearMatches = None
+    def __init__(self, message = None, symbol = None):
+        self.message = message
+        self.symbol = symbol
+        self.trueFormat = None
+        self.score = None
+        self.specificyPenalty = None
+        self.matchGain = None
+        self.specificy = None
+        self.nearWeights = None
+        self.meanDistance = None  # mean of "near" distances
+        self.trueCount = None
+        self.inferredCount = None
+        self.exactCount = None
+        self.nearCount = None
+        self.exactMatches = None
+        self.nearMatches = None
 
 
+class BaseComparator(object):
+    """Dummy for using nemere.utils.evaluationHelpers.CachedDistances with a unknown protocol."""
+    import nemere.utils.loader as sl
 
-class MessageComparator(object):
+    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False, debug = False):
+        self.specimens = specimens
+        self.messages = specimens.messagePool  # type: OrderedDict[AbstractMessage, netzob.RawMessage]
+        """:type messages: OrderedDict[AbstractMessage, RawMessage]"""
+        self.baselayer = specimens.getBaseLayerOfPCAP()
+        self.debug = debug
+        self._targetlayer = layer
+        self._relativeToIP = relativeToIP
+
+class MessageComparator(BaseComparator):
     """
     Formal and visual comparison of a list of messages' inferences and their dissections.
 
@@ -53,21 +81,14 @@ class MessageComparator(object):
 
     __messageCellCache = dict()  # type: Dict[(netzob.Symbol, AbstractMessage), List]
 
-    def __init__(self, specimens: sl.SpecimenLoader,
-                 layer: int = -1, relativeToIP: bool = False, failOnUndissectable=True,
-                 debug = False):
-        self.specimens = specimens
-        self.messages = specimens.messagePool  # type: OrderedDict[AbstractMessage, netzob.RawMessage]
-        """:type messages: OrderedDict[AbstractMessage, RawMessage]"""
-        self.baselayer = specimens.getBaseLayerOfPCAP()
-        self.debug = debug
+    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False,
+                 failOnUndissectable=True, debug = False):
+        super().__init__(specimens, layer, relativeToIP, debug)
+
+        self._failOnUndissectable = failOnUndissectable
 
         # Cache messages that already have been parsed and labeled
         self._messageCache = dict()  # type: Dict[netzob.RawMessage, ]
-        self._targetlayer = layer
-        self._relativeToIP = relativeToIP
-        self._failOnUndissectable = failOnUndissectable
-
         self._dissections = self._dissectAndLabel(self.messages.values())
 
 
@@ -111,6 +132,8 @@ class MessageComparator(object):
                     self._messageCache[m] = reparsed
                     labeledMessages[m] = self._messageCache[m]
 
+        ParsedMessage.closetshark()
+
         return labeledMessages
 
 
@@ -121,7 +144,6 @@ class MessageComparator(object):
     @property
     def parsedMessages(self) -> Dict[netzob.RawMessage, ParsedMessage]:
         return self._dissections
-
 
     @staticmethod
     def fieldEndsPerSymbol(nsymbol: netzob.Symbol, message: AbstractMessage):
@@ -136,15 +158,37 @@ class MessageComparator(object):
         if not message in nsymbol.messages:
             raise ValueError('Message in input symbol unknown by this comparator.')
 
+        from concurrent.futures.process import ProcessPoolExecutor
+        from concurrent.futures import TimeoutError as FutureTOError
+
         # since netzob.Symbol.getMessageCells is EXTREMELY inefficient,
         # we try to have it run as seldom as possible by caching its output
         if (nsymbol, message) not in MessageComparator.__messageCellCache:
-            # TODO wrap Symbols.getMessageCell in watchdog: run it in process and abort it after a timeout.
-            # Look for my previous solution in siemens repos
             # DHCP fails due to a very deep recursion here:
-            mcells = nsymbol.getMessageCells(encoded=False)  # dict of cells keyed by message
+            #   Wrap Symbols.getMessageCell in watchdog: run it in process and abort it after a timeout.
+            #   TODO Look for my previous solution in siemens repos
+            #   Wait only messageparsetimeout seconds for Netzob's MessageParser to return the result
+            with ProcessPoolExecutor(max_workers=1) as executor:
+                try:
+                    future = executor.submit(nsymbol.getMessageCells, encoded=False)
+                    mcells = future.result(messageparsetimeout)  # dict of cells keyed by message
+                    msgIdMap = {msg.id: msg for msg in nsymbol.messages}
+                except FutureTOError as e:
+                    stop_process_pool(executor)
+                    raise WatchdogTimeout(f"Parsing of Netzob symbol {nsymbol.name} timed out after "
+                                          f"{messageparsetimeout} seconds.")
+            # Non-process call:
+            # mcells = nsymbol.getMessageCells(encoded=False)  # dict of cells keyed by message
+            # for msg, fields in mcells.items():
+            #     MessageComparator.__messageCellCache[(nsymbol, msg)] = fields
+            #
+            # IPC breaks the identity check of messages, since the object instance needs to be copied.
+            #   Look up and use the correct message instances.
+            # TODO Keep in mind that this might break something since the fields
+            #  still do contain references to the copied messages in:
+            #       .messages and .parent.messages
             for msg, fields in mcells.items():
-                MessageComparator.__messageCellCache[(nsymbol, msg)] = fields
+                MessageComparator.__messageCellCache[(nsymbol, msgIdMap[msg.id])] = fields
 
         mcontent = MessageComparator.__messageCellCache[(nsymbol, message)]
         nfieldlengths = [len(field) for field in mcontent]
@@ -197,81 +241,27 @@ class MessageComparator(object):
         return distinctFormats
 
 
-    def pprint2Interleaved(self, message: AbstractMessage, inferredFieldEnds: List[int]=None,
+    def pprint2Interleaved(self, message: AbstractMessage, segmentsPerMsg: Sequence[Sequence[MessageSegment]]=tuple(),
                            mark: Union[Tuple[int,int], MessageSegment]=None,
                            messageSlice: Tuple[Union[int,None],Union[int,None]]=None):
         """
-
         :param message: The message from which to print the byte hex values. Also used to look up the
             true field boundaries to mark by spaces between in the printed byte hex values.
-        :param inferredFieldEnds: The field ends that should be visualized by color changes.
+        :param segmentsPerMsg: The segments that should be visualized by color changes.
         :param mark: Start and end indices of a range to mark by underlining.
         :param messageSlice: Tuple used as parameters of the slice builtin to select a subset of all messages to print.
             Use None to create an open slice (up to the beginning or end of the message).
-        :return:
         """
-        import nemere.visualization.bcolors as bc
-
-        l2msg = self.messages[message]
-        tformat = self.dissections[l2msg]
-        tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
-        msglen = len(message.data)
-        absSlice = (
-            messageSlice[0] if messageSlice is not None and messageSlice[0] is not None else 0,
-            messageSlice[1] if messageSlice is not None and messageSlice[1] is not None else msglen
-        )
-        dataSnip = message.data if messageSlice is None else message.data[slice(*messageSlice)]
-
-
-        ife = [0] + sorted(inferredFieldEnds if inferredFieldEnds is not None else self.fieldEndsPerMessage(message))
-        ife += [msglen] if ife[-1] < msglen else []
-
-        if mark is not None:
-            if isinstance(mark, MessageSegment):
-                mark = mark.offset, mark.nextOffset
-            assert mark[0] >= absSlice[0], repr(mark) + repr(messageSlice)
-            assert mark[1] <= absSlice[1], repr(mark) + repr(messageSlice)
-
-        hexdata = list()  # type: List[str]
-        lastcolor = None
-        for po, by in enumerate(dataSnip, absSlice[0]):
-            # end mark
-            if mark is not None and po == mark[1]:
-                hexdata.append(bc.ENDC)
-                # restart color after mark end
-                if lastcolor is not None and lastcolor < po and po not in ife:
-                    hexdata.append(bc.eightBitColor(lastcolor % 231 + 1))
-
-            # have a space in place of each true field end in the hex data.
-            if po in tfe:
-                hexdata.append(' ')
-
-            # have a different color per each inferred field
-            if po in ife:
-                if po > 0:
-                    lastcolor = None
-                    hexdata.append(bc.ENDC)
-                    # restart mark after color change
-                    if mark is not None and mark[0] < po < mark[1]:
-                        hexdata.append(bc.UNDERLINE)
-                if po < absSlice[1]:
-                    lastcolor = po
-                    hexdata.append(bc.eightBitColor(po % 231 + 1))
-
-            # start mark
-            if mark is not None and po == mark[0]:
-                hexdata.append(bc.UNDERLINE)
-
-            # add the actual value
-            hexdata.append('{:02x}'.format(by))
-        hexdata.append(bc.ENDC)
-
-        print(''.join(hexdata))
+        from ..visualization.simplePrint import ComparingPrinter
+        rawmsg = self.messages[message] if isinstance(message, L2NetworkMessage) else message
+        cprinter = ComparingPrinter(self, segmentsPerMsg)
+        cprinter.toConsole([rawmsg], mark, messageSlice)
 
 
     def __prepareMessagesForPPrint(self, symbols: Iterable[netzob.Symbol]) \
-            -> List[List[Tuple[AbstractMessage, List[int], List[int]]]]:
+            -> List[List[Tuple[AbstractMessage, List[int], Union[List[int], WatchdogTimeout]]]]:
         """
+        Iterate symbols and their messages, determine boundary lists of true and inferred formats.
 
         :param symbols:
         :return: list (symbols) of list (messages) of tuple with message, true, and inferred field ends
@@ -286,8 +276,12 @@ class MessageComparator(object):
                 tformat = self.dissections[l2msg]
                 msglen = len(msg.data)
                 tfe = MessageComparator.fieldEndsFromLength([l for t, l in tformat])
-                ife = [0] + MessageComparator.fieldEndsPerSymbol(sym, msg)
-                ife += [msglen] if ife[-1] < msglen else []
+                try:
+                    # catch WatchdogTimeout in callers of fieldEndsPerSymbol
+                    ife = [0] + MessageComparator.fieldEndsPerSymbol(sym, msg)
+                    ife += [msglen] if ife[-1] < msglen else []
+                except WatchdogTimeout as e:
+                    ife = e
                 msgfes.append((msg, tfe, ife))
             symfes.append(msgfes)
         return symfes
@@ -321,11 +315,14 @@ class MessageComparator(object):
 
                     # add the actual value
                     hexdata.append('{:02x}'.format(by))
-                hexdata.append(bc.ENDC)
+                if isinstance(ife, WatchdogTimeout):
+                    # handle Netzob WatchdogTimeout in fieldEndsPerSymbol
+                    print(str(ife), end="   ")
+                else:
+                    hexdata.append(bc.ENDC)
 
                 print(''.join(hexdata))
         print('true fields: SPACE | inferred fields: color change')
-
 
 
     def lprintInterleaved(self, symbols: List[netzob.Symbol]):
@@ -352,7 +349,7 @@ class MessageComparator(object):
                         hexdata.append(tfemarker)
 
                     # have a different color per each inferred field
-                    if po in ife:
+                    if not isinstance(ife, WatchdogTimeout) and po in ife:
                         if po > 0:
                             hexdata.append(ifeendmarker)
                         if po < len(msg.data):
@@ -360,13 +357,18 @@ class MessageComparator(object):
 
                     # add the actual value
                     hexdata.append('{:02x}'.format(by))
-                hexdata.append(ifeendmarker)
-                texcode += '\\noindent\n\\texttt{' + ''.join(hexdata) + '}\n\n'
+                if isinstance(ife, WatchdogTimeout):
+                    # handle Netzob WatchdogTimeout in fieldEndsPerSymbol
+                    note = str(ife) + "\\hspace{3em}"
+                else:
+                    hexdata.append(ifeendmarker)
+                    note = ""
+                texcode += '\\noindent\n' + note + '\\texttt{' + ''.join(hexdata) + '}\n\n'
         texcode += '\\bigskip\ntrue fields: SPACE | inferred fields: framed box'
         return texcode
 
 
-    def tprintInterleaved(self, symbols: Iterable[netzob.Symbol]):
+    def tprintInterleaved(self, symbols: Sequence[netzob.Symbol]):
         """
         Generate tikz source code visualizing the interleaved true and inferred format upon the byte values
         of each message in the symbols.
@@ -375,44 +377,101 @@ class MessageComparator(object):
 
         Also see self.pprintInterleaved doing the same for terminal output.
 
+        TODO cleanup: adapt and use nemere.visualization.simplePrint.ComparingPrinter (which is functionally equivalent)
+
         :param symbols: Inferred symbols
-        :return LaTeX code
+        :return LaTeX/tikz code
         """
         tfemarker = '1ex '
-        texcode = """
-\\begin{tikzpicture}[node distance=0pt, yscale=.5,
-        every node/.style={font=\\ttfamily, text height=.7em, outer sep=0, inner sep=0},
-        tfe/.style={draw, minimum height=1.2em, thick}]
-"""
+        texcode = ""
+
+        ftlabels = set()
+        for sym in symbols:
+            for msg in sym.messages:
+                pm = self.parsedMessages[self.messages[msg]]
+                ftlabels.update(t[0] for t in pm.getTypeSequence())
+        ftstyles = {lab: "fts" + lab.replace("_", "").replace(" ", "") for lab in ftlabels}  # field-type label to style name
+        ftcolornames = {tag: "col" + tag[3:] for lab, tag in ftstyles.items() }  # style name to color name
+        ftcolors = list()  # color definition
+        for tag in ftcolornames.values():
+            lightness = 0  # choose only light colors
+            while lightness < .5:
+                rgb = numpy.random.rand(3, )
+                lightness = 0.5 * min(rgb) + 0.5 * max(rgb)
+            ftcolors.append( f"\definecolor{{{tag}}}{{rgb}}{{{rgb[0]},{rgb[1]},{rgb[2]}}}" )
+        texcode += "\n        ".join(ftcolors) + "\n"
+
+        styles = ["every node/.style={font=\\ttfamily, text height=.7em, outer sep=0, inner sep=0}",
+                  "tfe/.style={draw, minimum height=1.2em, thick}", "tfelabel/.style={rotate=-20, anchor=north west}"]
+        styles += [f"{sty}/.style={{fill={ftcolornames[sty]}}}" for sty in ftstyles.values() ]
+
+        texcode += "\n\\begin{tikzpicture}[node distance=0pt, yscale=2,\n"
+        texcode += ",\n".join(styles) + "]"
         for symid, symfes in enumerate(self.__prepareMessagesForPPrint(symbols)):
             for msgid, (msg, tfe, ife) in enumerate(symfes):
+                pm = self.parsedMessages[self.messages[msg]]
+                offset2type = list(chain.from_iterable( [lab]*lgt for lab, lgt in pm.getTypeSequence() ))
+                offset2name = dict()
+                offset = 0
+                for name, lgt in pm.getFieldSequence():
+                    offset2name[offset] = name.replace("_", "\\_")
+                    offset += lgt
+
                 smid = symid + msgid
                 hexdata = list()  # type: List[str]
                 hexdata.append('\n\n\\coordinate(m{}f0) at (0,{});'.format(smid, -smid))
                 for po, by in enumerate(msg.data, start=1):
                     # add the actual value
-                    hexdata.append('\\node[right={}of m{}f{}] (m{}f{}) {{{:02x}}};'.format(
+                    hexdata.append('\\node[right={}of m{}f{}, {}{}] (m{}f{}) {{{:02x}}};'.format(
                         # have a 1ex space in place of each true field end in the hex data.
-                        tfemarker if po-1 in tfe else '', smid, po-1, smid, po, by))
+                        tfemarker if po-1 in tfe else '', smid, po-1,
+                        # style for the field type
+                        ftstyles[offset2type[po-1]],
+                        f", label={{[tfelabel]below:\\sffamily\\tiny {offset2name[po-1]}}}" if po-1 in offset2name else "",
+                        smid, po, by)
+                    )
                 texcode += '\n'.join(hexdata)
 
                 # have a frame per each inferred field
                 fitnodes = list()
-                for pol, por in zip(ife[:-1], ife[1:]):
+                if isinstance(ife, WatchdogTimeout):
+                    # handle Netzob WatchdogTimeout in fieldEndsPerSymbol
                     fitnodes.append(
-                        '\\node[fit=(m{}f{})(m{}f{}), tfe] {{}};'.format(smid, pol+1, smid, por)
+                        '\\node[] at (m{}f0) {{{}}};'.format(smid, str(ife))
                     )
+                else:
+                    for pol, por in zip(ife[:-1], ife[1:]):
+                        fitnodes.append(
+                            '\\node[fit=(m{}f{})(m{}f{}), tfe] {{}};'.format(smid, pol+1, smid, por)
+                        )
+                        # TODO add the inferred field's "truest" type as label
                 texcode += '\n' + '\n'.join(fitnodes)
 
         texcode += """
 \end{tikzpicture}
 
+\\centering
 \\bigskip\ntrue fields: SPACE | inferred fields: framed box
+
+True field type colors:\\\\
 """
-        return texcode
+        for lab, tag in ftstyles.items():
+            texlab = lab.replace("_", "\\_")
+            texcode += f"\\colorbox{{{ftcolornames[tag]}}}{{{texlab}}}\\\\\n"
+
+        return texcode + "\n"
 
 
     def segment2typed(self, segment: MessageSegment) -> Tuple[float, Union[TypedSegment, MessageSegment]]:
+        overlapRatio, overlapIndex, overlapStart, overlapEnd = self.fieldOverlap(segment)
+        messagetype, fieldname, fieldtype = self.lookupField(segment)
+
+        # return a typed version of the segment and the ratio of overlapping bytes to the segment length
+        return overlapRatio, TypedSegment(segment.analyzer, segment.offset, segment.length, fieldtype)
+
+
+    def fieldOverlap(self, segment: MessageSegment):
+        """Overlap info between segment and its closest true field."""
         parsedMessage = self.parsedMessages[self.messages[segment.message]]
         fieldSequence = list()
         off = 0
@@ -453,10 +512,7 @@ class MessageComparator(object):
         assert trueEnd in fieldSequence, "Field sequence is not matching any possible overlap. Investigate!"
         overlapIndex = fieldSequence.index(trueEnd)
 
-        fieldtype = parsedMessage.getTypeSequence()[overlapIndex][0]
-
-        # return a typed version of the segment and the ratio of overlapping bytes to the segment length
-        return overlapRatio, TypedSegment(segment.analyzer, segment.offset, segment.length, fieldtype)
+        return overlapRatio, overlapIndex, overlapStart, overlapEnd
 
 
     def lookupField(self, segment: MessageSegment):
@@ -472,13 +528,11 @@ class MessageComparator(object):
             field name (from tshark nomenclature),
             field type (from ParsingConstants in messageParser.py)
         """
-        pm = self.parsedMessages[self.messages[segment.message]]
-        fs = pm.getFieldSequence()
-        fsnum, offset = 0, 0
-        while offset < segment.offset:
-            offset += fs[fsnum][1]
-            fsnum += 1
-        return pm.messagetype, fs[fsnum][0], pm.getTypeSequence()[fsnum][0]
+        parsedMessage = self.parsedMessages[self.messages[segment.message]]
+        overlapRatio, overlapIndex, overlapStart, overlapEnd = self.fieldOverlap(segment)
+
+        return parsedMessage.messagetype, \
+               parsedMessage.getFieldSequence()[overlapIndex][0], parsedMessage.getTypeSequence()[overlapIndex][0]
 
 
     def segmentInfo(self, segment: MessageSegment):
@@ -498,6 +552,7 @@ class MessageComparator(object):
     def lookupValues4FieldName(self, fieldName: str):
         """
         Lookup the values for a given field name in all messages.
+        # TODO comparator.lookupValues4FieldName with list of messages (i.e., cluster elements)
 
         :param fieldName: name of field (according to tshark nomenclature)
         :return: List of values of all fields carrying the given field name
@@ -508,64 +563,51 @@ class MessageComparator(object):
         return values
 
 
-class DissectorMatcher(object):
+class AbstractDissectorMatcher(ABC):
     """
     Incorporates methods to match a message's inference with its dissector in different ways.
 
     Dissections been are done by MessageComparator so this class does not need direct interaction
     with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
     """
-
-    def __init__(self, mc: MessageComparator, inferredSymbol: netzob.Symbol, message:AbstractMessage=None):
+    @abstractmethod
+    def __init__(self, mc: MessageComparator, message: AbstractMessage=None):
         """
         Prepares matching of one message's (or message type's) inference with its dissector.
 
         :param mc: the object holding the low level message and dissection information
-        :param inferredSymbol: Symbol from inference to match, The corresponding dissection is implicit by the message.
-        :param message: If not given, uses the first message in the inferredSymbol, otherwise this message is used
-            to determine a dissection and a instantiation of the inference for comparison.
+        :param message: Message in segments to match.
         """
         self.debug = False
-
-        self.__message = None
-        """L4 Message"""
-        if message:
-            assert message in inferredSymbol.messages
-            self.__message = message
-        else:
-            assert len(inferredSymbol.messages) > 0
-            self.__message = inferredSymbol.messages[0]
-
-        self.__comparator = mc
+        self._message = message
+        self._comparator = mc
         """set of specimens message is contained in"""
-        self.__inferredSymbol = inferredSymbol
-        """Symbol from inference"""
-        self.__inferredFields, self.__dissectionFields = self._inferredandtrueFieldEnds(inferredSymbol)
-        """Lists of field ends including message end"""
 
+        tformat = self._comparator.parsedMessages[self._comparator.messages[self._message]].getTypeSequence()
+        tfieldlengths = [fieldlength for sfieldtype, fieldlength in tformat]
+        self._dissectionFields = MessageComparator.fieldEndsFromLength(tfieldlengths)
+        """Lists of field ends including message end"""
+        self._inferredFields = None  # must be filled by subclass!
 
     @property
     def inferredFields(self):
         """
         :return: List of inferred field ends.
         """
-        return self.__inferredFields
-
+        return self._inferredFields
 
     @property
     def dissectionFields(self):
         """
         :return: List of true field ends according to the dissection.
         """
-        return self.__dissectionFields
-
+        return self._dissectionFields
 
     def exactMatches(self) -> List[int]:
         """
         :return: exact matches of field ends in dissection and inference (excluding beginning and end of message)
         """
-        return [dife for dife in self.__dissectionFields[:-1] if dife in self.__inferredFields[:-1]]
-
+        return [dife for dife in self._dissectionFields[:-1] if dife in self._inferredFields[:-1]]
 
     def nearMatches(self) -> Dict[int, int]:
         """
@@ -575,40 +617,13 @@ class DissectorMatcher(object):
         difescopes = self.dissectorFieldEndScopes()
         nearmatches = dict()  # dife : nearest infe if in scope
         for dife, piv in difescopes.items():
-            ininscope = [infe for infe in self.__inferredFields if piv[0] <= infe <= piv[1]]
+            ininscope = [infe for infe in self._inferredFields if piv[0] <= infe <= piv[1]]
             if len(ininscope) == 0:
                 continue
             closest = argmin([abs(dife - infe) for infe in ininscope]).astype(int)
+            # noinspection PyTypeChecker
             nearmatches[dife] = ininscope[closest]
         return nearmatches
-
-
-    def inferredInDissectorScopes(self) -> Dict[int, List[int]]:
-        """
-        :return: any matches of field ends in dissection and inference (excluding beginning and end of message).
-            Depends on the scopes returned by self.allDissectorFieldEndScopes()
-        """
-        difescopes = self.allDissectorFieldEndScopes()
-        nearmatches = dict()  # dife : nearest infe if in scope
-        for dife, piv in difescopes.items():
-            ininscope = [infe for infe in self.__inferredFields if piv[0] <= infe <= piv[1]]
-            if len(ininscope) == 0:
-                continue
-            nearmatches[dife] = ininscope
-        return nearmatches
-
-
-    def distancesFromDissectorFieldEnds(self) -> Dict[int, List[int]]:
-        """
-        get distances for all inferred fields per true field.
-
-        :return: dict(true field ends: List[signed inferred distances])
-            negative distances are inferred fields ends left to the true field end
-        """
-        inferredForTrue = self.inferredInDissectorScopes()
-        return {tfe: [ife - tfe for ife in ifes] for tfe, ifes in inferredForTrue.items()}
-
-
 
     def dissectorFieldEndScopes(self) -> Dict[int, Tuple[int, int]]:
         """
@@ -618,14 +633,14 @@ class DissectorMatcher(object):
         exactMatches = self.exactMatches()
 
         difescopes = dict()
-        for idxl in range(len(self.__dissectionFields)-1):
-            center = self.__dissectionFields[idxl]
+        for idxl in range(len(self._dissectionFields) - 1):
+            center = self._dissectionFields[idxl]
             if center in exactMatches:
                 continue # if there is an exact match on this field,
                 # do not consider any other inferred field ends in its scope.
 
-            left = self.__dissectionFields[idxl-1]
-            right = self.__dissectionFields[idxl+1]
+            left = self._dissectionFields[idxl - 1]
+            right = self._dissectionFields[idxl + 1]
 
             # single byte fields never can have near matches, therefore the if ... else
             pivl = left + (center - left) // 2 if center - left > 1 else center
@@ -638,16 +653,15 @@ class DissectorMatcher(object):
             difescopes[center] = (pivl, pivr)
         return difescopes
 
-
     def allDissectorFieldEndScopes(self) -> Dict[int, Tuple[int, int]]:
         """
         :return: All byte position ranges (scopes) of field ends regardless whether they are exact matches.
         """
         difescopes = dict()
-        for idxl in range(len(self.__dissectionFields)-1):
-            center = self.__dissectionFields[idxl]
-            left = self.__dissectionFields[idxl-1]
-            right = self.__dissectionFields[idxl+1]
+        for idxl in range(len(self._dissectionFields) - 1):
+            center = self._dissectionFields[idxl]
+            left = self._dissectionFields[idxl - 1]
+            right = self._dissectionFields[idxl + 1]
 
             # single byte fields never can have near matches, therefore the if ... else
             pivl = left + (center - left) // 2 if center - left > 1 else center
@@ -658,8 +672,141 @@ class DissectorMatcher(object):
 
         return difescopes
 
+    def inferredInDissectorScopes(self) -> Dict[int, List[int]]:
+        """
+        :return: any matches of field ends in dissection and inference (excluding beginning and end of message).
+            Depends on the scopes returned by self.allDissectorFieldEndScopes()
+        """
+        difescopes = self.allDissectorFieldEndScopes()
+        nearmatches = dict()  # dife : nearest infe if in scope
+        for dife, piv in difescopes.items():
+            ininscope = [infe for infe in self._inferredFields if piv[0] <= infe <= piv[1]]
+            if len(ininscope) == 0:
+                continue
+            nearmatches[dife] = ininscope
+        return nearmatches
 
-    def _inferredandtrueFieldEnds(self, nsymbol: netzob.Symbol, tformat: List[Tuple]=None)\
+    def distancesFromDissectorFieldEnds(self) -> Dict[int, List[int]]:
+        """
+        get distances for all inferred fields per true field.
+
+        :return: dict(true field ends: List[signed inferred distances])
+            negative distances are inferred fields ends left to the true field end
+        """
+        inferredForTrue = self.inferredInDissectorScopes()
+        return {tfe: [ife - tfe for ife in ifes] for tfe, ifes in inferredForTrue.items()}
+
+    def calcFMS(self):
+        exactmatches = self.exactMatches()
+        nearmatches = self.nearMatches()  # TODO check the associated inferred field index (sometimes wrong?)
+        nearestdistances = {tfe: min(dists) for tfe, dists
+                            in self.distancesFromDissectorFieldEnds().items()
+                            if tfe in nearmatches}
+        # fieldendscopes = dm.dissectorFieldEndScopes()
+
+        exactcount = len(exactmatches)
+        nearcount = len(nearmatches)
+        fieldcount = len(self.dissectionFields) - 1
+        inferredcount = len(self.inferredFields) - 1
+
+        # nearmatches weighted by distance, /2 to increase spread -> less intense penalty for deviation from 0
+        nearweights = {tfe: math.exp(- ((dist / 2) ** 2))
+                       for tfe, dist in nearestdistances.items()}
+
+        # penalty for over-/under-specificity (normalized to true field count)
+        try:
+            specificyPenalty = math.exp(- ((fieldcount - inferredcount) / fieldcount) ** 2)
+        except ZeroDivisionError:
+            raise ZeroDivisionError("Offending message:\n{}".format(self._message.data.hex()))
+        matchGain = (exactcount + sum([nearweights[nm] for nm in nearmatches.keys()])) / fieldcount
+        score = specificyPenalty * (
+            # exact matches + weighted near matches
+            matchGain)
+
+        fms = FormatMatchScore(self._message)
+        fms.trueFormat = self._comparator.parsedMessages[self._comparator.messages[self._message]].getTypeSequence()
+        fms.score = score
+        fms.specificyPenalty = specificyPenalty
+        fms.matchGain = matchGain
+        fms.nearWeights = nearweights
+        fms.meanDistance = numpy.mean(list(nearestdistances.values())) if len(nearestdistances) > 0 else numpy.nan
+        fms.trueCount = fieldcount
+        fms.inferredCount = inferredcount
+        fms.exactCount = exactcount
+        fms.nearCount = nearcount
+        fms.specificy = fieldcount - inferredcount
+        fms.exactMatches = exactmatches
+        fms.nearMatches = nearmatches
+
+        return fms
+
+
+class BaseDissectorMatcher(AbstractDissectorMatcher):
+    """
+    Incorporates methods to match a message's inference with its dissector in different ways.
+
+    Dissections been are done by MessageComparator so this class does not need direct interaction
+    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
+    """
+    def __init__(self, mc: MessageComparator, messageSegments: List[MessageSegment]):
+        """
+        Prepares matching of one message's (or message type's) inference with its dissector.
+
+        :param mc: the object holding the low level message and dissection information
+        :param messageSegments: Message in segments from inference to match in offset order,
+            The corresponding dissection is implicit by the message.
+        """
+        # check messageSegments is consistent for exactly one message (and is not empty)
+        assert all(messageSegments[0].message == seg.message for seg in messageSegments)
+        super().__init__(mc, messageSegments[0].message)
+
+        self.__messageSegments = messageSegments
+        """Message in segments from inference"""
+        self._inferredFields = [0] + [seg.nextOffset for seg in messageSegments]
+        if self._inferredFields[-1] < len(self._message.data):
+            self._inferredFields += [len(self._message.data)]
+
+
+class DissectorMatcher(AbstractDissectorMatcher):
+    """
+    Incorporates methods to match a message's inference with its dissector in different ways.
+
+    TODO: check where this can be replaced by BaseDissectorMatcher, which performs better,
+      due to the omitted parsing of Netzob Symbols.
+
+    Dissections been are done by MessageComparator so this class does not need direct interaction
+    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
+    """
+
+    def __init__(self, mc: MessageComparator, inferredSymbol: netzob.Symbol, message: AbstractMessage=None):
+        """
+        Prepares matching of one message's (or message type's) inference with its dissector.
+
+        :param mc: the object holding the low level message and dissection information
+        :param inferredSymbol: Symbol from inference to match, The corresponding dissection is implicit by the message.
+        :param message: If not given, uses the first message in the inferredSymbol, otherwise this message is used
+            to determine a dissection and a instantiation of the inference for comparison.
+
+        :raises WatchdogTimeout: If Netzob symbol parsing times out
+        """
+        """L4 Message"""
+        if message:
+            assert message in inferredSymbol.messages
+        else:
+            assert len(inferredSymbol.messages) > 0
+            message = inferredSymbol.messages[0]
+        super().__init__(mc, message)
+
+        self._inferredSymbol = inferredSymbol
+        """Symbol from inference"""
+        try:
+            self._inferredFields, self._dissectionFields = self._inferredandtrueFieldEnds(inferredSymbol)
+            """Lists of field ends including message end"""
+        except RuntimeError as e:
+            print("Runtime error (probably due to a Netzob message parsing error) gracefully handled.")
+            raise e
+
+    def _inferredandtrueFieldEnds(self, nsymbol: netzob.Symbol, tformat: List[Tuple]=None) \
             -> Tuple[List[int],List[int]]:
         """
         Determines the field ends of an inferred Symbol
@@ -671,17 +818,19 @@ class DissectorMatcher(object):
             If not given, determines and uses the true format of the first message in the Symbol.
 
         :return: inferred field ends; true field ends
+
+        :raises WatchdogTimeout: If Netzob symbol parsing times out
         """
         # Fallback, which uses only the first message in the symbol to determine a dissection
         if tformat is None:
             if self.debug:
                 print("Determine true formats for symbol via tshark...")
             # get the raw message for the first layer 5 message in nsymbol and dissect
-            tformat = list(self.__comparator.dissections[self.__comparator.messages[nsymbol.messages[0]]])
+            tformat = list(self._comparator.dissections[self._comparator.messages[nsymbol.messages[0]]])
             samplemessage = nsymbol.messages[0]
         else:
-            l2msgs = { self.__comparator.messages[msg]: msg for msg in nsymbol.messages }
-            tformats = {k: self.__comparator.dissections[k] for k in l2msgs.keys()}
+            l2msgs = {self._comparator.messages[msg]: msg for msg in nsymbol.messages}
+            tformats = {k: self._comparator.dissections[k] for k in l2msgs.keys()}
             samplemessage = None  # initialize to later check on it
             # get a sample for the tformat
             for m, tf in tformats.items():
@@ -733,6 +882,7 @@ class DissectorMatcher(object):
         #####
         # Lists of inferred and dissector field end indices in byte within message:
         # determine the indices of the field ends in the message byte sequence
+        # ... Here the WatchdogTimeout is raised
         nfieldends = MessageComparator.fieldEndsPerSymbol(nsymbol, samplemessage)
         tfieldends = MessageComparator.fieldEndsFromLength(tfieldlengths)
 
@@ -743,61 +893,15 @@ class DissectorMatcher(object):
 
         return nfieldends, tfieldends
 
-
     def calcFMS(self):
-        import math, numpy
-        from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-
         fmslist = list()
-        l2rmsgs = {self.__comparator.messages[msg]: msg for msg in self.__inferredSymbol.messages}
-        tformats = {k: self.__comparator.dissections[k] for k in l2rmsgs.keys()}  # l2msg: tuple
-        for l2msg, l4msg in l2rmsgs.items():  # type: (RawMessage, AbstractMessage)
-            exactmatches = self.exactMatches()
-            nearmatches = self.nearMatches()  # TODO check the associated inferred field index (sometimes wrong?)
-            nearestdistances = {tfe: min(dists) for tfe, dists
-                                in self.distancesFromDissectorFieldEnds().items()
-                                if tfe in nearmatches}
-            # fieldendscopes = dm.dissectorFieldEndScopes()
-
-            exactcount = len(exactmatches)
-            nearcount = len(nearmatches)
-            fieldcount = len(self.dissectionFields) - 1
-            inferredcount = len(self.inferredFields) - 1
-
-            # nearmatches weighted by distance, /2 to increase spread -> less intense penalty for deviation from 0
-            nearweights = {tfe: math.exp(- ((dist / 2) ** 2))
-                           for tfe, dist in nearestdistances.items()}
-
-            # penalty for over-/under-specificity (normalized to true field count)
-            try:
-                specificyPenalty = math.exp(- ((fieldcount - inferredcount) / fieldcount) ** 2)
-            except ZeroDivisionError:
-                raise ZeroDivisionError("Offending message:\n{}".format(l4msg.data.hex()))
-            matchGain = (exactcount + sum([nearweights[nm] for nm in nearmatches.keys()])) / fieldcount
-            score = specificyPenalty * (
-                # exact matches + weighted near matches
-                matchGain)
-
-            fms = FormatMatchScore()
-            fms.message = l4msg
-            fms.symbol = self.__inferredSymbol
-            fms.trueFormat = tformats[l2msg]
-            fms.score = score
-            fms.specificyPenalty = specificyPenalty
-            fms.matchGain = matchGain
-            fms.nearWeights = nearweights
-            fms.meanDistance = numpy.mean(list(nearestdistances.values())) if len(nearestdistances) > 0 else numpy.nan
-            fms.trueCount = fieldcount
-            fms.inferredCount = inferredcount
-            fms.exactCount = exactcount
-            fms.nearCount = nearcount
-            fms.specificy = fieldcount - inferredcount
-            fms.exactMatches = exactmatches
-            fms.nearMatches = nearmatches
-
+        for msg in self._inferredSymbol.messages:
+            # TODO calculate independent FMSs for each symbol member mesasge, since currently
+            #  this does result in an FMS that is identical for all messages within the symbol!
+            fms = super().calcFMS()
+            fms.symbol = self._inferredSymbol
             fmslist.append(fms)
         return fmslist
-
 
     @staticmethod
     def symbolListFMS(mc: MessageComparator, symbols: List[netzob.Symbol]) -> Dict[AbstractMessage, FormatMatchScore]:
@@ -808,18 +912,30 @@ class DissectorMatcher(object):
         :param symbols: list of inferred symbols
         :return: OrderedDict of messages mapping to their FormatMatchScore
         """
-
         matchprecisions = OrderedDict()
         for counter, symbol in enumerate(symbols):
             symbol.name = "{:s}{:2d}".format(symbol.name, counter)
-
-            dm = DissectorMatcher(mc, symbol)
-            fmslist = dm.calcFMS()
-            for fms in fmslist:
-                matchprecisions[fms.message] = fms
+            try:
+                try:
+                    dm = DissectorMatcher(mc, symbol)
+                except WatchdogTimeout as e:
+                    print(e, "Continuing with next symbol...")
+                    for msg in symbol.messages:
+                        matchprecisions[msg] = FormatMatchScore(msg, symbol)  # add empty dummy FMS
+                    continue
+                fmslist = dm.calcFMS()
+                for fms in fmslist:
+                    matchprecisions[fms.message] = fms
+            except RuntimeError as e:
+                print("\n\n# # # Messages # # #\n")
+                for msg in symbol.messages:
+                    # # add dummy entries without values to denote (most probably) failed message parsing by Netzob
+                    # matchprecisions[msg] = FormatMatchScore(msg, symbol)
+                    print(msg.data.hex())
+                print()
+                raise e
 
         return matchprecisions
-
 
     @staticmethod
     def thresymbolListsFMS(mc: MessageComparator,

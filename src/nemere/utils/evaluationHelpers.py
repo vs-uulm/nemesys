@@ -2,16 +2,20 @@
 Module encapsulating evaluation parameters and helper functions to validate aspects of the
 NEMESYS and NEMETYL approaches.
 """
-from typing import TypeVar, Hashable, Sequence, Callable, Iterable
-from netzob.all import RawMessage
+from collections import defaultdict, Counter
+from typing import TypeVar, Sequence, Callable, Iterable, Optional
 from itertools import chain
 import os, csv, pickle, time
+from os.path import join, splitext, isfile, isdir, basename, exists, abspath
+from tabulate import tabulate
 
+from nemere import inferred4segment, markSegNearMatch
 from nemere.utils.loader import SpecimenLoader
-from nemere.validation.dissectorMatcher import MessageComparator
+from nemere.validation.dissectorMatcher import MessageComparator, BaseComparator
 from nemere.inference.analyzers import *
+from nemere.inference.formatRefinement import isOverlapping
 from nemere.inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, \
-    segmentsFixed
+    fixedlengthSegmenter
 from nemere.inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
 from nemere.inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
 
@@ -102,8 +106,6 @@ reportFolder = "reports"
 cacheFolder = "cache"
 clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
 ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-cluster-statistics.csv')
-scStatsFile = os.path.join(reportFolder, 'segment-cluster-statistics.csv')
-coStatsFile = os.path.join(reportFolder, 'segment-collective-cluster-statistics.csv')
 
 
 unknown = "[unknown]"
@@ -120,298 +122,8 @@ def annotateFieldTypes(analyzerType: type, analysisArgs: Union[Tuple, None], com
         for l4msg, rmsg in comparator.messages.items()]
     return segmentedMessages
 
-
-def writeIndividualMessageClusteringStaticstics(
-        clusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
-        runtitle: str, comparator: MessageComparator):
-    """
-    calculate conciseness, correctness = precision, and recall
-
-    """
-    abstrMsgClusters = {lab : [comparator.messages[element[0].message] for element in segseq]
-                        for lab, segseq in clusters.items()}
-    return writeIndividualClusterStatistics(abstrMsgClusters, groundtruth, runtitle, comparator)
-
-
-def writeIndividualClusterStatistics(
-        clusters: Dict[Hashable, List[Element]], groundtruth: Dict[Element, str],
-        runtitle: str, comparator: MessageComparator):
-    # clusters: clusterlabel : List of Segments (not Templates!)
-    # groundtruth: Lookup for Segment : true type string
-    from collections import Counter
-
-    outfile = clStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else scStatsFile
-    print('Write {} cluster statistics to {}...'.format(
-        "message" if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else "segment",
-        outfile))
-
-    numSegs = 0
-    prList = []
-    noise = None
-    if 'Noise' in clusters:
-        noisekey = 'Noise'
-    elif -1 in clusters:
-        noisekey = -1
-    else:
-        noisekey = None
-
-    if noisekey:
-        prList.append(None)
-        noise = clusters[noisekey]
-        clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
-
-    numClusters = len(clusters)
-    numTypesOverall = Counter(groundtruth.values())
-    numTypes = len(numTypesOverall)
-    conciseness = numClusters / numTypes
-
-    for label, cluster in clusters.items():
-        # we assume correct Tuples of MessageSegments with all objects in one Tuple originating from the same message
-        typeFrequency = Counter([groundtruth[element] for element in cluster])
-        mostFreqentType, numMFTinCluster = typeFrequency.most_common(1)[0]
-        numSegsinCuster = len(cluster)
-        numSegs += numSegsinCuster
-
-        precision = numMFTinCluster / numSegsinCuster
-        recall = numMFTinCluster / numTypesOverall[mostFreqentType]
-
-        prList.append((label, mostFreqentType, precision, recall, numSegsinCuster))
-
-    # noise statistics
-    if noise:
-        numNoise = len(noise)
-        numSegs += numNoise
-        ratioNoise = numNoise / numSegs
-        noiseTypes = {groundtruth[element] for element in noise}
-
-    csvWriteHead = False if os.path.exists(outfile) else True
-    with open(outfile, 'a') as csvfile:
-        clStatscsv = csv.writer(csvfile)  # type: csv.writer
-        if csvWriteHead:
-            # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
-            clStatscsv.writerow([
-                'run_title', 'trace', 'conciseness', 'cluster_label', 'most_freq_type', 'precision', 'recall', 'cluster_size'])
-        if noise:
-            # noinspection PyUnboundLocalVariable
-            clStatscsv.writerow([
-                runtitle, comparator.specimens.pcapFileName, conciseness, 'NOISE', str(noiseTypes), 'ratio:', ratioNoise, numNoise])
-        clStatscsv.writerows([
-            (runtitle, comparator.specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
-        ])
-
-    return prList, conciseness
-
-
-
-def writeCollectiveClusteringStaticstics(
-        clusters: Dict[Hashable, List[Element]], groundtruth: Dict[Element, str],
-        runtitle: str, comparator: MessageComparator, ignoreUnknown=True):
-    """
-    Precision and recall for the whole clustering interpreted as number of draws from pairs of messages.
-
-    For details see: https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-clustering-1.html
-    How to calculate the draws is calculated for the Rand index in the document.
-
-    Writes a CSV with tp, fp, fn, tn, pr, rc
-        for (a) all clusters and for (b) clusters that have a size of at least 1/40 of the number of samples/messages.
-
-    'total segs' and 'unique segs' are including 'unknown' and 'noise'
-    """
-    from collections import Counter
-    from itertools import combinations, chain
-    from scipy.special import binom
-
-    outfile = ccStatsFile if isinstance(next(iter(groundtruth.keys())), AbstractMessage) else coStatsFile
-    print('Write message cluster statistics to {}...'.format(outfile))
-
-    segTotal = sum(
-        sum(len(el.baseSegments) if isinstance(el, Template) else 1 for el in cl)
-        for cl in clusters.values() )
-    segUniqu = sum(len(cl) for cl in clusters.values())
-
-    if ignoreUnknown:
-        unknownKeys = ["[unknown]", "[mixed]"]
-        numUnknown = len([gt for gt in groundtruth.values() if gt in unknownKeys])
-        clustersTemp = {lab: [el for el in clu if groundtruth[el] not in unknownKeys] for lab, clu in clusters.items()}
-        clusters = {lab: elist for lab, elist in clustersTemp.items() if len(elist) > 0}
-        groundtruth = {sg: gt for sg,gt in groundtruth.items() if gt not in unknownKeys}
-    else:
-        numUnknown = "n/a"
-
-    noise = []
-    noisekey = 'Noise' if 'Noise' in clusters else -1 if -1 in clusters else None
-    # print("noisekey", noisekey)
-    if noisekey is not None:
-        noise = clusters[noisekey]
-        clusters = {k: v for k, v in clusters.items() if k != noisekey}  # remove the noise
-
-    """
-    # # # # # # # #
-    # test case
-    >>> groundtruth = {
-    >>>     "x0": "x", "x1": "x", "x2": "x", "x3": "x", "x4": "x", "x5": "x", "x6": "x", "x7": "x",
-    >>>     "o0": "o", "o1": "o", "o2": "o", "o3": "o", "o4": "o",
-    >>>     "#0": "#", "#1": "#", "#2": "#", "#3": "#"
-    >>> }
-    >>> clusters = { "A": ["x1", "x2", "x3", "x4", "x5", "o1"],
-    >>>              "B": ["x6", "o2", "o3", "o4", "o0", "#1"],
-    >>>              "C": ["x7", "x0", "#2", "#3", "#0"],
-    >>>              }
-    >>> typeFrequencies = [Counter([groundtruth[element] for element in c])
-                             for c in clusters.values()]
-    # # # # # # # #
-    """
-
-    # numTypesOverall = Counter(groundtruth[comparator.messages[element[0].message]]
-    #                           for c in clusters.values() for element in c)
-    numTypesOverall = Counter(groundtruth.values())
-    # number of types per cluster
-    typeFrequencies = [Counter([groundtruth[element] for element in c])
-                             for c in clusters.values()]
-    noiseTypes = Counter([groundtruth[element] for element in noise])
-
-    tpfp = sum(binom(len(c), 2) for c in clusters.values())
-    tp = sum(binom(t,2) for c in typeFrequencies for t in c.values())
-    tnfn = sum(map(lambda n: n[0] * n[1], combinations(
-        (len(c) for c in chain.from_iterable([clusters.values(), [noise]])), 2))) + \
-           sum(binom(noiseTypes[typeName],2) for typeName, typeTotal in noiseTypes.items())
-    # import IPython; IPython.embed()
-    # fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
-    #           for typeCluster in typeFrequencies + [noiseTypes]
-    #           for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2
-    #
-    # # noise handling: consider all elements in noise as false negatives
-    fn = sum(((typeTotal - typeCluster[typeName]) * typeCluster[typeName]
-              for typeCluster in typeFrequencies
-              for typeName, typeTotal in numTypesOverall.items() if typeName in typeCluster))//2 + \
-         sum((binom(noiseTypes[typeName],2) +
-              (
-                      (typeTotal - noiseTypes[typeName]) * noiseTypes[typeName]
-              )//2
-              for typeName, typeTotal in numTypesOverall.items() if typeName in noiseTypes))
-
-
-    # precision = tp / (tp + fp)
-    precision = tp / tpfp
-    recall = tp / (tp + fn)
-
-    head = [ 'run_title', 'trace', 'true positives', 'false positives', 'false negatives', 'true negatives',
-             'precision', 'recall', 'noise', 'unknown', 'total segs', 'unique segs']
-    row = [ runtitle, comparator.specimens.pcapFileName, tp, tpfp-tp, fn, tnfn-fn,
-            precision, recall, len(noise), numUnknown, segTotal, segUniqu ]
-
-    csvWriteHead = False if os.path.exists(outfile) else True
-    with open(outfile, 'a') as csvfile:
-        clStatscsv = csv.writer(csvfile)  # type: csv.writer
-        if csvWriteHead:
-            clStatscsv.writerow(head)
-        clStatscsv.writerow(row)
-
-
-def writeCollectiveMessageClusteringStaticstics(
-        messageClusters: Dict[Hashable, List[Tuple[MessageSegment]]], groundtruth: Dict[RawMessage, str],
-        runtitle: str, comparator: MessageComparator):
-    abstrMsgClusters = {lab : [comparator.messages[element[0].message] for element in segseq]
-                        for lab, segseq in messageClusters.items()}
-    return writeCollectiveClusteringStaticstics(abstrMsgClusters, groundtruth, runtitle, comparator)
-
-
-def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
-                          specimens: SpecimenLoader, pagetitle=None, colorPerLabel=False,
-                          typeDict: Dict[str, List[MessageSegment]] = None,
-                          isInteractive=False):
-    """
-    This is a not awfully important helper function saving the writing of a few lines code.
-
-    :param segmentGroups:
-    :param specimens:
-    :param pagetitle:
-    :param colorPerLabel:
-    :param typeDict: dict of types (str-keys: list of segments) present in the segmentGroups
-    :param isInteractive:
-    :return:
-    """
-    from nemere.visualization.multiPlotter import MultiMessagePlotter
-
-    mmp = MultiMessagePlotter(specimens, pagetitle, len(segmentGroups), isInteractive=isInteractive)
-    mmp.plotMultiSegmentLines(segmentGroups, colorPerLabel)
-
-    # TODO redundant code of writeIndividualMessageClusteringStaticstics
-    if typeDict:  # calculate conciseness, correctness = precision, and recall
-        import os, csv
-        from collections import Counter
-        from nemere.inference.templates import Template
-
-        # mapping from each segment in typeDict to the corresponding cluster and true type,
-        # considering representative templates
-        segment2type = {seg: ft for ft, segs in typeDict.items() for seg in segs}
-        clusters = list()
-        for label, segList in segmentGroups:
-            cluster = list()
-            for tl, seg in segList:
-                if isinstance(seg, Template):
-                    cluster.extend((tl, bs) for bs in seg.baseSegments)
-                else:
-                    cluster.append((tl, seg))
-            clusters.append(cluster)
-
-        numSegs = len(segment2type)
-        prList = []
-        noise = None
-        if 'Noise' in segmentGroups[0][0]:
-            noise, *clusters = clusters  # remove the noise
-            prList.append(None)
-
-        numClusters = len(clusters)
-        numFtypes = len(typeDict)
-        conciseness = numClusters / numFtypes
-
-        for clusterSegs in clusters:
-            # type from typeDict
-            typeKey, numMFTinCluster = Counter(segment2type[seg] for tl, seg in clusterSegs).most_common(1)[0]
-            # number of segments for the prevalent type in the trace
-            numMFToverall = len(typeDict[typeKey])
-            numSegsinCuster = len(clusterSegs)
-
-            precision = numMFTinCluster / numSegsinCuster
-            recall = numMFTinCluster / numMFToverall
-
-            # # rather do not repeat the amount in the label
-            # mostFrequentType = "{}: {} Seg.s".format(typeKey, numMFTinCluster)
-            mostFrequentType = typeKey
-            prList.append((mostFrequentType, precision, recall, numSegsinCuster))
-
-        mmp.textInEachAx(["precision = {:.2f}\n"  # correctness
-                          "recall = {:.2f}".format(pr[1], pr[2]) if pr else None for pr in prList])
-
-        # noise statistics
-        if noise:
-            numNoise = len(noise)
-            ratioNoise = numNoise / numSegs
-            noiseTypes = {ft for ft, seg in noise}
-
-
-        csvWriteHead = False if os.path.exists(scStatsFile) else True
-        with open(scStatsFile, 'a') as csvfile:
-            clStatscsv = csv.writer(csvfile)  # type: csv.writer
-            if csvWriteHead:
-                # in "pagetitle": "seg_length", "analysis", "dist_measure", 'min_cluster_size'
-                clStatscsv.writerow(['run_title', 'trace', 'conciseness', 'most_freq_type',
-                                     'precision', 'recall', 'cluster_size'])
-            if noise:
-                # noinspection PyUnboundLocalVariable
-                clStatscsv.writerow([pagetitle, specimens.pcapFileName, conciseness, 'NOISE',
-                                     str(noiseTypes), ratioNoise, numNoise])
-            clStatscsv.writerows([
-                (pagetitle, specimens.pcapFileName, conciseness, *pr) for pr in prList if pr is not None
-            ])
-
-    mmp.writeOrShowFigure()
-    del mmp
-
-
 def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]],
-                    seg: AbstractSegment) -> Union[str, bool]:
+                    seg: AbstractSegment) -> Union[str, None]:
     """
     Determine group label of an segment from deep hierarchy of segment clusters/groups.
 
@@ -441,7 +153,31 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
         else:
             return "[unknown]"
 
-    return False
+    return None
+
+def consolidateLabels(labels: numpy.ndarray, trigger = "$d_{max}$=0.000", maxLabels=20):
+    """
+    Replace the labels in the input, in-place, if the trigger is contained in a label.
+    If after this procedure still more than maxLabels distinct labels are remaining, only the 20 largest are retained.
+    """
+    zeroDmaxUnique = {c for c in labels if isinstance(labels, Iterable) and trigger in c}
+    zeroDcount = len(zeroDmaxUnique)
+    commonLabel = f"one of {zeroDcount} clusters with $d_{{max}}$=0.000"
+    for ci in range(labels.size):
+        if trigger in labels[ci]:
+            labels[ci] = commonLabel
+    lCounter = Counter(labels)
+    if len(lCounter) > maxLabels:
+        print("Still too many cluster labels! Merging the smallest ones, retaining 20 clusters.")
+        leastCommon = list(zip(*list(lCounter.most_common())[20:]))[0]
+        lcAmount = len(leastCommon)
+        if commonLabel in leastCommon:
+            lcAmount += zeroDcount
+        lcLabel = f"one of the {lcAmount} smallest clusters"
+        for ci in range(labels.size):
+            if labels[ci] in leastCommon:
+                labels[ci] = lcLabel
+    return labels
 
 
 def writePerformanceStatistics(specimens, clusterer, algos,
@@ -584,115 +320,244 @@ def calcHexDist(hexA, hexB):
     return dc.pairDistance(*segments)
 
 
-def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
-                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filterTrivial=False,
-                   refinementCallback:Union[Callable, None] = refinements,
-                   disableCache=False) \
-        -> Tuple[SpecimenLoader, MessageComparator, List[Tuple[MessageSegment]], DistanceCalculator,
-        float, float]:
-    """
-    cache or load the DistanceCalculator to or from the filesystem
+class CachedDistances(object):
+    def __init__(self, pcapfilename: str, analysisTitle: str, layer=2, relativeToIP=True):
+        """
+        Cache or load the DistanceCalculator to or from the filesystem
+        """
+        self.pcapfilename = pcapfilename  # type: str
+        self.pcapbasename = os.path.basename(pcapfilename)
+        self.pcapName = os.path.splitext(self.pcapbasename)[0]
 
+        self.layer = layer  # type: int
+        self.relativeToIP = relativeToIP  # type: bool
+        self.analysisTitle = analysisTitle  # type: str
+        self.analyzerType = analyses[analysisTitle]  # type: Type[MessageAnalyzer]
+        self.analysisArgs = None  # type: Union[None, Tuple]
 
-    :param filterTrivial: Filter out **one-byte** segments and such, just consisting of **zeros**.
-    :param disableCache: When experimenting with distances manipulation, deactivate caching!
-    :return:
-    """
-    pcapbasename = os.path.basename(pcapfilename)
-    # if refinementCallback == pcaMocoRefinements:
-    #     sigma = pcamocoSigmapertrace[pcapbasename] if not sigma and pcapbasename in pcamocoSigmapertrace else \
-    #         0.9 if not sigma else sigma
-    # else:
-    sigma = sigmapertrace[pcapbasename] if not sigma and pcapbasename in sigmapertrace else \
-        0.9 if not sigma else sigma
-    pcapName = os.path.splitext(pcapbasename)[0]
-    # noinspection PyUnboundLocalVariable
-    tokenparm = tokenizer if tokenizer != "nemesys" else \
-        "{}{:.0f}".format(tokenizer, sigma * 10)
-    dccachefn = os.path.join(cacheFolder, 'cache-dc-{}-{}-{}-{}-{}.{}'.format(
-        analysisTitle, tokenparm, "filtered" if filterTrivial else "all",
-        refinementCallback.__name__ if refinementCallback is not None else "raw",
-        pcapName, 'ddc'))
-    # dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
-    if disableCache or not os.path.exists(dccachefn):
-        # dissect and label messages
-        print("Load messages from {}...".format(pcapName))
-        specimens = SpecimenLoader(pcapfilename, 2, True)
-        comparator = MessageComparator(specimens, 2, True, debug=debug)
+        self.tokenizer = None  # type: Union[None, str]
+        self.sigma = None  # type: Union[None, float]
+        self.filter = False  # type: bool
+        self.refinementCallback = None  # type: Union[Callable, None]
+        self.refinementArgs = None  # type: Union[None, Dict]
+        """kwargs for the refinement function, e. g., reportFolder or collectedSubclusters"""
+        self.forwardComparator = False  # type: bool
+
+        self.dissectGroundtruth = True
+        """Expect tshark to know a dissector for the protocol and initialize a MessageComparator for it. 
+        Set to False for an unknown protocol!"""
+        self.disableCache = False  # type: bool
+        """When experimenting with distances manipulation, deactivate caching by setting disableCache to True!"""
+        self.debug = False  # type: bool
+
+        self.dccachefn = None  # type: Union[None, str]
+        self.isLoaded = False
+
+        self.specimens = None  # type: Union[None, SpecimenLoader]
+        self.comparator = None  # type: Union[None, BaseComparator]
+        self.segmentedMessages = None  # type: Union[None, List[Tuple[MessageSegment]]]
+        self.rawSegmentedMessages = None  # type: Union[None, List[Tuple[MessageSegment]]]
+        self.dc = None  # type: Union[None, DistanceCalculator]
+        self.segmentationTime = None  # type: Union[None, float]
+        self.dist_calc_segmentsTime = None  # type: Union[None, float]
+
+    def configureAnalysis(self, *analysisArgs):
+        """optional"""
+        self.analysisArgs = analysisArgs
+
+    def configureTokenizer(self, tokenizer: str, sigma: float=None, filtering=False):
+        """
+        mandatory (but may be called without parameters)
+
+        :param tokenizer: The tokenizer to use. One of: "tshark", "4bytesfixed", "nemesys"
+        :param sigma: Required only for nemesys: The sigma value to use. If not set,
+            the value in sigmapertrace in this module is looked up and if the trace is not known there, use 0.9.
+        :param filtering: Filter out **one-byte** segments and such, just consisting of **zeros**.
+        """
+        # if refinementCallback == pcaMocoRefinements:
+        #     sigma = pcamocoSigmapertrace[pcapbasename] if not sigma and pcapbasename in pcamocoSigmapertrace else \
+        #         0.9 if not sigma else sigma
+        # else:
+        self.sigma = sigmapertrace[self.pcapbasename] if not sigma and self.pcapbasename in sigmapertrace else \
+            0.9 if not sigma else sigma
+        self.tokenizer = tokenizer
+        self.filter = filtering
+
+    def configureRefinement(self, refinementCallback:Union[Callable, None] = refinements, forwardComparator=False,
+                            **refinementArgs):
+        """
+        optional
+
+        :param refinementCallback: The function to use for refinement.
+            Existing refinements can be found in segmentHandler.
+        :param forwardComparator: If True, the comparator instance is passed to the refinementCallback
+            as additional keyword argument with the key "comparator".
+        :param refinementArgs: kwargs for the refinement function, e. g., reportFolder or collectedSubclusters
+        """
+        self.refinementCallback = refinementCallback
+        self.refinementArgs = refinementArgs
+        self.forwardComparator = forwardComparator
+        if forwardComparator and not self.dissectGroundtruth:
+            raise ValueError("A comparator can only be forwarded to the refinement for evaluation if ground truth "
+                             "(see CachedDistances.dissectGroundtruth) is available.")
+
+    def _callRefinement(self):
+        if self.refinementCallback is not None:
+            self.rawSegmentedMessages = self.segmentedMessages
+            if self.forwardComparator:
+                if isinstance(self.refinementArgs, dict):
+                    self.refinementArgs["comparator"] = self.comparator
+                else:
+                    self.refinementArgs = {"comparator": self.comparator}
+            if self.refinementCallback.__code__.co_argcount > 1:  # not counting kwargs!
+                # assume the second argument is expected to be a distance calculator
+                chainedSegments = list(chain.from_iterable(self.segmentedMessages))
+                print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
+                if len(chainedSegments) ** 2 > MemmapDC.maxMemMatrix:
+                    refinementDC = MemmapDC(chainedSegments)
+                else:
+                    refinementDC = DelegatingDC(chainedSegments)
+                self.segmentedMessages = self.refinementCallback(self.segmentedMessages, refinementDC,
+                                                                 **self.refinementArgs)
+            else:
+                self.segmentedMessages = self.refinementCallback(self.segmentedMessages, **self.refinementArgs)
+
+    def _calc(self):
+        """
+        dissect and label messages
+        """
+        print("Load messages from {}...".format(self.pcapName))
+        self.specimens = SpecimenLoader(self.pcapfilename, self.layer, relativeToIP=self.relativeToIP)
+        if self.dissectGroundtruth:
+            self.comparator = MessageComparator(
+                self.specimens, layer=self.layer, relativeToIP=self.relativeToIP, debug=self.debug)
+        else:
+            self.comparator = BaseComparator(
+                self.specimens, layer=self.layer, relativeToIP=self.relativeToIP, debug=self.debug)
 
         print("Segmenting messages...", end=' ')
         segmentationTime = time.time()
         # select tokenizer by command line parameter
-        if tokenizer == "tshark":
-            # 1. segment messages according to true fields from the labels
-            segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-        elif tokenizer == "4bytesfixed":
+        if self.tokenizer == "tshark":
+            if isinstance(self.comparator, MessageComparator):
+                # 1. segment messages according to true fields from the labels
+                self.segmentedMessages = annotateFieldTypes(self.analyzerType, self.analysisArgs, self.comparator)
+            else:
+                raise ValueError("tshark tokenizer can only be used with existing (Wireshark) dissector "
+                                 "and CachedDistances.dissectGroundtruth set to True.")
+        elif self.tokenizer == "4bytesfixed":
             # 2. segment messages into fixed size chunks for testing
-            segmentedMessages = segmentsFixed(4, comparator, analyzerType, analysisArgs)
-        elif tokenizer == "nemesys":
+            self.segmentedMessages = fixedlengthSegmenter(4, self.specimens, self.analyzerType, self.analysisArgs)
+        elif self.tokenizer in ["nemesys", "nemesysle"]:
             # 3. segment messages by NEMESYS
-            segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
+            segmentsPerMsg = bcDeltaGaussMessageSegmentation(self.specimens, self.sigma)
 
             # get analyzer requested by analyzerType/analysisArgs
-            segmentedMessages = [[
-                MessageSegment(MessageAnalyzer.findExistingAnalysis(
-                    analyzerType, MessageAnalyzer.U_BYTE, seg.message, analysisArgs), seg.offset, seg.length)
-                for seg in msg] for msg in segmentsPerMsg]
+            self.segmentedMessages = MessageAnalyzer.convertAnalyzers(
+                segmentsPerMsg, self.analyzerType, self.analysisArgs)
+            self._callRefinement()
 
-            if refinementCallback is not None:
-                if refinementCallback.__code__.co_argcount > 1:
-                    # assume the second argument is expected to be a distance calculator
-                    chainedSegments = list(chain.from_iterable(segmentedMessages))
-                    print("Refinement: Calculate distance for {} segments...".format(len(chainedSegments)))
-                    if len(chainedSegments)**2 > MemmapDC.maxMemMatrix:
-                        refinementDC = MemmapDC(chainedSegments)
-                    else:
-                        refinementDC = DelegatingDC(chainedSegments)
-                    segmentedMessages = refinementCallback(segmentedMessages, refinementDC)
-                else:
-                    segmentedMessages = refinementCallback(segmentedMessages)
-
-            # segments = list(chain.from_iterable(segmentedMessages))
-
-        segmentationTime = time.time() - segmentationTime
+        self.segmentationTime = time.time() - segmentationTime
         print("done.")
 
-        if filterTrivial:
-            # noinspection PyUnboundLocalVariable
-            chainedSegments = [seg for seg in chain.from_iterable(segmentedMessages) if
+        if self.filter:
+            chainedSegments = [seg for seg in chain.from_iterable(self.segmentedMessages) if
                         seg.length > 1 and set(seg.values) != {0}]
         else:
-            # noinspection PyUnboundLocalVariable
-            chainedSegments = list(chain.from_iterable(segmentedMessages))
+            chainedSegments = list(chain.from_iterable(self.segmentedMessages))
 
         print("Calculate distance for {} segments...".format(len(chainedSegments)))
         # dc = DistanceCalculator(chainedSegments, reliefFactor=0.33)  # Pairwise similarity of segments: dc.distanceMatrix
         dist_calc_segmentsTime = time.time()
         if len(chainedSegments) ** 2 > MemmapDC.maxMemMatrix:
-            dc = MemmapDC(chainedSegments)
+            self.dc = MemmapDC(chainedSegments)
         else:
-            dc = DelegatingDC(chainedSegments)
-        assert chainedSegments == dc.rawSegments
-        dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
+            self.dc = DelegatingDC(chainedSegments)
+        self.dist_calc_segmentsTime = time.time() - dist_calc_segmentsTime
         try:
-            with open(dccachefn, 'wb') as f:
-                pickle.dump((segmentedMessages, comparator, dc), f, pickle.HIGHEST_PROTOCOL)
-        except MemoryError as e:
-            print("DC could not be cached due to a MemoryError. Removing", dccachefn, "and continuing.")
-            os.remove(dccachefn)
-    else:
-        print("Load distances from cache file {}".format(dccachefn))
-        with open(dccachefn, 'rb') as f:
-            segmentedMessages, comparator, dc = pickle.load(f)
-        if not (isinstance(comparator, MessageComparator)
-                and isinstance(dc, DistanceCalculator)):
+            with open(self.dccachefn, 'wb') as f:
+                pickle.dump((self.segmentedMessages, self.comparator, self.dc), f, pickle.HIGHEST_PROTOCOL)
+            print("Write distances to cache file {}".format(self.dccachefn))
+        except MemoryError:
+            print("DC could not be cached due to a MemoryError. Removing", self.dccachefn, "and continuing.")
+            os.remove(self.dccachefn)
+
+    def _load(self):
+        print("Load distances from cache file {}".format(self.dccachefn))
+        with open(self.dccachefn, 'rb') as f:
+            self.segmentedMessages, self.comparator, self.dc = pickle.load(f)
+        if not (isinstance(self.comparator, BaseComparator)
+                and isinstance(self.dc, DistanceCalculator)):
             print('Loading of cached distances failed.')
             exit(10)
-        specimens = comparator.specimens
-        # chainedSegments = list(chain.from_iterable(segmentedMessages))
-        segmentationTime, dist_calc_segmentsTime = None, None
+        if not isinstance(self.comparator, MessageComparator):
+            print("Loaded without ground truth from dissector.")
+        self.specimens = self.comparator.specimens
+        self.segmentationTime, self.dist_calc_segmentsTime = None, None
+        self.isLoaded = True
 
-    return specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime
+    def get(self):
+        assert self.analysisTitle is not None
+        assert self.tokenizer is not None
+        assert self.pcapName is not None
+        assert self.tokenizer != "nemesys" or self.sigma is not None
+
+        tokenparm = self.tokenizer if self.tokenizer[:7] != "nemesys" else \
+            "{}{:.0f}".format(self.tokenizer, self.sigma * 10)
+        refine = (self.refinementCallback.__name__ if self.refinementCallback is not None else "raw") \
+            + ("le" if self.refinementArgs is not None
+                       and "littleEndian" in self.refinementArgs and self.refinementArgs["littleEndian"] else "")
+        fnprefix = "cache-dc"
+        if isinstance(self.comparator, MessageComparator):
+            fnprefix += "-nogt"
+        self.dccachefn = os.path.join(cacheFolder, '{}-{}-{}-{}-{}-{}-{}.{}'.format(
+            fnprefix, self.analysisTitle, tokenparm, "filtered" if self.filter else "all",
+            refine,
+            self.pcapName,
+            "" if self.layer == 2 and self.relativeToIP == True
+                else str(self.layer) + "reltoIP" if self.relativeToIP else "",
+            'ddc'))
+        if self.disableCache or not os.path.exists(self.dccachefn):
+            self._calc()
+        else:
+            self._load()
+
+def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
+                   analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filtering=False,
+                   refinementCallback:Union[Callable, None] = refinements,
+                   disableCache=False, layer=2, relativeToIP=True) \
+        -> Tuple[SpecimenLoader, BaseComparator, List[Tuple[MessageSegment]], DistanceCalculator, Optional[float],
+                 Optional[float]]:
+    """
+    Legacy:
+    Wrapper around class CachedDistances for backwards compatibility:
+        cache or load the DistanceCalculator to or from the filesystem
+
+    >>> dc = DistanceCalculator()
+    >>> chainedSegments = dc.rawSegments
+
+    :param analyzerType: Unused
+    :param filtering: Filter out **one-byte** segments and such, just consisting of **zeros**.
+    :param disableCache: When experimenting with distances manipulation, deactivate caching!
+    :return:
+    """
+    fromCache = CachedDistances(pcapfilename, analysisTitle, layer, relativeToIP)
+    fromCache.disableCache = disableCache
+    fromCache.debug = debug
+    fromCache.configureAnalysis(*analysisArgs)
+    fromCache.configureTokenizer(tokenizer, sigma, filtering)
+    fromCache.configureRefinement(refinementCallback)
+    fromCache.get()
+
+    assert fromCache.specimens is not None
+    assert fromCache.comparator is not None
+    assert fromCache.segmentedMessages is not None
+    assert fromCache.dc is not None
+
+    return fromCache.specimens, fromCache.comparator, fromCache.segmentedMessages, fromCache.dc, \
+           fromCache.segmentationTime, fromCache.dist_calc_segmentsTime
+
+
 
 
 def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
@@ -710,4 +575,276 @@ def resolveTemplates2Segments(segments: Iterable[AbstractSegment]):
     return resolvedSegments
 
 
+
+class StartupFilecheck(object):
+    def __init__(self, pcapfilename: str, reportFullPath: str=None):
+        if not isfile(pcapfilename):
+            print('File not found:', pcapfilename)
+            exit(1)
+        self.pcapfilename = pcapfilename
+        self.pcapbasename = basename(pcapfilename)
+        self.pcapstrippedname = splitext(self.pcapbasename)[0]
+        print("\n\nTrace:", self.pcapbasename)
+
+        if reportFullPath is None:
+            self.reportFullPath = join(reportFolder, self.pcapstrippedname)
+            """A path name that is inside the report folder and reflects the pcap base name without extension."""
+        else:
+            self.reportFullPath = reportFullPath
+            """A path name that is inside the report folder and reflects the pcap base name without extension."""
+        if not exists(self.reportFullPath):
+            os.makedirs(self.reportFullPath)
+        elif isdir(self.reportFullPath):
+            print("Using existing ", self.reportFullPath, " as report folder.")
+        else:
+            print("Path that should be used as report folder is an existing file. Aborting.")
+            exit(1)
+
+        self.timestamp = time.time()
+        self.timeformated = time.strftime("%Y%m%d-%H%M%S", time.gmtime(self.timestamp))
+
+    def reportWithTimestamp(self, inferenceTitle: str=None):
+        if inferenceTitle is None:
+            reportPathTS = join(self.reportFullPath, self.timeformated)
+        else:
+            reportPathTS = join(self.reportFullPath, "{}_{}".format(inferenceTitle, self.timeformated))
+        os.makedirs(reportPathTS, exist_ok=True)
+        return reportPathTS
+
+    def writeReportMetadata(self, dcCacheFile: str=None, scriptRuntime: float=None):
+        import sys, git
+        if not exists(self.reportFullPath):
+            raise FileNotFoundError("Report folder must be existing. It does not.")
+        repo = git.Repo(search_parent_directories=True)
+        timeformat = "%d.%m.%Y %H:%M:%S %Z"
+
+        lines = {
+            "fullCommandLine": " ".join(sys.argv),
+            "absolutepcapfilename": abspath(self.pcapfilename),
+            "dcCacheFile": "n/a" if dcCacheFile is None else dcCacheFile,
+            "gitCommit": repo.head.object.hexsha + f" ({repo.active_branch})",
+            "currentTime": time.strftime(timeformat),
+            "scriptRuntime": "{:.3f} s".format(time.time() - self.timestamp
+                                               if scriptRuntime is None else scriptRuntime),
+            "host": os.uname().nodename
+        }
+
+        with open(join(self.reportFullPath, "run-metadata.md"), "a") as md:
+            md.write("# Report Metadata\n\n")
+            md.writelines(f"{k}: {v}\n\n" for k, v in lines.items())
+
+
+class TrueOverlays(object):
+    """
+    Count and  the amount of (falsely) inferred boundaries in the scope of each true field.
+    """
+    def __init__(self, trueSegments: Dict[str, Sequence[MessageSegment]],
+                 inferredSegments: List[Sequence[MessageSegment]], comparator: MessageComparator, minLen=3):
+        self.trueSegments = trueSegments
+        self.comparator = comparator
+        self.inferredSegments = inferredSegments
+        # at least minLen bytes long
+        self.keys4longer = [k for k, segs in self.trueSegments.items() if any(len(s) >= minLen for s in segs)]
+        self.trueNamesOverlay = defaultdict(defaultdict)
+        self._classifyTrueNamesOverlays()
+        self.trueNamesOverlayCounters = self._trueOverlayCounters()
+        # maxoverlaysegcount = max(cnt.keys() for cnt in self.trueNamesOverlayCounters.values())
+
+    def _classifyTrueNamesOverlays(self):
+        # sort the inferred segments per true segment by type of overlapping
+        for k4l in self.keys4longer:
+            for seg in self.trueSegments[k4l]:
+                inf4msg = inferred4segment(seg, self.inferredSegments)
+                # inferred field overlapping
+                overlapping = [i4m for i4m in inf4msg if isOverlapping(seg, i4m)]
+                # true and inferred fields match exactly
+                # .. t .. t ..
+                # .. i .. i ..
+                if len(overlapping) == 1 and \
+                        seg.offset == overlapping[0].offset and seg.nextOffset == overlapping[0].nextOffset:
+                    self.trueNamesOverlay[k4l][seg] = 0
+                # overspecific inference: true field overlaps by multiple inferred segments
+                # .. t ......... t ..
+                #   .. i .. i .. i ..
+                elif len(overlapping) > 1:
+                    self.trueNamesOverlay[k4l][seg] = len(overlapping)
+                # underspecific inference: true field is only substring of an inferred
+                #   .. t .. t ..
+                # .. i ......... i ..
+                else:  # len(overlapping) == 1 and (seg.offset < overlapping[0].offset or seg.nextOffset > overlapping[0].nextOffset)
+                    self.trueNamesOverlay[k4l][seg] = -1
+
+    def _trueOverlayCounters(self):
+        # amount of (falsely) inferred boundaries in the scope of each true field per true field name.
+        return {fname: Counter(segcnt.values()) for fname, segcnt in
+                                    self.trueNamesOverlay.items()}  # type: Dict[str, Counter]
+
+    _cutoff = 10
+    _cntheaders = ["Field name  /  inf per true", "min len", "max len", "sum", "all nulls",
+                                           "underspecific", "exact"] \
+                  + list(range(2, _cutoff)) + [f"> {_cutoff-1} (segments too many)"]
+
+    def _cnttable(self):
+         return [[fname,
+                     min(len(s) for s in self.trueSegments[fname]), max(len(s) for s in self.trueSegments[fname]),
+                     len(self.trueSegments[fname]),
+                     sum(set(s.values) == {0} for s in self.trueSegments[fname])
+                     ] + [
+            cnt[c] if c in cnt else None for c in [-1, 0] + list(range(2, TrueOverlays._cutoff))
+        ] + [sum(c for k, c in cnt.items() if k >= TrueOverlays._cutoff)]
+                    for fname, cnt in self.trueNamesOverlayCounters.items()]
+
+    def __repr__(self):
+        """
+        Arrange the data of trueNamesOverlayCounters in a table like this:
+
+        # Field name  /  inf per true | underspecific | exact | 1 | 2 | 3 | 4 | ... | > 10 | (segments too many)
+        # wlan.fixed.ftm.param.delim2 |       50      |  21   | ...
+        # wlan.tag.oui                |               |   3   | ...
+        # wlan.fixed.ftm_toa          | ...
+
+        :return: Visual table
+        """
+        cnttable = self._cnttable()
+        return tabulate(cnttable, headers=TrueOverlays._cntheaders)
+
+    def toCSV(self, folder: str):
+        import csv
+        csvPath = join(folder, type(self).__name__ + ".csv")
+        if exists(csvPath):
+            raise FileExistsError("Will not overwrite existing file " + csvPath)
+        with open(csvPath, 'w') as csvFile:
+            cntcsv = csv.writer(csvFile)  # type: csv.writer
+            cntcsv.writerow(self._cntheaders)
+            cntcsv.writerows(self._cnttable())
+
+    @staticmethod
+    def uniqSort(someSegs: Dict[str, Sequence[MessageSegment]]):
+        # remove double values by adding into dicts
+        uniqSegs = {fname: {s.values: s for s in segs} for fname, segs in someSegs.items()}
+        sortedSegs = {fname: sorted(segs.values(), key=lambda s: s.values) for fname, segs in uniqSegs.items()}
+        return sortedSegs
+
+    def filterUnderspecific(self):
+        """
+        true segments that are not all nulls and underspecific / sorted by segment value
+        :return:
+        """
+        filteredSegs = {fname: (s for s, c in segolc.items() if set(s.values) != {0} and c < 0)
+                        for fname, segolc in self.trueNamesOverlay.items()}
+        return TrueOverlays.uniqSort(filteredSegs)
+
+    def filterOverspecific(self, segCnt: int=3):
+        # true segments that are not all nulls and (+2/+3/*) inferred
+        filteredSegs = {fname: (s for s, c in segolc.items() if set(s.values) != {0} and c == segCnt)
+                        for fname, segolc in self.trueNamesOverlay.items()}
+        return TrueOverlays.uniqSort(filteredSegs)
+
+    def printSegmentContexts(self, trueSegments: Dict[str, Sequence[MessageSegment]], maxlines=10):
+        """
+        print the selected fields for reference
+        :param trueSegments:
+        :param maxlines: Limit output per field category to this number, no limit if <= 0
+        """
+        for lab, segs in trueSegments.items():
+            if len(segs) > 0:
+                print("\n" "# #", lab)
+                if maxlines > 0:
+                    truncatedSegs = segs[:maxlines]
+                else:
+                    truncatedSegs = segs
+                markSegNearMatch(truncatedSegs, self.inferredSegments, self.comparator, 3)
+            # for seg in segs:
+            #     # inf4msg = inferred4segment(seg, self.inferredSegments)
+            #     # overlapping = [i4m for i4m in inf4msg if isOverlapping(seg, i4m)]
+            #     # # print(overlapping)
+            #     # if len(overlapping) == 1:
+            #     #     # print("match or inferred larger. continuing")
+            #     #     continue
+            #     markSegNearMatch(seg, self.inferredSegments, 3)
+
+
+class TrueDataTypeOverlays(TrueOverlays):
+    def __init__(self, trueSegmentedMessages: Dict[AbstractMessage, Tuple[TypedSegment]],
+                 inferredSegments: List[Sequence[MessageSegment]], comparator: MessageComparator, minLen: int = 3):
+        # all true fields of one data type
+        trueDataTypes = defaultdict(list)
+        for seg in (seg for msgsegs in trueSegmentedMessages.values() for seg in msgsegs):
+            trueDataTypes[seg.fieldtype].append(seg)
+        super().__init__(trueDataTypes, inferredSegments, comparator, minLen)
+
+
+class TrueFieldNameOverlays(TrueOverlays):
+    def __init__(self, trueSegmentedMessages: Dict[AbstractMessage, Tuple[TypedSegment]],
+                 inferredSegments: List[Sequence[MessageSegment]], comparator: MessageComparator, minLen: int = 3):
+        # all true fields of one field type (tshark name)
+        trueFieldNames = defaultdict(list)
+        for absmsg, msgsegs in trueSegmentedMessages.items():
+            pm = comparator.parsedMessages[comparator.specimens.messagePool[absmsg]]
+            fnames = pm.getFieldNames()
+            # here we assume that the fnames and msgsegs are in the same order (and have the same amount),
+            # which should be the case if ParsedMessage works correctly and trueSegmentedMessages was not tampered with.
+            assert len(msgsegs) == len(fnames)
+            for seg, fna in zip(msgsegs, fnames):
+                trueFieldNames[fna].append(seg)
+        super().__init__(trueFieldNames, inferredSegments, comparator, minLen)
+
+
+class TitleBuilder(object):
+    """Builds readable strings from the configuration parameters of the analysis."""
+    def __init__(self, tokenizer, refinement = None, sigma = None, clusterer = None):
+        self.tokenizer = tokenizer
+        self.refinement = refinement
+        self._clusterer = clusterer
+        self.postProcess = None  # multiple. to be adjusted dynamically
+
+        self.sigma = sigma
+
+    @property
+    def tokenParams(self):
+        return f"sigma {self.sigma}" if self.tokenizer[:7] == "nemesys" else None
+
+    @property
+    def clusterer(self):
+        return type(self._clusterer).__name__
+
+    @clusterer.setter
+    def clusterer(self, val):
+        self._clusterer = val
+
+    @property
+    def clusterParams(self):
+        from sklearn.cluster import DBSCAN
+        from hdbscan import HDBSCAN
+        if isinstance(self._clusterer, (DBSCAN)):
+            return f"eps {self._clusterer.eps:.3f} ms {self._clusterer.min_samples}"
+        elif isinstance(self._clusterer, (HDBSCAN)):
+            return f"mcs {self._clusterer.min_cluster_size} ms {self._clusterer.min_samples}"
+
+    @property
+    def plotTitle(self):
+        plotTitle = self.tokenizer
+        if self.tokenParams is not None: plotTitle += "-" + self.tokenParams
+        if self.refinement is not None: plotTitle += "-" + self.refinement
+        plotTitle += " " + self.clusterer + " " + self.clusterParams
+        if self.postProcess is not None: plotTitle += " " + self.postProcess
+        return plotTitle
+
+    @property
+    def dict(self):
+        return {
+            "tokenizer": self.tokenizer,
+            "tokenParams": self.tokenParams,
+            "refinement": self.refinement,
+            "clusterer": self.clusterer,
+            "clusterParams": self.clusterParams,
+            "postProcess": self.postProcess
+            }
+
+
+class TitleBuilderSens(TitleBuilder):
+    """include Sensitivitiy from clusterer in title"""
+    @property
+    def clusterParams(self):
+        return super().clusterParams
 

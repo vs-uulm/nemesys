@@ -5,16 +5,19 @@ Methods for reformatting, pretty printing, and plotting of Format Match Score va
 import csv
 import os
 import time
-
 from os.path import abspath, isdir
 from typing import Dict, Tuple, List
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import TimeoutError as FutureTOError
+
 
 from netzob import all as netzob
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from nemere.utils.loader import SpecimenLoader
-from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator
+from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator, \
+    stop_process_pool, messageparsetimeout
 
 def printFMS(
         formatmatchmetrics: Dict[Tuple[int, netzob.Symbol, List[tuple]], Tuple[int, int, int, int, int]],
@@ -82,12 +85,18 @@ class MessageScoreStatistics(object):
         """
         import numpy
 
+        countEmpty = 0
         thrScores = dict()
         for (th, msg), fms in formatmatchmetrics.items():
+            # ignore parsing errors
+            if fms.score is None:
+                countEmpty += 1
+                continue
             if th not in thrScores:
                 thrScores[th] = list()
             thrScores[th].append(fms.score)
 
+        print("Empty inferences ignored:", countEmpty)
         return {th: (numpy.min(sc), numpy.max(sc), numpy.mean(sc)) for th, sc in thrScores.items()}
 
 
@@ -129,7 +138,7 @@ def writeReport(formatmatchmetrics: Dict[Tuple[int, AbstractMessage], FormatMatc
     """
     absFolder = abspath(folder)
     if not isdir(absFolder):
-        raise NotADirectoryError("The reports folder {:d} is not a directory. Reports cannot be written there.".format(absFolder))
+        raise NotADirectoryError("The reports folder {} is not a directory. Reports cannot be written there.".format(absFolder))
     pcapName = os.path.splitext(os.path.basename(specimens.pcapFileName))[0]
     reportFolder = os.path.join(absFolder, pcapName + "_clByAlign_" + time.strftime("%Y%m%d-%H%M%S", time.localtime()))
     os.makedirs(reportFolder)
@@ -164,7 +173,17 @@ def writeReport(formatmatchmetrics: Dict[Tuple[int, AbstractMessage], FormatMatc
         with open(os.path.join(reportFolder, fileNameS + '.csv'), 'w') as csvfile:
             symbolcsv = csv.writer(csvfile)
             symbolcsv.writerow([field.name for field in symbol.fields])
-            symbolcsv.writerows([[val.hex() for val in msg] for msg in symbol.getCells()])
+            # wait only messageparsetimeout seconds for Netzob's MessageParser to return the result
+            with ProcessPoolExecutor(max_workers=1) as executor:
+                try:
+                    future = executor.submit(symbol.getCells)
+                    cells = future.result(messageparsetimeout)
+                    symbolcsv.writerows([[val.hex() for val in msg] for msg in cells])
+                except FutureTOError as e:
+                    stop_process_pool(executor)
+                    symbolcsv.writerow(["Parsing of symbol", symbol.name, "timed out after",
+                                         messageparsetimeout, "seconds. Omitting", len(symbol.messages),
+                                        "messages in this symbol."])
 
     # thrSym = dict()
     # for thr, sym in uniqueSymbols:

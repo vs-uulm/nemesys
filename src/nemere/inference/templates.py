@@ -66,7 +66,7 @@ class DistanceCalculator(object):
         self._method = method
         self.thresholdFunction = thresholdFunction if thresholdFunction else DistanceCalculator.neutralThreshold
         self.thresholdArgs = thresholdArgs if thresholdArgs else {}
-        self._segments = list()  # type: List[MessageSegment]
+        self._segments = list()  # type: List[AbstractSegment]
         self._quicksegments = list()  # type: List[Tuple[int, int, Tuple[float]]]
         """List of Tuples: (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)"""
         # ensure that all segments have analysis values
@@ -80,7 +80,7 @@ class DistanceCalculator(object):
         self._distances = type(self)._getDistanceMatrix(self._embdedAndCalcDistances(), len(self._quicksegments))
 
         # prepare lookup for matrix indices
-        self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}
+        self._seg2idx = {seg: idx for idx, seg in enumerate(self._segments)}  # type: Dict[AbstractSegment, int]
 
         if manipulateChars:
             # Manipulate calculated distances for all char/char pairs.
@@ -167,7 +167,7 @@ class DistanceCalculator(object):
         return similarityMatrix
 
     @property
-    def segments(self) -> List[MessageSegment]:
+    def segments(self) -> List[AbstractSegment]:
         """
         :return: All segments in this object.
         """
@@ -661,6 +661,7 @@ class DistanceCalculator(object):
 
         subsetsSimi = scipy.spatial.distance.cdist(segmentValuesMatrix, numpy.array([shortSegment[2]]), method)
         shift = subsetsSimi.argmin() # for debugging and evaluation
+        # noinspection PyArgumentList
         distance = subsetsSimi.min()
 
         return method, shift, (shortSegment[0], longSegment[0], distance)
@@ -703,7 +704,7 @@ class DistanceCalculator(object):
         complete distance list of all combinations of the into segment list regardless of their length.
 
         >>> from tabulate import tabulate
-        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -739,10 +740,12 @@ class DistanceCalculator(object):
         :return: List of Tuples
             (index of segment in self._segments), (segment length), (Tuple of segment analyzer values)
         """
+        from concurrent.futures.process import BrokenProcessPool
+        import time
+
         dissCount = 0
         lenGrps = self.groupByLength()  # segment list is in format of self._quicksegments
 
-        import time
         pit_start = time.time()
 
         rslens = list(reversed(sorted(lenGrps.keys())))  # lengths, sorted by decreasing length
@@ -761,13 +764,20 @@ class DistanceCalculator(object):
         #         int_runtime, self.segments[0].message.data[:5].hex(), outerlen))
         else:
             import concurrent.futures
-            with concurrent.futures.ProcessPoolExecutor(max_workers=cpu_count()) as executor:   # Process # Thread
+            with concurrent.futures.ProcessPoolExecutor(max_workers=cpu_count()-1) as executor:   # Process # Thread
                 futureDis = dict()
                 for outerlen in rslens:
                     futureDis[executor.submit(self._outerloop, lenGrps, outerlen, rslens)] = outerlen
                 futureRes = dict()
                 for future in concurrent.futures.as_completed(futureDis.keys()):
-                    futureRes[futureDis[future]] = future.result()
+                    try:
+                        futureRes[futureDis[future]] = future.result()
+                    except BrokenProcessPool as e:
+                        import IPython
+                        print("Process failed. outerlen ", outerlen)
+                        print()
+                        IPython.embed()
+                        raise e
                 for ol in rslens:
                     for diss in futureRes[ol]:
                         dissCount += 1
@@ -896,7 +906,7 @@ class DistanceCalculator(object):
             distanceMax['sqeuclidean'] = dimensions * domainSize**2
         return 1 / distanceMax[method]
 
-    def neigbors(self, segment: AbstractSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
+    def neighbors(self, segment: AbstractSegment, subset: List[MessageSegment]=None) -> List[Tuple[int, float]]:
         # noinspection PyUnresolvedReferences
         """
 
@@ -920,7 +930,7 @@ class DistanceCalculator(object):
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
         Calculated distances for 37 segment pairs in ... seconds.
-        >>> nbrs = dc.neigbors(segments[2], segments[3:7])
+        >>> nbrs = dc.neighbors(segments[2], segments[3:7])
         >>> dsts = [dc.pairDistance(segments[2], segments[3]),
         ...         dc.pairDistance(segments[2], segments[4]),
         ...         dc.pairDistance(segments[2], segments[5]),
@@ -954,9 +964,11 @@ class DistanceCalculator(object):
 
     @staticmethod
     def _checkCacheFile(analysisTitle: str, tokenizer: str, pcapfilename: str):
-        from os.path import splitext, basename, exists
+        from os.path import splitext, basename, exists, join
+        from nemere.utils.evaluationHelpers import cacheFolder
         pcapName = splitext(basename(pcapfilename))[0]
         dccachefn = 'cache-dc-{}-{}-{}.{}'.format(analysisTitle, tokenizer, pcapName, 'dc')
+        dccachefn = join(cacheFolder, dccachefn)
         if not exists(dccachefn):
             return False, dccachefn
         else:
@@ -1074,8 +1086,14 @@ class Template(AbstractSegment):
     @property
     def bytes(self):
         if isinstance(self._values, numpy.ndarray):
-            return bytes(self._values.astype(int).tolist())
+            if any(numpy.isnan(self._values)):
+                return None  # TODO relevant for #10
+            bi = self._values.astype(int).tolist()
+            # noinspection PyTypeChecker
+            return bytes(bi)
         if isinstance(self._values, Iterable):
+            if any(numpy.isnan(self._values)):
+                return None  # TODO relevant for #10
             return bytes(self._values)
         return None
 
@@ -1087,7 +1105,7 @@ class Template(AbstractSegment):
 
     def checkSegmentsAnalysis(self):
         """
-        Validate that all base segments of this tempalte are configured with the same type of analysis.
+        Validate that all base segments of this template are configured with the same type of analysis.
 
         :raises: ValueError if not all analysis types and parameters of the base segments are identical.
         :return: Doesn't return anything if all is well. Raises a ValueError otherwise.
@@ -1169,7 +1187,7 @@ class Template(AbstractSegment):
         0.246...   0
         0.373...   0
         0.285...   0
-        0.5...   1
+        0.539...   1
         0.497...   0
         0.825...  -3
         0.682...   1
@@ -1233,6 +1251,7 @@ class Template(AbstractSegment):
             segments = segment
         else:
             segments = [segment]
+        # noinspection PyArgumentList
         return dc.distancesSubset(segments, self.baseSegments).min()
 
     def __hash__(self):
@@ -1319,7 +1338,7 @@ Methods/properties (including super's)
 * returning translation from segment to representative's indices:
   * segments2index()
   * internally: pairDistance() / distancesSubset()
-  * internally: neigbors
+  * internally: neighbors
   * internally: findMedoid
 """
 class DelegatingDC(DistanceCalculator):
@@ -1469,12 +1488,8 @@ class DelegatingDC(DistanceCalculator):
                             numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
         raise NotImplementedError()
 
-    @staticmethod
-    def _templates4Paddings(segments: Iterable[MessageSegment]):
-        raise NotImplementedError()
 
-
-    def segments2index(self, segmentList: Iterable[MessageSegment]):
+    def segments2index(self, segmentList: Iterable[AbstractSegment]):
         # noinspection PyUnresolvedReferences
         """
         Look up the indices of the given segments.
@@ -1554,7 +1569,7 @@ class DelegatingDC(DistanceCalculator):
         b = self._seg2idx[B] if B in self._seg2idx else self.reprMap[B]
         return self._distances[a, b]
 
-    def distancesSubset(self, As: Sequence[MessageSegment], Bs: Sequence[MessageSegment] = None) \
+    def distancesSubset(self, As: Sequence[AbstractSegment], Bs: Sequence[AbstractSegment] = None) \
             -> numpy.ndarray:
         """
         Retrieve a matrix of pairwise distances for two lists of segments, resolving representatives internally if necessary.

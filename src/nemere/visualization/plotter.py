@@ -3,6 +3,9 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
+from nemere.utils.evaluationHelpers import reportFolder
+
+
 class MessagePlotter(object):
     """
     Define basic functions and properties to plot messages.
@@ -32,6 +35,7 @@ class MessagePlotter(object):
         self._specimens = specimens
         self._title = analysisTitle
         self._interactive = isInteractive
+        self._autoLegend = True
 
     @property
     def title(self) -> str:
@@ -41,18 +45,20 @@ class MessagePlotter(object):
     # def figure(self):
     #     return self._figure
 
-
-    def writeOrShowFigure(self):
+    def writeOrShowFigure(self, plotfolder: str=None):
         """
+        :param plotfolder: Folder to place the plot in. If not set, use reportFolder from nemere.utils.evaluationHelpers
+
         If isInteractive was set to true, show the plot in a window, else write it to a file,
         if none of the same name already exists. Closes all figures afterwards.
         """
-        from nemere.utils.evaluationHelpers import reportFolder
-
+        if plotfolder is None:
+            plotfolder = reportFolder
         pcapName = splitext(basename(self._specimens.pcapFileName))[0]
-        plotfile = join(reportFolder, '{}_{}.pdf'.format(self._title, pcapName))
+        plotfile = join(plotfolder, '{}_{}.pdf'.format(self._title, pcapName))
 
-        plt.legend()
+        if self._autoLegend:
+            plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))
         plt.tight_layout(rect=[0,0,1,.95])
 

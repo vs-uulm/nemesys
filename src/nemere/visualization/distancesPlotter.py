@@ -2,8 +2,10 @@ import numpy
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
-from typing import List, Any, Union
+from typing import List, Any, Union, Sequence
 from itertools import compress
+from sklearn import manifold
+from sklearn.decomposition import PCA
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
@@ -20,25 +22,130 @@ class DistancesPlotter(MessagePlotter):
     """
 
     def __init__(self, specimens: BaseLoader, analysisTitle: str,
-                 isInteractive: bool=False):
+                 isInteractive: bool=False, plotSegmentValues=False):
         super().__init__(specimens, analysisTitle, isInteractive)
+        self._autoLegend = False
 
+        # # plot configuration
         plt.rc('xtick', labelsize=10)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=10)  # fontsize of the tick labels
 
         self._fig, self._axes = plt.subplots(1,2, figsize=(10,5))  # type: plt.Figure, numpy.ndarray
         if not isinstance(self._axes, numpy.ndarray):
             self._axes = numpy.array(self._axes)
-        self._fig.set_size_inches(16, 9)
-        # self._cm = cm.Set1  # has 9 colors
-        # self._cm = cm.tab20 # 20 colors
+        self._fig.set_size_inches(16, 8)
+        # self.cm = cm.Set1  # has 9 colors
+        # self.cm = cm.tab20 # 20 colors
         # noinspection PyUnresolvedReferences
-        self._cm = cm.jet  # type: colors.LinearSegmentedColormap
+        self.cm = cm.jet  # type: colors.LinearSegmentedColormap
+        """label color map"""
+        # noinspection PyUnresolvedReferences
+        self.fcm = cm.cubehelix
+        """type color map"""
+        self.labsize = 150
+        """label markers: size factor"""
+        self.typsize = 30
+        """type markers: size factor"""
+        self.maxSamples = 1000
+        """subsample the elements to plot if they are above this threshold"""
+        self._plotSegmentValues = plotSegmentValues
+
+    @property
+    def axesFlat(self):
+        return self._axes.flat
+
+    def subsample(self,
+                  segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
+                  distances: numpy.ndarray, labels: numpy.ndarray):
+        """
+        subsample the elements to plot if they are above the maxSamples threshold.
+
+        :param segments: The original segments, messages or other elements to be plotted.
+        :param distances: The pairwise distances between all of the original segments
+        :param labels: The labels for each of the original segments
+        :return: if subsampling was necessary, a tuple of
+            (originalSegmentCount, and subsampled values for segments, distances, labels),
+            else: False
+        """
+        originalSegmentCount = len(segments)
+        if originalSegmentCount > 2 * self.maxSamples:
+            import math
+            ratiorev = originalSegmentCount / self.maxSamples
+            step2keep = math.floor(ratiorev)
+            lab2idx = dict()
+            for idx, lab in enumerate(labels):
+                if lab not in lab2idx:
+                    lab2idx[lab] = list()
+                lab2idx[lab].append(idx)
+            # copy list to remove elements without side-effects
+            segments = segments.copy()
+            # to save the indices to be removed
+            idx2rem = list()
+            # determines a subset evenly distributed over all clusters while honoring the ratio to reduce to.
+            for lab, ics in lab2idx.items():
+                keep = set(ics[::step2keep])
+                idx2rem.extend(set(ics) - keep)
+            idx2rem = sorted(idx2rem, reverse=True)
+            for idx in idx2rem:
+                del segments[idx]
+            labels = numpy.delete(labels, idx2rem, 0)
+            distances = numpy.delete(numpy.delete(distances, idx2rem, 0), idx2rem, 1)
+            return originalSegmentCount, segments, distances, labels
+        else:
+            return False
+
+    @staticmethod
+    def manifoldPositions(distances: numpy.ndarray):
+        """prepare the 2 dimensionally projected positions for the input"""
+        # prepare MDS
+        seed = numpy.random.RandomState(seed=3)
+        mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
+                           dissimilarity="precomputed", n_jobs=1)
+        pos = mds.fit(distances).embedding_
+        # Rotate the data
+        clf = PCA(n_components=2)
+        return clf.fit_transform(pos)
+
+    @staticmethod
+    def uniqueLabels(labels: numpy.ndarray,
+                     segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]]) \
+            -> List:
+        """identify unique labels"""
+        allabels = set(labels)
+        if None in allabels:
+            allabels.remove(None)
+        if False in allabels:
+            allabels.remove(False)
+        if all(isinstance(l, numpy.integer) or l.isdigit() for l in allabels if l != "Noise"):
+            ulab = sorted(allabels,
+                          key=lambda l: -1 if l == "Noise" else int(l))
+        else:
+            ulab = sorted(allabels)
+
+        # omit noise in cluster labels if types are plotted anyway.
+        # the different handling is necessary due to the different noise markers in segments and messages.
+        if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
+            for l in ulab:
+                # find a string label containing "Noise" and remove it
+                if isinstance(l, str) and "Noise" in l:
+                    ulab.remove(l)
+        elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
+            for l in ulab:
+                # find a -1 integer label and remove it
+                try:
+                    if int(l) == -1:
+                        ulab.remove(l)
+                except ValueError:
+                    pass  # not a problem, just keep the cluster, since its not noise.
+        return ulab
 
 
-    def plotManifoldDistances(self, segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
+    def plotManifoldDistances(self,
+                              segments: List[Union[MessageSegment, TypedSegment, TypedTemplate, Template, RawMessage, Any]],
                               distances: numpy.ndarray,
-                              labels: numpy.ndarray, templates: List=None, plotEdges = False, countMarkers = False):
+                              labels: numpy.ndarray,
+                              templates: List=None, plotEdges = False, countMarkers = False):
+        # noinspection PyUnresolvedReferences
         """
         Plot distances of segments according to (presumably multidimensional) features.
         This function abstracts from the actual feature by directly taking a precomputed similarity matrix and
@@ -93,94 +200,37 @@ class DistancesPlotter(MessagePlotter):
             quickly becomes a huge load especially when rendering the plot as PDF.
         :param countMarkers: add text labels with information at positions with multiple markers
         """
-        from sklearn import manifold
-        from sklearn.decomposition import PCA
+        assert isinstance(segments, Sequence)
+        assert isinstance(distances, numpy.ndarray)
+        assert isinstance(labels, numpy.ndarray)
+        assert len(segments) == distances.shape[0] == distances.shape[1]
 
-        # plot configuration
-        labsize = 150  # label markers: size factor
-        typsize = 30   # type markers: size factor
-        # self._cm          # label color map
-        fcm = cm.cubehelix  # type color map
-
-        # identify unique labels
-        allabels = set(labels)
-        if all(isinstance(l, numpy.integer) or l.isdigit() for l in allabels if l != "Noise"):
-            ulab = sorted(allabels,
-                          key=lambda l: -1 if l == "Noise" else int(l))
-        else:
-            ulab = sorted(allabels)
+        axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
+        axMDS.set_aspect('equal', adjustable='datalim')
 
         # subsample if segment count is larger than maxSamples
-        maxSamples = 1000
-        originalSegmentCount = len(segments)
-        if originalSegmentCount > 2*maxSamples:
-            import math
-            ratiorev = originalSegmentCount / maxSamples
-            step2keep = math.floor(ratiorev)
-            lab2idx = dict()
-            for idx, lab in enumerate(labels):
-                if lab not in lab2idx:
-                    lab2idx[lab] = list()
-                lab2idx[lab].append(idx)
-            # copy list to remove elements without side-effects
-            segments = segments.copy()
-            # to save the indices to be removed
-            idx2rem = list()
-            # determines a subset evenly distributed over all clusters while honoring the ratio to reduce to.
-            for lab, ics in lab2idx.items():
-                keep = set(ics[::step2keep])
-                idx2rem.extend(set(ics) - keep)
-            idx2rem = sorted(idx2rem, reverse=True)
-            for idx in idx2rem:
-                del segments[idx]
-            labels = numpy.delete(labels, idx2rem, 0)
-            distances = numpy.delete(numpy.delete(distances, idx2rem, 0), idx2rem, 1)
-        else:
-            idx2rem = None
+        subret = self.subsample(segments, distances, labels)
+        if subret:
+            originalSegmentCount, segments, distances, labels = subret
+            if self._plotSegmentValues:
+                botlef = (0, -5)
+            else:
+                botlef = (0.1, 0.1)
+            axSeg.text(*botlef, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
+            # without subsampling, existing values need not to be overwritten
 
+        pos = DistancesPlotter.manifoldPositions(distances)
 
-        # prepare MDS
-        seed = numpy.random.RandomState(seed=3)
-        mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed,
-                           dissimilarity="precomputed", n_jobs=1)
-        pos = mds.fit(distances).embedding_
-        # print(distances)
-
-        # Rotate the data
-        clf = PCA(n_components=2)
-
-        pos = clf.fit_transform(pos)
-
-
-        fig = self._fig
-        axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
-
-        if idx2rem is not None:
-            axSeg.text(0, -5, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
-
-        # omit noise in cluster labels if types are plotted anyway.
-        if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
-            for l in ulab:
-                if isinstance(l, str) and "Noise" in l:
-                    ulab.remove(l)
-        elif isinstance(segments[0], RawMessage) and segments[0].messageType != "Raw":
-            for l in ulab:
-                try:
-                    if int(l) == -1:
-                        ulab.remove(l)
-                except ValueError as e:
-                    pass  # not a problem, just keep the cluster, since its not noise.
-
-        # prepare color space
-        cIdx = [int(round(each)) for each in numpy.linspace(2, self._cm.N-2, len(ulab))]
+        # identify unique labels
+        ulab = DistancesPlotter.uniqueLabels(labels, segments)
         if templates is None:
             templates = ulab
-        # iterate unique labels and scatter plot each of these clusters
+        # prepare color space
+        cIdx = [int(round(each)) for each in numpy.linspace(2, self.cm.N - 2, len(ulab))]
+
+        # CLUSTERS (large bobbles): iterate unique labels and scatter plot each of these clusters
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
-            # test with:
-            # color = [list(numpy.random.randint(0, 10, 4) / 10)]
-            # plt.scatter(numpy.random.randint(0,10,4), numpy.random.randint(0,10,4), c=color)
-            lColor = self._cm(cIdx[c])
+            lColor = self.cm(cIdx[c])
             class_member_mask = (labels == l)
             try:
                 x = list(compress(pos[:, 0].tolist(), class_member_mask))
@@ -188,7 +238,7 @@ class DistancesPlotter(MessagePlotter):
                 # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
                 # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
                 axMDS.scatter(x, y, c=colors.to_rgba_array(lColor), alpha=.6,
-                              s = labsize,
+                              s = self.labsize,
                               # s=s-(c*s/len(ulab)),  #
                               lw=0, label=str(l))
             except IndexError as e:
@@ -197,54 +247,56 @@ class DistancesPlotter(MessagePlotter):
                 print(segments)
                 raise e
 
-            if isinstance(t, Template):
+            if isinstance(t, Template) and self._plotSegmentValues:
                 axSeg.plot(t.values, c=lColor, linewidth=4)
 
-
-        # include field type labels for TypedSegments input
+        # GROUND TRUTH (small bobbles): include field type labels for TypedSegments input
         if any(isinstance(seg, (TypedSegment, TypedTemplate, RawMessage)) for seg in segments):
             if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
-                ftypes = numpy.array([seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else "[unknown]" for seg in segments])  # PP
+                ftypes = numpy.array([seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate))
+                                      else "[unknown]" for seg in segments])  # PP
             elif any(isinstance(seg, RawMessage) and seg.messageType != 'Raw' for seg in segments):
-                ftypes = numpy.array([msg.messageType if isinstance(msg, RawMessage) and msg.messageType != 'Raw' else "[unknown]" for msg in segments])  # PP
+                ftypes = numpy.array([msg.messageType if isinstance(msg, RawMessage) and msg.messageType != 'Raw'
+                                      else "[unknown]" for msg in segments])  # PP
             else:
                 ftypes = set()
             # identify unique types
             utyp = sorted(set(ftypes))
             # prepare color space
-            # noinspection PyUnresolvedReferences
-            cIdx = [int(round(each)) for each in numpy.linspace(30, fcm.N - 30, len(utyp))]
+            cIdx = [int(round(each)) for each in numpy.linspace(30, self.fcm.N - 30, len(utyp))]
             # iterate unique types and scatter plot each of these groups
             for n, ft in enumerate(utyp):  # PP
-                fColor = fcm(cIdx[n])
+                fColor = self.fcm(cIdx[n])
                 type_member_mask = (ftypes == ft)
                 x = list(compress(pos[:, 0].tolist(), type_member_mask))
                 y = list(compress(pos[:, 1].tolist(), type_member_mask))
                 # "If you want to specify the same RGB or RGBA value for all points, use a 2-D array with a single row."
                 # see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.scatter.html:
                 axMDS.scatter(x, y, c=colors.to_rgba_array(fColor), alpha=1,
-                          s=typsize,
+                          s=self.typsize,
                           lw=0, label=str(ft))
 
-                if isinstance(segments[0], (TypedSegment, TypedTemplate)):
+                if isinstance(segments[0], (TypedSegment, TypedTemplate)) and self._plotSegmentValues:
                     for seg in compress(segments, type_member_mask):
                         axSeg.plot(seg.values, c=fColor, alpha=0.05)
-        elif isinstance(segments[0], MessageSegment):
+        elif isinstance(segments[0], MessageSegment) and self._plotSegmentValues:
             for c, l in enumerate(ulab):
-                lColor = self._cm(cIdx[c])
+                lColor = self.cm(cIdx[c])
                 class_member_mask = (labels == l)
                 for seg in compress(segments, class_member_mask):
                     axSeg.plot(seg.values, c=lColor, alpha=0.1)
-        else:
-            axSeg.text(.5, .5, 'nothing to plot\n(message alignment)', horizontalalignment='center')
+        elif self._plotSegmentValues:
+                axSeg.text(.5, .5, 'nothing to plot\n(message alignment)', horizontalalignment='center')
 
-
-        # place the label/type legend at the best position
-        if isinstance(segments[0], RawMessage):
-            axMDS.legend(bbox_to_anchor=(1.04,1), scatterpoints=1, shadow=False)
+        # place the label/type legend in the (otherwise empty) axSeg subfigure
+        if isinstance(segments[0], RawMessage) or not self._plotSegmentValues:
+            legendHandles, legendLabels = axMDS.get_legend_handles_labels()
+            # axMDS.legend(bbox_to_anchor=(1.04,1), scatterpoints=1, shadow=False)
+            axSeg.legend(handles=legendHandles, labels=legendLabels, loc='best', scatterpoints=1, shadow=False)
             axSeg.patch.set_alpha(0.0)
             axSeg.axis('off')
         else:
+            # place the label/type legend at the best position
             axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
 
@@ -263,7 +315,6 @@ class DistancesPlotter(MessagePlotter):
             lc.set_array(distances.flatten())
             lc.set_linewidths(0.5 * numpy.ones(len(segments)))
             axMDS.add_collection(lc)
-
 
         if countMarkers:
             # Count markers at identical positions and plot text with information about the markers at this position
@@ -289,26 +340,25 @@ class DistancesPlotter(MessagePlotter):
                     posYr = posY + r * math.sin(theta)
                     axMDS.text(posXr, posYr, "{}: {}".format(lab, cnt), withdash=True)
 
-
-        fig.canvas.toolbar.update()
+        if self._fig.canvas.toolbar is not None:
+            self._fig.canvas.toolbar.update()
 
 
     def _plot2dDistances(self, segments: List[MessageSegment], labels: List,
                                templates: List = None):
-        fig = self._fig
         axMDS, axSeg = self._axes
 
         ulab = sorted(set(labels))
-        cIdx = [each for each in numpy.linspace(0, self._cm.N - 2, len(ulab))]
+        cIdx = [each for each in numpy.linspace(0, self.cm.N - 2, len(ulab))]
 
         if templates is None:
             templates = ulab
 
         coords = numpy.array([seg.values for seg in segments])  # type: numpy.ndarray
 
-        s = 150  # size factor
+        # s = 150  # size factor
         for c, (l, t) in enumerate(zip(ulab, templates)):  # type: int, (Any, Template)
-            lColor = self._cm(int(round(cIdx[c])))
+            lColor = self.cm(int(round(cIdx[c])))
             class_member_mask = (labels == l)
             try:
                 x = list(compress(coords[:, 0].tolist(), class_member_mask))
@@ -335,7 +385,8 @@ class DistancesPlotter(MessagePlotter):
 
         axMDS.legend(scatterpoints=1, loc='best', shadow=False)
 
-        fig.canvas.toolbar.update()
+        if self._fig.canvas.toolbar is not None:
+            self._fig.canvas.toolbar.update()
 
 
 

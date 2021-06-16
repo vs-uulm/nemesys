@@ -27,7 +27,6 @@ def sad(v, u):
         raise ValueError("Vectors need to be of equal length.")
     return numpy.sum(numpy.abs(numpy.subtract(v, u)))
 
-
 def tril(arrayIn: numpy.ndarray) -> numpy.ndarray:
     """
     >>> a = numpy.array([[1,2,3,4],[2,3,4,5],[3,4,5,6],[4,5,6,7]])
@@ -35,12 +34,21 @@ def tril(arrayIn: numpy.ndarray) -> numpy.ndarray:
     array([2, 3, 4, 4, 5, 6])
 
     :param arrayIn: a symmetrical matrix
-    :return: lower triangle values of arrayIn removing the identity (diagonal).
+    :return: Value list of the lower triangle of arrayIn without the identity (diagonal).
     """
     premask = numpy.full_like(arrayIn, True, bool)
-    mask = numpy.tril(premask, k=-1)  # mask including the first diagonal
+    mask = numpy.tril(premask, k=-1)  # mask also including the first diagonal
     return arrayIn[mask]
 
+def trilNaN(distances: numpy.ndarray):
+    """
+    :param distances: a symmetrical matrix
+    :return: lower triangle in original shape. Upper triangle and identity (diagonal) set to nan.
+    """
+    mask = numpy.tril(numpy.full_like(distances, True, bool), k=-1)
+    dist = distances.copy()
+    dist[~mask] = numpy.nan
+    return dist
 
 def generateTestSegments():
     from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage

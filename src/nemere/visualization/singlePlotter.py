@@ -208,6 +208,7 @@ class SingleMessagePlotter(MessagePlotter):
         for symbol in symbols:
             for message in symbol.messages:  # type: AbstractMessage
                 maxLen = max(maxLen, len(message.data))
+                # TODO catch WatchdogTimeout in callers of fieldEndsPerSymbol
                 cumulatedFieldEnds.update(
                     MessageComparator.fieldEndsPerSymbol(symbol, message)[:-1])  # omit message end
 

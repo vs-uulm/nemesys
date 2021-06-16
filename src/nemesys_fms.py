@@ -16,9 +16,8 @@ from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchSco
 from nemere.utils.loader import SpecimenLoader
 from nemere.inference.analyzers import *
 from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
-    baseRefinements, originalRefinements, symbolsFromSegments
-from nemere.validation import reportWriter
-
+    baseRefinements, symbolsFromSegments
+from nemere.utils import reportWriter
 
 debug = False
 """Some modules and methods contain debug output that can be activated by this flag."""

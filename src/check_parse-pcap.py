@@ -27,6 +27,7 @@ if __name__ == '__main__':
         specimens = SpecimenLoader(args.pcapfilename, args.targetlayer, args.relativeToIP)
     else:
         specimens = SpecimenLoader(args.pcapfilename)
+    print('Loaded PCAP file:', specimens.pcapFileName)
     pkt = list(specimens.messagePool.values())
 
     st = time.time()

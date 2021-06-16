@@ -117,15 +117,16 @@ class ClusterAligner(object):
 
 class ClusterMerger(ClusterAligner):
 
-    def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator):
+    def __init__(self, alignedClusters: Dict[int, List], dc: DistanceCalculator,
+                 messageTuplesClusters: Dict[int, List[Tuple[MessageSegment]]]):
         self.mismatchGrace = .2
         super().__init__(alignedClusters, dc)
-
+        self.messageTuplesClusters = messageTuplesClusters
 
     # # # # # # # # # # # # # # # # # # #
     # An experimentation protocol for design decisions exists!
     # # # # # # # # # # # # # # # # # # #
-    def alignFieldClasses(self, mmg=(0, -1, 5)):
+    def _alignFieldClasses(self, mmg=(0, -1, 5)):
         fclassHirsch, statDynFields, statDynValues = self.generateHirsch(mmg)
 
         statDynValuesMap = {sdv: idx for idx, sdv in enumerate(statDynValues)}
@@ -142,8 +143,7 @@ class ClusterMerger(ClusterAligner):
         # IPython.embed()
         return alignedFieldClasses
 
-
-    def gapMerging4nemesys(self, alignedFieldClasses):
+    def _gapMerging4nemesys(self, alignedFieldClasses):
         from tabulate import tabulate
         import IPython
 
@@ -195,8 +195,8 @@ class ClusterMerger(ClusterAligner):
                 cid = 0
                 while cid < len(changes):
                     rid, (mid, sab) = changes[cid]
-                    mergedValues = tuple(newFC[sab][mid].values + newFC[sab][rid].values if rid > mid \
-                        else newFC[sab][rid].values + newFC[sab][mid].values)
+                    mergedValues = tuple(newFC[sab][mid].values) + tuple(newFC[sab][rid].values) if rid > mid \
+                        else tuple(newFC[sab][rid].values) + tuple(newFC[sab][mid].values)
                     mergedSTA = None
                     for seg in self.dc.segments:
                         if tuple(seg.values) == mergedValues:
@@ -240,12 +240,10 @@ class ClusterMerger(ClusterAligner):
                 alignedFieldClassesRefined[cluPair] = alignedFieldClasses[cluPair]
         return alignedFieldClassesRefined
 
+    def _generateMatchingConditions(self, alignedFieldClasses):
+        return self._generateMatchingConditionsAlt1(alignedFieldClasses)
 
-    def generateMatchingConditions(self, alignedFieldClasses):
-        return self.generateMatchingConditionsAlt1(alignedFieldClasses)
-
-
-    def generateMatchingConditionsAlt1(self, alignedFieldClasses):
+    def _generateMatchingConditionsAlt1(self, alignedFieldClasses):
         """
         fixed threshold for DYN-STA mix: 0.7 > afcA.distToNearest(afcB)
 
@@ -278,8 +276,7 @@ class ClusterMerger(ClusterAligner):
             for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
         ] for clunuA, clunuB in alignedFieldClasses.keys()}
 
-
-    def generateMatchingConditionsAlt2(self, alignedFieldClasses):
+    def _generateMatchingConditionsAlt2(self, alignedFieldClasses):
         """
         alternative dynamic threshold for DYN-STA mix: dist(STA, DYN.medoid) <= DYN.maxDistToMedoid()
 
@@ -317,9 +314,8 @@ class ClusterMerger(ClusterAligner):
             for afcA, afcB in zip(*alignedFieldClasses[(clunuA, clunuB)])
         ] for clunuA, clunuB in alignedFieldClasses.keys()}
 
-
     @staticmethod
-    def selectMatchingClusters(alignedFieldClasses, matchingConditions):
+    def _selectMatchingClusters(alignedFieldClasses, matchingConditions):
 
         def lenAndTrue(boolist, length=2, truths=0):
             return len(boolist) <= length and len([a for a in boolist if a]) > truths
@@ -394,9 +390,8 @@ class ClusterMerger(ClusterAligner):
               # or onlyMSdistMatch(clunuA, clunuB)
         ]
 
-
-    def mergeClusters(self, messageClusters, clusterStats, alignedFieldClasses,
-                      matchingClusters, matchingConditions):
+    def _mergeClusters(self, messageClusters, clusterStats, alignedFieldClasses,
+                       matchingClusters, matchingConditions):
         import IPython
         from tabulate import tabulate
         from nemere.utils.evaluationHelpers import printClusterMergeConditions
@@ -420,9 +415,7 @@ class ClusterMerger(ClusterAligner):
         remDue2gapsInARow = list()
         for clunuAB in matchingClusters:
             for flip in (0, 1):
-                globals().update(locals())
                 rowOfGaps = [a[flip] for a in matchingConditions[clunuAB][1:]]
-                globals().update(locals())
                 startOfGroups = [i for i, g in enumerate(rowOfGaps) if g and i > 1 and not rowOfGaps[i - 1]]
                 endOfGroups = [i for i, g in enumerate(rowOfGaps) if
                                g and i < len(rowOfGaps) - 1 and not rowOfGaps[i + 1]]
@@ -430,7 +423,6 @@ class ClusterMerger(ClusterAligner):
                     endOfGroups.append(startOfGroups[-1])
                 if len(endOfGroups) > 0 and endOfGroups[0] == 0:
                     startOfGroups = [0] + startOfGroups
-                globals().update(locals())
                 # field index before and after all gap groups longer than 2
                 groupOfLonger = [(sog - 1, eog + 1) for sog, eog in zip(startOfGroups, endOfGroups) if sog < eog - 1]
                 for beforeGroup, afterGroup in groupOfLonger:
@@ -559,13 +551,14 @@ class ClusterMerger(ClusterAligner):
         connectedClusters = list(connected_components(chainedRemains))
 
         # for statistics
-        missedmerges = ClusterClusterer.printShouldMerge(connectedClusters, clusterStats)
-        missedmergepairs = [k for k in remainingClusters if any(
-            [k[0] in mc and k[1] in mc or
-             k[0] in mc and k[1] in chain.from_iterable([cc for cc in connectedClusters if k[0] in cc]) or
-             k[0] in chain.from_iterable([cc for cc in connectedClusters if k[1] in cc]) and k[1] in mc
-             for mc in missedmerges]
-        )]
+        if clusterStats is not None:
+            missedmerges = ClusterClusterer.printShouldMerge(connectedClusters, clusterStats)
+            missedmergepairs = [k for k in remainingClusters if any(
+                [k[0] in mc and k[1] in mc or
+                 k[0] in mc and k[1] in chain.from_iterable([cc for cc in connectedClusters if k[0] in cc]) or
+                 k[0] in chain.from_iterable([cc for cc in connectedClusters if k[1] in cc]) and k[1] in mc
+                 for mc in missedmerges]
+            )]
 
         singleClusters = {ck: ml for ck, ml in messageClusters.items() if not chainedRemains.has_node(ck)}
         mergedClusters = {str(mergelist):
@@ -575,7 +568,15 @@ class ClusterMerger(ClusterAligner):
 
         return mergedClusters
 
-
+    def merge(self, forNemesys=False, clusterStats=None):
+        alignedFieldClasses = self._alignFieldClasses((0, -1, 5))  # TODO alt1
+        # alignedFieldClasses = clustermerger._alignFieldClasses((0, -5, 5))  # TODO alt2
+        if forNemesys:
+            alignedFieldClasses = self._gapMerging4nemesys(alignedFieldClasses)
+        matchingConditions = self._generateMatchingConditions(alignedFieldClasses)
+        matchingClusters = ClusterMerger._selectMatchingClusters(alignedFieldClasses, matchingConditions)
+        return self._mergeClusters(self.messageTuplesClusters, clusterStats, alignedFieldClasses,
+                                   matchingClusters, matchingConditions)
 
 
 class ClusterClusterer(ClusterAligner):
@@ -584,8 +585,6 @@ class ClusterClusterer(ClusterAligner):
         super().__init__(alignedClusters, dc)
         self.clusterOrder = [clunu for clunu in sorted(alignedClusters.keys()) if clunu != -1]
         self.distances = self.calcClusterDistances()
-
-
 
     def calcClusterDistances(self, mmg=(0, -1, 5)):
         from nemere.inference.segmentHandler import matrixFromTpairs
@@ -624,13 +623,11 @@ class ClusterClusterer(ClusterAligner):
         assert distanceMatrix.min() >= 0, "prevent negative values for highly mismatching messages"
         return distanceMatrix
 
-
     def neighbors(self):
         neighbors = list()
         for idx, dists in enumerate(self.distances):  # type: int, numpy.ndarray
             neighbors.append(sorted([(i, d) for i, d in enumerate(dists) if i != idx], key=lambda x: x[1]))
         return neighbors
-
 
     def autoconfigureDBSCAN(self):
         """
@@ -649,7 +646,7 @@ class ClusterClusterer(ClusterAligner):
         seconddiffMax = (0, 0, 0)
         # can we omit k = 0 ?
         # No - recall and even more so precision deteriorates for dns and dhcp (1000s)
-        for k in range(0, ceil(log(len(neighbors) ** 2))):  # first log(n^2)   alt.: // 10 first 10% of k-neigbors
+        for k in range(0, ceil(log(len(neighbors) ** 2))):  # first log(n^2)   alt.: // 10 first 10% of k-neighbors
             knearest[k] = sorted([nfori[k][1] for nfori in neighbors])
             smoothknearest[k] = gaussian_filter1d(knearest[k], sigma)
             # max of second difference (maximum positive curvature) as knee (this not actually the knee!)
@@ -667,7 +664,6 @@ class ClusterClusterer(ClusterAligner):
         print("eps {:0.3f} autoconfigured from k {}".format(epsilon, k))
         return epsilon, min_samples
 
-
     def clusterMessageTypesDBSCAN(self, eps = 1.5, min_samples = 3) \
             -> Tuple[Dict[int, List[int]], numpy.ndarray, DBSCAN]:
         clusterer = DBSCAN(metric='precomputed', eps=eps,
@@ -676,7 +672,6 @@ class ClusterClusterer(ClusterAligner):
         print("Messages: DBSCAN epsilon:", eps, "min samples:", min_samples)
         clusterClusters, labels = self._postprocessClustering(clusterer)
         return clusterClusters, labels, clusterer
-
 
     def _postprocessClustering(self, clusterer: Union[DBSCAN]) \
             -> Tuple[Dict[int, List[int]], numpy.ndarray]:

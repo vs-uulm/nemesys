@@ -1,16 +1,16 @@
 """
 Batch handling of multiple segments.
 """
-
 import numpy
 import copy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
 
 from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
+from nemere.utils.loader import BaseLoader
 from nemere.inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from nemere.inference.analyzers import MessageAnalyzer
-from nemere.inference.templates import AbstractClusterer, TypedTemplate, DistanceCalculator, DelegatingDC
+from nemere.inference.templates import TypedTemplate
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -49,12 +49,60 @@ def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> L
     """
     Generate a list of Netzob Symbols from the given lists of segments for each message.
 
+    >>> from nemere.inference.segmentHandler import symbolsFromSegments
+    >>> from nemere.inference.segments import MessageSegment
+    >>> from nemere.inference.analyzers import Value
+    >>> from netzob.Model.Vocabulary.Symbol import Symbol
+    >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    >>>
+    >>> dummymsg = RawMessage(bytes(list(range(20, 40))))
+    >>> dummyana = Value(dummymsg)
+    >>> testgapped = [[ MessageSegment(dummyana, 0, 2), MessageSegment(dummyana, 5, 2), MessageSegment(dummyana, 7, 6),
+    ...                MessageSegment(dummyana, 17, 2) ]]
+    >>> symbol = symbolsFromSegments(testgapped)[0]
+    >>> print(symbol)
+    Field      | Field          | Field      | Field                   | Field  | Field | Field
+    ---------- | -------------- | ---------- | ----------------------- | ------ | ----- | -----
+    '\x14\x15' | '\x16\x17\x18' | '\x19\x1a' | '\x1b\x1c\x1d\x1e\x1f ' | '!"#$' | '%&'  | "'"
+    ---------- | -------------- | ---------- | ----------------------- | ------ | ----- | -----
+
+    Intermediately produces:
+    ```
+    from pprint import pprint
+    pprint(filledSegments)
+    [[MessageSegment 2 bytes at (0, 2): 1415 | values: (20, 21),
+      MessageSegment 3 bytes at (2, 5): 161718 | values: (22, 23, 24),
+      MessageSegment 2 bytes at (5, 7): 191a | values: (25, 26),
+      MessageSegment 6 bytes at (7, 13): 1b1c1d1e1f20 | values: (27, 28, 29...,
+      MessageSegment 4 bytes at (13, 17): 21222324 | values: (33, 34, 35...,
+      MessageSegment 2 bytes at (17, 19): 2526 | values: (37, 38)]]
+    ````
+
     :param segmentsPerMsg: List of messages, represented by lists of segments.
     :return: list of Symbols, one for each entry in the given iterable of lists.
     """
-    return [Symbol( [Field(segment.bytes) for segment in sorted(segSeq, key=lambda f: f.offset)],
-                    messages=[segSeq[0].message])
-        for segSeq in segmentsPerMsg ]
+    sortedSegments = (sorted(segSeq, key=lambda f: f.offset) for segSeq in segmentsPerMsg)
+    filledSegments = list()
+    for segSeq in sortedSegments:
+        assert len(segSeq) > 0
+        filledGaps = list()
+        for segment in segSeq:
+            lastoffset = filledGaps[-1].nextOffset if len(filledGaps) > 0 else 0
+            if segment.offset > lastoffset:
+                gaplength = segment.offset - lastoffset
+                filledGaps.append(MessageSegment(segment.analyzer, lastoffset, gaplength))
+            filledGaps.append(segment)
+        # check for required trailing segment
+        lastoffset = filledGaps[-1].nextOffset
+        msglen = len(filledGaps[-1].message.data)
+        if lastoffset < msglen:
+            gaplength = msglen - lastoffset
+            filledGaps.append(MessageSegment(filledGaps[-1].analyzer, lastoffset, gaplength))
+        filledSegments.append(filledGaps)
+
+    return [ Symbol( [Field(segment.bytes) for segment in segSeq],
+                     messages=[segSeq[0].message], name=f"nemesys Symbol {i}" )
+             for i,segSeq in enumerate(filledSegments) ]
 
 
 def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
@@ -74,9 +122,8 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
     return tuple(segments)
 
 
-# TODO replace parameter comparator by specimens
-def segmentsFixed(length: int, comparator,
-                  analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, padded=False) \
+def fixedlengthSegmenter(length: int, specimens: BaseLoader,
+                         analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, padded=False) \
         -> List[Tuple[MessageSegment]]:
     """
     Segment messages into fixed size chunks.
@@ -84,10 +131,10 @@ def segmentsFixed(length: int, comparator,
     >>> from nemere.utils.loader import SpecimenLoader
     >>> from nemere.validation.dissectorMatcher import MessageComparator
     >>> from nemere.inference.analyzers import Value
-    >>> from nemere.inference.segmentHandler import segmentsFixed
+    >>> from nemere.inference.segmentHandler import fixedlengthSegmenter
     >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
     >>> comparator = MessageComparator(specimens, 2, True, debug=False)
-    >>> segmentedMessages = segmentsFixed(4, comparator, Value, None)
+    >>> segmentedMessages = fixedlengthSegmenter(4, specimens, Value, None)
     >>> areIdentical = True
     >>> for msgsegs in segmentedMessages:
     ...     msg = msgsegs[0].message
@@ -98,7 +145,7 @@ def segmentsFixed(length: int, comparator,
 
     :param length: Fixed length for all segments. Overhanging segments at the end that are shorter than length
         will be padded with NANs.
-    :param comparator: Comparator that contains the payload messages.
+    :param specimens: Loader utility class that contains the payload messages.
     :param analyzerType: Type of the analysis. Subclass of inference.analyzers.MessageAnalyzer.
     :param analysisArgs: Arguments for the analysis method.
     :param unit: Base unit for the analysis. Either MessageAnalyzer.U_BYTE or MessageAnalyzer.U_NIBBLE.
@@ -107,7 +154,7 @@ def segmentsFixed(length: int, comparator,
     :return: Segments of the analyzer's message according to the true format.
     """
     segments = list()
-    for l4msg, rmsg in comparator.messages.items():
+    for l4msg, rmsg in specimens.messagePool.items():
         if len(l4msg.data) % length == 0:  # exclude the overlap
             lastOffset = len(l4msg.data)
         else:
@@ -207,7 +254,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
 
 
 
-def refinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculator) -> List[List[MessageSegment]]:
+def refinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -217,27 +264,9 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]], dc: DistanceCalculat
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    return nemetylRefinements(segmentsPerMsg)
 
-    print("Refine segmentation...")
 
-    refinedPerMsg = list()
-    for msg in segmentsPerMsg:
-        # merge consecutive segments of printable-char values (\t, \n, \r, >= 0x20 and <= 0x7e) into one text field.
-        charsMerged = refine.MergeConsecutiveChars(msg).merge()
-        charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
-        refinedPerMsg.append(charSplited)
-
-    # for tests use test_segment-refinements.py
-    moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
-    newstuff = list()
-    for msg in refinedPerMsg:
-        croppedMsg = refine.CropDistinct(msg, moco).split()
-        charmerged = refine.CumulativeCharMerger(croppedMsg).merge()
-        splitfixed = refine.SplitFixed(charmerged).split(0, 1)
-        newstuff.append(splitfixed)
-
-    return newstuff
 
 
 def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
@@ -278,7 +307,7 @@ def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> Li
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (nemetyl refinements)...")
 
@@ -313,7 +342,7 @@ def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (char refinements)...")
 
@@ -341,9 +370,9 @@ def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    import inference.formatRefinement as refine
+    import nemere.inference.formatRefinement as refine
 
-    print("Refine segmentation (WOOT18 refinements)...")
+    print("Refine segmentation (original WOOT18 refinements)...")
 
     refinedPerMsg = list()
     for msg in segmentsPerMsg:
@@ -441,8 +470,6 @@ def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
-    from nemere.inference.formatRefinement import locateNonPrintable
-
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen
@@ -454,7 +481,7 @@ def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
                 # and 0.66 > len(locateNonPrintable(values)) / vallen  # from smb one-char-many-zeros segments
             )
 
-def filterChars(segments: Iterable[MessageSegment], meanCorridor=(50, 115), minLen=6):
+def filterChars(segments: Iterable[AbstractSegment], meanCorridor=(50, 115), minLen=6):
     """
     Filter segments by some hypotheses about what might be a char sequence:
         1. Segment is larger than minLen
@@ -475,3 +502,40 @@ def filterChars(segments: Iterable[MessageSegment], meanCorridor=(50, 115), minL
                 if isExtendedCharSeq(seg.bytes, meanCorridor, minLen)
                 ]
     return filtered
+
+
+def wobbleSegmentInMessage(segment: MessageSegment):
+    """
+    At start for now.
+
+    For end if would be, e. g.: if segment.nextOffset < len(segment.message.data):  segment.nextOffset + 1
+
+    :param segment:
+    :return:
+    """
+    wobbles = [segment]
+
+    if segment.offset > 0:
+        wobbles.append(MessageSegment(segment.analyzer, segment.offset - 1, segment.length + 1))
+    if segment.length > 1:
+        wobbles.append(MessageSegment(segment.analyzer, segment.offset + 1, segment.length - 1))
+
+    return wobbles
+
+
+def locateNonPrintable(bstring: bytes) -> List[int]:
+    """
+    A bit broader definition of printable than python string's isPrintable()
+
+    :param bstring: a string of bytes
+    :return: position of bytes not in \t, \n, \r or between >= 0x20 and <= 0x7e
+    """
+    from nemere.inference.formatRefinement import isPrintableChar
+
+    npr = list()
+    for idx, bchar in enumerate(bstring):
+        if isPrintableChar(bchar):
+            continue
+        else:
+            npr.append(idx)
+    return npr

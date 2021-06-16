@@ -58,6 +58,7 @@ This is highly experimental software and by no means guaranteed to be fit for pr
 
 ## Requirements
 * Python 3
+* libpcap for pcapy: `apt-get install libpcap-dev libpq-dev`
 * Install packages listed in requirements.txt: `pip install -r requirements.txt`
 	* This necessitates to install libpcap for pcapy: `sudo apt-get install libpcap-dev`
 * Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)

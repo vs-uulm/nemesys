@@ -199,7 +199,7 @@ class MultiMessagePlotter(MessagePlotter):
             self.nameEachAx(subfigName)
 
         if resultsLabel or compareLabel:
-            plt.legend()
+            self._fig.legend()
 
     # noinspection PyDefaultArgument
     def printMessageBytes(self, messages: List[AbstractMessage], fontdict={'size': 2}):
@@ -277,7 +277,7 @@ class MultiMessagePlotter(MessagePlotter):
             #     bvax.plot(analyzer.values,
             #               linewidth=.6, alpha=.6, c='blue', label='Bitvariances')
 
-        plt.figlegend()
+        self._fig.legend()
 
 
     def plotMultiSegmentLines(self, segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
@@ -314,6 +314,13 @@ class MultiMessagePlotter(MessagePlotter):
         """
         Plot values to selected subfigure.
 
+        >>> import nemere.visualization.multiPlotter
+        >>> import nemere.utils.loader
+        >>> import numpy
+        >>> loader = nemere.utils.loader.SpecimenLoader("input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap")
+        >>> mmp = nemere.visualization.multiPlotter.MultiMessagePlotter(loader, "test", 4)
+        >>> mmp.plotToSubfig(2, numpy.random.poisson(5,100), numpy.random.poisson(5,100))
+
         :param subfigid: Subfigure id to plot to.
         :param values: Values to plot.
         :param plotkwArgs: kwargs directly passed through to the pyplot plot function.
@@ -323,11 +330,12 @@ class MultiMessagePlotter(MessagePlotter):
 
 
     def histoToSubfig(self, subfigid: int, data, **kwargs):
-        self._axes.flat[subfigid].hist(data, **kwargs)
+        ret = self._axes.flat[subfigid].hist(data, **kwargs)
         self._axes.flat[subfigid].legend()
+        return ret
 
 
-    def writeOrShowFigure(self):
+    def writeOrShowFigure(self, plotfolder: str = None):
         for sf in self.axes:
             # deduplicate labels
             handles, labels = sf.get_legend_handles_labels()
@@ -337,7 +345,7 @@ class MultiMessagePlotter(MessagePlotter):
                     newLabels.append(label)
                     newHandles.append(handle)
             sf.legend(newHandles, newLabels)
-        super().writeOrShowFigure()
+        super().writeOrShowFigure(plotfolder)
 
 
 

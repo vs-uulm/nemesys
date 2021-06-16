@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from inference.segments import MessageSegment
+from nemere.inference.segments import MessageSegment
 
 
 def isPrintableChar(char: int):
@@ -24,21 +24,50 @@ def isPrintable(bstring: bytes) -> bool:
             return False
     return True
 
-
-def locateNonPrintable(bstring: bytes) -> List[int]:
+def isOverlapping(segA: MessageSegment, segB: MessageSegment) -> bool:
     """
-    A bit broader definition of printable than python string's isPrintable()
+    Determines whether the given segmentS overlap.
 
-    :param bstring: a string of bytes
-    :return: position of bytes not in \t, \n, \r or between >= 0x20 and <= 0x7e
+    >>> from nemere.inference.formatRefinement import isOverlapping
+    >>> from nemere.inference.segments import MessageSegment
+    >>> from nemere.inference.analyzers import Value
+    >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    >>> from itertools import combinations
+    >>>
+    >>> dummymsg = RawMessage(bytes(list(range(20, 40))))
+    >>> dummyana = Value(dummymsg)
+    >>> nonoverlapping = [ MessageSegment(dummyana, 0, 2), MessageSegment(dummyana, 5, 3),
+    ...                    MessageSegment(dummyana, 8, 6), MessageSegment(dummyana, 17, 2) ]
+    >>> overlapping1 = [ MessageSegment(dummyana, 0, 2), MessageSegment(dummyana, 1, 3) ]
+    >>> overlapping2 = [ MessageSegment(dummyana, 7, 6), MessageSegment(dummyana, 5, 6) ]
+    >>> noncomb = combinations(nonoverlapping, 2)
+    >>> for nc in noncomb:
+    ...     print(isOverlapping(*nc))
+    False
+    False
+    False
+    False
+    False
+    False
+    >>> print(isOverlapping(*overlapping1))
+    True
+    >>> print(isOverlapping(*overlapping2))
+    True
+    >>> print(isOverlapping(*reversed(overlapping1)))
+    True
+    >>> print(isOverlapping(*reversed(overlapping2)))
+    True
+
+    :param segA: The segment to check against.
+    :param segB: The segment to check against.
+    :return: Is overlapping or not.
     """
-    npr = list()
-    for idx, bchar in enumerate(bstring):
-        if isPrintableChar(bchar):
-            continue
-        else:
-            npr.append(idx)
-    return npr
+    if segA.message == segB.message \
+            and (segA.offset < segB.nextOffset
+             and segB.offset < segA.nextOffset):
+        return True
+    else:
+        return False
 
 
 class MessageModifier(ABC):
@@ -497,9 +526,9 @@ class CumulativeCharMerger(MessageModifier):
         """
         Perform the merging.
 
-        >>> from utils.loader import SpecimenLoader
-        >>> from inference.segmentHandler import bcDeltaGaussMessageSegmentation
-        >>> from inference.formatRefinement import CumulativeCharMerger
+        >>> from nemere.utils.loader import SpecimenLoader
+        >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from nemere.inference.formatRefinement import CumulativeCharMerger
         >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
         Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
@@ -514,7 +543,7 @@ class CumulativeCharMerger(MessageModifier):
 
         :return: a new set of segments after the input has been merged
         """
-        from inference.segmentHandler import isExtendedCharSeq
+        from nemere.inference.segmentHandler import isExtendedCharSeq
 
         minLen = 6
 
@@ -588,7 +617,6 @@ class SplitFixed(MessageModifier):
             return newmsg
         else:
             return self.segments
-
 
 
 

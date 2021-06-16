@@ -129,6 +129,53 @@ class MessageAnalyzer(ABC):
             ac.analyze()
             return ac
 
+    @staticmethod
+    def _convertSegmentSequenceAnalyzers(segments: Sequence['MessageSegment'], targetAnalyzer: Type['MessageAnalyzer'],
+                         targetArguments=None):
+        return [MessageSegment(MessageAnalyzer.findExistingAnalysis(
+            targetAnalyzer, MessageAnalyzer.U_BYTE, seg.message, targetArguments), seg.offset, seg.length)
+            for seg in segments]
+
+    @staticmethod
+    def convertAnalyzers(segmentsPerMsg: Sequence[Union[Sequence['MessageSegment'],'MessageSegment']],
+                         targetAnalyzer: Type['MessageAnalyzer'], targetArguments=()):
+        """
+        Converts a list of given MessageSegments or a list of lists of MessageSegments with any MessageAnalyzer used in
+        any of the MessageSegments to the desired targetAnalyzer.
+        It automatically prevents the generation of new MessageSegment instances, if the input already uses
+        the target analyzer with the given targetArguments.
+
+        >>> from nemere import SpecimenLoader
+        >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
+        >>> from nemere.inference.segments import MessageSegment, MessageAnalyzer
+        >>> from nemere.inference.analyzers import Value
+        >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
+        >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, 1.2)
+        >>> vps = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+        >>> anothervps = MessageAnalyzer.convertAnalyzers(vps, Value)
+        >>> vps == anothervps
+        True
+
+        :param segmentsPerMsg: List or list of lists of MessageSegments for which the analyzer should be converted.
+        :param targetAnalyzer: Desired MessageAnalyzer. Must be a subclass of MessageAnalyzer.
+        :param targetArguments: The arguments for the MessageAnalyzer. See MessageAnalyzer.setAnalysisParams()
+        :return: List or list of lists, the same structure as the input segmentsPerMsg
+        """
+        if targetArguments is None:
+            targetArguments = ()
+        if all(isinstance(msg, Sequence) for msg in segmentsPerMsg):
+            # everything is already in desired target analyzer: return untouched
+            if all(isinstance(seg.analyzer, targetAnalyzer) and targetArguments == seg.analyzer.analysisParams
+                   for msg in segmentsPerMsg for seg in msg):
+                return segmentsPerMsg
+            return [MessageAnalyzer._convertSegmentSequenceAnalyzers(msg, targetAnalyzer, targetArguments)
+                    for msg in segmentsPerMsg]
+        else:
+            # everything is already in desired target analyzer: return untouched
+            if all(isinstance(seg.analyzer, targetAnalyzer) and targetArguments == seg.analyzer.analysisParams
+                   for seg in segmentsPerMsg):
+                return segmentsPerMsg
+            return MessageAnalyzer._convertSegmentSequenceAnalyzers(segmentsPerMsg, targetAnalyzer, targetArguments)
 
     def ngrams(self, n: int):
         """
@@ -343,18 +390,13 @@ class MessageAnalyzer(ABC):
 
         :return: entropy in token list
         """
-        # unit = U_BYTE  nibble => ASCII ?!
-        alphabet = dict()
+        from collections import Counter
         # get counts for each word of the alphabet
-        for x in tokens:
-            if x in alphabet:
-                alphabet[x] += 1
-            else:
-                alphabet[x] = 1
+        alphabet = Counter(tokens)
 
         entropy = 0
         for x in alphabet:
-            # probability of value in string
+            # probability of value in tokens
             p_x = float(alphabet[x]) / len(tokens)
             entropy += - p_x * math.log(p_x, alphabet_len)
 
@@ -426,8 +468,11 @@ class AbstractSegment(ABC):
         self.length = None
 
     @property
-    def values(self) -> Tuple:
+    def values(self) -> Union[Tuple, None]:
         return self._values
+
+    def __len__(self):
+        return self.length
 
     T = TypeVar('T')
     def fillCandidate(self, candidate: T) -> T:
@@ -602,6 +647,8 @@ class MessageSegment(AbstractSegment):
             raise ValueError('Offset is not an int.')
         if not isinstance(length, int):
             raise ValueError('Length is not an int. Its representation is ', repr(length))
+        if not length >= 1:
+            raise ValueError('Length must be a positive number, not ', repr(length))
         if offset >= len(self.message.data):
             raise ValueError('Offset {} too large for message of length {}.'.format(offset, len(self.message.data)))
         if offset+length-1 > len(self.message.data):
@@ -612,10 +659,6 @@ class MessageSegment(AbstractSegment):
         """byte offset of the first byte in message this segment is related to"""
         self.length = length
         """byte count of the segment this object represents in the originating message"""
-
-
-    def __len__(self):
-        return self.length
 
 
     @property
