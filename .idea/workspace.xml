@@ -7,72 +7,66 @@
     <list default="true" id="9ad69789-6b31-4c00-b8d2-c623d7babdd8" name="Default" comment="x">
       <change afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" afterDir="false" />
       <change afterPath="$USER_HOME$/REUP-common/Tools/netzob-official/netzob/src/netzob/.idea/netzob.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/other.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/eval-nemetyl-messagetype.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/eval-netzob-messagetype.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010-new-deduped-10000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/binaryprotocols_maxdiff-fromOrig-500.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/dns_ictf2010_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/nbns_SMIA20111010-one_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-mixed.pcapng" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-rawip.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/binaryprotocols_maxdiff-fromOrig-500-rawip.pcapng" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dhcp_SMIA2011101X-filtered_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dhcp_SMIA2011101X-filtered_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010-new_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010-new_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/dns_ictf2010_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/nbns_SMIA20111010-one_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/nbns_SMIA20111010-one_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/ntp_SMIA-20111010_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/ntp_SMIA-20111010_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/smb_SMIA20111010-one-rigid1_maxdiff-100-encap.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/raw/smb_SMIA20111010-one-rigid1_maxdiff-1100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/input/maxdiff-fromOrig/strip_encapsulation.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/dns_ictf2010_deduped-2.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/binaryprotocols_merged_500_deduped-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-new.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-new_100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-new_1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-new_10000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-responses.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010-responses_deduped.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010_deduped-66.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010_deduped-666.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010_deduped-6666.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dhcp_SMIA2011101X_deduped-10000_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dhcp_SMIA2011101X_deduped-10000_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dhcp_SMIA2011101X_deduped-10000_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010-new-deduped-10000_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010-new-deduped-10000_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010-new-deduped-10000_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010_deduped-9911_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010_deduped-9911_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/dns_ictf2010_deduped-9911_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/nbns_SMIA20111010-one_deduped-10000_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/nbns_SMIA20111010-one_deduped-10000_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/nbns_SMIA20111010-one_deduped-10000_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/ntp_SMIA-20111010_deduped-9995_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/ntp_SMIA-20111010_deduped-9995_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/ntp_SMIA-20111010_deduped-9995_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/smb_SMIA20111010-one_deduped-10000_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/smb_SMIA20111010-one_deduped-10000_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/maxdiff-filtered/smb_SMIA20111010-one_deduped-10000_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/dhcp_SMIA2011101X_deduped-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/dns_ictf2010-new-deduped-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/dns_ictf2010_deduped-9911-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/nbns_SMIA20111010-one_deduped-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/ntp_SMIA-20111010_deduped-9995-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/mindiff-filtered/smb_SMIA20111010-one_deduped-10000_mindiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/new-traces-overview.ods" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/smb_maccdc2012_maxdiff-100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/smb_maccdc2012_maxdiff-1000.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/smb_maccdc2012_maxdiff-1100-10k-30k.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/smb_maccdc2012_maxdiff-1100-from9999.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/input/smb_maccdc2012_maxdiff-1100.pcap" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/check_pcap-info.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/NEMESYS.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/NEMESYS.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/stephan.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/Sources.md" beforeDir="false" afterPath="$PROJECT_DIR$/input/Sources.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-1000.pcap" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-9911.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/dns_ictf2010_deduped-9911-10000.pcap" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/input/ntp_SMIA-20111010_deduped-9995.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/ntp_SMIA-20111010_deduped-9995-10000.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/dns_ictf2010_deduped-982-ether.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/dns_ictf2010_deduped-982-ether.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/random-100-continuous.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/random-100-continuous.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/random-100-fields.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/random-100-fields.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/random-9999-continuous.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/random-9999-continuous.pcap" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input/random-9999-fields.pcap" beforeDir="false" afterPath="$PROJECT_DIR$/input/hide/random-9999-fields.pcap" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/alignment/alignMessages.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/alignMessages.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/alignment/clusterMerging.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/clusterMerging.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/alignment/clusterSplitting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/formatRefinement.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/formatRefinement.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/segmentHandler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segmentHandler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/inference/segments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/segments.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inference/templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inference/templates.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/nemesys_fms.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/nemesys_fms.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/nemetyl_align-segments.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/nemetyl_align-segments.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/netzob_messagetypes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/netzob_messagetypes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/prep_deduplicate-trace.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/prep_deduplicate-trace.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/baseAlgorithms.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/baseAlgorithms.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/evaluationHelpers.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/utils/loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/loader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/dissectorMatcher.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/validation/messageParser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/messageParser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/validation/reportWriter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/validation/reportWriter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/distancesPlotter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualization/multiPlotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/multiPlotter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualization/plotter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/plotter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualization/simplePrint.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualization/simplePrint.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

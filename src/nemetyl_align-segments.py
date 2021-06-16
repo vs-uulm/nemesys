@@ -7,23 +7,16 @@ These segments get analyzed by the given analysis method which is used as featur
 Similar fields are then aligned.
 """
 
-import IPython
-import argparse
+import argparse, IPython
 from os.path import isfile, splitext, basename, exists, join
-
 from tabulate import tabulate
 
 from alignment.alignMessages import SegmentedMessages
-from alignment.clusterMerging import ClusterMerger
+from inference.segmentHandler import originalRefinements, baseRefinements
 from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from inference.segmentHandler import originalRefinements, \
-    baseRefinements
 from utils.evaluationHelpers import *
 from visualization.multiPlotter import MultiMessagePlotter
-
-# # change drawing toolkit for matplotlib (to be set before the pyplot import)
-# import matplotlib as mpl
-# mpl.use('Agg')
+from alignment.clusterMerging import ClusterMerger
 
 debug = False
 

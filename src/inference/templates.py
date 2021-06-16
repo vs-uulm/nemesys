@@ -1300,8 +1300,6 @@ class TypedTemplate(Template):
         """
         self._fieldtype = value
 
-
-
 """
 Methods/properties (including super's) 
 
@@ -1737,10 +1735,6 @@ class MemmapDC(DelegatingDC):
             simtrx.fill(filler)
         return simtrx
 
-
-    @staticmethod
-    def _templates4Paddings(segments: Iterable[MessageSegment]):
-        raise NotImplementedError()
 
 
 def __testing_generateTestSegmentsWithDuplicates():

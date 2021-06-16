@@ -272,7 +272,7 @@ class Resplit2LeastFrequentPair(MessageModifier):
         >>> from utils.loader import SpecimenLoader
         >>> import inference.formatRefinement as refine
         >>> from tabulate import tabulate
-        >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
+        >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
         Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
         >>> messageSegments = segmentsPerMsg[0]
@@ -399,6 +399,14 @@ class Resplit2LeastFrequentPair(MessageModifier):
 
 class CropDistinct(MessageModifier):
     """
+    Find common values of segments and split/crop other, larger segments if they contain these values.
+    """
+
+    minSegmentLength = 2
+    frequencyThreshold = 0.1
+    """fraction of *messages* to exhibit the value to be considered frequent"""
+
+    """
     Split segments into smaller chunks if a given value is contained in the segment.
     The given value is cropped to a segment on its own.
     """
@@ -413,15 +421,22 @@ class CropDistinct(MessageModifier):
 
     @staticmethod
     def countCommonValues(segmentedMessages: List[List[MessageSegment]]):
+        """
+        :param segmentedMessages: The segments to analyze
+        :return: The most common byte values of the given segments
+            "Most common" is dynamically defined as those with a frequency above
+            CropDistinct.frequencyThreshold * len(segmentedMessages)
+        """
         from collections import Counter
         from itertools import chain
         segcnt = Counter([seg.bytes for seg in chain.from_iterable(segmentedMessages)])
         segFreq = segcnt.most_common()
-        freqThre = .1 * len(segmentedMessages)
+        freqThre = CropDistinct.frequencyThreshold * len(segmentedMessages)
         thre = 0
         while thre < len(segFreq) and segFreq[thre][1] > freqThre:
             thre += 1
-        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) > 1]  # omit \x00-sequences and 1-byte long segments
+        # by the "if" in list comprehension: omit \x00-sequences and shorter than {minSegmentLength}-byte long segments
+        moco = [fv for fv, ct in segFreq[:thre] if set(fv) != {0} and len(fv) >= CropDistinct.minSegmentLength]
         # return moco
 
         # omit all sequences that have common subsequences
@@ -557,6 +572,12 @@ class SplitFixed(MessageModifier):
     """
 
     def split(self, segmentID: int, chunkLength: int):
+        """
+
+        :param segmentID: The index of the segment to split within the sequence of segments composing the message
+        :param chunkLength: The fixed length of the target segments in bytes
+        :return: The message segments with the given segment replaced by multiple segments of the given fixed length.
+        """
         selSeg = self.segments[segmentID]
         if chunkLength < selSeg.length:
             newSegs = list()

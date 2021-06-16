@@ -207,7 +207,7 @@ class MessageComparator(object):
         :param inferredFieldEnds: The field ends that should be visualized by color changes.
         :param mark: Start and end indices of a range to mark by underlining.
         :param messageSlice: Tuple used as parameters of the slice builtin to select a subset of all messages to print.
-            Use None to create an open slice (up to the beginnin or end of the message).
+            Use None to create an open slice (up to the beginning or end of the message).
         :return:
         """
         import visualization.bcolors as bc

@@ -1,2 +1,3 @@
-cache/*
-reports/*
+/cache*
+reports/
+__pycache__/

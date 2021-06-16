@@ -184,7 +184,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     Segment message by determining inflection points of gauss-filtered bit congruence deltas.
 
     >>> from utils.loader import SpecimenLoader
-    >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
+    >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
     Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
     >>> for spm in segmentsPerMsg:
@@ -302,7 +302,7 @@ def nemetylRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[
     return newstuff
 
 
-def charRefinements(segmentsPerMsg: List[List[MessageSegment]]) -> List[List[MessageSegment]]:
+def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[Sequence[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:
     Inflections of gauss-filtered bit-congruence deltas.
@@ -398,7 +398,6 @@ def matrixFromTpairs(distances: Iterable[Tuple[T,T,float]], segmentOrder: Sequen
         if row == col and intseg[2] != identity:
             print("Warning: Identity value at {},{} was overwritten by {}".format(row, col, intseg[2]))
     return simtrx
-
 
 
 def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:

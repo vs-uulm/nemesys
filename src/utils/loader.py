@@ -73,7 +73,7 @@ class SpecimenLoader(BaseLoader):
         :param relativeToIP: If True, extract the given layer relative to the IP layer.
 
         >>> from utils.loader import SpecimenLoader
-        >>> sl = SpecimenLoader('../input/random-100-continuous.pcap', layer=0, relativeToIP=True)
+        >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
         >>> firstmessage = list(sl.messagePool.items())[0]
         >>> print(firstmessage[0].data.hex())  # the whole message
         450000780001000040007c837f0000017f000001da362a9b658bcc70d1a8323979e8fc0affda6f9fca9de16a3b051303601280f2c249abdd05f85ce98aebaf67626c07b4698a3c87abb95af87abf108735bac6ffd8823e80ac498622e7347852e0f2e7a8759911782b00a74b5744109b9fe59f5d311252a1
