@@ -324,6 +324,11 @@ class CachedDistances(object):
     def __init__(self, pcapfilename: str, analysisTitle: str, layer=2, relativeToIP=True):
         """
         Cache or load the DistanceCalculator to or from the filesystem
+
+        :param pcapfilename: File name string of the PCAP to load.
+        :param analysisTitle: Text string to use as title/label for this analysis.
+        :param layer: Protocol layer to extract from the encapsulation. 1 for raw frame (with set relativeToIP = False).
+        :param relativeToIP: Interpret the layer relative to the IP layer (True) or absolute (False).
         """
         self.pcapfilename = pcapfilename  # type: str
         self.pcapbasename = os.path.basename(pcapfilename)
@@ -349,6 +354,7 @@ class CachedDistances(object):
         self.disableCache = False  # type: bool
         """When experimenting with distances manipulation, deactivate caching by setting disableCache to True!"""
         self.debug = False  # type: bool
+        """Set debug flag in MessageComparator."""
 
         self.dccachefn = None  # type: Union[None, str]
         self.isLoaded = False
@@ -409,6 +415,7 @@ class CachedDistances(object):
                     self.refinementArgs["comparator"] = self.comparator
                 else:
                     self.refinementArgs = {"comparator": self.comparator}
+            # noinspection PyUnresolvedReferences
             if self.refinementCallback.__code__.co_argcount > 1:  # not counting kwargs!
                 # assume the second argument is expected to be a distance calculator
                 chainedSegments = list(chain.from_iterable(self.segmentedMessages))
@@ -524,12 +531,12 @@ class CachedDistances(object):
 
 def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug: bool,
                    analyzerType: type, analysisArgs: Tuple=None, sigma: float=None, filtering=False,
-                   refinementCallback:Union[Callable, None] = refinements,
+                   refinementCallback: Union[Callable, None] = refinements,
                    disableCache=False, layer=2, relativeToIP=True) \
         -> Tuple[SpecimenLoader, BaseComparator, List[Tuple[MessageSegment]], DistanceCalculator, Optional[float],
                  Optional[float]]:
     """
-    Legacy:
+    Legacy, **deprecated**:
     Wrapper around class CachedDistances for backwards compatibility:
         cache or load the DistanceCalculator to or from the filesystem
 
@@ -539,9 +546,20 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     Calculated distances for 37 segment pairs in ... seconds.
     >>> chainedSegments = dc.rawSegments
 
+    :param analysisArgs: Optional arguments to use for instantiating for the given analysis type class.
+    :param debug: Set debug flag in MessageComparator.
+    :param pcapfilename: File name string of the PCAP to load.
+    :param analysisTitle: Text string to use as title/label for this analysis.
+    :param layer: Protocol layer to extract from the encapsulation. 1 for raw frame (with set relativeToIP = False).
+    :param relativeToIP: Interpret the layer relative to the IP layer (True) or absolute (False).
+    :param tokenizer: The tokenizer to use. One of: "tshark", "4bytesfixed", "nemesys"
+    :param sigma: Required only for nemesys: The sigma value to use. If not set,
+        the value in sigmapertrace in this module is looked up and if the trace is not known there, use 0.9.
     :param analyzerType: Unused
     :param filtering: Filter out **one-byte** segments and such, just consisting of **zeros**.
     :param disableCache: When experimenting with distances manipulation, deactivate caching!
+    :param refinementCallback: The function to use for refinement.
+        Existing refinements can be found in segmentHandler.
     :return:
     """
     fromCache = CachedDistances(pcapfilename, analysisTitle, layer, relativeToIP)

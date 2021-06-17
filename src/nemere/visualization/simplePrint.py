@@ -305,6 +305,7 @@ class SegmentPrinter(object):
     """
     _tfemarker = '1ex '
 
+    # noinspection PyUnusedLocal,PyMethodMayBeStatic
     def _msgoffs2label(self, msg, po):
         return ""
 

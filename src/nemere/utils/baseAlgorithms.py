@@ -95,6 +95,7 @@ def autoconfigureDBSCAN(neighbors: List[List[Tuple[int, float]]]):
         seconddiff[k] = numpy.diff(smoothknearest[k], 2)
         seconddiffargmax = seconddiff[k].argmax()
         if smoothknearest[k][seconddiffargmax] > 0:
+            # noinspection PyArgumentList
             diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
             if 2*sigma < seconddiffargmax < len(neighbors) - 2*sigma and diffrelmax > seconddiffMax[2]:
                 seconddiffMax = (k, seconddiffargmax, diffrelmax)
