@@ -533,7 +533,10 @@ def cacheAndLoadDC(pcapfilename: str, analysisTitle: str, tokenizer: str, debug:
     Wrapper around class CachedDistances for backwards compatibility:
         cache or load the DistanceCalculator to or from the filesystem
 
-    >>> dc = DistanceCalculator()
+    >>> from nemere.utils.baseAlgorithms import generateTestSegments
+    >>> segments = generateTestSegments()
+    >>> dc = DistanceCalculator(segments)
+    Calculated distances for 37 segment pairs in ... seconds.
     >>> chainedSegments = dc.rawSegments
 
     :param analyzerType: Unused

@@ -55,16 +55,16 @@ def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> L
     >>> from netzob.Model.Vocabulary.Symbol import Symbol
     >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
     >>>
-    >>> dummymsg = RawMessage(bytes(list(range(20, 40))))
+    >>> dummymsg = RawMessage(bytes(list(range(50, 70))))
     >>> dummyana = Value(dummymsg)
     >>> testgapped = [[ MessageSegment(dummyana, 0, 2), MessageSegment(dummyana, 5, 2), MessageSegment(dummyana, 7, 6),
     ...                MessageSegment(dummyana, 17, 2) ]]
     >>> symbol = symbolsFromSegments(testgapped)[0]
     >>> print(symbol)
-    Field      | Field          | Field      | Field                   | Field  | Field | Field
-    ---------- | -------------- | ---------- | ----------------------- | ------ | ----- | -----
-    '\x14\x15' | '\x16\x17\x18' | '\x19\x1a' | '\x1b\x1c\x1d\x1e\x1f ' | '!"#$' | '%&'  | "'"
-    ---------- | -------------- | ---------- | ----------------------- | ------ | ----- | -----
+    Field | Field | Field | Field    | Field  | Field | Field
+    ----- | ----- | ----- | -------- | ------ | ----- | -----
+    '23'  | '456' | '78'  | '9:;<=>' | '?@AB' | 'CD'  | 'E'...
+    ----- | ----- | ----- | -------- | ------ | ----- | -----
 
     Intermediately produces:
     ```
@@ -132,8 +132,9 @@ def fixedlengthSegmenter(length: int, specimens: BaseLoader,
     >>> from nemere.validation.dissectorMatcher import MessageComparator
     >>> from nemere.inference.analyzers import Value
     >>> from nemere.inference.segmentHandler import fixedlengthSegmenter
-    >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
+    >>> specimens = SpecimenLoader("../input/deduped-orig/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
     >>> comparator = MessageComparator(specimens, 2, True, debug=False)
+    Wait for tshark output (max 20s)...
     >>> segmentedMessages = fixedlengthSegmenter(4, specimens, Value, None)
     >>> areIdentical = True
     >>> for msgsegs in segmentedMessages:

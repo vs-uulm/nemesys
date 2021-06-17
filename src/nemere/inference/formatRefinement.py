@@ -129,7 +129,7 @@ class MergeConsecutiveChars(Merger):
     >>> from nemere.utils.loader import SpecimenLoader
     >>> import nemere.inference.formatRefinement as refine
     >>> from tabulate import tabulate
-    >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
+    >>> sl = SpecimenLoader('../input/deduped-orig/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
     Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
     >>> for messageSegments in segmentsPerMsg:
@@ -529,7 +529,7 @@ class CumulativeCharMerger(MessageModifier):
         >>> from nemere.utils.loader import SpecimenLoader
         >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
         >>> from nemere.inference.formatRefinement import CumulativeCharMerger
-        >>> sl = SpecimenLoader('../input/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
+        >>> sl = SpecimenLoader('../input/deduped-orig/dns_ictf2010_deduped-100.pcap', layer=0, relativeToIP=True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
         Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
         >>> for messageSegments in segmentsPerMsg:

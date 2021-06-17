@@ -126,7 +126,7 @@ class DistanceCalculator(object):
 
         >>> from tabulate import tabulate
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.analyzers import Value
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = [
         ...     bytes([1, 2, 3, 4]),
@@ -187,7 +187,7 @@ class DistanceCalculator(object):
         >>> from tabulate import tabulate
         >>> import math
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.analyzers import Value
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = [
         ...     bytes([1, 2, 3, 4]),
@@ -275,7 +275,7 @@ class DistanceCalculator(object):
         """
         Look up the indices of the given segments.
 
-        >>> from utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
         >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
@@ -298,7 +298,7 @@ class DistanceCalculator(object):
 
         >>> from itertools import combinations
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.analyzers import Value
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = [
         ...     bytes([1, 2, 3, 4]),
@@ -911,7 +911,7 @@ class DistanceCalculator(object):
         """
 
         >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from inference.analyzers import Value
+        >>> from nemere.inference.analyzers import Value
         >>>
         >>> bytedata = [
         ...     bytes([1, 2, 3, 4]),
@@ -1187,7 +1187,7 @@ class Template(AbstractSegment):
         0.246...   0
         0.373...   0
         0.285...   0
-        0.539...   1
+        0.5...   1
         0.497...   0
         0.825...  -3
         0.682...   1

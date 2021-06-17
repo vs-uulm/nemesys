@@ -149,8 +149,9 @@ class MessageAnalyzer(ABC):
         >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
         >>> from nemere.inference.segments import MessageSegment, MessageAnalyzer
         >>> from nemere.inference.analyzers import Value
-        >>> specimens = SpecimenLoader("../input/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
+        >>> specimens = SpecimenLoader("../input/deduped-orig/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
         >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, 1.2)
+        Segmentation by inflections of sigma-1.2-gauss-filtered bit-variance.
         >>> vps = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
         >>> anothervps = MessageAnalyzer.convertAnalyzers(vps, Value)
         >>> vps == anothervps

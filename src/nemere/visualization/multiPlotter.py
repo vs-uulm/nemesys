@@ -317,9 +317,9 @@ class MultiMessagePlotter(MessagePlotter):
         >>> import nemere.visualization.multiPlotter
         >>> import nemere.utils.loader
         >>> import numpy
-        >>> loader = nemere.utils.loader.SpecimenLoader("input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap")
+        >>> loader = nemere.utils.loader.SpecimenLoader("../input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap")
         >>> mmp = nemere.visualization.multiPlotter.MultiMessagePlotter(loader, "test", 4)
-        >>> mmp.plotToSubfig(2, numpy.random.poisson(5,100), numpy.random.poisson(5,100))
+        >>> mmp.plotToSubfig(2, numpy.random.poisson(5,100))
 
         :param subfigid: Subfigure id to plot to.
         :param values: Values to plot.
