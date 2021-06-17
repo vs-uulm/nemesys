@@ -61,10 +61,7 @@ if __name__ == '__main__':
 
     filechecker = StartupFilecheck(args.pcapfilename)
     withplots = args.with_plots
-    littleendian = args.littleendian == True
     tokenizer = args.tokenizer
-    if littleendian:
-        tokenizer += "le"
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Cache/load the segmentation and segment dissimilarities
