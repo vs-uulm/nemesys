@@ -179,7 +179,7 @@ def writeReport(formatmatchmetrics: Dict[Tuple[int, AbstractMessage], FormatMatc
                     future = executor.submit(symbol.getCells)
                     cells = future.result(messageparsetimeout)
                     symbolcsv.writerows([[val.hex() for val in msg] for msg in cells])
-                except FutureTOError as e:
+                except FutureTOError:
                     stop_process_pool(executor)
                     symbolcsv.writerow(["Parsing of symbol", symbol.name, "timed out after",
                                          messageparsetimeout, "seconds. Omitting", len(symbol.messages),

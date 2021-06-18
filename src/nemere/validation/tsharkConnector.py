@@ -85,6 +85,7 @@ class TsharkConnector(object):
         # st = time.time()
 
         # Wait for file content
+        # noinspection PyUnusedLocal
         for x in range(300):
             try:
                 peeked = pipe.peek(10)  # type: bytes
@@ -102,6 +103,7 @@ class TsharkConnector(object):
             else:
                 emptywaitcycles -= 1
                 # st = time.time()
+                # noinspection PyUnusedLocal
                 for x in range(10):
                     # sometimes the last "]\n" comes only after a delay
                     if pipe.peek(10):
@@ -131,6 +133,7 @@ class TsharkConnector(object):
         readThread.start()
         # print("Wait for queue...")
         # Wait for queue to fill from the tshark-pipe
+        # noinspection PyUnusedLocal
         for timeout in range(20):
             if self.__tsharkqueue.empty():
                 time.sleep(.01)

@@ -66,9 +66,9 @@ This is highly experimental software and by no means guaranteed to be fit for pr
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
     * clone Netzob next branch to a local folder: `git clone --single-branch -b next https://github.com/netzob/netzob.git` 
     * install it: `python setup.py install`
-* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) version in [2.2.6, 2.6.3]
+* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) version 2.x or 3.x (tested with: 2.2.6, 2.6.3, 2.6.5, 2.6.8, 3.2.3, 3.2.5)
   (possibly other versions, depending on the compatibility of the JSON-output format of dissected messages,
-  report further working versions e. g. per github issue)  
+  please report further working versions e. g., per github issue)  
   *Note: NEMESYS can be used without tshark as long as FMS validation (in package `validation`) 
   against a real dissector is NOT required.*
   

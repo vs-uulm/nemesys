@@ -4,6 +4,7 @@ NEMESYS and NEMETYL approaches.
 """
 from collections import defaultdict, Counter
 from typing import TypeVar, Sequence, Callable, Iterable, Optional
+
 from itertools import chain
 import os, csv, pickle, time
 from os.path import join, splitext, isfile, isdir, basename, exists, abspath
@@ -104,9 +105,6 @@ epsdefault = 2.4
 
 reportFolder = "reports"
 cacheFolder = "cache"
-clStatsFile = os.path.join(reportFolder, 'messagetype-cluster-statistics.csv')
-ccStatsFile = os.path.join(reportFolder, 'messagetype-combined-cluster-statistics.csv')
-
 
 unknown = "[unknown]"
 
@@ -130,6 +128,8 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
     A more advanced variant of `numpy.array([seg.fieldtype for seg in tg.segments])`
 
     see #segments2clusteredTypes()
+
+    deprecated see cauldron.label4Segment
 
     :param segGrpHier: Hierarchy of segment groups
     :param seg: The segment to label
@@ -208,22 +208,6 @@ def writePerformanceStatistics(specimens, clusterer, algos,
             segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime, cluster_params_autoconfTime,
             cluster_messagesTime, align_messagesTime
             ])
-
-
-def segmentInfo(comparator: MessageComparator, segment: MessageSegment):
-    pm = comparator.parsedMessages[comparator.messages[segment.message]]
-    print(pm.messagetype)
-
-    fs = pm.getFieldSequence()
-    fsnum = 0
-    offset = 0
-    while offset < segment.offset:
-        offset += fs[fsnum][1]
-        fsnum += 1
-    print(fs[fsnum][0])
-    print(pm.getTypeSequence()[fsnum][0])
-    print(segment.bytes)
-    print(segment.bytes.hex())
 
 
 def printClusterMergeConditions(clunuAB, alignedFieldClasses, matchingConditions, dc, diff=True):

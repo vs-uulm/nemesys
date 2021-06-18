@@ -15,6 +15,5 @@ tabulate
 networkx
 gitpython
 colorhash
-
 pcapy
 xlwt

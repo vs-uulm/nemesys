@@ -616,7 +616,7 @@ class DistanceCalculator(object):
         >>> DistanceCalculator.embedSegment(testdata[2], testdata[0])
         ('canberra', 1, (2, 0, 0.3333...))
         >>> DistanceCalculator.embedSegment(testdata[3], testdata[2])
-        ('canberra', 1, (3, 2, 0.2...))
+        ('canberra', 1, (3, 2, 0.2000...))
         >>> DistanceCalculator.embedSegment(testdata[6], testdata[0])
         ('canberra', 1, (6, 0, 2.037846856340007))
         >>> DistanceCalculator.embedSegment(testdata[7], testdata[5])
@@ -1488,6 +1488,9 @@ class DelegatingDC(DistanceCalculator):
                             numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
         raise NotImplementedError()
 
+    @staticmethod
+    def _templates4Paddings(segments: Iterable[MessageSegment]):
+        raise NotImplementedError()
 
     def segments2index(self, segmentList: Iterable[AbstractSegment]):
         # noinspection PyUnresolvedReferences
@@ -1670,8 +1673,7 @@ class DelegatingDC(DistanceCalculator):
         return transformatorK, clusterI
 
 
-
-
+# noinspection PyAbstractClass
 class MemmapDC(DelegatingDC):
     maxMemMatrix = 750000
     if parallelDistanceCalc:
@@ -1750,7 +1752,6 @@ class MemmapDC(DelegatingDC):
             simtrx = numpy.empty(shape, dtype=numpy.float16)
             simtrx.fill(filler)
         return simtrx
-
 
 
 def __testing_generateTestSegmentsWithDuplicates():
