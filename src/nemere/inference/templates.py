@@ -616,7 +616,7 @@ class DistanceCalculator(object):
         >>> DistanceCalculator.embedSegment(testdata[2], testdata[0])
         ('canberra', 1, (2, 0, 0.3333...))
         >>> DistanceCalculator.embedSegment(testdata[3], testdata[2])
-        ('canberra', 1, (3, 2, 0.2000...))
+        ('canberra', 1, (3, 2, 0.2...))
         >>> DistanceCalculator.embedSegment(testdata[6], testdata[0])
         ('canberra', 1, (6, 0, 2.037846856340007))
         >>> DistanceCalculator.embedSegment(testdata[7], testdata[5])

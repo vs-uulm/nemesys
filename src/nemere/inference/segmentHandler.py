@@ -54,6 +54,9 @@ def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> L
     >>> from nemere.inference.analyzers import Value
     >>> from netzob.Model.Vocabulary.Symbol import Symbol
     >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    >>> # prevent Netzob from producing debug output.
+    >>> import logging
+    >>> logging.getLogger().setLevel(30)
     >>>
     >>> dummymsg = RawMessage(bytes(list(range(50, 70))))
     >>> dummyana = Value(dummymsg)

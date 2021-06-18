@@ -1,6 +1,7 @@
 from typing import List
 from os.path import isfile
 from collections import OrderedDict
+import logging
 
 from scapy.layers.dot11 import RadioTap, Dot11, Dot11FCS
 from scapy.packet import Packet, Raw
@@ -106,6 +107,9 @@ class SpecimenLoader(BaseLoader):
             raise FileNotFoundError('File not found:', pcap)
         self.pcapFileName = pcap
         absLayer = 2 + layer if relativeToIP else layer
+
+        # prevent Netzob from producing debug output in certain cases.
+        logging.getLogger().setLevel(30)
 
         try:
             if layer < 0:

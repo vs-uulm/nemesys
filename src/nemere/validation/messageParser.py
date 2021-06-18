@@ -1285,7 +1285,10 @@ class ParsedMessage(object):
         >>> # noinspection PyUnresolvedReferences
         >>> from netzob.all import *
         >>> from nemere.validation.messageParser import ParsedMessage
-        >>> # pkt = PCAPImporter.readFile("../input/deduped-orig/irc_ictf2010-42_deduped-100.pcap", importLayer=1).values()
+        >>> # prevent Netzob from producing debug output.
+        >>> import logging
+        >>> logging.getLogger().setLevel(30)
+        >>>
         >>> pkt = PCAPImporter.readFile("../input/deduped-orig/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
         >>> pms = ParsedMessage.parseMultiple(pkt)
         Wait for tshark output (max 20s)...
@@ -1788,6 +1791,10 @@ class ParsedMessage(object):
         >>> # noinspection PyUnresolvedReferences
         >>> from netzob.all import *
         >>> from nemere.validation.messageParser import ParsedMessage
+        >>> # prevent Netzob from producing debug output.
+        >>> import logging
+        >>> logging.getLogger().setLevel(30)
+        >>>
         >>> dhcp = PCAPImporter.readFile("../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap",
         ...                              importLayer=1).values()
         >>> pms = ParsedMessage.parseMultiple(dhcp)
