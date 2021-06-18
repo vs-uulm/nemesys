@@ -1,2 +1,8 @@
-cache/*
-reports/*
+__pycache__
+/cache*
+reports/
+workspace.xml
+usage.statistics.xml
+shelf/
+*.iml
+gradle.xml

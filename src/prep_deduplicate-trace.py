@@ -4,12 +4,21 @@ Limit the number of message in a trace to a fixed value of unique packets (PACKE
 This way, generates comparable traces as evaluation input.
 """
 
-import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
-logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
-from scapy.all import *
 import argparse
 from os.path import exists,isfile,splitext
 from collections import OrderedDict
+from collections.abc import Sequence
+
+import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
+
+from scapy.layers.dot11 import RadioTap
+
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+from scapy.layers.inet import IP
+from scapy.layers.l2 import Ether
+from scapy.all import sniff, wrpcap
+
+from nemere.validation.messageParser import ParsingConstants
 
 PACKET_LIMIT = 1000
 
@@ -45,21 +54,20 @@ class Deduplicate(object):
             if isinstance(self.TARGETLAYER, int):
                 targetpacket = packet[self.TARGETLAYER]
             else:
-                targetpacket = packet[self.TARGETLAYER][2]
+                targetpacket = packet[self.TARGETLAYER[0]][self.TARGETLAYER[1]]
 
-            # Netzob does not support raw frames, so add ethernet dummy if necessary
-            if self.TARGETLAYER != 0 and not isinstance(packet[0], Ether):
-                packet = Ether(src='0',dst='0')/packet
 
             self.unique_packets[str(targetpacket)] = packet
             if len(self.unique_packets) >= PACKET_LIMIT:
                 return True
         except IndexError:
-            if isinstance(TARGETLAYER, str):
-                layername = TARGETLAYER + ' + 2'
+            if isinstance(self.TARGETLAYER, str):
+                layername = self.TARGETLAYER
+            elif isinstance(self.TARGETLAYER, Sequence):
+                layername = f'{self.TARGETLAYER[0]} + {self.TARGETLAYER[1]}'
             else:
-                layername = TARGETLAYER
-            print('Network layer ' + str(layername) + ' not available in the following packet:')
+                layername = self.TARGETLAYER
+            print('Protocol layer ' + str(layername) + ' not available in the following packet:')
             print('\n\n' + repr(packet) + '\n\n')
         return False
 
@@ -69,11 +77,23 @@ def main(filename, outputfile, targetlayer, packetlimit):
 
     # TODO sniff waits indefinitely if the input-pcap file contains less # packets < PACKET_LIMIT; break with ctrl+c
     # sniff has the advantage to NOT read the whole file into the memory initially. This saves memory for huge pcaps.
-    sniff(offline=filename,stop_filter=dedup.dedup,store=0)
+    sniff(offline=filename, stop_filter=dedup.dedup, store=0)
 
-    wrpcap(outputfile, dedup.unique_packets.values())
+    # get the first packet (we assume all have the same linktype)
+    eplpkt = next(iter(dedup.unique_packets.values()))
+    if isinstance(eplpkt, Ether):
+        lt = ParsingConstants.LINKTYPES["ETHERNET"] # 0x1
+    elif isinstance(eplpkt, IP):
+        lt = ParsingConstants.LINKTYPES["RAW_IP"] # 0x65
+    elif isinstance(eplpkt, RadioTap):
+         lt = ParsingConstants.LINKTYPES["IEEE802_11_RADIO"]  # 0x7f
+    else:
+        raise Exception("Check linktype ({}).".format(eplpkt.name))
+
+    wrpcap(outputfile, dedup.unique_packets.values(), linktype=lt)
     print("Deduplication of {:s} of pcap written to {:s}".format(
-        str(TARGETLAYER) if not isinstance(TARGETLAYER, str) else TARGETLAYER + ' + 2',
+        targetlayer if isinstance(targetlayer, str) else
+            f"{targetlayer[0]} + {targetlayer[1]}" if isinstance(targetlayer, Sequence) else str(targetlayer),
         outfile))
 
 
@@ -82,18 +102,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=
                                      'Limit number of packets in pcap outfile to fixed number of unique packets.')
     parser.add_argument('pcapfilename', help='pcapfilename')
-    parser.add_argument('-l', '--layernumber', nargs='?', type= int,
-                        help='layernumber (default: IP+2)', default='-1')
+    parser.add_argument('-l', '--layer', type=int, default=2,
+                        help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
+                             '(typically the payload of a transport protocol).')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
     parser.add_argument('-p', '--packetcount', nargs='?', type= int,
                         help='packet count (default: {:d})'.format(PACKET_LIMIT), default=PACKET_LIMIT)
     args = parser.parse_args()
 
     FILENAME = args.pcapfilename # 'file.pcap'
     PACKET_LIMIT = args.packetcount
-    if args.layernumber >= 0:
-        TARGETLAYER = args.layernumber # use 'IP' as flag for "IP+2"
+    if not args.relativeToIP:
+        TARGETLAYER = (0, args.layer)
     else:
-        TARGETLAYER = 'IP'
+        TARGETLAYER = ('IP', args.layer)
 
     if not isfile(FILENAME):
         print('File not found: ' + FILENAME)

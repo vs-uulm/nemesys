@@ -7,7 +7,7 @@
     * non-Application-Layer: TCP, ICMP, ARP
 
 ## Tools
-* Filter traces by tshark: 
+* Filter traces by tshark: `tshark -r infile -w outfile`
 * Concatenate pcaps: `mergecap -F pcap -w OUTFILE INFILES`
 * Change encapulation: `editcap -F pcap -T ENCTYPE INFILE OUTFILE`
 * Deduplicate and truncate to fixed size: `prep_deduplicate-trace.py PCAP --p [N]`
@@ -39,7 +39,10 @@
 * dhcp_SMIA2011101X_deduped-10000.pcap
     * from SMIA_2011-10-10_08_632834000_file1-splits/dhcp
       merged with dhcp_SMIA_2011-10-11_07-38-27_CEST_961090000_file1-filtered.pcap
+      to REUP-common/trace-collection/sources/A_SMIA/SMIA_2011-10-10+11 (?!)
     * filtered by: `!bootp.option.user_class && !icmp` and for `bootp.dhcp`
+* maxdiff-fromOrig/dhcp_SMIA2011101X-filtered_maxdiff-1100.pcap
+    * from trace-collection/sources/A_SMIA/SMIA_2011-10-10+11/dhcp_SMIA2011101X-filtered.pcap
 
 ### Netbios Name Server
 * nbns_SMIA20111010-one_deduped-100.pcap
@@ -55,11 +58,21 @@
         * alternatively: `!smb.trans2.cmd || (smb.trans2.cmd > 0 && smb.trans2.cmd < 0xffff)`
     * -- multiple find_first2 files
     * deduplicated and truncated by `python src/prep_deduplicate-trace.py`...
-    
+* maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1100.pcap
+    * from trace-collection/sources/A_SMIA/SMIA_2011-10-10_08_632834000_file1-splits/smb/smb_SMIA20111010-one-rigid1.pcap
+    * filtered by adapted /home/stephan/REUP-common/trace-collection/sources/filters/filter-smb.sh
+* smb_maccdc2012_maxdiff-1100.pcap
+    * from /media/usb0/project-raw-files/traces/MACCDC2012/smb_maccdc2012.pcap
+    * packets of trace are 802.11q VLAN encapsulated, strip to IP:  
+      python3 strip_encapsulation.py smb_maccdc2012_000*-f2.pcap
+    * filtered by /home/stephan/REUP-common/trace-collection/sources/filters/filter-smb.sh
+    * download command and additional infos: /media/usb0/project-raw-files/traces/MACCDC2012/source.txt
+
+
 
 ## iCTF 2010
 [UCSB](http://ictf.cs.ucsb.edu/ictfdata/2010/dumps/ictf2010pcap.tar.gz)  
- 
+
 ### IRC
 * irc_ictf2010-42.pcap
     * from file ictf2010.pcap42
@@ -75,6 +88,17 @@
     * from ictf2010_dns-f2.pcap
     * by `python src/prep_deduplicate-trace.py dns_ictf2010.pcap --p [N]`
     * filtered by `!_ws.malformed`
+
+#### new DNS
+
+* filter non-error responses: `(dns.flags.response == 1) && (dns.flags.rcode == 0)`
+* write to `dns_ictf2010-responses.pcap`
+* deduplicate: `python src/prep_deduplicate-trace.py -p 10000 input/hide/dns_ictf2010-responses.pcap`
+* For 100/1000/10000s, each do:
+    * get 66, 666, 6666 packets to merge: `python src/prep_deduplicate-trace.py -p 66  input/dns_ictf2010_deduped-9911-10000.pcap`
+    * merge: `mergecap -w dns_ictf2010-new_1000.pcap hide/dns_ictf2010_deduped-666.pcap hide/dns_ictf2010-responses_deduped.pcap`
+    * truncate: `python src/prep_deduplicate-trace.py -p 1000 input/dns_ictf2010-new_1000.pcap`
+    * rename to: `dns_ictf2010-new-deduped-100.pcap`
 
 
 ## Random
@@ -98,8 +122,12 @@ with parameters:
   ```
 * with `mergecap -F pcap -w binaryprotocols_merged_XXX.pcap INFILES`
 
+## Private/Own recordings
 
-
-
-
+* wlan monitor captures wardriving through Biberach
+* C_SEEMOO/wlan-mgt-priv.pcapng merged from C_SEEMOO/wlan-mgt by mergecap
+* from this is filtered: wlan-beacons-priv.pcapng 
+  * `wlan.fc.type_subtype == 0x0008 && !_ws.expert`
+  * (very common SSIDs could be reduced by `!(wlan.ssid == "HZN241577234" || wlan.ssid == "Fritzle")` ) but we didn't
+  * `python ~/Dokumente/git.lab-vs/REUP/nemesys/src/prep_filter-maxdiff-trace.py -l2 -p100[|0|00] wlan-beacons-priv.pcapng`
 

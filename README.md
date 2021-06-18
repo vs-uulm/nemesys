@@ -43,7 +43,8 @@ Additionally, this repository contains the reference implementation for calculat
 
 **NEMETYL** is a novel method for discriminating protocol message types from each other. It uses structural features of binary protocols inferred by NEMESYS to accurately recognize structural patterns and cluster messages based on their common structure.
 
-NEMESYS, FMS, and NEMETYL are indented to be used as a library to be integrated into your own scripts. However, you can also use it interactively with your favorite python shell.
+NEMESYS, FMS, and NEMETYL are indented to be used as a library to be integrated into your own scripts.
+However, you can also use it interactively with your favorite python shell.
 Have a look into `nemesys.py`, `nemesys_fms.py`, resp. `nemetyl_align-segments.py` to get an impression of the basic functionality and how to call it.
 
 
@@ -57,18 +58,21 @@ This is highly experimental software and by no means guaranteed to be fit for pr
 
 ## Requirements
 * Python 3
+* libpcap for pcapy: `apt-get install libpcap-dev libpq-dev`
 * Install packages listed in requirements.txt: `pip install -r requirements.txt`
+	* This necessitates to install libpcap for pcapy: `sudo apt-get install libpcap-dev`
 * Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)
   -- ~~currently NOT the official~~ [~~"next" branch~~](https://github.com/netzob/netzob/tree/next/netzob)! --
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
-    * clone Netzob fix-layer-build branch to a local folder:  
-      `git clone --single-branch -b fix-layer-build git@github.com:skleber/netzob.git` 
+    * clone Netzob next branch to a local folder: `git clone --single-branch -b next https://github.com/netzob/netzob.git` 
     * install it: `python setup.py install`
-* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) version in [2.2.6, 2.6.3]
+* [tshark](https://www.wireshark.org/docs/man-pages/tshark.html) version 2.x or 3.x (tested with: 2.2.6, 2.6.3, 2.6.5, 2.6.8, 3.2.3, 3.2.5)
   (possibly other versions, depending on the compatibility of the JSON-output format of dissected messages,
-  report further working versions e. g. per github issue)  
+  please report further working versions e. g., per github issue)  
   *Note: NEMESYS can be used without tshark as long as FMS validation (in package `validation`) 
   against a real dissector is NOT required.*
+  
+  Place your user in the "wireshark" group to enable tshark to run: `sudo gpasswd -a $USER wireshark`
 
 
 
