@@ -12,7 +12,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 # install required python modules
 COPY /requirements.txt .
 RUN pip3 install -r requirements.txt
-RUN pip3 install numpy
+# pylstar should be installed by netzob, but pip fails to install it there
+RUN pip3 install pylstar==0.1.2
 
 # install netzob
 # (tested on commit https://github.com/netzob/netzob/tree/49ee3e5e7d6dce67496afd5a75827a78be0c9f70)
