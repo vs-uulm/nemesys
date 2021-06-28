@@ -363,6 +363,9 @@ class SegmentPrinter(object):
         if exists(filename):
             print("File {} already exists, adding date and proceed...".format(filename))
             filename = filename + strftime("_%Y-%m-%d_%H%M%S")
+            # file could still exist
+            if exists(filename):
+                raise FileExistsError("File already exists. Abort write of tikz file.")
         with open(filename, 'w') as tikzfile:
             tikzfile.write(self.toTikz(selectMessages, styles))
 

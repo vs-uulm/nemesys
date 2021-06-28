@@ -4,7 +4,7 @@ This script primarily is intended to check whether the dissection of a specific 
 interpreted correctly to create a baseline to compare inferences to.
 """
 
-import time
+import time, logging
 from argparse import ArgumentParser
 from os.path import isfile
 from sys import exit
@@ -12,6 +12,9 @@ import IPython
 
 from nemere.validation.messageParser import ParsedMessage
 from nemere.utils.loader import SpecimenLoader
+
+# logging.basicConfig(level=logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 
 if __name__ == '__main__':
     parser = ArgumentParser(
