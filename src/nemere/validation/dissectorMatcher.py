@@ -473,7 +473,14 @@ True field type colors:\\\\
 
 
     def fieldOverlap(self, segment: MessageSegment):
-        """Overlap info between segment and its closest true field."""
+        """
+        Overlap info between segment and its closest true field.
+
+        :return: 4-tuple of the
+            ratio of overlap (with the segment length as base),
+            the index of the field in the field sequence (see parsedMessage#getFieldSequence()),
+            start and end offsets of the overlap.
+        """
         parsedMessage = self.parsedMessages[self.messages[segment.message]]
         fieldSequence = list()
         off = 0
@@ -520,15 +527,17 @@ True field type colors:\\\\
     def lookupField(self, segment: MessageSegment):
         """
         Look up the field name for a segment.
+        For determining this fields overlap (ratio, field index, overlap start and end) use #fieldOverlap().
 
-        TODO caveat: returns "close matches" without any notification,
-            i. e., the first offset of the segment's message fields that is not less than the segment's offset,
-            regardless of its length.
+        Caveat: Returns "close matches" without any notification that it is not an exact match,
+        i. e., the first offset of the segment's message fields that is not less than the segment's offset,
+        regardless of its length. It still is the field with the largest overlap as determined by #fieldOverlap(),
+        But this may be just, e.g., 2 out of 10 bytes if all other fields in scope of this segment are one byte long.
 
         :param segment: The segment to look up
-        :return: Message type (from MessageTypeIdentifiers in messageParser.py),
-            field name (from tshark nomenclature),
-            field type (from ParsingConstants in messageParser.py)
+        :return: Message type (from MessageTypeIdentifiers in module ..messageParser),
+            field name (from tshark dissector's nomenclature),
+            field type (from ParsingConstants in module ..messageParser)
         """
         parsedMessage = self.parsedMessages[self.messages[segment.message]]
         overlapRatio, overlapIndex, overlapStart, overlapEnd = self.fieldOverlap(segment)

@@ -493,13 +493,13 @@ def filterChars(segments: Iterable[AbstractSegment], meanCorridor=(50, 115), min
         2. Segment has not only 0x00 values
         3. All values are < 127 (0x7f)
         4. The sequence's values have a mean of between n and m, e. g. if 0x20 <= char <= 0x7e (printable chars)
-        5. The ratio of nonprintables is less than 2/3 of all values
+        5. The ratio of non-printables is less than 2/3 of all values
 
     :param segments: List of segments to be filtered
     :param meanCorridor: Corridor of mean value that denotes a probable char sequence.
         A meanCorridor=(0x20, 0x7e) would ensure to include even segments of repetitions
         of " " (bottommost printable) or "~" (topmost printable)
-    :param minLen: Minimum length of a segment to be condidered for hypothesis testing
+    :param minLen: Minimum length of a segment to be considered for hypothesis testing
     :return: Filtered segments: segments that hypothetically are chars
     """
 

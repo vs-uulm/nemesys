@@ -1,4 +1,4 @@
-import subprocess, io, struct, time
+import subprocess, io, struct, time, logging
 from queue import Queue
 from tempfile import NamedTemporaryFile
 from typing import Dict, Union
@@ -41,6 +41,7 @@ class TsharkConnector(object):
         self.__tempfile = None  # type: Union[io.BufferedRandom, None]
         self.__tempreader = None  # type: Union[io.BufferedReader, None]
         self.__version = None
+        logging.getLogger(__name__).setLevel(logging.DEBUG)
 
 
     @property
@@ -119,11 +120,8 @@ class TsharkConnector(object):
         """
         Read a dissected packet definition from the queue.
 
-        :raises:
-            A TimeoutError if no data is waiting in the queue.
-
-            A ValueError if the JSON was incomplete.
-
+        :raises TimeoutError: A TimeoutError if no data is waiting in the queue.
+        :raises ValueError: A ValueError if the JSON was incomplete.
         :return: A JSON string, trimmed and superficially validated.
         """
         assert self.__tempreader is not None and not self.__tempreader.closed, "Call writePacket() first"
@@ -131,13 +129,11 @@ class TsharkConnector(object):
         import threading
         readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
         readThread.start()
-        # print("Wait for queue...")
-        # Wait for queue to fill from the tshark-pipe
-        # noinspection PyUnusedLocal
+        logging.getLogger(__name__).info("Wait for queue to fill from the tshark-pipe...")
         for timeout in range(20):
             if self.__tsharkqueue.empty():
-                time.sleep(.01)
-                # print("Wait a little...")
+                time.sleep(.05)
+                logging.getLogger(__name__).debug(f"Wait a little for queue to fill... {timeout:02d}")
             else:
                 break
         print("Wait for tshark output (max 20s)...")
@@ -146,7 +142,7 @@ class TsharkConnector(object):
         if readThread.is_alive() or self.__tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")
 
-        # print("Queue filled...")
+        logging.getLogger(__name__).info("Queue filled. Capture tshark JSON output.")
 
         tjson = ""
         while not self.__tsharkqueue.empty():

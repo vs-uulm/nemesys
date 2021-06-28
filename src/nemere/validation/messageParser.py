@@ -3,10 +3,11 @@ Parsing of the JSON-format tshark dissectors.
 Interpret fields and data types for comparison to an inference result.
 """
 
-import json, re
+import json, re, logging
 from typing import List, Tuple, Dict, Set, Union, Generator, Type, Sequence, Any, Callable
 from pprint import pprint
 from itertools import chain
+from distutils.version import StrictVersion
 import inspect
 import IPython
 
@@ -14,6 +15,10 @@ from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMess
 
 from nemere.validation import protocols
 from nemere.validation.tsharkConnector import TsharkConnector
+
+
+# TODO make more central
+logging.getLogger(__name__).setLevel(logging.DEBUG)
 
 
 class MessageTypeIdentifiers(object):
@@ -221,6 +226,19 @@ class MessageTypeIdentifiers325(MessageTypeIdentifiers226):
 
 
 class ParsingConstants(object):
+    """
+    Class to hold constants necessary for the interpretation of the tshark dissectors.
+    Basic class with no specific protocol knowledge. Subclasses of this class extend the protocol knowledge according
+    to the tshark version they are compatible with.
+
+    TODO Determine at which exact tshark version the JSON output format is changed in each case.
+
+    Individual protocols should be defined in nemere.validation.protocols as module similar to the
+    example `wlan.py` there.
+
+    **Caution:** The dynamic importing of the protocols from the subpackage takes rather long, so instances of this
+        class should be cached and reused, not newly constructed too often.
+    """
     def __init__(self):
         compatibleProtocols = list(type(self).protocols(type(self).COMPATIBLE_TO))
 
@@ -294,6 +312,14 @@ class ParsingConstants(object):
     prehooks = dict()
     posthooks = dict()
     MESSAGE_TYPE_IDS = MessageTypeIdentifiers  # type: Type[MessageTypeIdentifiers]
+
+    @classmethod
+    def getAllSubclasses(cls):
+        all_subclasses = []
+        for subclass in cls.__subclasses__():
+            all_subclasses.append(subclass)
+            all_subclasses.extend(subclass.getAllSubclasses())
+        return all_subclasses
 
     @classmethod
     def _collect_ignore_fields(cls):
@@ -775,6 +801,9 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.unicode_password'] = 'bytes'
     TYPELOOKUP['smb.trans_data'] = 'bytes'
     TYPELOOKUP['smb2.unknown'] = 'bytes'  # has value: 0716
+    TYPELOOKUP['smb2.ioctl.enumerate_snapshots.num_snapshots'] = 'int_le'  # has value: 00000000
+    TYPELOOKUP['smb2.ioctl.enumerate_snapshots.num_snapshots_returned'] = 'int_le'  # has value: 00000000
+    TYPELOOKUP['smb2.ioctl.enumerate_snapshots.array_size'] = 'int_le'  # has value: 02000000
 
 
     # TODO enable reuse by providing the original field name to each hook
@@ -981,6 +1010,24 @@ class ParsingConstants226(ParsingConstants):
         """
         return [('bootp.option.type', value[:2]),]
 
+    @staticmethod
+    def _hookNTIOCTLDatatrail(value: list, siblings: List[Tuple[str, str]]) -> Union[List[Tuple[str, str]], None]:
+        """
+        Hook to append the trail of 'NT IOCTL Data' that is omitted in the dissector.
+        Return the constant value 50006900. (This is not generic: the value is non-static!)
+
+        unused, see ParsedMessage#_reassemblePostProcessing()
+
+        :param value: hex value of the field we are working on
+        :param siblings: subfields that we know of by now
+        :return: tuple of field name and value to add as new field
+        """
+        if value[0][0] == 'smb2.ioctl.enumerate_snapshots.num_snapshots_raw':
+            return [('smb.unknown_data', '50006900'), ]
+        else:
+            logging.getLogger(__name__).debug("NT IOCTL Data value: " + repr(value))
+        return None
+
     # HOOKS register. See :func:`walkSubTree()`.
     # noinspection PyUnresolvedReferences
     prehooks = {
@@ -1008,6 +1055,7 @@ class ParsingConstants226(ParsingConstants):
         'Unknown Transaction2 Data' : _hookAppendUnknownTransData.__func__,
         'smb.reserved': _hookAppendUnknownTransReqBytes.__func__,
         'nbns.session_data_packet_size' : _hookAppendFourZeros.__func__,
+        # 'NT IOCTL Data': _hookNTIOCTLDatatrail.__func__,
     }
 
 # noinspection PyDictCreation,PyAbstractClass
@@ -1138,7 +1186,8 @@ class ParsingConstants325(ParsingConstants263):
         return [('dhcp.option.type', value[:2]),]
 
     # noinspection PyUnresolvedReferences
-    prehooks = {'dhcp.option.type_raw': _hookFirstByte.__func__}
+    prehooks  = {'dhcp.option.type_raw': _hookFirstByte.__func__}
+    # noinspection PyUnresolvedReferences
     # posthooks = {}
 
 
@@ -1186,6 +1235,7 @@ class ParsedMessage(object):
     __tshark = None  # type: TsharkConnector
     """Cache the last used tsharkConnector for reuse."""
 
+    __constants = None
 
     def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True,
                  failOnUndissectable:bool=True,
@@ -1209,7 +1259,6 @@ class ParsedMessage(object):
         self._fieldsflat = None
         self._dissectfull = None
         self.__failOnUndissectable = failOnUndissectable
-        self.__constants = None
         if message:
             if not isinstance(message, RawMessage):
                 raise TypeError( "The message need to be of type netzob.Model.Vocabulary.Messages.RawMessage. "
@@ -1282,15 +1331,12 @@ class ParsedMessage(object):
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
-        >>> # noinspection PyUnresolvedReferences
-        >>> from netzob.all import *
-        >>> from nemere.validation.messageParser import ParsedMessage
-        >>> # prevent Netzob from producing debug output.
-        >>> import logging
-        >>> logging.getLogger().setLevel(30)
-        >>>
-        >>> pkt = PCAPImporter.readFile("../input/deduped-orig/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
-        >>> pms = ParsedMessage.parseMultiple(pkt)
+        >> # noinspection PyUnresolvedReferences
+        >> from netzob.all import PCAPImporter
+        >> from nemere.validation.messageParser import ParsedMessage
+        >>
+        >> pkt = PCAPImporter.readFile("../input/deduped-orig/dns_ictf2010_deduped-100.pcap", importLayer=1).values()
+        >> pms = ParsedMessage.parseMultiple(pkt)
         Wait for tshark output (max 20s)...
 
         :param messages: List of raw messages to parse
@@ -1623,7 +1669,9 @@ class ParsedMessage(object):
 
             if len(rest) <= 4:  # 2 bytes in hex notation
                 self._fieldsflat.append(('delimiter', rest))
-            elif self._fieldsflat[-1][0] in ['smb2.ioctl.shadow_copy.count', 'smb.trans_name']:
+            # for strange smb trails (perhaps some kind of undissected checksum):
+            elif self._fieldsflat[-1][0] in ['smb2.ioctl.shadow_copy.count',
+                                             'smb2.ioctl.enumerate_snapshots.array_size', 'smb.trans_name']:
                 # trailer that is unknown to the dissector
                 self._fieldsflat.append(('data.data', rest))
             elif set(rest) == {'0'}:  # an all-zero string at the end...
@@ -1749,23 +1797,31 @@ class ParsedMessage(object):
         #             "dns.qry.name_raw": "026130057477696d6703636f6d00",
         #             ...
 
-    @staticmethod
-    def __getCompatibleConstants() -> ParsingConstants:
+
+
+    @classmethod
+    def __getCompatibleConstants(cls) -> ParsingConstants:
         """
         Retrieve the ParsingConstants compatible to specific versions of tshark.
 
-        TODO Determine at which exact tshark version the JSON output format is changed in each case.
-
         :return: Appropriate ParsingConstants instance
         """
-        if ParsedMessage.__tshark.version <= ParsingConstants226.COMPATIBLE_TO:
-            return ParsingConstants226()
-        elif ParsedMessage.__tshark.version <= ParsingConstants263.COMPATIBLE_TO:
-            return ParsingConstants263()
-        elif ParsedMessage.__tshark.version <= ParsingConstants325.COMPATIBLE_TO:
-            return ParsingConstants325()
-        else:
-            return ParsingConstants263()
+        if not isinstance(cls.__constants, ParsingConstants):
+            subParsingConstants = sorted(
+                ((sub.COMPATIBLE_TO.decode(),sub) for sub in ParsingConstants.getAllSubclasses()),
+                key=lambda s: StrictVersion(s[0])
+            )
+            strictTshark = StrictVersion(ParsedMessage.__tshark.version.decode())
+            for compatibleTo, PC in subParsingConstants:
+                if strictTshark <= StrictVersion(compatibleTo):
+                    cls.__constants = PC()
+            # default to the latest version
+            if not isinstance(cls.__constants, ParsingConstants):
+                cls.__constants = subParsingConstants[-1][1]()
+        # logging.getLogger(__name__).debug(cls.__constants.__class__.__name__)
+        return cls.__constants
+
+
 
 
     ###  #############################################
@@ -1788,18 +1844,15 @@ class ParsedMessage(object):
         Prints to the console.
 
         Example:
-        >>> # noinspection PyUnresolvedReferences
-        >>> from netzob.all import *
-        >>> from nemere.validation.messageParser import ParsedMessage
-        >>> # prevent Netzob from producing debug output.
-        >>> import logging
-        >>> logging.getLogger().setLevel(30)
-        >>>
-        >>> dhcp = PCAPImporter.readFile("../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap",
-        ...                              importLayer=1).values()
-        >>> pms = ParsedMessage.parseMultiple(dhcp)
+        >> # noinspection PyUnresolvedReferences
+        >> from netzob.all import PCAPImporter
+        >> from nemere.validation.messageParser import ParsedMessage
+        >>
+        >> dhcp = PCAPImporter.readFile("../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap",
+        ..                              importLayer=1).values()
+        >> pms = ParsedMessage.parseMultiple(dhcp)
         Wait for tshark output (max 20s)...
-        >>> for parsed in pms.values(): parsed.printUnknownTypes()
+        >> for parsed in pms.values(): parsed.printUnknownTypes()
         """
         CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
         headerprinted = False

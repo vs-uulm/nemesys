@@ -186,23 +186,10 @@ class DistanceCalculator(object):
         """
         >>> from tabulate import tabulate
         >>> import math
-        >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        >>> from nemere.inference.analyzers import Value
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DistanceCalculator
         >>>
-        >>> bytedata = [
-        ...     bytes([1, 2, 3, 4]),
-        ...     bytes([   2, 3, 4]),
-        ...     bytes([   1, 3, 4]),
-        ...     bytes([   2, 4   ]),
-        ...     bytes([   2, 3   ]),
-        ...     bytes([20, 30, 37, 50, 69, 2, 30]),
-        ...     bytes([        37,  5, 69       ]),
-        ...     bytes([0, 0, 0, 0]),
-        ...     bytes([3, 2, 3, 4])
-        ...     ]
-        >>> messages  = [RawMessage(bd) for bd in bytedata]
-        >>> analyzers = [Value(message) for message in messages]
-        >>> segments  = [MessageSegment(analyzer, 0, len(analyzer.message.data)) for analyzer in analyzers]
+        >>> segments = generateTestSegments()
         >>> DistanceCalculator.debug = False
         >>> dc = DistanceCalculator(segments)
         Calculated distances for 37 segment pairs in ... seconds.
@@ -941,13 +928,13 @@ class DistanceCalculator(object):
         >>> [dsts[a] for a,b in nbrs] == [a[1] for a in nbrs]
         True
 
-        :param segment: Segment to get the neigbors for.
+        :param segment: Segment to get the neighbors for.
         :param subset: The subset of MessageSegments to use from this DistanceCalculator object, if any.
         :return: An ascendingly sorted list of neighbors of parameter segment
             from all the segments in this object (if subset is None)
             or from the segments in subset.
             The result is a list of tuples with
-                * the index of the neigbor (from self.segments or the subset list, respectively) and
+                * the index of the neighbor (from self.segments or the subset list, respectively) and
                 * the distance to this neighbor
         """
         home = self.segments2index([segment])[0]
@@ -958,8 +945,8 @@ class DistanceCalculator(object):
             # mask self identity by "None"-value if applicable
             mask = list(range(home)) + [None] + list(range(home + 1, self._distances.shape[0]))
 
-        candNeigbors = self._distances[:, home]
-        neighbors = sorted([(nidx, candNeigbors[n]) for nidx, n in enumerate(mask) if n is not None],
+        candNeighbors = self._distances[:, home]
+        neighbors = sorted([(nidx, candNeighbors[n]) for nidx, n in enumerate(mask) if n is not None],
                            key=lambda x: x[1])
         return neighbors
 

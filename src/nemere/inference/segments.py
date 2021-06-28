@@ -145,7 +145,7 @@ class MessageAnalyzer(ABC):
         It automatically prevents the generation of new MessageSegment instances, if the input already uses
         the target analyzer with the given targetArguments.
 
-        >>> from nemere import SpecimenLoader
+        >>> from nemere.utils.loader import SpecimenLoader
         >>> from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation
         >>> from nemere.inference.segments import MessageSegment, MessageAnalyzer
         >>> from nemere.inference.analyzers import Value
