@@ -1,4 +1,5 @@
 from itertools import chain
+from time import strftime
 from typing import Tuple, Iterable, Sequence, Dict, List, Union
 
 from tabulate import tabulate
@@ -360,7 +361,8 @@ class SegmentPrinter(object):
         print('Write tikz to ' + folder)
         filename = join(folder, 'inferredMessages.tikz')
         if exists(filename):
-            raise FileExistsError("File already exists. Abort write of tikz file.")
+            print("File {} already exists, adding date and proceed...".format(filename))
+            filename = filename + strftime("_%Y-%m-%d_%H%M%S")
         with open(filename, 'w') as tikzfile:
             tikzfile.write(self.toTikz(selectMessages, styles))
 

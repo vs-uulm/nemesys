@@ -67,9 +67,8 @@ if __name__ == '__main__':
     # * from netzob.Export.WiresharkDissector.WiresharkDissector import WiresharkDissector
     #   WiresharkDissector.dissectSymbols(refinedSymbols, 'ari.lua')
 
+    if args.interactive:
 
-    print("\nAccess inferred symbols via variables: symbols, refinedSymbols")
-    print("Access inferred message segments via variables: segmentsPerMsg, refinedPerMsg\n")
-
-
-    IPython.embed()
+        print("\nAccess inferred symbols via variables: symbols, refinedSymbols")
+        print("Access inferred message segments via variables: segmentsPerMsg, refinedPerMsg\n")
+        IPython.embed()
