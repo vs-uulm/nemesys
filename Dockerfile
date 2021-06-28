@@ -1,6 +1,6 @@
 FROM python:3.8-buster
 
-WORKDIR /nemesys
+WORKDIR /nemere
 
 # install missing system deps
 # tshark installation includes interactive question, thus using DEBIAN_FRONTEND var to prevent this
@@ -19,7 +19,7 @@ RUN pip3 install numpy
 RUN git clone --single-branch -b next https://github.com/netzob/netzob.git
 RUN cd netzob/netzob && python3 setup.py install && cd ../..
 
-# copy nemesys
+# copy nemere
 COPY . .
 
 # start in blank shell
