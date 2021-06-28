@@ -7,7 +7,6 @@ humanhash==0.0.1
 ipython==7.19.0
 kneed==0.7.0
 matplotlib==3.3.4
-Netzob==1.0.2
 networkx==2.5.1
 numpy==1.19.5
 pandas==1.2.1
