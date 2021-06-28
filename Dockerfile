@@ -17,7 +17,10 @@ RUN pip3 install numpy
 # install netzob
 # (tested on commit https://github.com/netzob/netzob/tree/49ee3e5e7d6dce67496afd5a75827a78be0c9f70)
 RUN git clone --single-branch -b next https://github.com/netzob/netzob.git
-RUN cd netzob/netzob && python3 setup.py install && cd ../..
+RUN cd netzob/netzob && \
+    git checkout 63125dbd31d28c27eee8616bd21345af417f5310 && \
+    python3 setup.py install && \
+    cd ../..
 
 # copy nemere
 COPY . .
