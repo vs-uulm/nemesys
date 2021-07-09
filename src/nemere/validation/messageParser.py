@@ -1275,19 +1275,30 @@ class ParsedMessage(object):
 
         :param listoftuples: list of tuples in format [(key, value), (key, value), (key, value)]
         :param name: The key to search for.
-        :return: the value, or list of values if multiple tuples with name as key exist
+        :return: list of values
         """
         foundvalues = list()
+
+        # remove 'list of single list' (as this might appear as a result of tshark's json output)
+        while isinstance(listoftuples, list) and \
+                len(listoftuples) == 1 and \
+                isinstance(listoftuples[0], list):
+            listoftuples = listoftuples[0]
+
+        # get values
         try:
             for k, v in listoftuples:
                 if name == k:
                     foundvalues.append(v)
         except ValueError:
             raise ValueError("could not parse as list of tuples: {}".format(listoftuples))
-        if len(foundvalues) == 0:
-            return False
-        if len(foundvalues) == 1:
-            return foundvalues[0]
+
+        # remove 'list of single list' (as this might appear as a result of tshark's json output)
+        while isinstance(foundvalues, list) and \
+                len(foundvalues) == 1 and \
+                isinstance(foundvalues[0], list):
+            foundvalues = foundvalues[0]
+
         return foundvalues
 
 
@@ -1465,14 +1476,14 @@ class ParsedMessage(object):
         framekey = 'frame'
         protocolskey = 'frame.protocols'
         sourcevalue = ParsedMessage._getElementByName(dissectjson, sourcekey)
-        if isinstance(sourcevalue, list):
+        if sourcevalue: 
             layersvalue = ParsedMessage._getElementByName(sourcevalue, layerskey)
-            if isinstance(layersvalue, list):
+            if layersvalue:
                 framevalue = ParsedMessage._getElementByName(layersvalue, framekey)
-                if isinstance(framevalue, list):
+                if framevalue:
                     protocolsvalue = ParsedMessage._getElementByName(framevalue, protocolskey)
-                    if isinstance(protocolsvalue, str):
-                        self.protocols = protocolsvalue.split(':')
+                    if len(protocolsvalue) == 1 and isinstance(protocolsvalue[0], str):
+                        self.protocols = protocolsvalue[0].split(':')
                         if self.relativeToIP and 'ip' not in self.protocols:
                             errortext = "No IP layer could be identified in a message of the trace."
                             raise DissectionTemporaryFailure(errortext)
@@ -1523,7 +1534,7 @@ class ParsedMessage(object):
                         # Only 'frame_raw' is guaranteed to all the bytes. Thus should we use this value??
                         self.protocolbytes = ParsedMessage._getElementByName(layersvalue,
                             self.protocolname + ParsedMessage.RK)  # tshark 2.2.6
-                        if isinstance(self.protocolbytes, list):   # tshark 2.6.3
+                        if self.protocolbytes:   # tshark 2.6.3
                             self.protocolbytes = self.protocolbytes[0]
 
                         # what to do with layers after (embedded in) the target protocol
@@ -1536,7 +1547,7 @@ class ParsedMessage(object):
                                 #     print("Bogus protocol layer ignored: {}".format(embedded))
 
                         # happens for some malformed packets with too few content e.g. irc with only "\r\n" payload
-                        if not isinstance(self._dissectfull, list):
+                        if not self._dissectfull:
                             print ("Undifferentiated protocol content for protocol ", self.protocolname,
                                    "\nDissector JSON is: ", self._dissectfull)
                             try:
@@ -1923,10 +1934,7 @@ class ParsedMessage(object):
         :param fieldname: The field name to look for in the dissection.
         :return: list of values for all fields with the given fieldname, empty list if non found.
         """
-        element = ParsedMessage._getElementByName(self._fieldsflat, fieldname)
-        if not element:
-            return []
-        return element if isinstance(element, list) else [element]
+        return ParsedMessage._getElementByName(self._fieldsflat, fieldname)
 
     @property
     def messagetype(self):
