@@ -4,6 +4,7 @@ WORKDIR /nemere
 
 # install missing system deps
 # tshark installation includes interactive question, thus using DEBIAN_FRONTEND var to prevent this
+RUN echo 'wireshark-common wireshark-common/install-setuid boolean true' | debconf-set-selections -
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git \
     libpcap-dev \
@@ -25,6 +26,11 @@ RUN cd netzob/netzob && \
 
 # copy nemere
 COPY . .
+
+# create user and add them to wireshark group
+RUN useradd -ms /bin/bash user
+RUN gpasswd -a user wireshark
+USER user
 
 # start in blank shell
 CMD [ "/bin/bash" ]

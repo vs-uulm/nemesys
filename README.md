@@ -86,6 +86,8 @@ docker build . -t nemere:latest
 docker run -ti --mount type=bind,source=$(pwd),target=/nemere/ nemere:latest
 ```
 
+For the use of FMS where tshark is going to be used, we need to add the `--privileged` flag to the run command above.
+
 
 ## Sample scripts
 There are several scripts to provide a starting point to working with NEMESYS and FMS.
