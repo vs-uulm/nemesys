@@ -10,6 +10,7 @@ from itertools import chain
 from distutils.version import StrictVersion
 import inspect
 import IPython
+from os.path import isfile
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
 
@@ -1303,6 +1304,86 @@ class ParsedMessage(object):
         ParsedMessage._parseMultiple([self.message], target=self, layer=self.layernumber,
                                      relativeToIP=self.relativeToIP, linktype=linktype)
         return None
+
+
+    @staticmethod
+    def parseFromPCAP(messages: List[RawMessage], pcap: str, layer=-1, relativeToIP=False,
+                      failOnUndissectable=True,
+                      linktype=ParsingConstants.LINKTYPES['ETHERNET']) -> Dict[RawMessage, 'ParsedMessage']:
+        """
+        Bulk create ParsedMessages in one tshark run with a PCAP file.
+
+        :param messages: A list of messages to be dissected.
+        :param file: full PCAP file path
+        :param layer: Protocol layer to parse, default is -1 for the topmost
+        :param relativeToIP: whether the layer is given relative to the IP layer.
+        :param failOnUndissectable:
+        :param linktype: base protocol layer of the PCAP file. One of ParsingConstants.LINKTYPES
+        :return: A dict of the input ``messages`` mapped to their ``ParsedMessage`` s
+        """
+
+        from json import loads
+        from subprocess import run
+
+        # tshark params:
+        # -Q : keep quiet, output only real errors on stderr not some infos
+        # -l : flush output buffering after each packet
+        # -n : Disable network object name resolution (such as hostname, TCP and UDP port names)
+        # -T json : set JSON output format
+        # -x : print hex of raw data (and ASCII interpretation)
+        # -r pcap : use pcap as input
+        tsharkline = ["/usr/bin/tshark", "-Q", "-l", "-n", "-i", "-", "-T", "json", "-x", "-r", pcap]
+
+        parsedMessages = {}
+
+        if len(messages) < 1:
+            raise ValueError("No messages provided...")
+
+        if not isfile(pcap):
+            raise ValueError("File {} does not exist.".format(pcap))
+
+        # write once any data (we don't care really) just to start a tshark process;
+        # we want this process to be started to keep following mechanisms working
+        # (e.g. compatability tests in _parseJSON function need a thsark process running)
+        # we are still only using the json data retrieved in the complete pcap run below
+        if not ParsedMessage.__tshark:
+            ParsedMessage.__tshark = TsharkConnector(linktype)
+        elif ParsedMessage.__tshark.linktype != linktype:
+            ParsedMessage.__tshark.terminate(2)
+            ParsedMessage.__tshark = TsharkConnector(linktype)
+        ParsedMessage.__tshark.writePacket(messages[0].data)
+        if not ParsedMessage.__tshark.isRunning():
+            raise RuntimeError("tshark could not be called.")
+
+        # create complete json output of pcap via tshark
+        rawjson = run(args=tsharkline, capture_output=True, text=True)
+        json = loads(rawjson.stdout, object_pairs_hook = list)
+
+        # parse each item in json and create a corresponding ParsedMessage() object
+        if len(json) == len(messages):
+            for j_item, m in zip(json, messages):
+                pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
+                                        failOnUndissectable=failOnUndissectable)
+                try:
+                    pm.message = m
+                    pm._parseJSON(j_item)
+                except DissectionInvalidError as e:
+                    print("Dissection invalid ({})".format(e))
+
+                # check if RawMessage matches the raw output of json if possible
+                # ... and set the message afterwards
+
+                # add ParsedMessage to parsedMessages
+                parsedMessages[m] = pm
+        else:
+            err = "Amount of messages in pcap ({}) does not match imported " + \
+                  "RawMessage ({}).".format(len(json), len(messages))
+            raise ValueError(err)
+
+        # close tshark process that we used for compatability reasons only
+        ParsedMessage.__tshark.terminate(2)
+
+        return parsedMessages
 
 
     @staticmethod

@@ -61,8 +61,9 @@ class BaseComparator(object):
     """Dummy for using nemere.utils.evaluationHelpers.CachedDistances with a unknown protocol."""
     import nemere.utils.loader as sl
 
-    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False, debug = False):
+    def __init__(self, specimens: sl.SpecimenLoader, pcap = None, layer: int = -1, relativeToIP: bool = False, debug = False):
         self.specimens = specimens
+        self.pcap = pcap
         self.messages = specimens.messagePool  # type: OrderedDict[AbstractMessage, netzob.RawMessage]
         """:type messages: OrderedDict[AbstractMessage, RawMessage]"""
         self.baselayer = specimens.getBaseLayerOfPCAP()
@@ -82,9 +83,9 @@ class MessageComparator(BaseComparator):
 
     __messageCellCache = dict()  # type: Dict[(netzob.Symbol, AbstractMessage), List]
 
-    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False,
+    def __init__(self, specimens: sl.SpecimenLoader, pcap = None, layer: int = -1, relativeToIP: bool = False,
                  failOnUndissectable=True, debug = False):
-        super().__init__(specimens, layer, relativeToIP, debug)
+        super().__init__(specimens, pcap, layer, relativeToIP, debug)
 
         self._failOnUndissectable = failOnUndissectable
 
@@ -110,8 +111,17 @@ class MessageComparator(BaseComparator):
         labeledMessages = dict()
         toparse = [msg for msg in messages if msg not in self._messageCache]
         # for msg in toparse: print("MessageCache miss for {}".format(msg.data))
-        mparsed = ParsedMessage.parseMultiple(toparse, self._targetlayer, self._relativeToIP,
-                                              failOnUndissectable=self._failOnUndissectable, linktype=self.baselayer)
+        if self.pcap:
+            mparsed = ParsedMessage.parseFromPCAP(toparse,
+                    pcap=self.pcap,
+                    layer=self._targetlayer,
+                    relativeToIP=self._relativeToIP,
+                    failOnUndissectable=self._failOnUndissectable,
+                    linktype=self.baselayer)
+        else:
+            mparsed = ParsedMessage.parseMultiple(toparse, self._targetlayer, self._relativeToIP,
+                                              failOnUndissectable=self._failOnUndissectable,
+                                              linktype=self.baselayer)
         for m, p in mparsed.items():
             try:
                 self._messageCache[m] = p
