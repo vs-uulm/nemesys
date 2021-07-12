@@ -1370,9 +1370,6 @@ class ParsedMessage(object):
                 except DissectionInvalidError as e:
                     print("Dissection invalid ({})".format(e))
 
-                # check if RawMessage matches the raw output of json if possible
-                # ... and set the message afterwards
-
                 # add ParsedMessage to parsedMessages
                 parsedMessages[m] = pm
         else:
