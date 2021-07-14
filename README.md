@@ -77,7 +77,7 @@ This is highly experimental software and by no means guaranteed to be fit for pr
 
 ## Dockerfile
 
-There is a Dockerfile provided so that you can use Nemere without worrying about dependencies. The following code builds the image and starts a container with the directory bind as a volume so that input files can be easily used and generated reports can be easily accessed even after stoping the container.
+There is a Dockerfile provided so that you can use Nemere without worrying about dependencies. The following code builds the image and starts a container with the directory bind as a volume so that input files can be easily used and generated reports can be easily accessed even after stopping the container.
 
 ```
 git clone https://github.com/vs-uulm/nemesys.git
@@ -85,6 +85,8 @@ cd nemesys
 docker build . -t nemere:latest
 docker run -ti --mount type=bind,source=$(pwd),target=/nemere/ nemere:latest
 ```
+
+For the use of FMS where tshark is going to be used, we need to add the `--privileged` flag to the run command above.
 
 
 ## Sample scripts

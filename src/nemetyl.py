@@ -47,9 +47,10 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interactive', help='Open ipython prompt after finishing the analysis.',
                         action="store_true")
     parser.add_argument('-l', '--layer', type=int, default=2,
-                        help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
-                             '(typically the payload of a transport protocol).')
-    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
+                        help='Protocol layer to consider. Default is layer 2. Use --relativeToIP '
+                             'to use a layer relative to IP layer.')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true', \
+                        help='Consider a layer relative to the IP layer (see also --layer flag)')
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.',
                         choices=tokenizers, default="nemesys")
     parser.add_argument('-s', '--sigma', type=float,
