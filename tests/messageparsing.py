@@ -8,6 +8,168 @@ from netzob.all import PCAPImporter
 
 from nemere.validation.messageParser import ParsedMessage
 
+TESTDHCP = "../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap"
+TESTDNS = "../input/deduped-orig/dns_ictf2010_deduped-100.pcap"
+
+HUNDRED_COOKIES = "['63825363']\n"*99 + "['63825363']"
+HUNDRED_REQUEST_LIST_ITEMS = """['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '2c', '2e', '2f', '06']
+['01', '0f', '03', '2c', '2e', '2f', '06']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '2b', '4d']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '79', 'f9', '2b', 'fc']
+['01', '0f', '03', '2c', '2e', '2f', '06']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', 'f9', '2b', 'fc']
+['01', '0f', '03', '06', '2c', '2e', '2f', '1f', '21', '2b']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']
+['01', '1c', '02', '03', '0f', '06', '77', '0c', '2c', '2f', '1a', '79', '2a']"""
+HUNDRED_MESSAGE_TYPES = """Request
+ACK
+Request
+ACK
+Inform
+ACK
+Inform
+ACK
+Discover
+Discover
+Discover
+Discover
+Request
+ACK
+Request
+ACK
+Discover
+Discover
+Inform
+ACK
+Request
+ACK
+Request
+ACK
+Inform
+ACK
+Inform
+ACK
+Inform
+ACK
+Request
+Request
+ACK
+Inform
+ACK
+Inform
+ACK
+Request
+ACK
+Inform
+ACK
+Request
+ACK
+Inform
+ACK
+Discover
+Discover
+Discover
+Discover
+Discover
+Inform
+ACK
+Request
+ACK
+Inform
+ACK
+Discover
+Request
+Request
+ACK
+Request
+ACK
+Inform
+ACK
+Request
+Request
+ACK
+Inform
+ACK
+Request
+ACK
+Request
+ACK
+Inform
+ACK
+Request
+ACK
+Inform
+ACK
+Request
+ACK
+Request
+ACK
+Request
+ACK
+Inform
+ACK
+Inform
+Request
+ACK
+Inform
+ACK
+Request
+ACK
+Discover
+Request
+Inform
+Inform
+Inform
+Inform"""
+
+
 
 @contextmanager
 def captured_output():
@@ -30,30 +192,64 @@ class TestParsedMessage(unittest.TestCase):
     """
     Test nemere.validation.messageParser.ParsedMessage as unittest since the corresponding doctests fail miraculously.
     """
-    TESTDHCP = "../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap"
-    TESTDNS  = "../input/deduped-orig/dns_ictf2010_deduped-100.pcap"
 
     def setUp(self) -> None:
         """Import DHCP and DNS traces as samples using netzob's PCAPImporter."""
         # prevent Netzob from producing debug output.
         logging.getLogger().setLevel(30)
-        self.dhcp = PCAPImporter.readFile(TestParsedMessage.TESTDHCP, importLayer = 1).values()
-        self.dns  = PCAPImporter.readFile(TestParsedMessage.TESTDNS,  importLayer = 1).values()
+        self.dhcp = PCAPImporter.readFile(TESTDHCP, importLayer = 1).values()
+        self.dns  = PCAPImporter.readFile(TESTDNS,  importLayer = 1).values()
+        self.dhcpPms = ParsedMessage.parseMultiple(self.dhcp)
+        self.dnsPms = []
 
     def test_printUnknownTypes(self):
         """Test parsing of DHCP and validate by printUnknownTypes which should return nothing if everything is fine."""
         with captured_output() as (out, err):
-            pms = ParsedMessage.parseMultiple(self.dhcp)
-            for parsed in pms.values(): parsed.printUnknownTypes()
+            for parsed in self.dhcpPms.values(): parsed.printUnknownTypes()
         output = out.getvalue().strip()
-        self.assertEqual(output, 'Wait for tshark output (max 20s)...')
+        self.assertEqual(output, '')
 
     def test_parseMultiple(self):
         """Test parsing of DNS which should return basically nothing."""
         with captured_output() as (out, err):
-            pms = ParsedMessage.parseMultiple(self.dns)
+            self.dnsPms = ParsedMessage.parseMultiple(self.dns)
         output = out.getvalue().strip()
         self.assertEqual(output, 'Wait for tshark output (max 20s)...')
 
+    def test_getValuesByName(self):
+        """Test retrieving field values by name."""
+        with captured_output() as (out, err):
+            for pms in self.dhcpPms.values():
+                elements = pms.getValuesByName("dhcp.option.request_list_item")  # cookie
+                if not isinstance(elements,bool) and elements:
+                     print(elements)
+        output = out.getvalue().strip()
+        self.assertEqual(output, HUNDRED_REQUEST_LIST_ITEMS)
+
+    def test_messagetype(self):
+        """Test MessageTypeIdentifiers.typeOfMessage."""
+        with captured_output() as (out, err):
+            for pms in sorted(self.dhcpPms.values(), key=lambda m: m.message.date):
+                print(pms.messagetype)
+        output = out.getvalue().strip()
+        self.assertEqual(output, HUNDRED_MESSAGE_TYPES)
+
 if __name__ == '__main__':
     unittest.main()
+
+# cd src/
+# from netzob.all import PCAPImporter
+# from nemere.validation.messageParser import ParsedMessage
+# TESTDHCP = "../input/deduped-orig/dhcp_SMIA2011101X_deduped-100.pcap"
+# dhcp = PCAPImporter.readFile(TESTDHCP, importLayer = 1).values()
+# dhcpPms = ParsedMessage.parseMultiple(dhcp)
+# from collections import Counter, defaultdict
+# fieldCnt = defaultdict(Counter)
+# for pms in dhcpPms.values():
+#     fc = Counter(pms.getFieldNames())
+#     for f,c in fc.items():
+#         fieldCnt[f].update([c])
+
+
+
+

@@ -565,6 +565,16 @@ True field type colors:\\\\
         Lookup the values for a given field name in all messages.
         # TODO comparator.lookupValues4FieldName with list of messages (i.e., cluster elements)
 
+        >>> from nemere.utils.loader import SpecimenLoader
+        >>> from nemere.validation.dissectorMatcher import MessageComparator
+        >>> from collections import Counter
+        >>> specimens = SpecimenLoader("../input/deduped-orig/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
+        >>> comparator = MessageComparator(specimens, 2, True, debug=False)
+        Wait for tshark output (max 20s)...
+        >>> lv = comparator.lookupValues4FieldName("ntp.ppoll")
+        >>> Counter(lv).most_common()
+        [('0a', 43), ('06', 41), ('09', 6), ('0e', 4), ('08', 2), ('0f', 2), ('0d', 2)]
+
         :param fieldName: name of field (according to tshark nomenclature)
         :return: List of values of all fields carrying the given field name
         """
