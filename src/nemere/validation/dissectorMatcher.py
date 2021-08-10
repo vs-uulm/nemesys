@@ -108,9 +108,9 @@ class MessageComparator(BaseComparator):
         labeledMessages = dict()
         toparse = [msg for msg in messages if msg not in self._messageCache]
         # for msg in toparse: print("MessageCache miss for {}".format(msg.data))
-            mparsed = ParsedMessage.parseMultiple(toparse, 
-                                              failOnUndissectable=self._failOnUndissectable,
-                                              linktype=self.baselayer)
+        mparsed = ParsedMessage.parseMultiple(toparse, 
+                                          failOnUndissectable=self._failOnUndissectable,
+                                          linktype=self.baselayer)
         for m, p in mparsed.items():
             try:
                 self._messageCache[m] = p
