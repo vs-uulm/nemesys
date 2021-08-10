@@ -914,20 +914,10 @@ class DissectorMatcher(AbstractDissectorMatcher):
 
         return nfieldends, tfieldends
 
-    def calcFMS(self):
-        fmslist = list()
-        for msg in self._inferredSymbol.messages:
-            # TODO calculate independent FMSs for each symbol member message, since currently
-            #  this does result in an FMS that is identical for all messages within the symbol!
-            fms = super().calcFMS()
-            fms.symbol = self._inferredSymbol
-            fmslist.append(fms)
-        return fmslist
-
     @staticmethod
     def symbolListFMS(mc: MessageComparator, symbols: List[netzob.Symbol]) -> Dict[AbstractMessage, FormatMatchScore]:
         """
-        Calculate Format Matching Score for a list of symbols and name the symbols by adding a sequence number.
+        Calculate Format Match Score for a list of symbols and name the symbols by adding a sequence number.
 
         :param mc: The message comparator by which to obtain dissections for the messages in the symbols.
         :param symbols: list of inferred symbols
@@ -937,16 +927,11 @@ class DissectorMatcher(AbstractDissectorMatcher):
         for counter, symbol in enumerate(symbols):
             symbol.name = "{:s}{:2d}".format(symbol.name, counter)
             try:
-                try:
-                    dm = DissectorMatcher(mc, symbol)
-                except WatchdogTimeout as e:
-                    print(e, "Continuing with next symbol...")
-                    for msg in symbol.messages:
-                        matchprecisions[msg] = FormatMatchScore(msg, symbol)  # add empty dummy FMS
-                    continue
-                fmslist = dm.calcFMS()
-                for fms in fmslist:
-                    matchprecisions[fms.message] = fms
+                for msg in symbol.messages:
+                    dm = DissectorMatcher(mc, symbol, msg)
+                    fms = dm.calcFMS()
+                    fms.symbol = symbol
+                    matchprecisions[msg] = fms
             except RuntimeError as e:
                 print("\n\n# # # Messages # # #\n")
                 for msg in symbol.messages:
