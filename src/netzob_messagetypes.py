@@ -108,8 +108,7 @@ if __name__ == '__main__':
     print('\nLoading ...')
 
     specimens = SpecimenLoader(args.pcapfilename, layer=args.layer, relativeToIP=args.relativeToIP)
-    comparator = MessageComparator(specimens, layer=args.layer, relativeToIP=args.relativeToIP,
-                               failOnUndissectable=False, debug=debug)
+    comparator = MessageComparator(specimens, failOnUndissectable=False, debug=debug)
     print('Loaded and dissected in {:.3f}s'.format(time.time() - swstart))
 
     print('\nNetzob Inference ...')

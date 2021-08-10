@@ -46,9 +46,7 @@ if __name__ == '__main__':
     print("Load messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=args.layer,
                                relativeToIP=args.relativeToIP)
-    comparator = MessageComparator(specimens, layer=args.layer,
-                               relativeToIP=args.relativeToIP,
-                               failOnUndissectable=False, debug=debug)
+    comparator = MessageComparator(specimens, failOnUndissectable=False, debug=debug)
 
     ########################
 

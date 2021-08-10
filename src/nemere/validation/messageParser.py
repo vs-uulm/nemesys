@@ -620,12 +620,6 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.aaaa'] = 'ipv6'
     TYPELOOKUP['dns.cname'] = 'chars'
 
-    # eth
-    TYPELOOKUP['eth.addr'] = 'macaddr'
-    TYPELOOKUP['eth.dst'] = 'macaddr'
-    TYPELOOKUP['eth.src'] = 'macaddr'
-    TYPELOOKUP['eth.type'] = 'int' # unsigned integer, 2 bytes
-
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'
     TYPELOOKUP['irc.request.command'] = 'chars'
