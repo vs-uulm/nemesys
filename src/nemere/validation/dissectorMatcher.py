@@ -61,30 +61,28 @@ class BaseComparator(object):
     """Dummy for using nemere.utils.evaluationHelpers.CachedDistances with a unknown protocol."""
     import nemere.utils.loader as sl
 
-    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False, debug = False):
+    def __init__(self, specimens: sl.SpecimenLoader, debug = False):
         self.specimens = specimens
         self.messages = specimens.messagePool  # type: OrderedDict[AbstractMessage, netzob.RawMessage]
         """:type messages: OrderedDict[AbstractMessage, RawMessage]"""
         self.baselayer = specimens.getBaseLayerOfPCAP()
         self.debug = debug
-        self._targetlayer = layer
-        self._relativeToIP = relativeToIP
 
 class MessageComparator(BaseComparator):
     """
     Formal and visual comparison of a list of messages' inferences and their dissections.
 
     Functions that are closely coupled to the dissection: Interfaces with tshark to configure the call to it by
-    the parameters layer, relativeToIP, and failOnUndissectable and processes the output to directly know the
+    the parameters failOnUndissectable and processes the output to directly know the
     dissection result.
     """
     import nemere.utils.loader as sl
 
     __messageCellCache = dict()  # type: Dict[(netzob.Symbol, AbstractMessage), List]
 
-    def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False,
+    def __init__(self, specimens: sl.SpecimenLoader,
                  failOnUndissectable=True, debug = False):
-        super().__init__(specimens, layer, relativeToIP, debug)
+        super().__init__(specimens, debug)
 
         self._failOnUndissectable = failOnUndissectable
 
@@ -110,8 +108,9 @@ class MessageComparator(BaseComparator):
         labeledMessages = dict()
         toparse = [msg for msg in messages if msg not in self._messageCache]
         # for msg in toparse: print("MessageCache miss for {}".format(msg.data))
-        mparsed = ParsedMessage.parseMultiple(toparse, self._targetlayer, self._relativeToIP,
-                                              failOnUndissectable=self._failOnUndissectable, linktype=self.baselayer)
+            mparsed = ParsedMessage.parseMultiple(toparse, 
+                                              failOnUndissectable=self._failOnUndissectable,
+                                              linktype=self.baselayer)
         for m, p in mparsed.items():
             try:
                 self._messageCache[m] = p
@@ -128,7 +127,7 @@ class MessageComparator(BaseComparator):
                 labeledMessages[m] = self._messageCache[m]
             except KeyError:  # something went wrong in the last parsing attempt of m
                 if self._failOnUndissectable:
-                    reparsed = ParsedMessage(m, self._targetlayer, self._relativeToIP,
+                    reparsed = ParsedMessage(m, layer=-1,
                                              failOnUndissectable=self._failOnUndissectable)
                     self._messageCache[m] = reparsed
                     labeledMessages[m] = self._messageCache[m]
@@ -589,7 +588,7 @@ class AbstractDissectorMatcher(ABC):
     Incorporates methods to match a message's inference with its dissector in different ways.
 
     Dissections been are done by MessageComparator so this class does not need direct interaction
-    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
+    with tshark nor any knowledge of failOnUndissectable.
     """
     @abstractmethod
     def __init__(self, mc: MessageComparator, message: AbstractMessage=None):
@@ -767,7 +766,7 @@ class BaseDissectorMatcher(AbstractDissectorMatcher):
     Incorporates methods to match a message's inference with its dissector in different ways.
 
     Dissections been are done by MessageComparator so this class does not need direct interaction
-    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
+    with tshark nor any knowledge of failOnUndissectable.
     """
     def __init__(self, mc: MessageComparator, messageSegments: List[MessageSegment]):
         """
@@ -796,7 +795,7 @@ class DissectorMatcher(AbstractDissectorMatcher):
       due to the omitted parsing of Netzob Symbols.
 
     Dissections been are done by MessageComparator so this class does not need direct interaction
-    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
+    with tshark nor any knowledge of failOnUndissectable.
     """
 
     def __init__(self, mc: MessageComparator, inferredSymbol: netzob.Symbol, message: AbstractMessage=None):

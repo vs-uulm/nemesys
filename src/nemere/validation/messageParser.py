@@ -620,6 +620,12 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.aaaa'] = 'ipv6'
     TYPELOOKUP['dns.cname'] = 'chars'
 
+    # eth
+    TYPELOOKUP['eth.addr'] = 'macaddr'
+    TYPELOOKUP['eth.dst'] = 'macaddr'
+    TYPELOOKUP['eth.src'] = 'macaddr'
+    TYPELOOKUP['eth.type'] = 'int' # unsigned integer, 2 bytes
+
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'
     TYPELOOKUP['irc.request.command'] = 'chars'
@@ -1250,7 +1256,7 @@ class ParsedMessage(object):
 
     __constants = None
 
-    def __init__(self, message: Union[RawMessage, None], layernumber:int=2, relativeToIP:bool=True,
+    def __init__(self, message: Union[RawMessage, None], layernumber: int = -1,
                  failOnUndissectable:bool=True,
                  linktype:int=ParsingConstants.LINKTYPES['ETHERNET']):
         """
@@ -1258,14 +1264,12 @@ class ParsedMessage(object):
 
         :param message: The raw message to be parsed.
         :param layernumber: Message layer to be considered by the dissection.
-            The default is 2, -1 is the upmost layer.
-        :param relativeToIP: whether layernumber should be interpreted relative to the IP layer.
+            The default is -1, in this case we will ask which layer to use.
         :param failOnUndissectable: If the protocol in layernumber has no known dissector (one field: 'data'), fail.
         """
         # entire Netzob RawMessage
         self.message = message
         self.layernumber = layernumber
-        self.relativeToIP = relativeToIP
         self.protocols = None
         self.protocolname = None
         self.protocolbytes = None
@@ -1344,33 +1348,28 @@ class ParsedMessage(object):
         """
         Dissect write self.message.data to the tshark process and parse the result.
         """
-        ParsedMessage._parseMultiple([self.message], target=self, layer=self.layernumber,
-                                     relativeToIP=self.relativeToIP, linktype=linktype)
+        ParsedMessage._parseMultiple([self.message], target=self, linktype=linktype)
         return None
 
 
     @staticmethod
-    def parseMultiple(messages: List[RawMessage], layer=-1, relativeToIP=False,
-                                         failOnUndissectable=True,
+    def parseMultiple(messages: List[RawMessage], failOnUndissectable=True,
                       linktype=ParsingConstants.LINKTYPES['ETHERNET']) -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
 
         :param failOnUndissectable:
         :param messages: A list of messages to be dissected.
-        :param layer: Protocol layer to parse, default is -1 for the topmost
-        :param relativeToIP: whether the layer is given relative to the IP layer.
         :param linktype: base protocol layer of the PCAP file. One of ParsingConstants.LINKTYPES
         :return: A dict of the input ``messages`` mapped to their ``ParsedMessage`` s
         """
-        return ParsedMessage._parseMultiple(messages, layer=layer, relativeToIP=relativeToIP,
-                                         failOnUndissectable=failOnUndissectable, linktype=linktype)
+        return ParsedMessage._parseMultiple(messages, failOnUndissectable=failOnUndissectable,
+                linktype=linktype)
 
 
     @staticmethod
-    def _parseMultiple(messages: List[RawMessage], target = None, layer=-1, relativeToIP=False,
-                       failOnUndissectable=True, linktype = ParsingConstants.LINKTYPES['ETHERNET'],
-                       maxRecursion: int=3) \
+    def _parseMultiple(messages: List[RawMessage], target = None, failOnUndissectable=True,
+            linktype = ParsingConstants.LINKTYPES['ETHERNET'], maxRecursion: int=3) \
             -> Dict[RawMessage, 'ParsedMessage']:
         """
         Bulk create ParsedMessages in one tshark run for better performance.
@@ -1432,7 +1431,7 @@ class ParsedMessage(object):
                 except (ValueError, TimeoutError) as e:
                     print("Need to respawn tshark ({})".format(e))
                     ParsedMessage.__tshark.terminate(2)
-                    prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target, layer, relativeToIP,
+                    prsdmsgs.update(ParsedMessage._parseMultiple(msgChunk, target,
                                                                  failOnUndissectable, linktype))
                     print("Stopped for raised exception:", e)
 
@@ -1443,19 +1442,21 @@ class ParsedMessage(object):
                         raise json.JSONDecodeError("Empty dissection received.", "", 0)
                     # iterate each main JSON node alongside the corresponding message from the chunk written to tshark
                     dissectjson = json.loads(tjson, object_pairs_hook = list)
+                    layer = -1
                     for paketjson, m in zip(dissectjson, msgChunk):
                         if target:
                             pm = target  # for one single target
                         else:
                             # Prevent individual tshark call for parsing by creating a
                             #   ParsedMessage with message set to None...
-                            pm = ParsedMessage(None, layernumber=layer, relativeToIP=relativeToIP,
+                            pm = ParsedMessage(None, layernumber=layer,
                                                failOnUndissectable=failOnUndissectable)
                             # ... and set the message afterwards
                             pm.message = m
                         try:
                             pm._parseJSON(paketjson)
                             prsdmsgs[m] = pm
+                            layer = pm.layernumber
                         except DissectionTemporaryFailure as e:
                             # Retry tshark, e.g., in case of the "No IP layer" exception
                             print("Need to respawn tshark ({})".format(e))
@@ -1463,8 +1464,7 @@ class ParsedMessage(object):
                             # Prevent an infinite recursion of ParsedMessage._parseMultiple
                             if maxRecursion > 0:
                                 prsdmsgs.update(ParsedMessage._parseMultiple(
-                                    msgChunk[msgChunk.index(m):], target, target.layernumber, target.relativeToIP,
-                                    maxRecursion=maxRecursion-1))
+                                    msgChunk[msgChunk.index(m):], target, maxRecursion=maxRecursion-1))
                             else:
                                 raise RuntimeError("ParsedMessage._parseMultiple exceeded its recursion limit.")
                             break   # continue with next chunk. The rest of the current chunk
@@ -1534,17 +1534,18 @@ class ParsedMessage(object):
                 layersvalue, framekey), protocolskey)
             if len(protocolsvalue) == 1 and isinstance(protocolsvalue[0], str):
                 self.protocols = protocolsvalue[0].split(':')
-                if self.relativeToIP and 'ip' not in self.protocols:
-                    errortext = "No IP layer could be identified in a message of the trace."
-                    raise DissectionTemporaryFailure(errortext)
-                if not self.relativeToIP:
-                    baselayer = 0 if 'radiotap' not in self.protocols else self.protocols.index('radiotap') + 1
-                    absLayNum = (baselayer + self.layernumber) if self.layernumber >= 0 else len(self.protocols) - 1
-                else:
-                    absLayNum = self.protocols.index('ip') + self.layernumber
+
+                if self.layernumber < 0:
+                    for protoi, proto in enumerate(self.protocols):
+                        print("[{}]: {}".format(protoi, proto))
+                    print()
+                    protoi = input("Which protocol shall we analyze? ")
+                    print("\nTry to remember your decision, but we might need to ask again... \n")
+                    self.layernumber = int(protoi)
+
                 try:
                     # protocolname is e.g. 'ntp'
-                    self.protocolname = self.protocols[absLayNum]
+                    self.protocolname = self.protocols[self.layernumber]
                 except IndexError as e:
                     # there is a bug in the wlan.mgt/awdl dissector: "sometimes" it doesn't list any layer
                     # above wlan in the protocols value of frame (see `self.protocols`), so we check for
@@ -1556,9 +1557,9 @@ class ParsedMessage(object):
                     # in rawProtocols then replace the self.protocols list with the manually determined one.
                     if rawProtocols[:len(self.protocols)] == self.protocols:
                         self.protocols = rawProtocols
-                        self.protocolname = self.protocols[absLayNum]
+                        self.protocolname = self.protocols[self.layernumber]
                     else:
-                        ptxt = f"{absLayNum} missing in {self.protocols}"
+                        ptxt = f"{self.layernumber} missing in {self.protocols}"
                         print(ptxt)
                         try:
                             subprocess.run(["spd-say", ptxt])
@@ -1570,7 +1571,7 @@ class ParsedMessage(object):
 
                 # add missing layers in protocols list
                 pKeys = [a for a, b in layersvalue]
-                for lnProtocol in self.protocols[absLayNum::-1]:
+                for lnProtocol in self.protocols[self.layernumber::-1]:
                     if lnProtocol in pKeys:
                         lastKnownLayer = pKeys.index(lnProtocol)
                         missingLayers = [a for a, b in layersvalue[lastKnownLayer+1:]
@@ -1588,8 +1589,8 @@ class ParsedMessage(object):
                     self.protocolbytes = self.protocolbytes[0]
 
                 # what to do with layers after (embedded in) the target protocol
-                if absLayNum < len(self.protocols):
-                    for embedded in self.protocols[absLayNum+1 : ]:
+                if self.layernumber < len(self.protocols):
+                    for embedded in self.protocols[self.layernumber+1 : ]:
                         dissectsub = ParsedMessage._getElementByName(layersvalue, embedded)
                         if isinstance(dissectsub, list):
                             self._dissectfull += dissectsub
