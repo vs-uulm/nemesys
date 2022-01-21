@@ -4,7 +4,7 @@ Cython==0.29.21
 GitPython==3.1.18
 hdbscan==0.8.26
 humanhash==0.0.1
-ipython==7.19.0
+ipython==7.31.1
 kneed==0.7.0
 matplotlib==3.3.4
 netaddr==0.8.0
