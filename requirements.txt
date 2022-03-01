@@ -9,7 +9,7 @@ kneed==0.7.0
 matplotlib==3.3.4
 netaddr==0.8.0
 networkx==2.5.1
-numpy==1.19.5
+numpy==1.21.0
 pandas==1.2.1
 pcapy==0.10.10
 scapy==2.4.4
