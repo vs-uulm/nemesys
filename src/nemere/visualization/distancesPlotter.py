@@ -2,18 +2,18 @@ import numpy
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
-from typing import List, Any, Union, Sequence
+from typing import List, Any, Union, Sequence, Tuple, Hashable
 from itertools import compress
+
 from sklearn import manifold
 from sklearn.decomposition import PCA
 
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
 
-from nemere.visualization.plotter import MessagePlotter
 from nemere.utils.loader import BaseLoader
-from nemere.inference.segments import MessageSegment, TypedSegment
-from nemere.inference.templates import Template, TypedTemplate, DistanceCalculator
-
+from nemere.inference.segments import MessageSegment, TypedSegment, AbstractSegment
+from nemere.inference.templates import Template, TypedTemplate, DistanceCalculator, FieldTypeTemplate
+from nemere.visualization.plotter import MessagePlotter
 
 
 class DistancesPlotter(MessagePlotter):
@@ -205,6 +205,8 @@ class DistancesPlotter(MessagePlotter):
         assert isinstance(labels, numpy.ndarray)
         assert len(segments) == distances.shape[0] == distances.shape[1]
 
+        from nemere.utils.evaluationHelpers import unknown
+
         axMDS, axSeg = self._axes  # type: plt.Axes, plt.Axes
         axMDS.set_aspect('equal', adjustable='datalim')
 
@@ -216,6 +218,7 @@ class DistancesPlotter(MessagePlotter):
                 botlef = (0, -5)
             else:
                 botlef = (0.1, 0.1)
+            # noinspection PyTypeChecker
             axSeg.text(*botlef, 'Subsampled: {} of {} segments'.format(len(segments), originalSegmentCount))
             # without subsampling, existing values need not to be overwritten
 
@@ -254,10 +257,10 @@ class DistancesPlotter(MessagePlotter):
         if any(isinstance(seg, (TypedSegment, TypedTemplate, RawMessage)) for seg in segments):
             if any(isinstance(seg, (TypedSegment, TypedTemplate)) for seg in segments):
                 ftypes = numpy.array([seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate))
-                                      else "[unknown]" for seg in segments])  # PP
+                                      else unknown for seg in segments])  # PP
             elif any(isinstance(seg, RawMessage) and seg.messageType != 'Raw' for seg in segments):
                 ftypes = numpy.array([msg.messageType if isinstance(msg, RawMessage) and msg.messageType != 'Raw'
-                                      else "[unknown]" for msg in segments])  # PP
+                                      else unknown for msg in segments])  # PP
             else:
                 ftypes = set()
             # identify unique types
@@ -440,3 +443,50 @@ class DistancesPlotter(MessagePlotter):
         plt.show()
 
 
+class SegmentTopology(object):
+    """Create a distance Topology plot for the given Segment cluster data."""
+
+    from nemere.utils.evaluationHelpers import TitleBuilder, StartupFilecheck, unknown
+    # leads to import clash:
+    # from nemere.utils.reportWriter import SegmentClusterGroundtruthReport
+
+    # show only largest clusters
+    clusterCutoff = 15
+
+    def __init__(self, clusterStats: List[Tuple[Hashable, str, float, float, int]],
+                 fTypeTemplates: List[FieldTypeTemplate], noise: List[AbstractSegment],
+                 dc: DistanceCalculator):
+        # look up inferred data types for the segments in the selected subset of clusters and generate labels for them.
+        clusterStatsLookup = {stats[0]: (stats[4], stats[2], stats[1])  # label, mostFreqentType, precision, recall, numSegsinCuster
+                              for stats in clusterStats if stats is not None}
+        sortedClusters = sorted(fTypeTemplates, key=lambda x: -len(x.baseSegments))
+        if type(self).clusterCutoff > 0:
+            selectedClusters = [ftt for ftt in sortedClusters
+                                if clusterStatsLookup[ftt.fieldtype][2] != type(self).unknown][:type(self).clusterCutoff]
+        else:
+            selectedClusters = sortedClusters
+        omittedClusters = [ftt for ftt in sortedClusters if ftt not in selectedClusters]
+        clustermask = {segid: "{}: {} seg.s ({:.2f} {})".format(ftt.fieldtype, *clusterStatsLookup[ftt.fieldtype])
+            for ftt in selectedClusters for segid in dc.segments2index(ftt.baseSegments)}
+        clustermask.update({segid: "Noise" for segid in dc.segments2index(
+            noise + [bs for ftt in omittedClusters for bs in ftt.baseSegments]
+        )})
+        self.labels = numpy.array([clustermask[segid] for segid in range(len(dc.segments))])
+        self.dc = dc
+
+    def writeFigure(self, specimens: BaseLoader, inferenceParams: TitleBuilder,
+                    elementsReport: "SegmentClusterGroundtruthReport", filechecker: StartupFilecheck):
+        print("Plot distances...")
+        if type(self).clusterCutoff > 0:
+            inferenceParams.postProcess = "largest{}clusters".format(type(self).clusterCutoff)
+        atitle = 'segment-distances_' + inferenceParams.plotTitle
+
+        sdp = DistancesPlotter(specimens, atitle, False)
+        # hand over selected subset of clusters to plot
+        sdp.plotManifoldDistances(
+            [elementsReport.typedMatchTemplates[seg][1] if elementsReport.typedMatchTemplates[seg][0] > 0.5
+             else seg for seg in self.dc.segments],
+            self.dc.distanceMatrix, self.labels)
+        # sdp.plotSegmentDistances(dc, labels)
+        sdp.writeOrShowFigure(filechecker.reportFullPath)
+        del sdp

@@ -1,8 +1,8 @@
 """
-Infer messages from PCAPs by the NEMESYS approach (BCDG-segmentation)
+Infer messages from PCAPs by Value Delta
 and write FMS and other evaluation data to report.
 
-Usenix WOOT 2018.
+Based on NEMESYS, Usenix WOOT 2018.
 """
 
 import argparse, time
@@ -14,10 +14,8 @@ import matplotlib.pyplot as plt
 from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from nemere.utils.loader import SpecimenLoader
 from nemere.inference.analyzers import *
-from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, baseRefinements, originalRefinements, \
-    symbolsFromSegments
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, symbolsFromSegments, charRefinements
 from nemere.utils import reportWriter
-from nemere.utils.evaluationHelpers import sigmapertrace
 
 debug = False
 """Some modules and methods contain debug output that can be activated by this flag."""
@@ -70,7 +68,7 @@ def writeResults(tikzcode: str, specimens: SpecimenLoader, inferenceTitle: str, 
 
 
 # noinspection PyShadowingNames
-def bcDeltaPlot(bcdg_mmm: List[BitCongruenceDeltaGauss]):
+def bcDeltaPlot(bcdg_mmm: List[ValueVariance]):
     """
     Plot BCD(G) values for the messages with the best, average, and worst FMS.
 
@@ -81,14 +79,14 @@ def bcDeltaPlot(bcdg_mmm: List[BitCongruenceDeltaGauss]):
     fieldEnds = [comparator.fieldEndsPerMessage(bcdg.message) for bcdg in bcdg_mmm]
 
     # mark the byte right before the max delta
-    inflectionXs = [[offset + int(numpy.nanargmax(wd)) - 1 for offset, wd in a.risingDeltas()] for a in bcdg_mmm]
-    inflections = [(pwp, [bcdg.values[p] for p in pwp]) for pwp, bcdg in zip(inflectionXs, bcdg_mmm)]
+    # inflectionXs = [[offset + int(numpy.nanargmax(wd)) - 1 for offset, wd in a.risingDeltas()] for a in bcdg_mmm]
+    # inflections = [(pwp, [bcdg.values[p] for p in pwp]) for pwp, bcdg in zip(inflectionXs, bcdg_mmm)]
 
-    pinpointedInflections = [a.inflectionPoints() for a in bcdg_mmm]
-    preInflectionXs = [[i - 1 for i in xs] for xs,ys in pinpointedInflections]
-    preInflectionPoints = [ (pwp, [bcdg.bcdeltas[p] for p in pwp]) for pwp, bcdg in zip(preInflectionXs, bcdg_mmm)]
+    # pinpointedInflections = [a.inflectionPoints() for a in bcdg_mmm]
+    # preInflectionXs = [[i - 1 for i in xs] for xs,ys in pinpointedInflections]
+    # preInflectionPoints = [ (pwp, [bcdg.bcdeltas[p] for p in pwp]) for pwp, bcdg in zip(preInflectionXs, bcdg_mmm)]
 
-    mmp = MultiMessagePlotter(specimens, 'bitCongruenceDeltaGauss', 3, 1, args.interactive)
+    mmp = MultiMessagePlotter(specimens, 'valueDelta', 3, 1, args.interactive)
     # noinspection PyProtectedMember
     for ax in mmp._axes.flat:  # type: plt.Axes
         ax.tick_params(labelsize=7)
@@ -96,10 +94,10 @@ def bcDeltaPlot(bcdg_mmm: List[BitCongruenceDeltaGauss]):
     # aspect ratio 2:3
     mmp.setFigureSize(3.136, 3 * (.667 * 3.136 + 0.14)  )   # 10 pt = 0.139 in
     mmp.plotSubfigs([a.values for a in bcdg_mmm],
-                    compareValue=[a.bcdeltas for a in bcdg_mmm],
+                  #  compareValue=[a.bcdeltas for a in bcdg_mmm],
                     fieldEnds=fieldEnds, fieldEndMarks=False)
-    mmp.scatterInEachAx(preInflectionPoints, 'v')
-    mmp.scatterInEachAx(inflections, 'o')
+    # mmp.scatterInEachAx(preInflectionPoints, 'v')
+    # mmp.scatterInEachAx(inflections, 'o')
     mmp.printMessageBytes([a.message for a in bcdg_mmm], {'size': 4})  # set to 4 for DNS, 2.5 for NTP
     mmp.writeOrShowFigure()
 
@@ -125,14 +123,7 @@ if __name__ == '__main__':
         print('File not found: ' + args.pcapfilename)
         exit(1)
 
-    # sigma = 0.6 if not args.sigma else args.sigma
-    if not args.sigma:
-        # input="input/maxdiff-fromOrig/*-100.pcap input/deduped-orig/dhcp_SMIA2011101X_deduped-10000.pcap input/deduped-orig/dns_ictf2010-new-deduped-10000.pcap input/deduped-orig/nbns_SMIA20111010-one_deduped-10000.pcap input/deduped-orig/ntp_SMIA-20111010_deduped-9995-10000.pcap input/deduped-orig/smb_SMIA20111010-one_deduped-10000.pcap"
-        # for fn in $input ; do python src/nemesys_fms.py -rl2 ${fn} ; done
-        pcapBasename = basename(args.pcapfilename)
-        sigma = sigmapertrace[pcapBasename] if pcapBasename in sigmapertrace else 0.6
-    else:
-        sigma = args.sigma
+    sigma = 0.6 if not args.sigma else args.sigma
 
     print("Load messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=args.layer,
@@ -144,13 +135,25 @@ if __name__ == '__main__':
     ########################
 
     print("Segment messages...")
-    inferenceTitle = 'bcDeltaGauss{:.1f}'.format(sigma)  # +hiPlateaus
+    BCDG = True
+    if BCDG:  # for comparison reasons.
+        inferenceTitle = 'bcDeltaGauss{:.1f}'.format(sigma)
+    else:
+        inferenceTitle = 'ValueVariance{:.1f}'.format(sigma)
 
     startsegmentation = time.time()
-    segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
+    segmentsPerMsg = list()
+    for l4msg, rmsg in specimens.messagePool.items():
+        if BCDG:
+            analyzer = BitCongruenceDeltaGauss(l4msg)
+            analyzer.setAnalysisParams(0.9)
+        else:
+            analyzer = ValueVariance(l4msg)
+        analyzer.analyze()
+        segmentsPerMsg.append(analyzer.messageSegmentation())
     runtimeSegmentation = time.time() - startsegmentation
-    refinedPerMsg = originalRefinements(segmentsPerMsg)
-    # refinedPerMsg = baseRefinements(segmentsPerMsg)
+    # refinedPerMsg = originalRefinements(segmentsPerMsg)
+    refinedPerMsg = charRefinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
@@ -174,7 +177,7 @@ if __name__ == '__main__':
     minmeanmax = reportWriter.getMinMeanMaxFMS([round(q.score, 3) for q in message2quality.values()])
 
     # here we only use one message as example of a quality! There may be more messages with the same quality.
-    bcdg_mmm = [msg2analyzer[quality2messages[q][0]] for q in minmeanmax]  # type: List[BitCongruenceDeltaGauss]
+    bcdg_mmm = [msg2analyzer[quality2messages[q][0]] for q in minmeanmax]  # type: List[ValueVariance]
     bcDeltaPlot(bcdg_mmm)
 
     ########################

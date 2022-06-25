@@ -7,9 +7,7 @@ NEMESYS requires that Netzob is at least as recent to have the following commits
 """
 import logging
 import unittest, itertools
-from os import path
 
-import netzob
 from netzob.Import.PCAPImporter.PCAPImporter import PCAPImporter
 from netzob.Model.Vocabulary.Field import Field
 from netzob.Model.Vocabulary.Symbol import Symbol

@@ -5,8 +5,8 @@
 #input="input/*-100.pcap input/*-1000.pcap"
 #input="input/ntp_SMIA-20111010_deduped-1000.pcap input/smb_SMIA20111010-one_deduped-1000.pcap"
 
-input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
-#input="input/maxdiff-fromOrig/*-100*.pcap"
+input="input/maxdiff-fromOrig/*-100*.pcap"
+#input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
 
 
 #sigmas="0.6 0.8 1.0 1.2"
@@ -15,7 +15,6 @@ input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
 sigmas="1.2"
 
 # full
-#segmenters="nemesys"
 segmenters="nemesys"
 
 # full
@@ -23,16 +22,16 @@ segmenters="nemesys"
 
 # Nemesys options
 # refines="original nemetyl"
-# default
-# refines="original nemetyl"
 refines="nemetyl"
 
 
 L2PROTOS="input/awdl-* input/au-* input/wlan-beacons-*"
+L1PROTOS=""
+LEPROTOS="input/awdl-* input/au-* input/smb* input/*/smb* input/wlan-beacons-*"
 
 prefix="nemetyl"
 
-cftnpad="229"
+cftnpad="405"
 for f in reports/${prefix}-* ; do
   if [ -e "$f" ] ; then
     cftnext=$(expr 1 + $(ls -d reports/${prefix}-* | sed "s/^.*${prefix}-\([0-9]*\)-.*$/\1/" | sort | tail -1))
@@ -55,6 +54,12 @@ for fn in ${input} ; do
         optargs="-l 2"
       fi
     done
+    for proto in ${L1PROTOS} ; do
+      if [[ "${fn}" == ${proto} ]] ; then
+        # replace
+        optargs="-l 1"
+      fi
+    done
     echo -e "\n\ntshark: ${fn}"
 #    echo "$fn -t tshark ${optargs} --with-plots"
 #    exit
@@ -66,6 +71,12 @@ for fn in ${input} ; do
       if [[ "${fn}" == ${proto} ]] ; then
         # replace
         optargs="-l 2"
+      fi
+    done
+    for proto in ${L1PROTOS} ; do
+      if [[ "${fn}" == ${proto} ]] ; then
+        # replace
+        optargs="-l 1"
       fi
     done
     echo -e "\n\n4bytesfixed: ${fn}"
@@ -87,9 +98,31 @@ for seg in ${segmenters} ; do
                   optargs="-l 2"
                 fi
               done
+              for proto in ${L1PROTOS} ; do
+                if [[ "${fn}" == ${proto} ]] ; then
+                  # replace
+                  optargs="-l 1"
+                fi
+              done
+              # comment out for "the wrong branch"
+              for proto in ${LEPROTOS} ; do
+                if [[ "${fn}" == $proto ]] ; then
+                  # append
+                  optargs="${optargs} -e"  # -e: little endian
+                  echo -e "\nlitte endian"
+                fi
+              done
               echo -e "\n${seg}, sigma ${sig} (${refines}): ${fn}"
               python src/nemetyl_align-segments.py ${fn} -f ${ref} -t ${seg} -s ${sig} ${optargs} --with-plots
+#              # # # #
+#              # the wrong branch: apply LE optimization to the BE protocols
+#              echo -e "\nforced litte endian"
+#              echo -e "\n${seg}, sigma ${sig} (${refines}): ${fn}"
+#              python src/nemetyl_align-segments.py ${fn} -f ${ref} -t ${seg} -s ${sig} -e ${optargs} --with-plots
+#              # # # #
           done
+  #        mkdir ${report}/sig${sig}-${ref}
+  #        mv reports/*.pdf ${report}/sig${sig}-${ref}/
       done
   done
 done

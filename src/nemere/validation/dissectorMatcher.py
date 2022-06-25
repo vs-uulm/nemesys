@@ -83,14 +83,17 @@ class MessageComparator(BaseComparator):
     __messageCellCache = dict()  # type: Dict[(netzob.Symbol, AbstractMessage), List]
 
     def __init__(self, specimens: sl.SpecimenLoader, layer: int = -1, relativeToIP: bool = False,
-                 failOnUndissectable=True, debug = False):
+                 failOnUndissectable=True, debug = False, dissectOneshot=True):
         super().__init__(specimens, layer, relativeToIP, debug)
 
         self._failOnUndissectable = failOnUndissectable
 
         # Cache messages that already have been parsed and labeled
         self._messageCache = dict()  # type: Dict[netzob.RawMessage, ]
-        self._dissections = self._dissectAndLabel(self.messages.values())
+        if dissectOneshot:
+            self._dissections = ParsedMessage.parseOneshot(specimens, failOnUndissectable)
+        else:
+            self._dissections = self._dissectAndLabel(self.messages.values())
 
 
     def _dissectAndLabel(self, messages: Iterable[netzob.RawMessage]) \
@@ -246,6 +249,8 @@ class MessageComparator(BaseComparator):
                            mark: Union[Tuple[int,int], MessageSegment]=None,
                            messageSlice: Tuple[Union[int,None],Union[int,None]]=None):
         """
+        TODO deprecated: use ComparingPrinter directly!
+
         :param message: The message from which to print the byte hex values. Also used to look up the
             true field boundaries to mark by spaces between in the printed byte hex values.
         :param segmentsPerMsg: The segments that should be visualized by color changes.
@@ -570,7 +575,6 @@ True field type colors:\\\\
         >>> from collections import Counter
         >>> specimens = SpecimenLoader("../input/deduped-orig/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
         >>> comparator = MessageComparator(specimens, 2, True, debug=False)
-        Wait for tshark output (max 20s)...
         >>> lv = comparator.lookupValues4FieldName("ntp.ppoll")
         >>> Counter(lv).most_common()
         [('0a', 43), ('06', 41), ('09', 6), ('0e', 4), ('08', 2), ('0f', 2), ('0d', 2)]

@@ -5,8 +5,7 @@ import numpy
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
-
-
+MA = TypeVar('MA', bound='MessageAnalyzer')
 
 ### MessageAnalyzer base class #########################################
 
@@ -103,8 +102,8 @@ class MessageAnalyzer(ABC):
 
 
     @staticmethod
-    def findExistingAnalysis(analyzerclass: type, unit: int,
-                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None) -> 'MessageAnalyzer':
+    def findExistingAnalysis(analyzerclass: Type[MA], unit: int,
+                             message: AbstractMessage, analysisArgs: Union[Any, Tuple]=None) -> MA:
         """
         Efficiently obtain an analyzer by looking for an already existing identical object instance.
 
@@ -119,7 +118,7 @@ class MessageAnalyzer(ABC):
         if keytuple in MessageAnalyzer._analyzerCache:
             return MessageAnalyzer._analyzerCache[keytuple]
         else:
-            ac = analyzerclass(message, unit)  # type: MessageAnalyzer
+            ac = analyzerclass(message, unit)  # type: MA
             if analysisArgs is None:
                 analysisArgs = tuple()
             try:
@@ -720,7 +719,7 @@ class MessageSegment(AbstractSegment):
         """
         if self.values is None:
             raise ValueError('Value of MessageSegment instance must be set to calculate its mean.')
-        return numpy.mean(self.values)
+        return numpy.nanmean(self.values)
 
 
     def stdev(self):
@@ -730,7 +729,7 @@ class MessageSegment(AbstractSegment):
         """
         if self.values is None:
             raise ValueError('Value of MessageSegment instance must be set to calculate its standard deviation.')
-        return numpy.std(self.values)
+        return numpy.nanstd(self.values)
 
 
     def fillCandidate(self, candidate: Union['MessageSegment', AbstractMessage]):

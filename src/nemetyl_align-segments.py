@@ -12,13 +12,12 @@ The selected segmenter yields segments from each message. These segments are ana
 which is used as feature to determine their similarity. Similar fields are then aligned.
 """
 
-import argparse, IPython
-
+import argparse
 
 from nemere.alignment.alignMessages import TypeIdentificationByAlignment
-from nemere.inference.segmentHandler import originalRefinements, baseRefinements, \
-    nemetylRefinements 
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, nemetylRefinements
 from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from nemere.inference.templates import ClusterAutoconfException
 from nemere.utils.evaluationHelpers import *
 from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport
 from nemere.visualization.multiPlotter import MultiMessagePlotter
@@ -350,6 +349,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.',
                         choices=tokenizers, default="tshark")
+    parser.add_argument('-e', '--littleendian', help='Toggle presumed endianness to little.', action="store_true")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.9')
     parser.add_argument('-f', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
@@ -361,10 +361,13 @@ if __name__ == '__main__':
 
     filechecker = StartupFilecheck(args.pcapfilename)
     withplots = args.with_plots
+    littleendian = args.littleendian == True
     analyzerType = analyses[analysis_method]
     analysisArgs = None
     analysisTitle = analysis_method
     tokenizer = args.tokenizer
+    if littleendian:
+        tokenizer += "le"
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
@@ -387,7 +390,12 @@ if __name__ == '__main__':
             fromCache.configureRefinement(nemetylRefinements)
         else:
             print("No refinement selected. Performing raw segmentation.")
-    fromCache.get()
+    try:
+        fromCache.get()
+    except ClusterAutoconfException as e:
+        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+              "The original exception message was:\n", e)
+        exit(10)
     segmentedMessages = fromCache.segmentedMessages
     specimens, comparator, dc = fromCache.specimens, fromCache.comparator, fromCache.dc
     segmentationTime, dist_calc_segmentsTime = fromCache.segmentationTime, fromCache.dist_calc_segmentsTime
@@ -436,8 +444,8 @@ if __name__ == '__main__':
     # epsilon = message_epspertrace[filechecker.pcapbasename]
     #               if filechecker.pcapbasename in message_epspertrace else 0.15
     if withplots:
-        epsConfirm = epsautoconfeval(tyl.eps, tokenizer + f"-s{args.sigma}-{args.refinement}"
-                                                                            if tokenizer[:7] == "nemesys" else "")
+        epsConfirm = epsautoconfeval(tyl.eps, tokenizer +
+                                     (f"-s{args.sigma}-{args.refinement}" if tokenizer[:7] == "nemesys" else "") )
     # # # # # # # # # # # # # # # # # # # # # # # #
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #

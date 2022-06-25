@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List
 
+from bitstring import Bits
+from pyitlib import discrete_random_variable as drv
+
 from nemere.inference.segments import MessageSegment
 from nemere.inference.segmentHandler import isExtendedCharSeq
-
 
 
 def isPrintableChar(char: int):
@@ -72,6 +74,21 @@ def isOverlapping(segA: MessageSegment, segB: MessageSegment) -> bool:
         return False
 
 
+def entropyOfBytes(byteData: bytes, n=3):
+    bitData = Bits(bytes=byteData)
+    ngrams = [bitData[offset:offset+n].uint for offset in range(len(bitData)-n+1)]
+    return drv.entropy(ngrams)/n
+
+
+def entropyOfXor(byteDataA: bytes, byteDataB: bytes, n=3):
+    bitDataA = Bits(bytes=byteDataA)
+    bitDataB = Bits(bytes=byteDataB)
+    trunc = min(len(bitDataA), len(bitDataB))
+    xored = bitDataA[:trunc] ^ bitDataB[:trunc]
+    ngrams = [xored[offset:offset+n].uint for offset in range(len(xored)-n+1)]
+    return drv.entropy(ngrams)/n
+
+
 class MessageModifier(ABC):
     _debug = False
 
@@ -108,10 +125,8 @@ class Merger(MessageModifier, ABC):
                     mergedSegments.append(segr)
         return mergedSegments
 
-
-    @staticmethod
     @abstractmethod
-    def condition(segl: MessageSegment, segr: MessageSegment) -> bool:
+    def condition(self, segl: MessageSegment, segr: MessageSegment) -> bool:
         """
         A generic condition called to determine whether a merging is necessary.
 
@@ -119,7 +134,7 @@ class Merger(MessageModifier, ABC):
         :param segr: right segment
         :return: True if merging is required, False otherwise.
         """
-        pass
+        raise NotImplementedError("A condition for merging needs to be defined by subclassing.")
 
 
 class MergeConsecutiveChars(Merger):
@@ -144,8 +159,7 @@ class MergeConsecutiveChars(Merger):
     ...             print("Mismatch!")
     """
 
-    @staticmethod
-    def condition(segl: MessageSegment, segr: MessageSegment):
+    def condition(self, segl: MessageSegment, segr: MessageSegment):
         """
         Check whether both segments consist of printable characters.
         """
@@ -217,6 +231,8 @@ class RelocateSplits(MessageModifier, ABC):
                                 print("{} and {}".format(segc, segmentStack[-1] if segmentStack else 'Empty'))
 
                 mangledSegments.append(segc)
+        else:
+            mangledSegments = self.segments
         return mangledSegments
 
     @staticmethod
@@ -521,7 +537,7 @@ class CropDistinct(MessageModifier):
 
 class CumulativeCharMerger(MessageModifier):
     """
-    Merge consecutive segments that toghether fulfill the char conditions in inference.segmentHandler.isExtendedCharSeq
+    Merge consecutive segments that together fulfill the char conditions in inference.segmentHandler.isExtendedCharSeq
     """
 
     def merge(self):

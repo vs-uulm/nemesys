@@ -14,7 +14,7 @@ import IPython
 from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage, AbstractMessage
 
 from nemere.validation import protocols
-from nemere.validation.tsharkConnector import TsharkConnector
+from nemere.validation.tsharkConnector import TsharkConnector, TsharkOneshot
 
 
 # TODO make more central
@@ -32,6 +32,24 @@ class MessageTypeIdentifiers(object):
             self.importProtocol(p.MESSAGE_TYPE_IDS)
 
     FOR_PROTCOL = dict()
+    """        
+    A message type discriminator may be a field name string (from the tshark dissector) or a dict:
+    
+    ```
+        {
+            'field': 'fieldname',
+            'filter': lambda v: v != 'ff',
+            'select': lambda w: w
+        }
+    ```
+    
+    field: is the field name string to apply the rule to,
+    filter: is a function with one parameter containing the value of a single message's field
+        and it needs to return a Boolean: True if the field is a discriminator, False if it should be ignored
+    select: is a function with one parameter containing the value of a single message's field
+        and it needs to return a transformation of the value, e.g. a single bit of it, that should be used as
+        message type discriminating value.
+    """
     NAMED_TYPES = dict()
 
     def _collect_superclasses(self):
@@ -47,7 +65,9 @@ class MessageTypeIdentifiers(object):
             else "{}={}".format(fieldname, fieldvalue)
 
     def typeOfMessage(self, message: 'ParsedMessage'):
-        """Retrieve the type of the given message"""
+        """
+        Retrieve the type of the given message from the FOR_PROTCOL dict.
+        """
         if message.protocolname in self.FOR_PROTCOL:
             idFields = self.FOR_PROTCOL[message.protocolname]
             resolvedTypeName = []
@@ -129,7 +149,14 @@ class MessageTypeIdentifiers226(MessageTypeIdentifiers):
             'filter': lambda v: True,
             'select': lambda w: (int.from_bytes(bytes.fromhex(w), "big") & 128) != 0  # first bit denotes request/response
         }],
-        'ntp'   : ['ntp.flags', 'ntp.stratum']
+        # 'ntp'   : ['ntp.flags', 'ntp.stratum']
+        'ntp':  [ {
+            'field': 'ntp.flags',
+            'filter': lambda v: True,
+            'select': lambda w: int.from_bytes(bytes.fromhex(w), "big") & 0xc7  # mask out the version
+            # select for only leap indicator - gt_liandmodev1:
+            # int.from_bytes(bytes.fromhex(w), "big") >>6  # The first two bits is the leap indicator we use
+        } ]
     }
 
     NAMED_TYPES = {  # assumes hex bytes are lower-case
@@ -187,21 +214,21 @@ class MessageTypeIdentifiers226(MessageTypeIdentifiers):
             '3010': 'Release',
             '8500': 'Response',
         },
-        'ntp.flags': {
-            '13': 'v2 client',
-            '19': 'v3 symmetric active',
-            '1b': 'v3 client',
-            '1c': 'v3 server',
-            '23': 'v4 client',
-            '24': 'v4 server',
-            '25': 'v4 broadcast',
-            'd9': 'v3 symmetric active (unsynchronized, MAC)',
-            'db': 'v3 client (unsynchronized)',
-            'dc': 'v3 server (unsynchronized)',
-            'e3': 'v4 client (unsynchronized, MAC)',
-            'e4': 'v4 server (unsynchronized)',
-            'e5': 'v4 broadcast (unsynchronized)',
-        },
+        # 'ntp.flags': {
+        #     '13': 'v2 client',
+        #     '19': 'v3 symmetric active',
+        #     '1b': 'v3 client',
+        #     '1c': 'v3 server',
+        #     '23': 'v4 client',
+        #     '24': 'v4 server',
+        #     '25': 'v4 broadcast',
+        #     'd9': 'v3 symmetric active (unsynchronized, MAC)',
+        #     'db': 'v3 client (unsynchronized)',
+        #     'dc': 'v3 server (unsynchronized)',
+        #     'e3': 'v4 client (unsynchronized, MAC)',
+        #     'e4': 'v4 server (unsynchronized)',
+        #     'e5': 'v4 broadcast (unsynchronized)',
+        # },
         # 'ntp.stratum': {
         #     '00': '',
         #     '03': '',
@@ -209,6 +236,20 @@ class MessageTypeIdentifiers226(MessageTypeIdentifiers):
         #     '05': '',
         #     '06': '',
         # }
+        # 'ntp.flags': {  # only leap indicator - gt_liandmodev1
+        #     0: 'synchronized',
+        #     3: 'unsynchronized',
+        # },
+        'ntp.flags': {  # leap indicator and mode
+            3: 'client synchronized',
+            1: 'client synchronized',  # 'symmetric active synchronized'
+            4: 'server synchronized',
+            5: 'broadcast synchronized',
+            193: 'client unsynchronized',  # 'symmetric active unsynchronized'
+            195: 'client unsynchronized',
+            196: 'server unsynchronized',
+            197: 'broadcast unsynchronized'
+        },
     }  # type: Dict[str, Dict[str, str]]
 
 
@@ -448,11 +489,11 @@ class ParsingConstants226(ParsingConstants):
         'nbdgm.first_raw', 'nbdgm.node_type_raw',
         'smb.security_blob_raw', 'gss-api_raw', 'spnego_raw', 'spnego.negTokenInit_element_raw',
         'spnego.mechTypes_raw', 'ntlmssp_raw', 'ntlmssp.version_raw', 'ntlmssp.challenge.target_name_raw',
-        'ntlmssp.challenge.target_info_raw'
+        'ntlmssp.challenge.target_info_raw', 'browser.windows_version_raw'
     ]
 
     EXCLUDE_SUB_FIELDS = [
-        'dns.flags_tree', 'ntp.flags_tree',
+        'dns.flags_tree', 'dns.id_tree', 'ntp.flags_tree',
         'bootp.flags_tree', 'bootp.fqdn.flags_tree', 'bootp.secs_tree',
         'smb.flags_tree', 'smb.flags2_tree', 'smb.sm_tree', 'smb.server_cap_tree',
         'nbns.flags_tree', 'nbns.nb_flags_tree',
@@ -465,7 +506,7 @@ class ParsingConstants226(ParsingConstants):
         'smb.fs_attr_tree', 'smb.nt.notify.completion_filter_tree',
 
         'smb2.ioctl.function_tree', 'smb.nt.ioctl.completion_filter_tree', 'smb2.ioctl.function_tree',
-        'smb.nt.ioctl.completion_filter_tree', 'smb.lock.type_tree'
+        'smb.nt.ioctl.completion_filter_tree', 'smb.lock.type_tree', 'smb.nt_qsd_tree'
     ]
 
     # names of field nodes in the json which should be descended into.
@@ -495,13 +536,19 @@ class ParsingConstants226(ParsingConstants):
         'NT Trans Response (0xa0)', 'Trans2 Response (0x32)', 'NT IOCTL Setup', 'NT IOCTL Data', 'Range',
         'Write AndX Request (0x2f)', 'Write AndX Response (0x2f)',
         'Locking AndX Request (0x24)', 'Locking AndX Response (0x24)', 'Echo Request (0x2b)', 'Echo Response (0x2b)',
-        'Unlocks', 'Unlock', 'Locks', 'Lock', 'SET_FILE_INFO Parameters', 'SET_FILE_INFO Data'
+        'Unlocks', 'Unlock', 'Locks', 'Lock', 'SET_FILE_INFO Parameters', 'SET_FILE_INFO Data',
+        'NT QUERY SECURITY DESC Parameters', 'NT QUERY SECURITY DESC Data', 'NT Security Descriptor',
+        'NT User (DACL) ACL'
         # 'dcerpc.cn_ctx_item', 'dcerpc.cn_bind_abstract_syntax', 'dcerpc.cn_bind_trans',
         # 'smb.security_blob_tree', 'gss-api',
         # 'spnego', 'spnego.negTokenInit_element', 'spnego.mechTypes_tree', 'spnego.negHints_element',
         # 'ntlmssp', 'ntlmssp.version', 'ntlmssp.challenge.target_name_tree', 'ntlmssp.challenge.target_info',
         # 'Servers', 'lanman.server_tree'
-        ]
+    ]
+
+    INCLUDE_SUBFIELDS_RE = [re.compile(pattern) for pattern in [
+        'NT ACE: .*'
+    ]]
 
     # names of field nodes in the json that have a record structure (list[list[tuples], not list[tuples[str, tuple]]).
     RECORD_STRUCTURE = ['Queries', 'Answers',           # in dns, nbns
@@ -532,6 +579,13 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['ntp.priv.auth_seq'] = 'int'  # has value: 97
     TYPELOOKUP['ntp.priv.impl'] = 'int'  # has value: 00
     TYPELOOKUP['ntp.priv.reqcode'] = 'int'  # has value: 00
+    TYPELOOKUP['ntp.ctrl.flags2'] = 'flags'  # has value: 82
+    TYPELOOKUP['ntp.ctrl.sequence'] = 'int'  # has value: 0001
+    TYPELOOKUP['ntp.ctrl.status'] = 'flags'  # has value: 0615
+    TYPELOOKUP['ntp.ctrl.associd'] = 'id'  # has value: 0000
+    TYPELOOKUP['ntp.ctrl.offset'] = 'int'  # has value: 0000
+    TYPELOOKUP['ntp.ctrl.count'] = 'int'  # has value: 0178
+    TYPELOOKUP['ntp.ctrl.data'] = 'chars'  # has value: 7665...0d0a
 
     # dhcp
     TYPELOOKUP['bootp.type'] = 'flags'  # or enum
@@ -643,20 +697,6 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smtp.response.code'] = 'chars'  # has value: 323230
     TYPELOOKUP['smtp.rsp.parameter'] = 'chars'
 
-    # smb
-    TYPELOOKUP['smb.server_component'] = 'id'  # has value: ff534d42 = ".SMB"
-    TYPELOOKUP['smb.cmd'] = 'int'  # has value: 73
-    TYPELOOKUP['smb.nt_status'] = 'int'  # has value: 00000000
-    TYPELOOKUP['smb.flags'] = 'flags'  # has value: 18
-    TYPELOOKUP['smb.flags2'] = 'flags'  # has value: 07c8
-    TYPELOOKUP['smb.pid.high'] = 'id'  # has value: 0000
-    TYPELOOKUP['smb.signature'] = 'crypto'  # has value: 4253525350594c20
-    TYPELOOKUP['smb.reserved'] = 'int'  # has value: 0000
-    TYPELOOKUP['smb.tid'] = 'id'  # 'id' behaves like flags  # has value: 0000
-    TYPELOOKUP['smb.pid'] = 'id'  # 'id' behaves like flags  # has value: fffe
-    TYPELOOKUP['smb.uid'] = 'id'  # 'id' behaves like flags  # has value: 0000
-    TYPELOOKUP['smb.mid'] = 'id'  # 'id' behaves like flags  # has value: 4000
-
     # nbns
     TYPELOOKUP['nbns.id'] = 'id'
     TYPELOOKUP['nbns.flags'] = 'flags'  # has value: 0110
@@ -675,11 +715,23 @@ class ParsingConstants226(ParsingConstants):
     # smb - mostly little endian numbers
     TYPELOOKUP['nbss.type'] = 'id'  # has value: 00
     TYPELOOKUP['nbss.length'] = 'int'  # has value: 000038
+    TYPELOOKUP['smb.server_component'] = 'addr'  # has value: ff534d42 = ".SMB"  # somewhat similar to a addr
+    TYPELOOKUP['smb.cmd'] = 'int'  # has value: 73
+    TYPELOOKUP['smb.nt_status'] = 'int'  # has value: 00000000
+    TYPELOOKUP['smb.flags'] = 'flags'  # has value: 18
+    TYPELOOKUP['smb.flags2'] = 'flags'  # has value: 07c8
+    TYPELOOKUP['smb.pid.high'] = 'id'  # has value: 0000
+    TYPELOOKUP['smb.signature'] = 'crypto'  # has value: 4253525350594c20
+    TYPELOOKUP['smb.reserved'] = 'int'  # has value: 0000
+    TYPELOOKUP['smb.tid'] = 'id'  # 'id' behaves like flags  # has value: 0000
+    TYPELOOKUP['smb.pid'] = 'id'  # 'id' behaves like flags  # has value: fffe
+    TYPELOOKUP['smb.uid'] = 'id'  # 'id' behaves like flags  # has value: 0000
+    TYPELOOKUP['smb.mid'] = 'id'  # 'id' behaves like flags  # has value: 4000
     TYPELOOKUP['smb.wct'] = 'int'  # has value: 07
     TYPELOOKUP['smb.andxoffset'] = 'int_le'  # has value: 3800 - little endian
     TYPELOOKUP['smb.connect.support'] = 'int_le'  # has value: 0100
     TYPELOOKUP['smb.bcc'] = 'int_le'  # has value: 0700 (Byte count)
-    TYPELOOKUP['smb.service'] = 'enum'  # its coded as 8 bit ASCII 'chars', e.g: 49504300 - http://ubiqx.org/cifs/Book.html p. 311
+    TYPELOOKUP['smb.service'] = 'chars'  # its coded as 8 bit ASCII 'chars', e.g: 49504300 - http://ubiqx.org/cifs/Book.html p. 311
     TYPELOOKUP['smb.native_fs'] = 'chars'  # has value: 0000
     TYPELOOKUP['smb.tpc'] = 'int_le'  # has value: 1a00
     TYPELOOKUP['smb.tdc'] = 'int_le'  # has value: 0000
@@ -715,7 +767,7 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb.unknown_data'] = 'unknown'  # has value: 00000000
     TYPELOOKUP['smb.max_buf'] = 'int'  # has value: 0411
     TYPELOOKUP['smb.max_mpx_count'] = 'int_le'  # has value: 3200
-    TYPELOOKUP['smb.vc'] = 'int'  # has value: 0000
+    TYPELOOKUP['smb.vc'] = 'id'  # has value: 0000  # virtual circuits (VCs) are often identical to the pid
     TYPELOOKUP['smb.session_key'] = 'bytes'  # has value: 00000000
     TYPELOOKUP['smb.security_blob_len'] = 'int_le'  # has value: 6b00
     TYPELOOKUP['smb.server_cap'] = 'flags'  # has value: d4000080
@@ -823,6 +875,25 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['smb2.ioctl.enumerate_snapshots.num_snapshots'] = 'int_le'  # has value: 00000000
     TYPELOOKUP['smb2.ioctl.enumerate_snapshots.num_snapshots_returned'] = 'int_le'  # has value: 00000000
     TYPELOOKUP['smb2.ioctl.enumerate_snapshots.array_size'] = 'int_le'  # has value: 02000000
+    TYPELOOKUP['smb.trans_data.parameters'] = 'bytes'  # has value: 000093ff04000400
+    TYPELOOKUP['smb.nt_qsd'] = 'int_le'
+    TYPELOOKUP['smb.sec_desc_len'] = 'int_le'  # has value: bc000000
+    TYPELOOKUP['nt.sec_desc.revision'] = 'int_le'  # has value: 0100
+    TYPELOOKUP['nt.sec_desc.type'] = 'enum'  # has value: 0484
+    TYPELOOKUP['nt.offset_to_owner_sid'] = 'id'  # has value: 00000000
+    TYPELOOKUP['nt.offset_to_group_sid'] = 'id'  # has value: 00000000
+    TYPELOOKUP['nt.offset_to_sacl'] = 'int_le'  # has value: 00000000
+    TYPELOOKUP['nt.offset_to_dacl'] = 'int_le'  # has value: 14000000
+    TYPELOOKUP['nt.acl.revision'] = 'int_le'  # has value: 0200
+    TYPELOOKUP['nt.acl.size'] = 'int_le'  # has value: a800
+    TYPELOOKUP['nt.acl.num_aces'] = 'int_le'  # has value: 06000000
+    TYPELOOKUP['nt.ace.type'] = 'enum'  # has value: 00
+    TYPELOOKUP['nt.ace.flags'] = 'flags'  # has value: 10
+    TYPELOOKUP['nt.ace.size'] = 'int_le'  # has value: 1400
+    TYPELOOKUP['nt.access_mask'] = 'flags'  # has value: ff011f00
+    TYPELOOKUP['nt.sid'] = 'id'  # has value: 010500000000000515000000ff424cbf49cbe5ae01ea0c4af4010000
+    TYPELOOKUP['nt.access_mask'] = '???'  # has value: ff011f00
+
 
 
     # TODO enable reuse by providing the original field name to each hook
@@ -1167,6 +1238,7 @@ class ParsingConstants325(ParsingConstants263):
     TYPELOOKUP['dhcp.option.vendor_class_id'] = 'chars'  # has value: 4d53465420352e30
     TYPELOOKUP['dhcp.option.vendor.value'] = 'bytes'  # has value: 5e00
     TYPELOOKUP['dhcp.option.request_list_item'] = 'enum'  # uint; has value: 01
+    TYPELOOKUP['dhcp.option.request_list'] = 'bytes'  # has value: 010f03062c2e2f1f2179f92b
     TYPELOOKUP['dhcp.option.broadcast_address'] = 'ipv4'  # has value: ac1203ff
     TYPELOOKUP['dhcp.option.dhcp_server_id'] = 'ipv4'  # has value: ac120301
     TYPELOOKUP['dhcp.option.ip_address_lease_time'] = 'int'  # uint; has value: 00000e10
@@ -1251,7 +1323,7 @@ class ParsedMessage(object):
 
     RK = '_raw'
 
-    __tshark = None  # type: TsharkConnector
+    __tshark = None  # type: Union[TsharkConnector, TsharkOneshot]
     """Cache the last used tsharkConnector for reuse."""
 
     __constants = None
@@ -1493,6 +1565,29 @@ class ParsedMessage(object):
 
         return prsdmsgs  # type: dict[AbstractMessage: ParsedMessage]
 
+    @classmethod
+    def parseOneshot(cls, specimens, failOnUndissectable=True):
+        cls.__tshark = TsharkOneshot()
+        jsontext = cls.__tshark.readfile(specimens.pcapFileName)
+        dissectjson = json.loads(jsontext, object_pairs_hook=list)
+        prsdmsgs = {}
+
+        for paketjson, msg in zip(dissectjson, specimens.messagePool.values()):
+            # Prevent individual tshark call for parsing by creating a
+            #   ParsedMessage with message set to None...
+            pm = ParsedMessage(None, layernumber=specimens.layer, relativeToIP=specimens.relativeToIP,
+                               failOnUndissectable=failOnUndissectable)
+            # ... and set the message afterwards
+            pm.message = msg
+            pm._parseJSON([paketjson])
+            # assert "".join(pm.getFieldValues()) == msg.data.hex(), \
+            #     f"msg data and dissector mismatch:\n{msg.data.hex()}\n{''.join(pm.getFieldValues())}"
+            # TODO validate correct msg to pm association (via byte data)
+            prsdmsgs[msg] = pm
+
+        return prsdmsgs  # type: dict[AbstractMessage: ParsedMessage]
+
+
     def _parseJSON(self, dissectjson: List[Tuple[str, any]]):
         """
         Read the structure of dissectjson and from this populate:
@@ -1690,6 +1785,13 @@ class ParsedMessage(object):
             field was not parsed correctly. This needs manual postprosessing of the dissector output.
             Therefore see :func:`_prehooks` and :func:`_posthooks`.
         """
+        # fix ari field seuquence - TODO find better location for that
+        for ix, fk in enumerate([fk for fk, fv in self._fieldsflat]):
+            if fk == 'ari.length' and ix > 0 and self._fieldsflat[ix-1][0] == 'ari.message_name':
+                arilen = self._fieldsflat[ix]
+                self._fieldsflat[ix] = self._fieldsflat[ix-1]
+                self._fieldsflat[ix-1] = arilen
+
         rest = str(self.protocolbytes)
         toInsert = list()
         # iterate all fields and search their value at the next position in the raw message
@@ -1736,6 +1838,9 @@ class ParsedMessage(object):
 
             if len(rest) <= 4:  # 2 bytes in hex notation
                 self._fieldsflat.append(('delimiter', rest))
+            # the dissector failed for this packet
+            elif len(self._fieldsflat) == 0:
+                self._fieldsflat.append(('data.data', rest))
             # for strange smb trails (perhaps some kind of undissected checksum):
             elif self._fieldsflat[-1][0] in ['smb2.ioctl.shadow_copy.count',
                                              'smb2.ioctl.enumerate_snapshots.array_size', 'smb.trans_name']:
@@ -1746,6 +1851,37 @@ class ParsedMessage(object):
             else:  # a two byte delimiter is probably still reasonable
                 raise DissectionIncomplete("Unparsed trailing field found. Value: {:s}".format(rest), rest=rest)
 
+        # make some final adjustments if necessary  # TODO move to ParsingConstants325
+        needsMerging = {  # merge all adjacent fields named like <key> to one field named <value>
+            "dhcp.option.request_list_item": "dhcp.option.request_list"
+        }
+        needsSplitting = {  # split all fields named <key> into chunks of length <value>[0] bytes named <value>[1]
+            "awdl_pd.mfbuf.chunk_data": (4, "awdl_pd.mfbuf.sample_component")
+        }
+        for mergeFrom, mergeTo in needsMerging.items():
+            # prevent needless list copying
+            if not mergeFrom in self.getFieldNames():
+                continue
+            newFieldsflat = list()
+            for field in self._fieldsflat:
+                if field[0] == mergeFrom and newFieldsflat[-1][0] in [mergeFrom, mergeTo]:
+                    newFieldsflat[-1] = (mergeTo, newFieldsflat[-1][1] + field[1])
+                else:
+                    newFieldsflat.append(field)
+            self._fieldsflat = newFieldsflat
+        for splitFrom, splitTo in needsSplitting.items():
+            # prevent needless list copying
+            if not splitFrom in self.getFieldNames():
+                continue
+            newFieldsflat = list()
+            for field in self._fieldsflat:
+                if field[0] == splitFrom:
+                    n = splitTo[0]*2  # chunk length (cave HEX string! Thus 2 times)
+                    chunks = [(splitTo[1], field[1][i:i + n]) for i in range(0, len(field[1]), n)]
+                    newFieldsflat.extend(chunks)
+                else:
+                    newFieldsflat.append(field)
+            self._fieldsflat = newFieldsflat
 
     @staticmethod
     def _nodeValue(node) -> Tuple[int, Union[str, List]]:
@@ -1774,6 +1910,7 @@ class ParsedMessage(object):
 
     @staticmethod
     def walkSubTree(root: List[Tuple[str, any]], allSubFields=False) -> List[Tuple[str, str]]:
+        # noinspection PyUnresolvedReferences
         """
         Walk the tree structure of the tshark-json, starting from ``root`` and generate a flat representation
         of the field sequence as it is in the message.
@@ -1908,7 +2045,7 @@ class ParsedMessage(object):
 
     @staticmethod
     def closetshark():
-        if ParsedMessage.__tshark:
+        if isinstance(ParsedMessage.__tshark,TsharkConnector):
             ParsedMessage.__tshark.terminate(2)
 
 

@@ -8,6 +8,7 @@ from typing import TypeVar, Sequence, Callable, Iterable, Optional
 from itertools import chain
 import os, csv, pickle, time
 from os.path import join, splitext, isfile, isdir, basename, exists, abspath
+
 from tabulate import tabulate
 
 from nemere.utils.loader import SpecimenLoader
@@ -16,9 +17,9 @@ from nemere.visualization.simplePrint import inferred4segment, markSegNearMatch
 from nemere.inference.analyzers import *
 from nemere.inference.formatRefinement import isOverlapping
 from nemere.inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, \
-    fixedlengthSegmenter
+    fixedlengthSegmenter, bcDeltaGaussMessageSegmentationLE
 from nemere.inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
-from nemere.inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC
+from nemere.inference.templates import DistanceCalculator, DelegatingDC, Template, MemmapDC, TypedTemplate
 
 Element = TypeVar('Element')
 
@@ -26,48 +27,70 @@ Element = TypeVar('Element')
 # available analysis methods
 analyses = {
     'bcpnm': BitCongruenceNgramMean,
-    'bc': BitCongruence,
-    'bcd': BitCongruenceDelta,
-    'bcdg': BitCongruenceDeltaGauss,
-    'mbhbv': HorizonBitcongruence,
+    'bc':    BitCongruence,
+    'bcg':   BitCongruenceGauss,
+    'bcd':   BitCongruenceDelta,
+    'bcdg':  BitCongruenceDeltaGauss,
+    'hbcg':  HorizonBitcongruenceGauss,
+    'sbcdg': SlidingNbcDeltaGauss,
+    'pivot': PivotBitCongruence,
 
     'variance': ValueVariance,  # Note: VARIANCE is the inverse of PROGDIFF
-    'progdiff': ValueProgressionDelta,
-    'progcumudelta': CumulatedProgressionDelta,
     'value': Value,
     'ntropy': EntropyWithinNgrams,
     'stropy': Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
 }
 
 
-# raw nemesys - cft-121 "withoutrefinement"
-sigmapertrace = {
-    "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
-    "dns_ictf2010_deduped-100.pcap"             : 0.6,
-    "dns_ictf2010-new-deduped-100.pcap"         : 0.6,
-    "nbns_SMIA20111010-one_deduped-100.pcap"    : 1.0,
-    "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
-    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.6,
-    "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
-    "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
-    "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
-    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 1.0,
-    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
-    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.6,
+# # raw nemesys - cft-121 "withoutrefinement"
+# sigmapertrace = {
+#     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
+#     "dns_ictf2010_deduped-100.pcap"             : 0.6,
+#     "dns_ictf2010-new-deduped-100.pcap"         : 0.6,
+#     "nbns_SMIA20111010-one_deduped-100.pcap"    : 1.0,
+#     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+#     "smb_SMIA20111010-one_deduped-100.pcap"     : 0.6,
+#     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
+#     "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
+#     "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
+#     "nbns_SMIA20111010-one_deduped-1000.pcap"   : 1.0,
+#     "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
+#     "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.6,
+#
+#     # assumptions derived from first traces
+#     "dhcp_SMIA2011101X-filtered_maxdiff-100.pcap": 0.6,
+#     "dns_ictf2010_maxdiff-100.pcap": 0.6,
+#     "dns_ictf2010-new_maxdiff-100.pcap": 0.6,
+#     "nbns_SMIA20111010-one_maxdiff-100.pcap": 1.0,
+#     "ntp_SMIA-20111010_maxdiff-100.pcap": 1.2,
+#     "smb_SMIA20111010-one-rigid1_maxdiff-100.pcap": 0.6,
+#     "dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap": 0.6,
+#     "dns_ictf2010_maxdiff-1000.pcap": 0.6,
+#     "dns_ictf2010-new_maxdiff-1000.pcap": 0.6,
+#     "nbns_SMIA20111010-one_maxdiff-1000.pcap": 1.0,
+#     "ntp_SMIA-20111010_maxdiff-1000.pcap": 1.2,
+#     "smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap": 0.6,
+# }
 
-    # assumptions derived from first traces
-    "dhcp_SMIA2011101X-filtered_maxdiff-100.pcap": 0.6,
-    "dns_ictf2010_maxdiff-100.pcap": 0.6,
-    "dns_ictf2010-new_maxdiff-100.pcap": 0.6,
-    "nbns_SMIA20111010-one_maxdiff-100.pcap": 1.0,
-    "ntp_SMIA-20111010_maxdiff-100.pcap": 1.2,
-    "smb_SMIA20111010-one-rigid1_maxdiff-100.pcap": 0.6,
-    "dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap": 0.6,
-    "dns_ictf2010_maxdiff-1000.pcap": 0.6,
-    "dns_ictf2010-new_maxdiff-1000.pcap": 0.6,
-    "nbns_SMIA20111010-one_maxdiff-1000.pcap": 1.0,
-    "ntp_SMIA-20111010_maxdiff-1000.pcap": 1.2,
-    "smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap": 0.6,
+sigmapertrace = {
+    "dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap": 0.4,
+    "dns_ictf2010-new_maxdiff-1000.pcap": 0.9,
+    "nbns_SMIA20111010-one_maxdiff-1000.pcap": 0.4,
+    "ntp_SMIA-20111010_maxdiff-1000.pcap": 1.3,
+    "smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap": 0.4,
+
+    # assumptions derived from 1000s traces
+    "dhcp_SMIA2011101X-filtered_maxdiff-100.pcap": 0.4,
+    "dns_ictf2010-new_maxdiff-100.pcap": 0.9,
+    "nbns_SMIA20111010-one_maxdiff-100.pcap": 0.4,
+    "ntp_SMIA-20111010_maxdiff-100.pcap": 1.3,
+    "smb_SMIA20111010-one-rigid1_maxdiff-100.pcap": 0.4,
+
+    "dhcp_SMIA2011101X_deduped-10000.pcap": 0.4,
+    "dns_ictf2010-new-deduped-10000.pcap": 0.9,
+    "nbns_SMIA20111010-one_deduped-10000.pcap": 0.4,
+    "ntp_SMIA-20111010_deduped-9995-10000.pcap": 1.3,
+    "smb_SMIA20111010-one_deduped-10000.pcap": 0.4,
 }
 
 epspertrace = {
@@ -151,7 +174,7 @@ def labelForSegment(segGrpHier: List[Tuple[str, List[Tuple[str, List[Tuple[str, 
         if inGroup is not None:
             return inGroup.split(", ", 2)[-1]
         else:
-            return "[unknown]"
+            return unknown
 
     return None
 
@@ -305,6 +328,18 @@ def calcHexDist(hexA, hexB):
 
 
 class CachedDistances(object):
+
+    # tokenizers to select from
+    tokenizers = ('nemesys',)  # zeroslices + CropChars
+
+    # refinement methods
+    refinementMethods = [
+        "none",
+        "original",  # WOOT2018 paper
+        "base",  # ConsecutiveChars+moco
+        "nemetyl",  # INFOCOM2020 paper: ConsecutiveChars+moco+splitfirstseg
+    ]
+
     def __init__(self, pcapfilename: str, analysisTitle: str, layer=2, relativeToIP=True):
         """
         Cache or load the DistanceCalculator to or from the filesystem
@@ -427,6 +462,7 @@ class CachedDistances(object):
                 self.specimens, layer=self.layer, relativeToIP=self.relativeToIP, debug=self.debug)
 
         print("Segmenting messages...", end=' ')
+        littleEndian = self.tokenizer[-2:] == "le"
         segmentationTime = time.time()
         # select tokenizer by command line parameter
         if self.tokenizer == "tshark":
@@ -441,12 +477,17 @@ class CachedDistances(object):
             self.segmentedMessages = fixedlengthSegmenter(4, self.specimens, self.analyzerType, self.analysisArgs)
         elif self.tokenizer in ["nemesys", "nemesysle"]:
             # 3. segment messages by NEMESYS
-            segmentsPerMsg = bcDeltaGaussMessageSegmentation(self.specimens, self.sigma)
+            if self.tokenizer == "nemesysle":  # little endian version
+                segmentsPerMsg = bcDeltaGaussMessageSegmentationLE(self.specimens, self.sigma)
+            else:
+                segmentsPerMsg = bcDeltaGaussMessageSegmentation(self.specimens, self.sigma)
 
             # get analyzer requested by analyzerType/analysisArgs
             self.segmentedMessages = MessageAnalyzer.convertAnalyzers(
                 segmentsPerMsg, self.analyzerType, self.analysisArgs)
             self._callRefinement()
+        else:
+            raise ValueError(f"tokenizer {self.tokenizer} is unknown")
 
         self.segmentationTime = time.time() - segmentationTime
         print("done.")
@@ -597,13 +638,14 @@ class StartupFilecheck(object):
         else:
             self.reportFullPath = reportFullPath
             """A path name that is inside the report folder and reflects the pcap base name without extension."""
-        if not exists(self.reportFullPath):
+        try:
             os.makedirs(self.reportFullPath)
-        elif isdir(self.reportFullPath):
-            print("Using existing ", self.reportFullPath, " as report folder.")
-        else:
-            print("Path that should be used as report folder is an existing file. Aborting.")
-            exit(1)
+        except FileExistsError:
+            if isdir(self.reportFullPath):
+                print("Using existing ", self.reportFullPath, " as report folder.")
+            else:
+                print("Path that should be used as report folder is an existing file. Aborting.")
+                exit(1)
 
         self.timestamp = time.time()
         self.timeformated = time.strftime("%Y%m%d-%H%M%S", time.gmtime(self.timestamp))
@@ -641,7 +683,7 @@ class StartupFilecheck(object):
 
 class TrueOverlays(object):
     """
-    Count and  the amount of (falsely) inferred boundaries in the scope of each true field.
+    Count and the amount of (falsely) inferred boundaries in the scope of each true field.
     """
     def __init__(self, trueSegments: Dict[str, Sequence[MessageSegment]],
                  inferredSegments: List[Sequence[MessageSegment]], comparator: MessageComparator, minLen=3):
@@ -819,12 +861,15 @@ class TitleBuilder(object):
 
     @property
     def clusterParams(self):
-        from sklearn.cluster import DBSCAN
+        from nemere.inference.templates import DBSCANsegmentClusterer, HDBSCANsegmentClusterer, OPTICSsegmentClusterer
+        from sklearn.cluster import DBSCAN, OPTICS
         from hdbscan import HDBSCAN
-        if isinstance(self._clusterer, (DBSCAN)):
+        if isinstance(self._clusterer, (DBSCANsegmentClusterer, DBSCAN)):
             return f"eps {self._clusterer.eps:.3f} ms {self._clusterer.min_samples}"
-        elif isinstance(self._clusterer, (HDBSCAN)):
+        elif isinstance(self._clusterer, (HDBSCANsegmentClusterer, HDBSCAN)):
             return f"mcs {self._clusterer.min_cluster_size} ms {self._clusterer.min_samples}"
+        elif isinstance(self._clusterer, (OPTICSsegmentClusterer, OPTICS)):
+            return f"ms {self._clusterer.min_samples} maxeps {self._clusterer.max_eps}"
 
     @property
     def plotTitle(self):
@@ -851,5 +896,22 @@ class TitleBuilderSens(TitleBuilder):
     """include Sensitivitiy from clusterer in title"""
     @property
     def clusterParams(self):
-        return super().clusterParams
+        from nemere.inference.templates import DBSCANsegmentClusterer
+        if isinstance(self._clusterer, DBSCANsegmentClusterer):
+            return f"S {self._clusterer.S:.1f} eps {self._clusterer.eps:.3f} ms {self._clusterer.min_samples}"
+        else:
+            return super().clusterParams
 
+
+def segIsTyped(someSegment):
+    return isinstance(someSegment, (TypedTemplate, TypedSegment))
+
+
+uulmColors = {
+    "uulm"       : "#7D9AAA",  # blue-gray
+    "uulm-akzent": "#A9A28D",  # beige
+    "uulm-in"    : "#A32638",  # magenta
+    "uulm-med"   : "#26247C",  # bluish
+    "uulm-mawi"  : "#56AA1C",  # green
+    "uulm-nawi"  : "#BD6005"   # orange
+}

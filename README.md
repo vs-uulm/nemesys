@@ -109,7 +109,7 @@ All scripts provide these command line options:
 ### prep_*
 PCAP preparation scripts:
 
-* `prep_deduplicate-trace.py pcapfilename`   
+* `prep_deduplicate-trace.py pcapfilename`
   Detect identical payloads and de-duplicate traces, ignoring encapsulation metadata.
 
 
@@ -121,7 +121,7 @@ Basic checks whether PCAPs are parseable:
 The tshark-dissected fields that are contained in the PCAPs need to be known to the message parser.
 Therefore, validation.messageParser.ParsingConstants needs to be made aware of any field occuring in the traces.
 
-* `check_parse-pcap.py pcapfilename`  
+* `check_parse-pcap.py pcapfilename`
   Parse a PCAP file and print its dissection for testing. This helps verifying if there are any unknown fields 
   that need to be added to validation.messageParser.ParsingConstants.
   Before starting to validate/use FMS with a new PCAP, first run this check and solve any errors.

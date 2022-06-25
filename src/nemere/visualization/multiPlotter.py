@@ -8,6 +8,7 @@ from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from nemere.visualization.plotter import MessagePlotter
 from nemere.inference.segments import MessageSegment, TypedSegment, MessageAnalyzer
+from nemere.utils.evaluationHelpers import uulmColors
 
 
 class MultiMessagePlotter(MessagePlotter):
@@ -18,7 +19,7 @@ class MultiMessagePlotter(MessagePlotter):
 
     def __init__(self, specimens: SpecimenLoader, analysisTitle: str,
                  nrows: int, ncols: int=None,
-                 isInteractive: bool=False):
+                 isInteractive: bool=False, sameYscale=True):
         """
         :param nrows: The number of rows the sheet should have. If ncols is not set, this is interpreted
             as the expected count of plots and the number of rows and cols are determined automatically.
@@ -32,12 +33,16 @@ class MultiMessagePlotter(MessagePlotter):
         if not isinstance(self._axes, numpy.ndarray):
             self._axes = numpy.array(self._axes)
         self._fig.set_size_inches(16, 9)
-
+        self._sameYscale = sameYscale
 
     @property
     def axes(self) -> List[plt.Axes]:
         return self._axes.flat
 
+    @property
+    def fig(self) -> plt.Figure:
+        """Convenience property for future change of the class to use something else then pyplot."""
+        return self._fig
 
     @staticmethod
     def _autoconfRowsCols(plotCount):
@@ -87,15 +92,16 @@ class MultiMessagePlotter(MessagePlotter):
             ax.text(left + marginH, top + marginV, text)
 
 
-    def scatterInEachAx(self, valuesList: List[Tuple[List, List]], marker='_'):
+    def scatterInEachAx(self, valuesList: List[Tuple[List, List]], marker='_', color=uulmColors["uulm"]):
         """
         Scatter plot of the given values. Each pair of value-sequences is plotted into a separate subplot.
 
         :param valuesList: List of value-sequence pairs. First sequence are x-values, second y-values.
         :param marker: The marker to use in the plot.
+        :param color: color of the scatter points.
         """
         for ax, values in zip(self._axes.flat, valuesList):
-            ax.scatter(values[0], values[1], marker=marker, s=5)
+            ax.scatter(values[0], values[1], marker=marker, s=5, c=color)
 
 
     def fieldmarkersInEachAx(self, fieldEnds: List[List[int]]):
@@ -104,10 +110,11 @@ class MultiMessagePlotter(MessagePlotter):
 
         :param fieldEnds: Values to mark in each subplot.
         """
-        for ax, fends in zip(self._axes.flat, fieldEnds):
+        for ax, fends in zip(self._axes.flat, fieldEnds):  # type: plt.Axes, List[int]
             for fe in fends:
                 ax.axvline(x=fe, **MessagePlotter.STYLE_FIELDENDLINE)
             ax.set_xticks(sorted(fends))
+            ax.tick_params(axis='x', labelrotation=90)
 
 
     def nameEachAx(self, labels: List[str]):
@@ -202,9 +209,15 @@ class MultiMessagePlotter(MessagePlotter):
             self._fig.legend()
 
     # noinspection PyDefaultArgument
-    def printMessageBytes(self, messages: List[AbstractMessage], fontdict={'size': 2}):
+    def printMessageBytes(self, messages: List[AbstractMessage], fontdict={'size': 2, 'family': 'monospace'}):
+        minY, maxY = None, None
+        if self._sameYscale:
+            minY, maxY = self._commonY
         for ax, message in zip(self._axes.flat, messages):  # type: plt.Axes, AbstractMessage
-            ymin, ymax = ax.get_ylim()
+            if self._sameYscale:
+                ymin, ymax = minY, maxY
+            else:
+                ymin, ymax = ax.get_ylim()
             ypos = ymin + (ymax-ymin) * .05
             for idx, byt in enumerate(message.data):  # type: bytes
                 ax.text(float(idx)+.2, ypos, "{:02x}".format(byt), fontdict=fontdict)
@@ -230,7 +243,8 @@ class MultiMessagePlotter(MessagePlotter):
         :param compareValues: The second list of another analysis result
         """
         for ax, analysisResult, compareValue in zip(self._axes.flat, analysisResults, compareValues):
-            MessagePlotter.fillDiffToCompare(ax, analysisResult, compareValue)
+            if analysisResult is not None and compareValue is not None:
+                MessagePlotter.fillDiffToCompare(ax, analysisResult, compareValue)
 
 
     from nemere.inference.segments import CorrelatedSegment
@@ -317,7 +331,7 @@ class MultiMessagePlotter(MessagePlotter):
         >>> import nemere.visualization.multiPlotter
         >>> import nemere.utils.loader
         >>> import numpy
-        >>> loader = nemere.utils.loader.SpecimenLoader("../input/maxdiff-fromOrig/dns_ictf2010_maxdiff-100.pcap")
+        >>> loader = nemere.utils.loader.SpecimenLoader("../input/maxdiff-fromOrig/dns_ictf2010-new_maxdiff-100.pcap")
         >>> mmp = nemere.visualization.multiPlotter.MultiMessagePlotter(loader, "test", 4)
         >>> mmp.plotToSubfig(2, numpy.random.poisson(5,100))
 
@@ -335,6 +349,13 @@ class MultiMessagePlotter(MessagePlotter):
         return ret
 
 
+    @property
+    def _commonY(self):
+        ylims = [sf.get_ylim() for sf in self.axes]
+        minY, maxY = zip(*ylims)
+        return min(minY), max(maxY)
+
+
     def writeOrShowFigure(self, plotfolder: str = None):
         for sf in self.axes:
             # deduplicate labels
@@ -345,6 +366,10 @@ class MultiMessagePlotter(MessagePlotter):
                     newLabels.append(label)
                     newHandles.append(handle)
             sf.legend(newHandles, newLabels)
+        if self._sameYscale:
+            minY, maxY = self._commonY
+            for sf in self.axes:
+                sf.set_ylim(minY, maxY)
         super().writeOrShowFigure(plotfolder)
 
 
@@ -420,3 +445,5 @@ class PlotGroups:
     def appendSegment(self, cid: int, pid: int, title: str, segment: TypedSegment):
         self.plotGroups[cid][1][pid][1].append((title, segment))
         return len(self.plotGroups[cid][1][pid][1]) - 1
+
+

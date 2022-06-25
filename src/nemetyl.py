@@ -18,6 +18,7 @@ import IPython
 
 from nemere.alignment.alignMessages import TypeIdentificationByAlignment
 from nemere.inference.segmentHandler import originalRefinements, nemetylRefinements
+from nemere.inference.templates import ClusterAutoconfException
 from nemere.utils.evaluationHelpers import StartupFilecheck, CachedDistances, TitleBuilder, writePerformanceStatistics
 
 # https://stackoverflow.com/questions/15639779/why-does-multiprocessing-use-only-a-single-core-after-i-import-numpy
@@ -49,10 +50,11 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer to consider. Default is layer 2. Use --relativeToIP '
                              'to use a layer relative to IP layer.')
-    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true', \
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true',
                         help='Consider a layer relative to the IP layer (see also --layer flag)')
     parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.',
                         choices=tokenizers, default="nemesys")
+    parser.add_argument('-e', '--littleendian', help='Toggle presumed endianness to little.', action="store_true")
     parser.add_argument('-s', '--sigma', type=float,
                         help='Only NEMESYS: sigma for noise reduction (gauss filter), default: 0.9')
     parser.add_argument('-f', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
@@ -62,7 +64,10 @@ if __name__ == '__main__':
 
     filechecker = StartupFilecheck(args.pcapfilename)
     withplots = args.with_plots
+    littleendian = args.littleendian == True
     tokenizer = args.tokenizer
+    if littleendian:
+        tokenizer += "le"
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # Cache/load the segmentation and segment dissimilarities
@@ -87,7 +92,12 @@ if __name__ == '__main__':
         else:
             print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
             exit(2)
-    fromCache.get()
+    try:
+        fromCache.get()
+    except ClusterAutoconfException as e:
+        print("Initial clustering of the segments in the trace failed. The protocol in this trace cannot be inferred. "
+              "The original exception message was:\n", e)
+        exit(10)
     segmentedMessages = fromCache.segmentedMessages
     specimens, _, dc = fromCache.specimens, fromCache.comparator, fromCache.dc
     segments = dc.rawSegments

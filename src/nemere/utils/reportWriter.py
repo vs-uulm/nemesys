@@ -8,17 +8,18 @@ from abc import ABC, abstractmethod
 
 import numpy
 from typing import Dict, Tuple, Iterable, TypeVar, Hashable, List, Union, Any, Sequence
-from os.path import isdir, splitext, basename, join
+from os.path import isdir, splitext, basename, join, exists
 from itertools import chain
 from collections import Counter, defaultdict, OrderedDict
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from nemere.inference.segments import AbstractSegment, TypedSegment, MessageSegment
-from nemere.inference.templates import Template, TypedTemplate
-from nemere.utils.evaluationHelpers import StartupFilecheck, reportFolder
+from nemere.inference.templates import Template, TypedTemplate, FieldTypeTemplate
+from nemere.utils.evaluationHelpers import StartupFilecheck, reportFolder, segIsTyped, unknown
 from nemere.utils.loader import SpecimenLoader
-from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator
+from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator, BaseDissectorMatcher
+from nemere.visualization.simplePrint import FieldtypeComparingPrinter
 
 
 def calcScoreStats(scores: Iterable[float]) -> Tuple[float, float, float, float, float]:
@@ -67,9 +68,8 @@ def countMatches(quality: Iterable[FormatMatchScore]):
 
 
 def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
-                runtime: float,
-                specimens: SpecimenLoader, comparator: MessageComparator,
-                inferenceTitle: str, folder="reports"):
+                runtime: float, comparator: MessageComparator,
+                inferenceTitle: str, folder="reports", withTitle=False):
 
     if not isdir(folder):
         raise NotADirectoryError("The reports folder {} is not a directory. Reports cannot be written there.".format(
@@ -77,7 +77,8 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
     print('Write report to ' + folder)
 
     # write Format Match Score and Metrics to csv
-    with open(os.path.join(folder, 'FormatMatchMetrics.csv'), 'w') as csvfile:
+    fn = f'FormatMatchMetrics_{inferenceTitle}.csv' if withTitle else 'FormatMatchMetrics.csv'
+    with open(os.path.join(folder, fn), 'w') as csvfile:
         fmmcsv = csv.writer(csvfile)
         fmmcsv.writerow(["Message", "Score", 'I', 'M', 'N', 'S', 'MG', 'SP'])
         fmmcsv.writerows( [
@@ -88,10 +89,13 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
     scoreStats = calcScoreStats([q.score for q in formatmatchmetrics.values()])
     matchCounts = countMatches(formatmatchmetrics.values())
 
-    with open(os.path.join(folder, 'ScoreStatistics.csv'), 'w') as csvfile:
+    fn = os.path.join(folder, 'ScoreStatistics.csv')
+    writeHeader = not exists(fn)
+    with open(fn, 'a') as csvfile:
         fmmcsv = csv.writer(csvfile)
-        fmmcsv.writerow(["inference", "min", "mean", "max", "median", "std",
-                         "exactcount", "offbyonecount", "offbymorecount", "runtime"])
+        if writeHeader:
+            fmmcsv.writerow(["inference", "min", "mean", "max", "median", "std",
+                             "exactcount", "offbyonecount", "offbymorecount", "runtime"])
         fmmcsv.writerow( [ inferenceTitle,
                            *scoreStats, *matchCounts,
                            runtime] )
@@ -109,7 +113,7 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
                 symbolcsv.writerow([field.name for field in symbol.fields])
                 symbolcsv.writerows([val.hex() for val in msg] for msg in symbol.getCells())
     else:
-        fileNameS = 'Symbols'
+        fileNameS = f'Symbols_{inferenceTitle}' if withTitle else 'Symbols'
         with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
             symbolcsv = csv.writer(csvfile)
             msgcells = chain.from_iterable([sym.getCells() for sym in  # unique symbols by set
@@ -139,7 +143,8 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
     tikzcode = comparator.tprintInterleaved(symsMinMeanMax)
 
     # write Format Match Score and Metrics to csv
-    with open(join(folder, 'example-inference-minmeanmax.tikz'), 'w') as tikzfile:
+    fn = f'example-inference-minmeanmax_{inferenceTitle}.tikz' if withTitle else 'example-inference-minmeanmax.tikz'
+    with open(join(folder, fn), 'w') as tikzfile:
         tikzfile.write(tikzcode)
 
 
@@ -151,6 +156,26 @@ def writeSegmentedMessages2CSV(segmentsPerMsg: Sequence[Sequence[MessageSegment]
         symbolcsv.writerows(
             [seg.bytes.hex() for seg in msg] for msg in segmentsPerMsg
         )
+
+
+def writeFieldTypesTikz(comparator: MessageComparator, segmentedMessages: List[Tuple[MessageSegment]],
+                        fTypeTemplates: List[FieldTypeTemplate], filechecker: StartupFilecheck):
+    # select the messages to print by quality: three of around fmsmin, fmsmean, fmsmax each
+    fmslist = [BaseDissectorMatcher(comparator, msg).calcFMS() for msg in segmentedMessages]
+    fmsdict = {fms.score: fms for fms in fmslist}  # type: Dict[float, FormatMatchScore]
+    scoreSorted = sorted(fmsdict.keys())
+    fmsmin, fmsmean, fmsmax, fmsmedian, fmsstd = calcScoreStats(scoreSorted)
+    meanI = scoreSorted.index(fmsmean)
+    scoreSelect = scoreSorted[-3:] + scoreSorted[meanI - 1:meanI + 2] + scoreSorted[:3]
+    symsMinMeanMax = [fmsdict[mmm].message for mmm in scoreSelect]
+
+    # visualization of segments from clusters in messages.
+    cp = FieldtypeComparingPrinter(comparator, fTypeTemplates)
+    tikzcode = cp.fieldtypes(symsMinMeanMax)
+    # write tikz code to file
+    with open(join(filechecker.reportFullPath, 'example-messages-fieldtypes.tikz'), 'w') as tikzfile:
+        tikzfile.write(tikzcode)
+
 
 
 Element = TypeVar('Element', AbstractMessage, AbstractSegment)
@@ -366,7 +391,7 @@ class CombinatorialClustersReport(ClusteringReport):
         self.segUniqu = sum(len(cl) for cl in clusters.values())
 
         if ignoreUnknown:
-            unknownKeys = ["[unknown]", "[mixed]"]
+            unknownKeys = [unknown, "[mixed]"]
             self.numUnknown = len([gt for gt in self.groundtruth.values() if gt in unknownKeys])
             clustersTemp = {lab: [el for el in clu if self.groundtruth[el] not in unknownKeys] for lab, clu in
                             clusters.items()}
@@ -566,7 +591,7 @@ class SegmentClusterGroundtruthReport(SegmentClusterReport):
         reportPath = reportPath if reportPath is not None else pcap.reportFullPath \
             if isinstance(pcap, StartupFilecheck) else reportFolder
         super().__init__(pcap, reportPath)
-        self.groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
+        self.groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else unknown
                             for rawSeg, typSeg in self.typedMatchTemplates.items()}
 
     def write(self, clusters: Dict[str, Union[MessageSegment, Template]], runtitle: Union[str, Dict]=None):
@@ -595,8 +620,7 @@ class SegmentClusterGroundtruthReport(SegmentClusterReport):
                     (
                         cLabel, seg.bytes.hex(), seg.bytes,
                         len(seg.baseSegments) if isinstance(seg, Template) else 1,
-                        typedMatchTemplates[seg][1].fieldtype if SegmentClusterGroundtruthReport.segIsTyped(
-                            typedMatchTemplates[seg][1]) else "[unknown]",
+                        typedMatchTemplates[seg][1].fieldtype if segIsTyped(typedMatchTemplates[seg][1]) else unknown,
                         typedMatchTemplates[seg][0],
                         self._comparator.lookupField(
                             typedMatchTemplates[seg][1].baseSegments[0] if isinstance(typedMatchTemplates[seg][1],
@@ -608,7 +632,7 @@ class SegmentClusterGroundtruthReport(SegmentClusterReport):
 
     @staticmethod
     def segIsTyped(someSegment):
-        return isinstance(someSegment, (TypedTemplate, TypedSegment))
+        return segIsTyped(someSegment)
 
     def relativeOffsets(self, infSegment):
         """(Matched templates have offsets and lengths identical to seg (inferred) and not the true one.)"""

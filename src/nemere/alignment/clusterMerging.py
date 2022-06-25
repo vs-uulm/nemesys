@@ -23,6 +23,7 @@ class ClusterAligner(object):
         self.dc = dc
 
     def generateHirsch(self, mmg=(0, -1, 5)):
+        """TODO fix the non-symmetric DYN-DYN similarity."""
         alignedFields = {clunu: [field for field in zip(*cluelms)] for clunu, cluelms in self.alignedClusters.items() if
                          clunu != -1}
         statDynFields = dict()

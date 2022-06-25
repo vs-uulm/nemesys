@@ -1,14 +1,16 @@
+from collections import defaultdict
 from itertools import chain
 from time import strftime
 from typing import Tuple, Iterable, Sequence, Dict, List, Union
 
 from tabulate import tabulate
+from colorhash import ColorHash
 
 from netzob.Common.Utils.MatrixList import MatrixList
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from nemere.inference.segments import MessageSegment
-from nemere.inference.templates import DistanceCalculator, Template
+from nemere.inference.templates import DistanceCalculator, Template, FieldTypeTemplate
 from nemere.validation.dissectorMatcher import MessageComparator
 from nemere.visualization import bcolors as bcolors
 
@@ -415,3 +417,222 @@ class ComparingPrinter(SegmentPrinter):
     """
 
 
+class FieldtypeHelper(object):
+    """Common functions to handle field types."""
+    def __init__(self, ftclusters: List[FieldTypeTemplate]):
+        self.ftclusters = ftclusters  # type: List[FieldTypeTemplate]
+        self.segmentedMessages = defaultdict(list)  # type: Dict[AbstractMessage, List[MessageSegment]]
+        self._mapMessages2Segments(ftclusters)
+        # this is FieldtypeComparingPrinter specific:
+        self._segments2labels = type(self).segments2Labels(ftclusters)  # type: Dict[MessageSegment, str]
+
+    @classmethod
+    def segments2Labels(cls, templates: List[FieldTypeTemplate]):
+        """Used by classes like FieldtypeComparingPrinter"""
+        return {bs: templ.fieldtype for templ in templates for bs in cls._recurseSegments2Labels(templ)}
+
+    @classmethod
+    def _recurseSegments2Labels(cls, template: Template):
+        """Used by classes like FieldtypeComparingPrinter"""
+        for bs in template.baseSegments:
+            if isinstance(bs, MessageSegment):
+                yield bs
+            else:
+                yield from cls._recurseSegments2Labels(bs)
+
+    def _mapMessages2Segments(self, ftclusters: List[Template]):
+        """Recover list of segments per message"""
+        for ftc in ftclusters:
+            self._recurseTemplates(ftc)
+        sortedSegments = dict()
+        for msg, segs in self.segmentedMessages.items():
+            sortedSegments[msg] = sorted(set(segs), key=lambda s: s.offset)
+        self.segmentedMessages = sortedSegments
+
+    def _recurseTemplates(self, template: Template):
+        for bs in template.baseSegments:
+            if isinstance(bs, MessageSegment):
+                self.segmentedMessages[bs.message].append(bs)
+            else:
+                # recursively add base segments of Templates among segments in the cluster
+                self._recurseTemplates(bs)
+
+    def offset2colorlabel(self, message):
+        """
+        style label for the inferred segment cluster as color
+        """
+        segs = self.segmentedMessages[message] if message in self.segmentedMessages else []
+        offlab = list()
+        for seg in segs:
+            offdiff = seg.offset - len(offlab)
+            if offdiff > 0:
+                offlab += [None] * offdiff
+            offlab += [self._segments2labels[seg]] * len(seg)
+        offdiff = len(message.data) - len(offlab)
+        if offdiff > 0:
+            offlab += [None] * offdiff
+        return offlab
+
+    def colorHashStyles(self, selectMessages: Iterable[AbstractMessage]):
+        """
+        Returns two lists and two dicts:
+        :return: List of tikz style definitions; map of label to style name; map of color name to style name; list of color definitions
+        """
+        # define labels, colors, styles
+        ftstyles = {lab: "fts" + lab.replace("_", "").replace(" ", "")
+                          for lab in self._colorlabels(selectMessages)}  # field-type label to style name
+        ftcolornames = {tag: "col" + tag[3:] for lab, tag in ftstyles.items() }  # style name to color name
+        ftcolors = list()  # color definition
+        for tag in ftcolornames.values():
+            red, green, blue = [tint/256 for tint in ColorHash(tag[3:], lightness=(0.5, 0.6, 0.7, 0.8)).rgb]
+            ftcolors.append( f"\definecolor{{{tag}}}{{rgb}}{{{red},{green},{blue}}}" )
+        styles = [f"{sty}/.style={{fill={ftcolornames[sty]}}}" for sty in ftstyles.values() ]
+        return styles, ftstyles, ftcolornames, ftcolors
+
+    def _colorlabels(self, selectMessages: Iterable[AbstractMessage]):
+        """
+        Return a set of all possible color labels to be returned by _offset2colorlabel.
+        TODO Currently ignores selectMessages. Should return only those fieldtypes that are present in
+          selectMessages' segments.
+        """
+        # TODO use all messages if selectMessages is None
+        return {ftc.fieldtype for ftc in self.ftclusters}
+
+
+
+class FieldtypeComparingPrinter(ComparingPrinter):
+
+    def __init__(self, comparator: MessageComparator, ftclusters: List[FieldTypeTemplate]):
+        # We populate the inferred segments from ftclusters ourselves right afterwards by _mapMessages2Segments().
+        super().__init__(comparator, ())
+        self._ftHelper = FieldtypeHelper(ftclusters)
+        self._segmentedMessages = self._ftHelper.segmentedMessages
+        self._ftclusters = ftclusters  # type: List[FieldTypeTemplate]
+        # transiently used during fieldtypes()
+        self._offset2color = dict()
+        self._offset2text = dict()
+        self.__ftstyles = dict()
+
+    def _offset2colorlabel(self, message):
+        return self._ftHelper.offset2colorlabel(message)
+
+    def _offset2textlabel(self, message):
+        """
+        true data types as labels
+        """
+        pm = self._comparator.parsedMessages[self._comparator.messages[message]]
+        trueDatatypeMap = dict()
+        offset = 0
+        for name, lgt in pm.getTypeSequence():
+            trueDatatypeMap[offset] = name.replace("_", "\\_")
+            offset += lgt
+        return trueDatatypeMap
+
+    def _msgoffs2label(self, msg, po):
+        # place offset labels in caches
+        if msg not in self._offset2color:
+            self._offset2color[msg] = self._offset2colorlabel(msg)
+        if msg not in self._offset2text:
+            self._offset2text[msg] = self._offset2textlabel(msg)
+
+        labels = list()
+        # style for the color label
+        labels.append(self.__ftstyles[self._offset2color[msg][po - 1]]
+                      if self._offset2color[msg][po - 1] is not None else "nonelabel"),
+        # text label below the offset
+        if po - 1 in self._offset2text[msg]:
+            labels.append(f"label={{[tfelabel]below:\\sffamily\\tiny {self._offset2text[msg][po - 1]}}}")
+
+        return ", ".join(labels)
+
+    def toConsole(self, selectMessages: Iterable[AbstractMessage] = None,
+                  mark: Union[Tuple[int, int], MessageSegment] = None,
+                  messageSlice: Tuple[Union[int, None], Union[int, None]] = None):
+        # TODO make this a subclass of SegmentPrinter (toConsole needs to be adjusted to use colors for type marking
+        #   and a way to discern two subsequent inferred segments of the same type/color on the terminal.
+        raise NotImplementedError()
+
+    def fieldtypes(self, selectMessages: List[AbstractMessage]):
+        """
+        Generate tikz source code visualizing the the byte values of selected messages overlaid with interleaved
+        representation of true and inferred field types.
+
+        requires \\usetikzlibrary{positioning, fit} in the including latex document header.
+
+        Adapted from nemere.validation.dissectorMatcher.MessageComparator.tprintInterleaved.
+
+        :return LaTeX/tikz code
+        """
+        assert all(msg in self._comparator.messages for msg in selectMessages), \
+            "At least one of the selected messages is not present in the comparator."
+
+        # define labels, colors, styles
+        styles, self.__ftstyles, ftcolornames, ftcolors = self._ftHelper.colorHashStyles(selectMessages)
+
+         # start filling the texcode variable
+        texcode = "\n        ".join(ftcolors) + "\n"
+        texcode += self.toTikz(selectMessages, styles)
+
+        # color legend
+        texcode += "Field type colors:\\\\\n"
+        for lab, tag in self.__ftstyles.items():
+            texlab = lab.replace("_", "\\_")
+            texcode += f"\\colorbox{{{ftcolornames[tag]}}}{{{texlab}}}\\\\\n"
+
+        return texcode + "\n"
+
+    def toTikz(self, selectMessages: Iterable[AbstractMessage] = None, styles = None):
+        # define labels, colors, styles
+        autostyles, self.__ftstyles, ftcolornames, ftcolors = self._ftHelper.colorHashStyles(selectMessages)
+        if styles is not None:
+            autostyles += styles
+        return super().toTikz(selectMessages, autostyles)
+
+
+class FieldClassesPrinter(SegmentPrinter):
+    def __init__(self, ftclusters: List[FieldTypeTemplate]):
+        super().__init__(())
+        self._ftHelper = FieldtypeHelper(ftclusters)
+        self._segmentedMessages = self._ftHelper.segmentedMessages
+        self._ftclusters = ftclusters  # type: List[FieldTypeTemplate]
+        self._offset2color = dict()
+        # set at the beginning of toTikz() and used in _msgoffs2label() during callback of super().toTikz()
+        self.__ftstyles = dict()
+
+    def _msgoffs2label(self, msg, po):
+        # place offset labels in caches
+        if msg not in self._offset2color:
+            self._offset2color[msg] = self._offset2colorlabel(msg)
+        # style for the color label
+        return self.__ftstyles[self._offset2color[msg][po - 1]] \
+            if self._offset2color[msg][po - 1] is not None else "nonelabel"
+
+    def _offset2colorlabel(self, message):
+        return self._ftHelper.offset2colorlabel(message)
+
+    def toTikz(self, selectMessages: Iterable[AbstractMessage] = None, styles = None):
+        """
+        Generate tikz source code visualizing the the byte values of selected messages and inferred field types.
+
+        requires \\usetikzlibrary{positioning, fit} in the including latex document header.
+
+        :return LaTeX/tikz code
+        """
+        selectMessagesList = list(selectMessages) if selectMessages is not None else None
+        assert selectMessages is None or all(msg in self._segmentedMessages for msg in selectMessagesList), \
+            "At least one of the selected messages has no representative in any of the segments in the ftclusters."
+
+        # define labels, colors, styles
+        styles, self.__ftstyles, ftcolornames, ftcolors = self._ftHelper.colorHashStyles(selectMessagesList)
+
+         # start filling the texcode variable
+        texcode = "\n        ".join(ftcolors) + "\n"
+        texcode += super().toTikz(selectMessagesList, styles)
+
+        # color legend
+        texcode += "Field type (from classification) colors:\\\\\n"
+        for lab, tag in self.__ftstyles.items():
+            texlab = lab.replace("_", "\\_")
+            texcode += f"\\colorbox{{{ftcolornames[tag]}}}{{{texlab}}}\\\\\n"
+
+        return texcode + "\n"
