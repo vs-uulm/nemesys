@@ -1,20 +1,23 @@
 """
+Reference implementation for calling NEMESYS: NEtwork MEssage Syntax analysYS with an unknown protocol.
+Usenix WOOT 2018.
+
 Infer messages from PCAPs by the NEMESYS approach (BCDG-segmentation)
 and write inference result to the terminal. Finally drop to an IPython console
 and expose API to interact with the result.
-
-Usenix WOOT 2018.
 """
 
 import argparse, time
 from os.path import isfile
+from itertools import islice
+from typing import List
+
 import IPython
+from netzob.Model.Vocabulary.Symbol import Symbol
 
-from utils.loader import SpecimenLoader
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
-
-
-
+from nemere.utils.loader import SpecimenLoader
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
+import nemere.visualization.simplePrint as sP
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -51,11 +54,22 @@ if __name__ == '__main__':
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
 
     symbols = symbolsFromSegments(segmentsPerMsg)
-    refinedSymbols = symbolsFromSegments(refinedPerMsg)
+    refinedSymbols = symbolsFromSegments(refinedPerMsg)  # type: List[Symbol]
 
-    # TODO output (colored?) visualization on terminal
+    # output visualization of at most 100 messages on terminal and all into file
+    segprint = sP.SegmentPrinter(refinedPerMsg)
+    segprint.toConsole(islice(specimens.messagePool.keys(),100))
+    # segprint.toTikzFile()
+    # omit messages longer than 200 bytes (and not more than 100 messages)
+    segprint.toTikzFile(islice((msg for msg in specimens.messagePool.keys() if len(msg.data) < 200), 100))
+    # available for output:
+    # * nemere.utils.reportWriter.writeSegmentedMessages2CSV
+    # * from netzob.Export.WiresharkDissector.WiresharkDissector import WiresharkDissector
+    #   WiresharkDissector.dissectSymbols(refinedSymbols, 'ari.lua')
 
-    print("Access inferred symbols via variables: symbols, refinedSymbols")
-    print("Access inferred message segments via variables: segmentsPerMsg, refinedPerMsg")
+
+    print("\nAccess inferred symbols via variables: symbols, refinedSymbols")
+    print("Access inferred message segments via variables: segmentsPerMsg, refinedPerMsg\n")
+
 
     IPython.embed()

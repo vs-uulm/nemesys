@@ -1,0 +1,1 @@
+/home/stephan/REUP-common/trace-collection/sources/filters/strip_encapsulation.py

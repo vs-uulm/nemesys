@@ -13,18 +13,16 @@ In the end, accumulate the comparison into one number to get a quality metric: T
 Usenix WOOT 2018.
 """
 import argparse
-from os.path import isfile, join
+from os.path import isfile, splitext, basename
 from typing import Dict, Tuple, List
 
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
-import utils.evaluationHelpers as eh
-from inference.segments import HelperSegment
-from inference.analyzers import NoneAnalysis
 
-from utils.loader import SpecimenLoader
-from validation.messageParser import ParsedMessage
-from validation.dissectorMatcher import MessageComparator
+from nemere.utils.loader import SpecimenLoader
+from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport
+from nemere.validation.messageParser import ParsedMessage
+from nemere.validation.dissectorMatcher import MessageComparator
 
 
 debug = True
@@ -154,17 +152,17 @@ if __name__ == '__main__':
 
     # compare symbols' messages to true message types
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
-    eh.clStatsFile = join(eh.reportFolder, 'messagetype-netzob-statistics.csv')
-    eh.ccStatsFile = join(eh.reportFolder, 'messagetype-combined-netzob-statistics.csv')
+    IndividualClusterReport.messagetypeStatsFile = "messagetype-netzob-statistics"
+    CombinatorialClustersReport.messagetypeStatsFile = "messagetype-combined-netzob-statistics"
     for thresh, symbMsgs in threshSymbMsgs.items():
-        # place each msg in tuple of one dummy segment
-        messageClusters = {symname: [[HelperSegment(NoneAnalysis(msg),0,len(msg.data))] for msg in msglist]
-                           for symname, msglist in symbMsgs.items()}
+        messageClusters = {symname: [specimens.messagePool[msg] for msg in msglist]
+                            for symname, msglist in symbMsgs.items()}
 
-        clusterStats, conciseness = eh.writeIndividualMessageClusteringStaticstics(
-            messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
-        eh.writeCollectiveClusteringStaticstics(
-            messageClusters, groundtruth, "netzob-thresh={}".format(thresh), comparator)
+        # TODO replace title by ...inferenceParams
+        clusterReport = IndividualClusterReport(groundtruth, splitext(basename(specimens.pcapFileName))[0])
+        clusterReport.write(messageClusters, "netzob-thresh={}".format(thresh))
+        combinReport = CombinatorialClustersReport(groundtruth, splitext(basename(specimens.pcapFileName))[0])
+        combinReport.write(messageClusters, "netzob-thresh={}".format(thresh))
 
     ParsedMessage.closetshark()
 

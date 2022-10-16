@@ -1,45 +1,47 @@
 """
-Use groundtruth about field segmentation by dissectors and align segments
-on the similarity of their feature "personality".
+Evaluation implementation for NEMETYL, the NEtwork MEssage TYpe identification by aLignment.
+INFOCOM 2020.
 
-Takes a PCAP trace of a known protocol, dissects each message into their fields, and yields segments from each of them.
-These segments get analyzed by the given analysis method which is used as feature to determine their similarity.
-Similar fields are then aligned.
+Use different segmenters to tokenize messages and align segments on the similarity of their "personality"
+derived from the segments' features.
+This script uses groundtruth about field segmentation by tshark dissectors to evaluate the quality.
+Thus, it takes a PCAP trace of a known protocol, dissects each message into their fields and compares the results to
+the selected heuristic segmenter.
+
+The selected segmenter yields segments from each message. These segments are analyzed by the given analysis method
+which is used as feature to determine their similarity. Similar fields are then aligned.
 """
 
-from typing import List, Tuple
-import argparse, IPython, csv
-import time, numpy
-from os.path import isfile, splitext, basename, exists, join
+import argparse, IPython
 
 
-from tabulate import tabulate
+from nemere.alignment.alignMessages import TypeIdentificationByAlignment
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, \
+    nemetylRefinements 
+from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
+from nemere.utils.evaluationHelpers import *
+from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport
+from nemere.visualization.multiPlotter import MultiMessagePlotter
+from nemere.alignment.clusterMerging import ClusterClusterer
 
-# # change drawing toolkit for matplotlib (to be set before the pyplot import)
-# import matplotlib as mpl
-# mpl.use('Agg')
-
-from alignment.alignMessages import SegmentedMessages, MessageSegment
-from inference.segmentHandler import originalRefinements, baseRefinements
-from inference.templates import DistanceCalculator
-from alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
-from utils.evaluationHelpers import analyses, cacheAndLoadDC, \
-    writeIndividualMessageClusteringStaticstics, writeCollectiveMessageClusteringStaticstics, writePerformanceStatistics
-from visualization.multiPlotter import MultiMessagePlotter
-from alignment.clusterMerging import ClusterMerger
-
+# https://stackoverflow.com/questions/15639779/why-does-multiprocessing-use-only-a-single-core-after-i-import-numpy
+os.system("taskset -p 0xffffffffffffffffff %d" % os.getpid())
 
 debug = False
 
+# fix the analysis method to VALUE
 analysis_method = 'value'
+# fix the distance method to canberra
 distance_method = 'canberra'
+# tokenizers to select from
 tokenizers = ('tshark', '4bytesfixed', 'nemesys')
 roundingprecision = 10**8
-
 # refinement methods
 refinementMethods = [
+    "none",
     "original", # WOOT2018 paper
-    "base",     # moco+splitfirstseg
+    "base",     # ConsecutiveChars+moco
+    "nemetyl",  # ConsecutiveChars+moco+splitfirstseg
     ]
 
 
@@ -60,7 +62,6 @@ def relign(segseqA, segseqB):
 def columnOfAlignment(alignedSegments: List[List[MessageSegment]], colnum: int):
     return [msg[colnum] for msg in alignedSegments]
 
-
 # noinspection PyShadowingNames
 def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]], colnum: int):
     """
@@ -77,7 +78,9 @@ def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegme
     nonepos = [idx for idx, seg in enumerate(column) if seg is None]
     stripedcol = [seg for seg in column if seg is not None]
 
-    dists2first = ["- (reference)"] + list(dc.distancesSubset(stripedcol[0:1], stripedcol[1:]).tolist())[0]  # type: List[Union[str, None]]
+    # noinspection PyTypeChecker
+    disulist = list(dc.distancesSubset(stripedcol[0:1], stripedcol[1:]).tolist())  # type: list
+    dists2first = ["- (reference)"] + disulist[0]  # type: List[Union[str, None]]
 
     # re-insert Nones
     for idx in nonepos:
@@ -90,7 +93,6 @@ def column2first(dc: DistanceCalculator, alignedSegments: List[List[MessageSegme
 def printSegDist(d2ft: List[Tuple[MessageSegment, float]]):
     print(tabulate([(s.bytes.hex() if isinstance(s, MessageSegment) else "-", d) for s, d in d2ft],
                    headers=['Seg (hex)', 'Distance'], floatfmt=".4f"))
-
 
 # noinspection PyShadowingNames
 def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
@@ -110,18 +112,18 @@ def seg2seg(dc: DistanceCalculator, alignedSegments: List[List[MessageSegment]],
     print(segB)
     return dc.pairDistance(segA, segB)
 
-
 # noinspection PyShadowingNames
 def quicksegmentTuple(dc: DistanceCalculator, segment: MessageSegment):
     return dc.segments2index([segment])[0], segment.length, tuple(segment.values)
 
-def epsautoconfeval(epsilon):
+def epsautoconfeval(epsilon, plotTitle):
     """
     investigate distance properties for clustering autoconfiguration
     plots of k-nearest-neighbor distance histogram and "knee"
 
     See SegmentedMessages#autoconfigureDBSCAN
 
+    :param plotTitle: Part of plot's filename and header
     :param epsilon The manually determined "best" epsilon for comparison
     :return:
     """
@@ -134,9 +136,9 @@ def epsautoconfeval(epsilon):
     # hstplt.writeOrShowFigure()
     # del hstplt
 
-    neighbors = sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
+    neighbors = tyl.sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
 
-    mmp = MultiMessagePlotter(specimens, tokenizer + "-knn-distance-funtion", 1, 2,
+    mmp = MultiMessagePlotter(specimens, "knn-distance-funtion_" + plotTitle, 1, 2,
                               isInteractive=False)
     mmp.axes[0].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
     mmp.axes[1].axhline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
@@ -157,7 +159,7 @@ def epsautoconfeval(epsilon):
     sigma = log(len(neighbors))
     knearest = dict()
     smoothknearest = dict()
-    seconddiff = dict()
+    seconddiff = dict()  # type: Dict[int, numpy.ndarray]
     seconddiffMax = (0, 0, 0)
 
     # ksteepeststats = list()
@@ -170,6 +172,7 @@ def epsautoconfeval(epsilon):
         # max of second difference (maximum upwards curvature) as knee
         seconddiff[k] = numpy.diff(smoothknearest[k], 2)
         seconddiffargmax = seconddiff[k].argmax()
+        # noinspection PyArgumentList
         diffrelmax = seconddiff[k].max() / smoothknearest[k][seconddiffargmax]
         if 2*sigma < seconddiffargmax < len(neighbors) - 2*sigma and diffrelmax > seconddiffMax[2]:
             seconddiffMax = (k, seconddiffargmax, diffrelmax)
@@ -197,7 +200,8 @@ def epsautoconfeval(epsilon):
 
     ax0twin = mmp.axes[0].twinx()
     # mmp.plotToSubfig(ax0twin, seconddiff[k], linestyle='dotted', color='cyan', alpha=.4)
-    mmp.plotToSubfig(ax0twin, [None] + list(seconddiff[k].tolist()), linestyle='dotted',
+    # noinspection PyTypeChecker
+    mmp.plotToSubfig(ax0twin, [None] + seconddiff[k].tolist(), linestyle='dotted',
                      color='magenta', alpha=.4)
 
     # epsilon = knearest[k][x]
@@ -209,7 +213,7 @@ def epsautoconfeval(epsilon):
     mmp.axes[0].axvline(x, linestyle='dashed', color='blue', alpha=.4)
 
 
-    mmp.writeOrShowFigure()
+    mmp.writeOrShowFigure(filechecker.reportFullPath)
     del mmp
 
     # if args.interactive:
@@ -219,7 +223,106 @@ def epsautoconfeval(epsilon):
 
     return epsilon
 
+def clusterClusters():
+    """
+    alternative idea of merging clusters by clustering them:
+        does not improve merging - perhaps the similarity matrix is not good enough?!
+    :return:
+    """
+    # ClusterClusterer
+    clusterclusterer = ClusterClusterer(tyl.alignedClusters, dc)
+    # clusterDists = clusterclusterer.calcClusterDistances()
 
+    mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
+
+    cluclu, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
+    clusterClustersNoiseless = {k: v for k, v in cluclu.items() if k > -1}
+    mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, tyl.messageObjClusters)
+    ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), splitClusterReport.precisionRecallList)
+    mergedObjClusters = {lab: [comparator.messages[element[0].message] for element in segseq]
+                         for lab, segseq in mergedClusters.items()}
+
+    inferenceParams.postProcess += "split+mergedAlt-{}-eps={:.2f}-min_samples={}".format(
+        type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples)
+    clusteredClusterReport = IndividualClusterReport(groundtruth, filechecker)
+    clusteredClusterReport.write(mergedObjClusters, inferenceParams.dict)
+
+    from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    from nemere.visualization.distancesPlotter import DistancesPlotter
+    typedClusterDummys = list()
+    for clun in clusterclusterer.clusterOrder:
+        clusta = None
+        for stats in clusteredClusterReport.precisionRecallList:
+            if stats is not None and stats[0] == clun:
+                clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
+                break
+        msgdum = RawMessage(messageType=clusta)
+        typedClusterDummys.append(msgdum)
+
+    dipl = DistancesPlotter(specimens, "cluster-clustering-" + inferenceParams.plotTitle, False)
+    dipl.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
+    dipl.writeOrShowFigure(filechecker.reportFullPath)
+
+def printm4c(clusters, selected, printer):
+    """
+    Print messages for clusters.
+
+    :param clusters:
+    :param selected:
+    :param printer: callable with one parameter for the message
+    :return:
+    """
+    for lab, msgs in clusters.items():
+        if lab in selected:
+            print("\n\nCluster", lab, "\n")
+            for msg in msgs:
+                printer(msg)
+
+def printVals4Field(clusters, selected, field):
+    """all values for the given field name in the cluster"""
+    printm4c(clusters, selected,
+             lambda msg: print(comparator.parsedMessages[specimens.messagePool[msg[0].message]].getValuesByName(field)))
+
+def printSpecClu(clusters, selected):
+    printm4c(clusters, selected,
+             lambda msg: comparator.pprint2Interleaved(msg, messageSlice=(None, 100)))
+
+def countVals4Field(clusters, selected, field):
+    valCounter = dict()
+    for lab, msgs in clusters.items():
+        if lab in selected:
+            print("\n\nCluster", lab, "\n")
+            valCounter[lab] = Counter(chain.from_iterable(
+                comparator.parsedMessages[specimens.messagePool[msg[0].message]].getValuesByName(
+                    field) for msg in msgs))
+            print(valCounter[lab])
+    # psftck = [set(tc.keys()) for tc in valCounter.values()]
+    # # these tag values are present in all psf messages
+    # psfcommon = psftck[0].intersection(*psftck)
+    # [[b for b in a if b not in psfcommon] for a in psftck]
+    return valCounter
+
+def singularFields(clusters, cmp, select):
+    fields = defaultdict(lambda: defaultdict(set))
+    for lab, msgs in clusters.items():
+        if lab in select:
+            for msg in msgs:
+                pm = cmp.parsedMessages[cmp.specimens.messagePool[msg[0].message]]
+                for fn in pm.getFieldNames():
+                    fields[lab][fn].update(pm.getValuesByName(fn))
+    # find fields that have a single value within the cluster
+    single = {lab: {fn: next(iter(val)) for fn, val in fnval.items() if len(val) == 1}
+                 for lab, fnval in fields.items()}
+    return fields, single
+
+def discriminators(single, selectcount):
+    # find singular fields (e.g., from mifsingle) in other clusters that have different singular values there: discriminator
+    elgnis = defaultdict(dict)
+    for lab, fnval in single.items():
+        for fn, val in fnval.items():
+            elgnis[fn][lab] = val
+    return elgnis, {fn: {lab: val for lab, val in labval.items()} for fn, labval in elgnis.items()
+                     if selectcount * 0.5 == len(set(labval.values()))}  # to allow for overspecific clusters (above groundtruth types)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # END : Evaluation helpers  # # # # # # # # # # # # # #
@@ -241,79 +344,71 @@ if __name__ == '__main__':
     parser.add_argument('pcapfilename', help='Filename of the PCAP to load.')
     parser.add_argument('-i', '--interactive', help='Open ipython prompt after finishing the analysis.',
                         action="store_true")
-    parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.', default="tshark")
+    parser.add_argument('-l', '--layer', type=int, default=2,
+                        help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
+                             '(typically the payload of a transport protocol).')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
+    parser.add_argument('-t', '--tokenizer', help='Select the tokenizer for this analysis run.',
+                        choices=tokenizers, default="tshark")
     parser.add_argument('-s', '--sigma', type=float, help='Only NEMESYS: sigma for noise reduction (gauss filter),'
                                                           'default: 0.9')
-    parser.add_argument('-r', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
-                        default="base")
-    parser.add_argument('--split', help='Use old split-clusters implementation.',
-                        action="store_true")
+    parser.add_argument('-f', '--refinement', help='Select segment refinement method.', choices=refinementMethods,
+                        default=refinementMethods[-1])
     parser.add_argument('-p', '--with-plots',
                         help='Generate plots.',
                         action="store_true")
     args = parser.parse_args()
+
+    filechecker = StartupFilecheck(args.pcapfilename)
     withplots = args.with_plots
-
-    print("\n\n")
-
-    if not isfile(args.pcapfilename):
-        print('File not found: ' + args.pcapfilename)
-        exit(1)
-    pcapbasename = basename(args.pcapfilename)
-
     analyzerType = analyses[analysis_method]
     analysisArgs = None
     analysisTitle = analysis_method
-
-    if args.tokenizer in tokenizers:
-        tokenizer = args.tokenizer
-    else:
-        print("Unsupported tokenizer:", args.tokenizer, "allowed values are:", tokenizers)
-        exit(2)
+    tokenizer = args.tokenizer
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # cache/load the DistanceCalculator to the filesystem
+    #
+    fromCache = CachedDistances(args.pcapfilename, analysisTitle, args.layer, args.relativeToIP)
+    # Note!  When manipulating distances calculation, deactivate caching by uncommenting the following assignment.
+    # fromCache.disableCache = True
+    fromCache.debug = debug
+    if analysisArgs is not None:
+        # noinspection PyArgumentList
+        fromCache.configureAnalysis(*analysisArgs)
+    fromCache.configureTokenizer(tokenizer, args.sigma)
+
+    if tokenizer[:7] == "nemesys":
+        if args.refinement == "original":
+            fromCache.configureRefinement(originalRefinements)
+        elif args.refinement == "base":
+            fromCache.configureRefinement(baseRefinements)
+        elif args.refinement == "nemetyl":
+            fromCache.configureRefinement(nemetylRefinements)
+        else:
+            print("No refinement selected. Performing raw segmentation.")
+    fromCache.get()
+    segmentedMessages = fromCache.segmentedMessages
+    specimens, comparator, dc = fromCache.specimens, fromCache.comparator, fromCache.dc
+    segmentationTime, dist_calc_segmentsTime = fromCache.segmentationTime, fromCache.dist_calc_segmentsTime
+
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # TODO when manipulating distances, deactivate caching! by adding "True"
-    # noinspection PyUnboundLocalVariable
-    if args.tokenizer != "nemesys":
-        # noinspection PyUnboundLocalVariable
-        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
-            refinementCallback=None
-            # , disableCache=True
-        )
-    elif args.refinement == "original":
-        # noinspection PyUnboundLocalVariable
-        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
-            refinementCallback=originalRefinements
-            #, disableCache=True
-        )
-    elif args.refinement == "base":
-        # noinspection PyUnboundLocalVariable
-        specimens, comparator, segmentedMessages, dc, segmentationTime, dist_calc_segmentsTime = cacheAndLoadDC(
-            args.pcapfilename, analysisTitle, tokenizer, debug, analyzerType, analysisArgs, args.sigma,
-            refinementCallback=baseRefinements
-            #, disableCache=True
-        )
-    else:
-        print("Unknown refinement", args.refinement, "\nAborting")
-        exit(2)
-    # noinspection PyUnboundLocalVariable
-    chainedSegments = dc.rawSegments
-
-
-
+    # Start the NEMETYL inference process
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    tyl = TypeIdentificationByAlignment(dc, segmentedMessages, tokenizer, specimens.messagePool)
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # if not exists(smcachefn):
-    # noinspection PyUnboundLocalVariable
-    print("Calculate distance for {} messages...".format(len(segmentedMessages)))
-    dist_calc_messagesTime = time.time()
-    sm = SegmentedMessages(dc, segmentedMessages)
-    dist_calc_messagesTime = time.time() - dist_calc_messagesTime
-    # smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, pcapName, 'sm')
+    #
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # Calculate Alignment-Score and CLUSTER messages
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    tyl.clusterMessages()
+    # Prepare basic information about the inference run for the report
+    inferenceParams = TitleBuilder(tokenizer, args.refinement, args.sigma, tyl.clusterer)
+    #
+    # smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, filechecker.pcapstrippedname, 'sm')
     #     with open(smcachefn, 'wb') as f:
     #         pickle.dump(sm, f, pickle.HIGHEST_PROTOCOL)
     # else:
@@ -323,424 +418,135 @@ if __name__ == '__main__':
     #         print('Loading of cached message distances failed.')
     #         exit(11)
     # # # # # # # # # # # # # # # # # # # # # # # #
-    cluster_params_autoconfTime = time.time()
-    eps, min_samples = sm.autoconfigureDBSCAN()
-    cluster_params_autoconfTime = time.time() - cluster_params_autoconfTime
+    if withplots:
+        # plot message distances and clusters
+        print("Plot distances...")
+        from nemere.visualization.distancesPlotter import DistancesPlotter
+        dp = DistancesPlotter(specimens, 'message-distances_' + inferenceParams.plotTitle, False)
+        dp.plotManifoldDistances(
+            [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
+            tyl.sm.distances, tyl.labels)  # segmentedMessages
+        dp.writeOrShowFigure(filechecker.reportFullPath)
+
+
     # # # # # # # # # # # # # # # # # # # # # # # #
-
-
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
     # retrieve manually determined epsilon value
-    # epsilon = message_epspertrace[pcapbasename] if pcapbasename in message_epspertrace else 0.15
-    if tokenizer == "nemesys":
-        eps = eps * .8
+    # epsilon = message_epspertrace[filechecker.pcapbasename]
+    #               if filechecker.pcapbasename in message_epspertrace else 0.15
     if withplots:
-        epsConfirm = epsautoconfeval(eps)
+        epsConfirm = epsautoconfeval(tyl.eps, tokenizer + f"-s{args.sigma}-{args.refinement}"
+                                                                            if tokenizer[:7] == "nemesys" else "")
+    # # # # # # # # # # # # # # # # # # # # # # # #
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # cluster and align messages and calculate statistics of it
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    print('Clustering messages...')
-    cluster_messagesTime = time.time()
-    messageClusters, labels, clusterer = sm.clusterMessageTypesDBSCAN(eps=eps, min_samples=3)
-    cluster_messagesTime = time.time() - cluster_messagesTime
-    plotTitle = "{}-{} eps {:.3f} ms {}".format(
-        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples)
-    # messageClusters, labels, clusterer = sm.clusterMessageTypesHDBSCAN()
-    # plotTitle = "{}-{} mcs {} ms {}".format(
-    #     tokenizer, type(clusterer).__name__, clusterer.min_cluster_size, clusterer.min_samples)
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-    # noinspection PyUnboundLocalVariable
     groundtruth = {msg: pm.messagetype for msg, pm in comparator.parsedMessages.items()}
     for msg, mtype in groundtruth.items():
         msg.messageType = mtype
-
     minCsize = numpy.log(len(segmentedMessages))
 
-
-    # TODO test run due to writeCollective(Message)ClusteringStaticstics implementation change!
     # # # # # # # # # # # # # # # # # # # # # # # #
     # write message clustering statistics to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
-    clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
-        messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
-        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    fullClusterReport = IndividualClusterReport(groundtruth, filechecker)
+    fullClusterReport.write(tyl.messageObjClusters, inferenceParams.dict)
     # # # # # # # #
-    writeCollectiveMessageClusteringStaticstics(
-        messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}".format(
-        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-    # # # # # # # # min cluster size
-    noisekey = 'Noise' if 'Noise' in messageClusters else -1
-    filteredClusters = {k: v for k, v in messageClusters.items() if len(v) >= minCsize}
+    fullCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    fullCombinReport.write(tyl.messageObjClusters, inferenceParams.dict)
+
+    # # min cluster size # # # # # #
+    inferenceParams.postProcess = "minCsize"
+    noisekey = 'Noise' if 'Noise' in tyl.messageObjClusters else -1
+    filteredClusters = {k: v for k, v in tyl.messageObjClusters.items() if len(v) >= minCsize}
     filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
-    filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
+    filteredClusters[noisekey].extend(s for k, v in tyl.messageObjClusters.items()
                                       if len(v) < minCsize for s in v)
-    writeCollectiveMessageClusteringStaticstics(
-        filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
-        tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
+    filteredCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    filteredCombinReport.write(filteredClusters, inferenceParams.dict)
+
+
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # ALIGN cluster members
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    tyl.alignClusterMembers()
     # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    # SPLIT clusters based on fields without rare values
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    inferenceParams.postProcess = tyl.splitClusters(  # activateCVSout by the following kwargs
+        runtitle = inferenceParams.dict,
+        trace = filechecker.pcapstrippedname,
+        clusterPrecisions = {cs[0]: cs[2] for cs in fullClusterReport.precisionRecallList if cs is not None})
+    # # # # # # # # # # # # # # # # # # # # # # # #
     if withplots:
         # plot distances and message clusters
         print("Plot distances...")
-        from visualization.distancesPlotter import DistancesPlotter
-
-        # noinspection PyUnboundLocalVariable
-        dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle, False)
+        from nemere.visualization.distancesPlotter import DistancesPlotter
+        dp = DistancesPlotter(specimens, 'message-distances_' + inferenceParams.plotTitle, False)
         dp.plotManifoldDistances(
             [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-            sm.distances, labels)  # segmentedMessages
-        dp.writeOrShowFigure()
-
+            tyl.sm.distances, tyl.labels)  # segmentedMessages
+        dp.writeOrShowFigure(filechecker.reportFullPath)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # align cluster members
+    # clusterStats for splitter
     # # # # # # # # # # # # # # # # # # # # # # # #
-    align_messagesTime = time.time()
-    alignedClusters = dict()
-    alignedClustersHex = dict()
-    print("Align each cluster...")
-    for clunu, msgcluster in messageClusters.items():  # type: int, List[Tuple[MessageSegment]]
-        clusteralignment, alignedsegments = sm.alignMessageType(msgcluster)
-        alignedClusters[clunu] = alignedsegments
-
-        # get gaps at the corresponding positions
-        # print('Cluster', clunu)
-        alignedClustersHex[clunu] = [[s.bytes.hex() if s is not None else None for s in m] for m in alignedsegments]
-    print()
-    align_messagesTime = time.time() - align_messagesTime
+    # write message clustering statistics to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
+    splitClusterReport = IndividualClusterReport(groundtruth, filechecker)
+    splitClusterReport.write(tyl.messageObjClusters, inferenceParams.dict)
+    # # # # # # # #
+    splitCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    splitCombinReport.write(tyl.messageObjClusters, inferenceParams.dict)
 
-
-
-
-
-
-
+    # # # # # # # # min cluster size
+    inferenceParams.postProcess += "-minCsize"
+    noisekey = 'Noise' if 'Noise' in tyl.messageObjClusters else -1
+    filteredClusters = {k: v for k, v in tyl.messageObjClusters.items()
+                        if len(v) >= minCsize }
+    filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
+    filteredClusters[noisekey].extend(s for k, v in tyl.messageObjClusters.items()
+                                      if len(v) < minCsize for s in v)
+    filteredSplitCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    filteredSplitCombinReport.write(filteredClusters, inferenceParams.dict)
+    # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # split clusters based on fields without rare values
+    # Check for cluster MERGE candidates
     # # # # # # # # # # # # # # # # # # # # # # # #
-    if not args.split:
-        from alignment.clusterSplitting import *
-
-        cSplitter = RelaxedExoticClusterSplitter(6 if not tokenizer == "tshark" else 3,
-                                    alignedClusters, messageClusters, sm)
-        cSplitter.activateCVSout("{}-{}-eps={:.2f}-min_samples={}".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator.specimens.pcapFileName, {cs[0]: cs[2] for cs in clusterStats if cs is not None})
-        # in-place split of clusters in alignedClusters and messageClusters
-        cSplitter.split()
-        labels = cSplitter.labels
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        if withplots:
-            # plot distances and message clusters
-            print("Plot distances...")
-            from visualization.distancesPlotter import DistancesPlotter
-
-            dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
-            dp.plotManifoldDistances(
-                [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-                sm.distances, labels)  # segmentedMessages
-            dp.writeOrShowFigure()
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # clusterStats for merger
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # write message clustering statistics to csv
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
-            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # #
-        writeCollectiveMessageClusteringStaticstics(
-            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # # min cluster size
-
-        noisekey = 'Noise' if 'Noise' in messageClusters else -1
-        filteredClusters = {k: v for k, v in messageClusters.items()
-                            if len(v) >= minCsize }
-        filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
-        filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
-                                          if len(v) < minCsize for s in v)
-        writeCollectiveMessageClusteringStaticstics(
-            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-    else:
-        # old implementation
-        from collections import Counter
-
-        exoticValueStats = "reports/exotic-values-statistics.csv"
-        fieldLenThresh = 6 if not tokenizer == "tshark" else 3
-
-        clusterReplaceMap = dict()
-        for aNum, aClu in alignedClusters.items():
-            if aNum == -1:
-                continue
-            cPrec = next(cs[2] for cs in clusterStats if cs is not None and cs[0] == aNum)
-            freqThresh = numpy.floor(numpy.log(len(aClu)))  # numpy.round(numpy.log(len(aClu)))
-            fields = [fld for fld in zip(*aClu)]  # type: List[List[MessageSegment]]
-            distinctVals4fields = [{tuple(val.values) for val in fld if val is not None} for fld in fields]
-            # amount of distinct values per field
-            valAmount4fields = [len(valSet) for valSet in distinctVals4fields]
-
-            print("\nCluster", aNum, "of size", len(aClu),
-                  "- threshold", numpy.log(len(aClu)))
-            print("Cluster should", "" if cPrec < 1 else "not", "be split. Precision is", cPrec)
-
-            valCounts4fields = {fidx: Counter(tuple(seg.values) for seg in segs if seg is not None)
-                                for fidx, segs in enumerate(fields)}  # type: Dict[int, Counter]
-            pivotFieldIds = [fidx for fidx, vCnt in enumerate(valAmount4fields)
-                 if 1 < vCnt <= freqThresh  # knee
-                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
-                 and not any(val.length > fieldLenThresh for val in fields[fidx] if val is not None)  # omit fields longer than 3/4
-                 and not any(set(val.values) == {0} for val in fields[fidx] if val is not None)  # omit fields that have zeros
-                 and not any(cnt <= freqThresh
-                             for cnt in valCounts4fields[fidx].values())]  # remove fields with exotic values
-
-            preExotic = [fidx for fidx, vCnt in enumerate(valAmount4fields)
-                 if 1 < vCnt <= freqThresh  # knee
-                 and len([True for val in fields[fidx] if val is None]) <= freqThresh  # omit fields that have many gaps
-                 and not any([val.length > fieldLenThresh for val in fields[fidx] if val is not None])  # omit fields longer than 3/4
-                 and not any([set(val.values) == {0} for val in fields[fidx] if val is not None])  # omit fields that have zeros
-                         ]
-
-            for fidx in preExotic:
-                scnt = sorted(valCounts4fields[fidx].values())
-                diffmax = (numpy.diff(scnt).argmax()+1) if len(scnt) > 1 else "-"
-                csvWriteHead = False if exists(exoticValueStats) else True
-                with open(exoticValueStats, 'a') as csvfile:
-                    exoticcsv = csv.writer(csvfile)  # type: csv.writer
-                    if csvWriteHead:
-                        exoticcsv.writerow([
-                            'run_title', 'trace', 'cluster_label', 'precision', 'cluster_size', 'field',
-                            'num_vals',
-                            'maxdiff_n', 'maxdiff_v', 'sum<n', 'sum>=n', 'mean<n', 'mean>=n',
-                            'stdev<n', 'stdev>=n', 'median<n', 'median>=n'
-                        ])
-                    fieldParameters = [ "{}-{}-eps={:.2f}-min_samples={}".format(
-                                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-                            comparator.specimens.pcapFileName,
-                            aNum, cPrec, len(aClu), fidx, len(scnt)]
-                    if len(scnt) > 1:
-                        exoticcsv.writerow([
-                            *fieldParameters, diffmax, scnt[diffmax],
-                            sum(scnt[:diffmax]), sum(scnt[diffmax:]),
-                            numpy.mean(scnt[:diffmax]), numpy.mean(scnt[diffmax:]),
-                            numpy.std(scnt[:diffmax]), numpy.std(scnt[diffmax:]),
-                            numpy.median(scnt[:diffmax]), numpy.median(scnt[diffmax:])
-                        ])
-                    else:
-                        exoticcsv.writerow(fieldParameters + [""] * 10)
-
-
-
-            newExotic = list()
-            for fidx in preExotic:
-                scnt = sorted(valCounts4fields[fidx].values())
-                if len(scnt) > 1:
-                    if scnt[0] > freqThresh >= len(scnt):
-                        newExotic.append(fidx)
-                        continue
-
-                    # the pivot index and value to split the sorted list of type amounts
-                    # iVal, pVal = next((i, cnt) for i, cnt in enumerate(scnt) if cnt > freqThresh)
-                    iVal = numpy.diff(scnt).argmax() + 1
-                    # the special case of any(cnt <= freqThresh for cnt in scnt) is relaxedly included here
-                    numValues_u = len(scnt) - iVal
-                    # if there are no or only one frequent value, do not split
-                    if numValues_u > 1:
-                        pVal = scnt[iVal]
-                        mean_u = numpy.mean(scnt[iVal:])
-                        halfsRatio =  sum(scnt[:iVal]) / sum(scnt[iVal:])
-                        if halfsRatio < 0.1 and mean_u > 2 * len(aClu) / numpy.log(len(aClu)):
-                            newExotic.append(fidx)
-
-
-            addExotics = set(newExotic) - set(pivotFieldIds)
-            remExotics = set(pivotFieldIds) - set(newExotic)
-            if not len(addExotics) == len(remExotics) == 0:
-                print("pivot field changes due to new exotics:")
-                print("  add fields:", addExotics)
-                print("  remove fields:", remExotics)
-            # print info only if we do not split
-            if len(newExotic) == 0:
-                print("no pivot fields left")
-                # exoticCondition = [(fidx, any(cnt <= freqThresh for cnt in valCounts4fields[fidx].values()))
-                #                    for fidx, vCnt in enumerate(valAmount4fields)]
-                continue  # conditions not met for splitting: next cluster
-            elif len(newExotic) > 2:
-                print("too many pivot fields:", len(newExotic))
-                continue  # conditions not met for splitting: next cluster
-
-
-            print(newExotic)
-            # split clusters
-            clusterSplits = dict()  # type: Dict[Union[Tuple, None], List[Tuple[MessageSegment]]]
-            for msgsegs in aClu:
-                # concatenate multiple distinct field combinations
-                pivotVals = tuple([(pId, *msgsegs[pId].values) if msgsegs[pId] is not None else None
-                                   for pId in newExotic])
-                if pivotVals not in clusterSplits:
-                    clusterSplits[pivotVals] = list()
-                clusterSplits[pivotVals].append(msgsegs)
-            clusterReplaceMap[aNum] = clusterSplits
-            print("replace cluster", aNum, "by")
-            print(tabulate((clusterSplits.keys())))
-
-
-        # replace clusters by their splits
-        for aNum, clusterSplits in clusterReplaceMap.items():
-            for nci, cluSpl in enumerate(clusterSplits.values()):  # type: int, List[Tuple[MessageSegment]]
-                # newCluLabel = (aNum+1) * 100 + nci
-                newCluLabel = "{}s{}".format(aNum, nci)
-
-                msgs = [next(seg for seg in msgsegs if seg is not None).message for msgsegs in cluSpl]
-                messageClusters[newCluLabel] = [msgsegs for msgsegs in messageClusters[aNum]
-                                                if msgsegs[0].message in msgs]
-
-                clusteralignment, alignedsegments = sm.alignMessageType(messageClusters[newCluLabel])
-                alignedClusters[newCluLabel] = alignedsegments
-
-            del alignedClusters[aNum]
-            del messageClusters[aNum]
-
-        # labels for distance plot
-        msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
-        labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        if withplots:
-            # plot distances and message clusters
-            print("Plot distances...")
-            from visualization.distancesPlotter import DistancesPlotter
-
-            dp = DistancesPlotter(specimens, 'message-distances-' + plotTitle + '-split', False)
-            dp.plotManifoldDistances(
-                [specimens.messagePool[seglist[0].message] for seglist in segmentedMessages],
-                sm.distances, labels)  # segmentedMessages
-            dp.writeOrShowFigure()
-
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # clusterStats for merger
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        # write message clustering statistics to csv
-        # # # # # # # # # # # # # # # # # # # # # # # #
-        clusterStats, conciseness = writeIndividualMessageClusteringStaticstics(
-            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # #
-        writeCollectiveMessageClusteringStaticstics(
-            messageClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # # min cluster size
-
-        noisekey = 'Noise' if 'Noise' in messageClusters else -1
-        filteredClusters = {k: v for k, v in messageClusters.items()
-                            if len(v) >= minCsize }
-        filteredClusters[noisekey] = list() if not noisekey in filteredClusters else filteredClusters[noisekey].copy()
-        filteredClusters[noisekey].extend(s for k, v in messageClusters.items()
-                                          if len(v) < minCsize for s in v)
-        writeCollectiveMessageClusteringStaticstics(
-            filteredClusters, groundtruth, "{}-{}-eps={:.2f}-min_samples={}-split-minCsize".format(
-            tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples), comparator)
-        # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-
+    inferenceParams.postProcess = tyl.mergeClusters()
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # check for cluster merge candidates
+    # clusterStats for merger
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # TODO fully integrate into/encapsulate in ClusterMerger class
-    print("Check for cluster merge candidates...")
-    # noinspection PyUnreachableCode
-    if True:
-        # ClusterMerger
-        clustermerger = ClusterMerger(alignedClusters, dc)
+    # write message clustering statistics to csv
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    mergedClusterReport = IndividualClusterReport(groundtruth, filechecker)
+    mergedClusterReport.write(tyl.messageObjClusters, inferenceParams.dict)
+    # # # # # # # #
+    mergedCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    mergedCombinReport.write(tyl.messageObjClusters, inferenceParams.dict)
 
-        alignedFieldClasses = clustermerger.alignFieldClasses((0, -1, 5))  # TODO alt1
-        # alignedFieldClasses = clustermerger.alignFieldClasses((0, -5, 5))  # TODO alt2
-        if tokenizer == "nemesys":
-            alignedFieldClasses = clustermerger.gapMerging4nemesys(alignedFieldClasses)
-        matchingConditions = clustermerger.generateMatchingConditions(alignedFieldClasses)
-        matchingClusters = ClusterMerger.selectMatchingClusters(alignedFieldClasses, matchingConditions)
-        mergedClusters = clustermerger.mergeClusters(
-            messageClusters, clusterStats, alignedFieldClasses, matchingClusters, matchingConditions)
-        mergedClusterStats, mergedConciseness = writeIndividualMessageClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-        # # # # # # # #
-        writeCollectiveMessageClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-        # # # # # # # # min cluster size
-        noisekey = 'Noise' if 'Noise' in mergedClusters else -1
-        filteredMerged = {k: v for k, v in mergedClusters.items() if len(v) >= minCsize}
-        filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
-        filteredMerged[noisekey].extend(s for k, v in mergedClusters.items()
-                                          if len(v) < minCsize for s in v)
-        writeCollectiveMessageClusteringStaticstics(
-            filteredMerged, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}-minCsize".format(
-                tokenizer, type(clusterer).__name__, clusterer.eps, clusterer.min_samples),
-            comparator)
-    else:
-        # # # # # # # # # # # # # # # # # # # # #
-        # alternative idea of clustering clusters: does not improve merging - perhaps the similarity matrix is not good enough?!
-        # ClusterClusterer
-        clusterclusterer = ClusterClusterer(alignedClusters, dc)
-        # clusterDists = clusterclusterer.calcClusterDistances()
+    # # # # # # # # min cluster size
+    inferenceParams.postProcess += "-minCsize"
+    noisekey = 'Noise' if 'Noise' in tyl.messageObjClusters else -1
+    filteredMerged = {k: v for k, v in tyl.messageObjClusters.items() if len(v) >= minCsize}
+    filteredMerged[noisekey] = list() if not noisekey in filteredMerged else filteredMerged[noisekey].copy()
+    filteredMerged[noisekey].extend(s for k, v in tyl.messageObjClusters.items()
+                                      if len(v) < minCsize for s in v)
+    filteredSplitCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
+    filteredSplitCombinReport.write(filteredClusters, inferenceParams.dict)
 
-        mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
-
-        clusterClusters, labels, mergeclusterer = clusterclusterer.clusterMessageTypesDBSCAN(mergeEps, min_samples=2)
-        clusterClustersNoiseless = {k: v for k, v in clusterClusters.items() if k > -1}
-        mergedClusters = ClusterClusterer.mergeClusteredClusters(clusterClustersNoiseless, messageClusters)
-        ClusterClusterer.printShouldMerge(list(clusterClustersNoiseless.values()), clusterStats)
-
-        mergedClusterStats, mergedConciseness = writeMessageClusteringStaticstics(
-            mergedClusters, groundtruth,
-            "merged-{}-{}-eps={:.2f}-min_samples={}".format(
-                tokenizer, type(mergeclusterer).__name__, mergeclusterer.eps, mergeclusterer.min_samples),
-            comparator)
-
-        from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
-        from visualization.distancesPlotter import DistancesPlotter
-        typedClusterDummys = list()
-        for clunu in clusterclusterer.clusterOrder:
-            clusta = None
-            for stats in clusterStats:
-                if stats is not None and stats[0] == clunu:
-                    clusta = stats[1] if stats[2] == 1.0 else "({})".format(stats[1])
-                    break
-            msgdum = RawMessage(messageType=clusta)
-            typedClusterDummys.append(msgdum)
-
-        dp = DistancesPlotter(specimens, "cluster-clustering-" + plotTitle, False)
-        dp.plotManifoldDistances(typedClusterDummys, clusterclusterer.distances, labels)
-        dp.writeOrShowFigure()
+    # # Alternative approach to ClusterMerger, discarded.
+    # clusterClusters()
 
     # # overwrite existing variables
     # # # # # # # # # # # # # # # # # # # # # # # #
@@ -760,7 +566,7 @@ if __name__ == '__main__':
     # # labels for distance plot
     # msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
     # labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
-
+    #
     # END # of # check for cluster merge candidates #
     # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -770,48 +576,45 @@ if __name__ == '__main__':
 
 
 
-
-
-
-
-
-
-
+    writePerformanceStatistics(
+        specimens, tyl.clusterer, inferenceParams.plotTitle,
+        segmentationTime, dist_calc_segmentsTime,
+        tyl.dist_calc_messagesTime, tyl.cluster_params_autoconfTime, tyl.cluster_messagesTime, tyl.align_messagesTime
+    )
+    filechecker.writeReportMetadata(fromCache.dccachefn if fromCache.isLoaded else None)
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     # write alignments to csv
     # # # # # # # # # # # # # # # # # # # # # # # #
-    reportFolder = "reports"
-    pcapName = splitext(pcapbasename)[0]
-    fileNameS = "NEMETYL-symbols-" + plotTitle + "-" + pcapName
-    csvpath = join(reportFolder, fileNameS + '.csv')
+    # TODO split clusters are internally re-aligned, but NOT merged clusters. Can this lead to an inconsistency?
+    csvpath = join(filechecker.reportFullPath,
+                   f"NEMETYL-symbols-{inferenceParams.plotTitle}-{filechecker.pcapstrippedname}.csv")
     if not exists(csvpath):
         print('Write alignments to {}...'.format(csvpath))
         with open(csvpath, 'w') as csvfile:
             symbolcsv = csv.writer(csvfile)
-            for clunu, clusg in alignedClusters.items():
-                symbolcsv.writerow(["# Cluster", clunu, "- Fields -", "- Alignment -"])
+            symbolcsv.writerow(["Cluster", "Type", "frame.time_epoch", "Field", "Alignment"])
+            for clunu, clusg in tyl.alignedClusters.items():
                 symbolcsv.writerows(
-                    [groundtruth[comparator.messages[next(seg for seg in msg if seg is not None).message]]]
+                    [clunu,  # cluster label
+                     groundtruth[comparator.messages[next(seg for seg in msg if seg is not None).message]],  # message type string from gt
+                     next(seg for seg in msg if seg is not None).message.date]  # frame.time_epoch
                     + [sg.bytes.hex() if sg is not None else '' for sg in msg] for msg in clusg
                 )
-                symbolcsv.writerow(["---"] * 5)
     else:
         print("Symbols not saved. File {} already exists.".format(csvpath))
         if not args.interactive:
             IPython.embed()
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-    writePerformanceStatistics(
-        specimens, clusterer,
-        "{} {} {}".format(tokenizer, analysis_method, distance_method),
-        segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime,
-        cluster_params_autoconfTime, cluster_messagesTime, align_messagesTime
-    )
+
+
 
 
     if args.interactive:
+        import numpy
         from tabulate import tabulate
+
         # globals().update(locals())
         IPython.embed()
 

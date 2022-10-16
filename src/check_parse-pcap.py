@@ -10,8 +10,8 @@ from os.path import isfile
 from sys import exit
 import IPython
 
-from validation.messageParser import ParsedMessage
-from utils.loader import SpecimenLoader
+from nemere.validation.messageParser import ParsedMessage
+from nemere.utils.loader import SpecimenLoader
 
 if __name__ == '__main__':
     parser = ArgumentParser(
@@ -27,6 +27,7 @@ if __name__ == '__main__':
         specimens = SpecimenLoader(args.pcapfilename, args.targetlayer, args.relativeToIP)
     else:
         specimens = SpecimenLoader(args.pcapfilename)
+    print('Loaded PCAP file:', specimens.pcapFileName)
     pkt = list(specimens.messagePool.values())
 
     st = time.time()

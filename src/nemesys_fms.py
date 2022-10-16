@@ -12,12 +12,12 @@ from os import makedirs
 import matplotlib.pyplot as plt
 import IPython
 
-from validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
-from utils.loader import SpecimenLoader
-from inference.analyzers import *
-from inference.segmentHandler import bcDeltaGaussMessageSegmentation, refinements, symbolsFromSegments
-from validation import reportWriter
-
+from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
+from nemere.utils.loader import SpecimenLoader
+from nemere.inference.analyzers import *
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, \
+    baseRefinements, symbolsFromSegments
+from nemere.utils import reportWriter
 
 debug = False
 """Some modules and methods contain debug output that can be activated by this flag."""
@@ -54,7 +54,7 @@ def writeResults(tikzcode: str, specimens: SpecimenLoader, inferenceTitle: str, 
 
     absFolder = abspath(folder)
     if not isdir(absFolder):
-        raise NotADirectoryError("The reports folder {:d} is not a directory. Reports cannot be written there.".format(
+        raise NotADirectoryError("The reports folder {} is not a directory. Reports cannot be written there.".format(
             absFolder))
 
     pcapName = splitext(basename(specimens.pcapFileName))[0]
@@ -76,7 +76,7 @@ def bcDeltaPlot(bcdg_mmm: List[BitCongruenceDeltaGauss]):
 
     :param bcdg_mmm: Example message analysis results to plot. Expects three elements in the list.
     """
-    from visualization.multiPlotter import MultiMessagePlotter
+    from nemere.visualization.multiPlotter import MultiMessagePlotter
 
     fieldEnds = [comparator.fieldEndsPerMessage(bcdg.message) for bcdg in bcdg_mmm]
 
@@ -142,7 +142,8 @@ if __name__ == '__main__':
     startsegmentation = time.time()
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
     runtimeSegmentation = time.time() - startsegmentation
-    refinedPerMsg = refinements(segmentsPerMsg, None)
+    # refinedPerMsg = originalRefinements(segmentsPerMsg)
+    refinedPerMsg = baseRefinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
