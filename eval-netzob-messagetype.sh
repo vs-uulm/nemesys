@@ -32,17 +32,14 @@ mkdir ${report}
 #
 ## ntp_SMIA-20111010_deduped-1000.pcap
 #python src/netzob_messagetypes.py input/ntp_SMIA-20111010_deduped-1000.pcap -r --smin 56 --smax 58
-
+#
 # ntp_SMIA-20111010_deduped-100.pcap
 python src/netzob_messagetypes.py input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap -r --smin 56 --smax 58
 
-#
-#
+
 ## smb_SMIA20111010-one_deduped-1000.pcap
 #python src/netzob_messagetypes.py input/nbns_SMIA20111010-one_deduped-1000.pcap -r --smin 54 --smax 55
 #python src/netzob_messagetypes.py input/nbns_SMIA20111010-one_deduped-1000.pcap -r --smin 56 --smax 56
-
-
 
 
 

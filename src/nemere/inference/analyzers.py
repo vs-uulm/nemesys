@@ -154,6 +154,7 @@ class BitCongruenceGauss(BitCongruence):
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
+        >>> # noinspection PyUnresolvedReferences
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
         True
 
@@ -895,6 +896,7 @@ class HorizonBitcongruenceGauss(HorizonBitcongruence):
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
+        >>> # noinspection PyUnresolvedReferences
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
         True
 

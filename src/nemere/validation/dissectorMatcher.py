@@ -27,6 +27,7 @@ from nemere.inference.segments import MessageSegment, TypedSegment
 messageparsetimeout = 60*120
 
 def stop_process_pool(executor):
+    # noinspection PyProtectedMember
     for pid, process in executor._processes.items():
         process.terminate()
     executor.shutdown()
@@ -173,7 +174,7 @@ class MessageComparator(BaseComparator):
                     future = executor.submit(nsymbol.getMessageCells, encoded=False)
                     mcells = future.result(messageparsetimeout)  # dict of cells keyed by message
                     msgIdMap = {msg.id: msg for msg in nsymbol.messages}
-                except FutureTOError as e:
+                except FutureTOError:
                     stop_process_pool(executor)
                     raise WatchdogTimeout(f"Parsing of Netzob symbol {nsymbol.name} timed out after "
                                           f"{messageparsetimeout} seconds.")
@@ -398,6 +399,7 @@ class MessageComparator(BaseComparator):
             while lightness < .5:
                 rgb = numpy.random.rand(3, )
                 lightness = 0.5 * min(rgb) + 0.5 * max(rgb)
+            # noinspection PyUnboundLocalVariable
             ftcolors.append( f"\definecolor{{{tag}}}{{rgb}}{{{rgb[0]},{rgb[1]},{rgb[2]}}}" )
         texcode += "\n        ".join(ftcolors) + "\n"
 
@@ -896,7 +898,7 @@ class DissectorMatcher(AbstractDissectorMatcher):
     def calcFMS(self):
         fmslist = list()
         for msg in self._inferredSymbol.messages:
-            # TODO calculate independent FMSs for each symbol member mesasge, since currently
+            # TODO calculate independent FMSs for each symbol member message, since currently
             #  this does result in an FMS that is identical for all messages within the symbol!
             fms = super().calcFMS()
             fms.symbol = self._inferredSymbol

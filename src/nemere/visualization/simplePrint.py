@@ -214,7 +214,7 @@ class SegmentPrinter(object):
             assert mark[1] <= absSlice[1], repr(mark) + "not valid with message slice" + repr(absSlice)
         return mark
 
-    # noinspection PyMethodMayBeStatic
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _trueFieldEnds(self, message: AbstractMessage):
         """
         Just a dummy, for subcalsses to overwrite if there is ground truth to be printed there.
@@ -305,6 +305,7 @@ class SegmentPrinter(object):
     """
     _tfemarker = '1ex '
 
+    # noinspection PyUnusedLocal,PyMethodMayBeStatic
     def _msgoffs2label(self, msg, po):
         return ""
 

@@ -54,6 +54,9 @@ def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> L
     >>> from nemere.inference.analyzers import Value
     >>> from netzob.Model.Vocabulary.Symbol import Symbol
     >>> from netzob.Model.Vocabulary.Messages.RawMessage import RawMessage
+    >>> # prevent Netzob from producing debug output.
+    >>> import logging
+    >>> logging.getLogger().setLevel(30)
     >>>
     >>> dummymsg = RawMessage(bytes(list(range(50, 70))))
     >>> dummyana = Value(dummymsg)
@@ -235,6 +238,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     >>> segmentsPerMsg = bcDeltaGaussMessageSegmentation(sl)
     Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
     >>> for spm in segmentsPerMsg:
+    ...     # noinspection PyUnresolvedReferences
     ...     if b''.join([seg.bytes for seg in spm]).hex() != spm[0].message.data.hex():
     ...         print("Mismatch!")
 
@@ -254,7 +258,7 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
     return msgSeg
 
 
-
+# noinspection PyUnusedLocal
 def refinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
     """
     Refine the segmentation using specific improvements for the feature:

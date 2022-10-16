@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import List
 
 from nemere.inference.segments import MessageSegment
+from nemere.inference.segmentHandler import isExtendedCharSeq
+
 
 
 def isPrintableChar(char: int):
@@ -543,8 +545,6 @@ class CumulativeCharMerger(MessageModifier):
 
         :return: a new set of segments after the input has been merged
         """
-        from nemere.inference.segmentHandler import isExtendedCharSeq
-
         minLen = 6
 
         segmentStack = list(reversed(self.segments))

@@ -10,7 +10,7 @@ from nemere.inference.segments import MessageSegment, AbstractSegment, Correlate
 
 debug = False
 
-parallelDistanceCalc = False
+parallelDistanceCalc = True
 """
 activate parallel/multi-processor calculation of dissimilarities 
 in inference.templates.DistanceCalculator#_embdedAndCalcDistances
@@ -754,7 +754,10 @@ class DistanceCalculator(object):
             for outerlen in rslens:
                 for diss in self._outerloop(lenGrps, outerlen, rslens):
                     dissCount += 1
-                    yield diss
+                    # split off the offset if present (None in case of equal length segments)
+                    if diss[3] is not None:
+                        self._offsets[(diss[0], diss[1])] = diss[3]
+                    yield diss[0], diss[1], diss[2]
 
         #     profiler = cProfile.Profile()
         #     int_start = time.time()
@@ -781,7 +784,10 @@ class DistanceCalculator(object):
                 for ol in rslens:
                     for diss in futureRes[ol]:
                         dissCount += 1
-                        yield diss
+                        # split off the offset if present (None in case of equal length segments)
+                        if diss[3] is not None:
+                            self._offsets[(diss[0], diss[1])] = diss[3]
+                        yield diss[0], diss[1], diss[2]
 
         runtime = time.time() - pit_start
         print("Calculated distances for {} segment pairs in {:.2f} seconds.".format(dissCount, runtime))
@@ -801,11 +807,9 @@ class DistanceCalculator(object):
         # TODO something outside of calcDistances takes a lot longer to return during the embedding loop. Investigate.
         ilDist = DistanceCalculator.calcDistances(outersegs, method=self._method)
         # # # # # # # # # # # # # # # # # # # # # # # #
-        dissimilarities.extend([(i, l,
-                          self.thresholdFunction(
-                              d * self._normFactor(outerlen),
-                              **self.thresholdArgs))
-                         for i, l, d in ilDist])
+        dissimilarities.extend([
+            (i, l, self.thresholdFunction( d * self._normFactor(outerlen), **self.thresholdArgs), None)
+            for i, l, d in ilDist])
         # # # # # # # # # # # # # # # # # # # # # # # #
         # b) on segments with mismatching length: embedSegment:
         #       for all length groups with length < current length
@@ -845,15 +849,12 @@ class DistanceCalculator(object):
                         - self._reliefFactor * ratio * (1 - distEmb)
 
                     # # # # # # # # # # # # # # # # # # # # # # # #
-                    dlDist = (interseg[0], interseg[1], (
-                        self.thresholdFunction(
-                            mlDistance,
-                            **self.thresholdArgs)
-                    )
+                    dlDist = (interseg[0], interseg[1],
+                              ( self.thresholdFunction( mlDistance, **self.thresholdArgs ) ),
+                              embedded[1]  # byte offset between interseg[0] and interseg[1] from embedding
                               )  # minimum of dimensions
                     # # # # # # # # # # # # # # # # # # # # # # # #
                     dissimilarities.append(dlDist)
-                    self._offsets[(interseg[0], interseg[1])] = embedded[1]
         # if not DistanceCalculator.debug:
         #     print()
         return dissimilarities
@@ -1167,22 +1168,33 @@ class Template(AbstractSegment):
         >>> from tabulate import tabulate
         >>> from scipy.spatial.distance import cdist
         >>> from nemere.utils.baseAlgorithms import generateTestSegments
-        >>> from nemere.inference.templates import DistanceCalculator, Template
-        >>> listOfSegments = generateTestSegments()
+        >>> from nemere.inference.templates import DistanceCalculator, Template, parallelDistanceCalc
         >>> DistanceCalculator.debug = False
-        >>> dc = DistanceCalculator(listOfSegments)
+        >>> listOfSegments = generateTestSegments()
+        >>> # test both implementations: using parallel dissimilarity calculation and one single process.
+        >>> for pdc in [False, True]:
+        ...     parallelDistanceCalc = pdc
+        ...     dc = DistanceCalculator(listOfSegments)
+        ...     center = [1,3,7,9]  # "mean"
+        ...     tempearly = Template(center, listOfSegments)
+        ...     dtml = tempearly.distancesToMixedLength(dc)
+        ...     print("Dissimilarity to Segment 0:", cdist([center], [listOfSegments[0].values], "canberra")[0,0]/len(center))
+        ...     print("     ... from the function:", dtml[0][0])
+        ...     print("Matches:",
+        ...         round(cdist([center], [listOfSegments[0].values], "canberra")[0,0]/len(center), 2) == round(dtml[0][0], 2)
+        ...         )
+        ...     print("Dissimilarities and offsets for a mean center:")
+        ...     print(tabulate(dtml))
+        ...     center = listOfSegments[0]  # "medoid"
+        ...     template = Template(center, listOfSegments)
+        ...     print("Dissimilarities and offsets for a medoid center:")
+        ...     print(tabulate(template.distancesToMixedLength(dc)))
         Calculated distances for 37 segment pairs in ... seconds.
-        >>> center = [1,3,7,9]  # "mean"
-        >>> tempearly = Template(center, listOfSegments)
-        >>> dtml = tempearly.distancesToMixedLength(dc)
         Calculated distances for 46 segment pairs in ... seconds.
-        >>> print(cdist([center], [listOfSegments[0].values], "canberra")[0,0]/len(center))
-        0.24615384615384617
-        >>> print(dtml[0][0])
-        0.2461
-        >>> round(cdist([center], [listOfSegments[0].values], "canberra")[0,0]/len(center), 2) == round(dtml[0][0], 2)
-        True
-        >>> print(tabulate(dtml))
+        Dissimilarity to Segment 0: 0.24615384615384617
+             ... from the function: 0.2461
+        Matches: True
+        Dissimilarities and offsets for a mean center:
         --------  --
         0.246...   0
         0.373...   0
@@ -1194,9 +1206,7 @@ class Template(AbstractSegment):
         1          0
         0.371...   0
         --------  --
-        >>> center = listOfSegments[0]  # "medoid"
-        >>> template = Template(center, listOfSegments)
-        >>> print(tabulate(template.distancesToMixedLength(dc)))
+        Dissimilarities and offsets for a medoid center:
         --------  --
         0          0
         0.214...   1
@@ -1488,6 +1498,9 @@ class DelegatingDC(DistanceCalculator):
                             numpy.count_nonzero(s.values) - numpy.count_nonzero(numpy.isnan(s.values)) > 0]
         raise NotImplementedError()
 
+    @staticmethod
+    def _templates4Paddings(segments: Iterable[MessageSegment]):
+        raise NotImplementedError()
 
     def segments2index(self, segmentList: Iterable[AbstractSegment]):
         # noinspection PyUnresolvedReferences
@@ -1670,8 +1683,7 @@ class DelegatingDC(DistanceCalculator):
         return transformatorK, clusterI
 
 
-
-
+# noinspection PyAbstractClass
 class MemmapDC(DelegatingDC):
     maxMemMatrix = 750000
     if parallelDistanceCalc:
@@ -1750,7 +1762,6 @@ class MemmapDC(DelegatingDC):
             simtrx = numpy.empty(shape, dtype=numpy.float16)
             simtrx.fill(filler)
         return simtrx
-
 
 
 def __testing_generateTestSegmentsWithDuplicates():
