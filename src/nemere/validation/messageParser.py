@@ -47,6 +47,7 @@ class MessageTypeIdentifiers(object):
             else "{}={}".format(fieldname, fieldvalue)
 
     def typeOfMessage(self, message: 'ParsedMessage'):
+        """Retrieve the type of the given message"""
         if message.protocolname in self.FOR_PROTCOL:
             idFields = self.FOR_PROTCOL[message.protocolname]
             resolvedTypeName = []
@@ -606,6 +607,18 @@ class ParsingConstants226(ParsingConstants):
     TYPELOOKUP['dns.resp.ext_rcode'] = 'int'  # has value: 00
     TYPELOOKUP['dns.resp.edns0_version'] = 'int'  # has value: 00
     TYPELOOKUP['dns.resp.z'] = 'flags'  # has value: 8000
+
+    TYPELOOKUP['dns.soa.rname'] = 'chars'
+    TYPELOOKUP['dns.soa.mname'] = 'chars'
+    TYPELOOKUP['dns.soa.serial_number'] = 'int'
+    TYPELOOKUP['dns.soa.refresh_interval'] = 'int'
+    TYPELOOKUP['dns.soa.retry_interval'] = 'int'
+    TYPELOOKUP['dns.soa.expire_limit'] = 'int'
+    TYPELOOKUP['dns.soa.mininum_ttl'] = 'int'
+    TYPELOOKUP['dns.mx.preference'] = 'int'
+    TYPELOOKUP['dns.mx.mail_exchange'] = 'chars'
+    TYPELOOKUP['dns.aaaa'] = 'ipv6'
+    TYPELOOKUP['dns.cname'] = 'chars'
 
     # irc
     TYPELOOKUP['irc.request.prefix'] = 'chars'
@@ -1273,21 +1286,52 @@ class ParsedMessage(object):
         """
         Search a list of tuples for name as the first element of one or multiple tuples.
 
+        >>> import sys
+        >>> sys.path.append('../tests/resources')
+        >>> # noinspection PyUnresolvedReferences
+        >>> from json_listoftuples_testcases import testjsons
+        >>> from nemere.validation.messageParser import ParsedMessage
+        >>> for json in testjsons:
+        ...     elements = ParsedMessage._getElementByName(json, "smb.cmd")
+        ...     if elements:
+        ...         print(elements)
+        ['71']
+        ['74', 'ff']
+        ['73', '75', 'ff']
+        >>> for json in testjsons:
+        ...     elements = ParsedMessage._getElementByName(ParsedMessage._getElementByName(json, "_source"), "layers")
+        ...     if elements:
+        ...         print(elements)
+        [('frame_raw', ['000000000000000000000000080045000039000040004011b4980a0d72010a0d000113a4003500259e126...
+
         :param listoftuples: list of tuples in format [(key, value), (key, value), (key, value)]
         :param name: The key to search for.
-        :return: the value, or list of values if multiple tuples with name as key exist
+        :return: list of values
         """
+        # with open("reports/JSONlistoftuples.txt", "a") as jsonfile:
+        #     jsonfile.write(repr(listoftuples) + "\n")
         foundvalues = list()
+
+        # remove 'list of single list' (as this might appear as a result of tshark's json output)
+        while isinstance(listoftuples, list) and \
+                len(listoftuples) == 1 and \
+                isinstance(listoftuples[0], list):
+            listoftuples = listoftuples[0]
+
+        # get values
         try:
             for k, v in listoftuples:
                 if name == k:
                     foundvalues.append(v)
         except ValueError:
             raise ValueError("could not parse as list of tuples: {}".format(listoftuples))
-        if len(foundvalues) == 0:
-            return False
-        if len(foundvalues) == 1:
-            return foundvalues[0]
+
+        # remove 'list of single list' (as this might appear as a result of tshark's json output)
+        while isinstance(foundvalues, list) and \
+                len(foundvalues) == 1 and \
+                isinstance(foundvalues[0], list):
+            foundvalues = foundvalues[0]
+
         return foundvalues
 
 
@@ -1443,7 +1487,6 @@ class ParsedMessage(object):
 
         return prsdmsgs  # type: dict[AbstractMessage: ParsedMessage]
 
-
     def _parseJSON(self, dissectjson: List[Tuple[str, any]]):
         """
         Read the structure of dissectjson and from this populate:
@@ -1456,6 +1499,26 @@ class ParsedMessage(object):
 
         Afterwards do some postprocessing (see :func:`_reassemblePostProcessing()`)
 
+        >>> import sys
+        >>> sys.path.append('../tests/resources')
+        >>> # noinspection PyUnresolvedReferences
+        >>> from json_listoftuples_testcases import testjsons
+        >>> from nemere.validation.messageParser import ParsedMessage, DissectionInvalidError
+        >>> for json in testjsons[6:11]:
+        ...     pm = ParsedMessage(None)
+        ...     try:
+        ...         pm._parseJSON(json)
+        ...         fields = pm.getFieldNames()
+        ...         if fields:
+        ...             print(fields)
+        ...     except DissectionInvalidError as e:
+        ...         print(e)
+        JSON invalid.
+        ['dns.id', 'dns.flags', 'dns.count.queries', 'dns.count.answers', 'dns.count.auth_rr', 'dns.count.add_rr', 'dns.qry.name', 'dns.qry.type', 'dns.qry.class']
+        ['ntp.flags', 'ntp.stratum', 'ntp.ppoll', 'ntp.precision', 'ntp.rootdelay', 'ntp.rootdispersion', 'ntp.refid', 'ntp.reftime', 'ntp.org', 'ntp.rec', 'ntp.xmt']
+        ['dhcp.type', 'dhcp.hw.type', 'dhcp.hw.len', 'dhcp.hops', 'dhcp.id', 'dhcp.secs', 'dhcp.flags', 'dhcp.ip.client', 'dhcp.ip.your', 'dhcp.ip.server', 'dhcp.ip.relay', 'dhcp.hw.mac_addr', 'dhcp.hw.addr_padding', 'dhcp.server', 'dhcp.file', 'dhcp.cookie', 'dhcp.option.type', 'dhcp.option.length', 'dhcp.option.dhcp', 'dhcp.option.type', 'dhcp.option.length', 'dhcp.option.vendor.value', 'dhcp.option.type']
+        JSON invalid.
+
         :param dissectjson: The output of json.loads(), with ``object_pairs_hook = list``
         """
         import subprocess
@@ -1464,151 +1527,149 @@ class ParsedMessage(object):
         layerskey = 'layers'
         framekey = 'frame'
         protocolskey = 'frame.protocols'
-        sourcevalue = ParsedMessage._getElementByName(dissectjson, sourcekey)
-        if isinstance(sourcevalue, list):
-            layersvalue = ParsedMessage._getElementByName(sourcevalue, layerskey)
-            if isinstance(layersvalue, list):
-                framevalue = ParsedMessage._getElementByName(layersvalue, framekey)
-                if isinstance(framevalue, list):
-                    protocolsvalue = ParsedMessage._getElementByName(framevalue, protocolskey)
-                    if isinstance(protocolsvalue, str):
-                        self.protocols = protocolsvalue.split(':')
-                        if self.relativeToIP and 'ip' not in self.protocols:
-                            errortext = "No IP layer could be identified in a message of the trace."
-                            raise DissectionTemporaryFailure(errortext)
-                        if not self.relativeToIP:
-                            baselayer = 0 if 'radiotap' not in self.protocols else self.protocols.index('radiotap') + 1
-                            absLayNum = (baselayer + self.layernumber) if self.layernumber >= 0 else len(self.protocols) - 1
-                        else:
-                            absLayNum = self.protocols.index('ip') + self.layernumber
+        layersvalue = ParsedMessage._getElementByName(ParsedMessage._getElementByName(
+            dissectjson, sourcekey), layerskey)
+        if layersvalue:
+            protocolsvalue = ParsedMessage._getElementByName(ParsedMessage._getElementByName(
+                layersvalue, framekey), protocolskey)
+            if len(protocolsvalue) == 1 and isinstance(protocolsvalue[0], str):
+                self.protocols = protocolsvalue[0].split(':')
+                if self.relativeToIP and 'ip' not in self.protocols:
+                    errortext = "No IP layer could be identified in a message of the trace."
+                    raise DissectionTemporaryFailure(errortext)
+                if not self.relativeToIP:
+                    baselayer = 0 if 'radiotap' not in self.protocols else self.protocols.index('radiotap') + 1
+                    absLayNum = (baselayer + self.layernumber) if self.layernumber >= 0 else len(self.protocols) - 1
+                else:
+                    absLayNum = self.protocols.index('ip') + self.layernumber
+                try:
+                    # protocolname is e.g. 'ntp'
+                    self.protocolname = self.protocols[absLayNum]
+                except IndexError as e:
+                    # there is a bug in the wlan.mgt/awdl dissector: "sometimes" it doesn't list any layer
+                    # above wlan in the protocols value of frame (see `self.protocols`), so we check for
+                    # existing layers in the keys of `layersvalue` that have no "_raw" suffix (see
+                    # `ParsedMessage.RK`)
+                    rawProtocols = [lv[0] for lv in layersvalue
+                                    if not lv[0].endswith(ParsedMessage.RK) and lv[0] != framekey]
+                    # make sure everything up to the last protocol listed in self.protocols is also contained
+                    # in rawProtocols then replace the self.protocols list with the manually determined one.
+                    if rawProtocols[:len(self.protocols)] == self.protocols:
+                        self.protocols = rawProtocols
+                        self.protocolname = self.protocols[absLayNum]
+                    else:
+                        ptxt = f"{absLayNum} missing in {self.protocols}"
+                        print(ptxt)
                         try:
-                            # protocolname is e.g. 'ntp'
-                            self.protocolname = self.protocols[absLayNum]
-                        except IndexError as e:
-                            # there is a bug in the wlan.mgt/awdl dissector: "sometimes" it doesn't list any layer
-                            # above wlan in the protocols value of frame (see `self.protocols`), so we check for
-                            # existing layers in the keys of `layersvalue` that have no "_raw" suffix (see
-                            # `ParsedMessage.RK`)
-                            rawProtocols = [lv[0] for lv in layersvalue
-                                            if not lv[0].endswith(ParsedMessage.RK) and lv[0] != framekey]
-                            # make sure everything up to the last protocol listed in self.protocols is also contained
-                            # in rawProtocols then replace the self.protocols list with the manually determined one.
-                            if rawProtocols[:len(self.protocols)] == self.protocols:
-                                self.protocols = rawProtocols
-                                self.protocolname = self.protocols[absLayNum]
-                            else:
-                                ptxt = f"{absLayNum} missing in {self.protocols}"
-                                print(ptxt)
-                                try:
-                                    subprocess.run(["spd-say", ptxt])
-                                except FileNotFoundError:
-                                    pass  # does not matter, there simply is no speech notification
-                                IPython.embed()
-                                raise e
-                        self._dissectfull = ParsedMessage._getElementByName(layersvalue, self.protocolname)
+                            subprocess.run(["spd-say", ptxt])
+                        except FileNotFoundError:
+                            pass  # does not matter, there simply is no speech notification
+                        IPython.embed()
+                        raise e
+                self._dissectfull = ParsedMessage._getElementByName(layersvalue, self.protocolname)
 
-                        # add missing layers in protocols list
-                        pKeys = [a for a, b in layersvalue]
-                        for lnProtocol in self.protocols[absLayNum::-1]:
-                            if lnProtocol in pKeys:
-                                lastKnownLayer = pKeys.index(lnProtocol)
-                                missingLayers = [a for a, b in layersvalue[lastKnownLayer+1:]
-                                                if a not in self.protocols # and not a == 'frame'
-                                                and not a.endswith(ParsedMessage.RK)]
-                                if missingLayers:
-                                    print(missingLayers)
-                                    self.protocols += missingLayers
-                                break
+                # add missing layers in protocols list
+                pKeys = [a for a, b in layersvalue]
+                for lnProtocol in self.protocols[absLayNum::-1]:
+                    if lnProtocol in pKeys:
+                        lastKnownLayer = pKeys.index(lnProtocol)
+                        missingLayers = [a for a, b in layersvalue[lastKnownLayer+1:]
+                                        if a not in self.protocols # and not a == 'frame'
+                                        and not a.endswith(ParsedMessage.RK)]
+                        if missingLayers:
+                            print(missingLayers)
+                            self.protocols += missingLayers
+                        break
 
-                        # Only 'frame_raw' is guaranteed to all the bytes. Thus should we use this value??
-                        self.protocolbytes = ParsedMessage._getElementByName(layersvalue,
-                            self.protocolname + ParsedMessage.RK)  # tshark 2.2.6
-                        if isinstance(self.protocolbytes, list):   # tshark 2.6.3
-                            self.protocolbytes = self.protocolbytes[0]
+                # Only 'frame_raw' is guaranteed to all the bytes. Thus should we use this value??
+                self.protocolbytes = ParsedMessage._getElementByName(layersvalue,
+                    self.protocolname + ParsedMessage.RK)  # tshark 2.2.6
+                if self.protocolbytes:   # tshark 2.6.3
+                    self.protocolbytes = self.protocolbytes[0]
 
-                        # what to do with layers after (embedded in) the target protocol
-                        if absLayNum < len(self.protocols):
-                            for embedded in self.protocols[absLayNum+1 : ]:
-                                dissectsub = ParsedMessage._getElementByName(layersvalue, embedded)
-                                if isinstance(dissectsub, list):
-                                    self._dissectfull += dissectsub
-                                # else:
-                                #     print("Bogus protocol layer ignored: {}".format(embedded))
+                # what to do with layers after (embedded in) the target protocol
+                if absLayNum < len(self.protocols):
+                    for embedded in self.protocols[absLayNum+1 : ]:
+                        dissectsub = ParsedMessage._getElementByName(layersvalue, embedded)
+                        if isinstance(dissectsub, list):
+                            self._dissectfull += dissectsub
+                        # else:
+                        #     print("Bogus protocol layer ignored: {}".format(embedded))
 
-                        # happens for some malformed packets with too few content e.g. irc with only "\r\n" payload
-                        if not isinstance(self._dissectfull, list):
-                            print ("Undifferentiated protocol content for protocol ", self.protocolname,
-                                   "\nDissector JSON is: ", self._dissectfull)
-                            try:
-                                subprocess.run(["spd-say", "'Undifferenzierter Protokolinhalt!'"])
-                            except FileNotFoundError:
-                                pass  # does not matter, there simply is no speech notification
-                            IPython.embed()  # TODO how to handle this in general without the need for interaction?
-                            raise DissectionInsufficient("Undifferentiated protocol content for protocol ", self.protocolname,
-                                   "\nDissector JSON is: ", self._dissectfull)
-                        if 'tcp.analysis' in [k for k, v in self._dissectfull]:
-                            # print("Packet contents for Wireshark filter: {}".format(
-                            #     ':'.join([b1 + b2 for b1, b2 in
-                            #               zip(self.protocolbytes[::2], self.protocolbytes[1::2])])))
-                            raise DissectionTemporaryFailure("Damn tshark expert information.")
-                        if 'data.data' in [k for k, v in self._dissectfull]:
-                            if self.__failOnUndissectable or \
-                                    {k for k, v in self._dissectfull} != {'data.data_raw', 'data.data', 'data.len'}:
-                                print(dissectjson)
-                                raise DissectionInsufficient(
-                                    "Incomplete dissection. Probably wrong base encapsulation detected?")
+                # happens for some malformed packets with too few content e.g. irc with only "\r\n" payload
+                if not self._dissectfull:
+                    print ("Undifferentiated protocol content for protocol ", self.protocolname,
+                           "\nDissector JSON is: ", self._dissectfull)
+                    try:
+                        subprocess.run(["spd-say", "'Undifferenzierter Protokolinhalt!'"])
+                    except FileNotFoundError:
+                        pass  # does not matter, there simply is no speech notification
+                    IPython.embed()  # TODO how to handle this in general without the need for interaction?
+                    raise DissectionInsufficient("Undifferentiated protocol content for protocol ", self.protocolname,
+                           "\nDissector JSON is: ", self._dissectfull)
+                if 'tcp.analysis' in [k for k, v in self._dissectfull]:
+                    # print("Packet contents for Wireshark filter: {}".format(
+                    #     ':'.join([b1 + b2 for b1, b2 in
+                    #               zip(self.protocolbytes[::2], self.protocolbytes[1::2])])))
+                    raise DissectionTemporaryFailure("Damn tshark expert information.")
+                if 'data.data' in [k for k, v in self._dissectfull]:
+                    if self.__failOnUndissectable or \
+                            {k for k, v in self._dissectfull} != {'data.data_raw', 'data.data', 'data.len'}:
+                        print(dissectjson)
+                        raise DissectionInsufficient(
+                            "Incomplete dissection. Probably wrong base encapsulation detected?")
 
-                        # field keys, filter for those ending with '_raw' into fieldnames
-                        self._fieldsflat = ParsedMessage.walkSubTree(self._dissectfull)
-                        try:
-                            ParsedMessage._reassemblePostProcessing(self)
-                        except DissectionIncomplete as e:
-                            print("Known message dissection is", ", ".join(ds[0] for ds in self._dissectfull))
-                            print("Too long unknown message trail found. Rest is:", e.rest,
-                                  "\nfor Wireshark filter: {}".format(':'.join([b1 + b2 for b1, b2 in
-                                                                                zip(self.protocolbytes[::2],
-                                                                                    self.protocolbytes[1::2])])))
-                            # it will raise an exception at the following test,
-                        except ValueError as e:
-                            print(e)
+                # field keys, filter for those ending with '_raw' into fieldnames
+                self._fieldsflat = ParsedMessage.walkSubTree(self._dissectfull)
+                try:
+                    ParsedMessage._reassemblePostProcessing(self)
+                except DissectionIncomplete as e:
+                    print("Known message dissection is", ", ".join(ds[0] for ds in self._dissectfull))
+                    print("Too long unknown message trail found. Rest is:", e.rest,
+                          "\nfor Wireshark filter: {}".format(':'.join([b1 + b2 for b1, b2 in
+                                                                        zip(self.protocolbytes[::2],
+                                                                            self.protocolbytes[1::2])])))
+                    # it will raise an exception at the following test,
+                except ValueError as e:
+                    print(e)
 
-                        # validate dissection
-                        if not "".join(self.getFieldValues()) == self.protocolbytes:
-                            from tabulate import tabulate
-                            import difflib
-                            import nemere.visualization.bcolors as bcolors
-                            from textwrap import wrap
-                            print("\n Known message dissection is") #, ", ".join(ds[0] for ds in dissectsub))
-                            print(tabulate(zip(self.getFieldNames(), self.getFieldValues())))
-                            diffgen = difflib.ndiff(wrap("".join(self.getFieldValues()),2), wrap(self.protocolbytes,2))
-                            fieldvaluesColored = ""
-                            protobytesColored = ""
-                            for diffchar in diffgen:
-                                if diffchar[0] == "+":
-                                    protobytesColored += bcolors.colorizeStr(diffchar[2:], 10)
-                                if diffchar[0] == "-":
-                                    fieldvaluesColored += bcolors.colorizeStr(diffchar[2:], 10)
-                                if diffchar[0] == " ":
-                                    protobytesColored += diffchar[2:]
-                                    fieldvaluesColored += diffchar[2:]
-                            print(
-                                '\nDissection is incomplete. (Compare self.getFieldValues() and self.protocolbytes):'
-                                '\nDissector result: {}\nOriginal  packet: {}\n'.format(
-                                    fieldvaluesColored, protobytesColored)
-                            )
-                            print('self is of type ParsedMessage\n'
-                                  'self._fieldsflat or self._dissectfull are interesting sometimes\n')
-                            try:
-                                subprocess.run(["spd-say", "'Dissection unvollständig!'"])
-                            except FileNotFoundError:
-                                pass  # does not matter, there simply is no speech notification
-                            IPython.embed()
+                # validate dissection
+                if not "".join(self.getFieldValues()) == self.protocolbytes:
+                    from tabulate import tabulate
+                    import difflib
+                    import nemere.visualization.bcolors as bcolors
+                    from textwrap import wrap
+                    print("\n Known message dissection is") #, ", ".join(ds[0] for ds in dissectsub))
+                    print(tabulate(zip(self.getFieldNames(), self.getFieldValues())))
+                    diffgen = difflib.ndiff(wrap("".join(self.getFieldValues()),2), wrap(self.protocolbytes,2))
+                    fieldvaluesColored = ""
+                    protobytesColored = ""
+                    for diffchar in diffgen:
+                        if diffchar[0] == "+":
+                            protobytesColored += bcolors.colorizeStr(diffchar[2:], 10)
+                        if diffchar[0] == "-":
+                            fieldvaluesColored += bcolors.colorizeStr(diffchar[2:], 10)
+                        if diffchar[0] == " ":
+                            protobytesColored += diffchar[2:]
+                            fieldvaluesColored += diffchar[2:]
+                    print(
+                        '\nDissection is incomplete. (Compare self.getFieldValues() and self.protocolbytes):'
+                        '\nDissector result: {}\nOriginal  packet: {}\n'.format(
+                            fieldvaluesColored, protobytesColored)
+                    )
+                    print('self is of type ParsedMessage\n'
+                          'self._fieldsflat or self._dissectfull are interesting sometimes\n')
+                    try:
+                        subprocess.run(["spd-say", "'Dissection unvollständig!'"])
+                    except FileNotFoundError:
+                        pass  # does not matter, there simply is no speech notification
+                    IPython.embed()
 
-                            raise DissectionIncomplete('Dissection is incomplete:\nDissector result: {}\n'
-                                                       'Original  packet: {}'.format("".join(self.getFieldValues()),
-                                                                                     self.protocolbytes))
+                    raise DissectionIncomplete('Dissection is incomplete:\nDissector result: {}\n'
+                                               'Original  packet: {}'.format("".join(self.getFieldValues()),
+                                                                             self.protocolbytes))
 
-                        return  # everything worked out
+                return  # everything worked out
 
         # if any of the requirements to the structure is not met (see if-conditions above).
         raise DissectionInvalidError('JSON invalid.')
@@ -1695,7 +1756,7 @@ class ParsedMessage(object):
         # tshark 2.2.6
         if isinstance(node, str):
             return 1, node
-        # tshark 2.6.3
+        # tshark 2.6.3 (perhaps earlier) and above
         elif isinstance(node, list) and len(node) == 5 \
                 and isinstance(node[0], str) \
                 and isinstance(node[1], int) and isinstance(node[2], int) \
@@ -1711,12 +1772,19 @@ class ParsedMessage(object):
         Walk the tree structure of the tshark-json, starting from ``root`` and generate a flat representation
         of the field sequence as it is in the message.
 
+        >>> import sys
+        >>> sys.path.append('../tests/resources')
+        >>> from json_listoftuples_testcases import testjsons
+        >>> from nemere.validation.messageParser import ParsedMessage
+        >>> ParsedMessage.walkSubTree(ParsedMessage._getElementByName(ParsedMessage._getElementByName(
+        ...     ParsedMessage._getElementByName(testjsons[7], '_source'), 'layers'), 'dns'), True)
+        [('dns.id', '6613'), ('dns.flags', '0100'), ('dns.flags.response', '00'), ('dns.flags.opcode', '00'), ('dns.flags.truncated', '00'), ('dns.flags.recdesired', '01'), ('dns.flags.z', '00'), ('dns.flags.checkdisable', '00'), ('dns.count.queries', '0001'), ('dns.count.answers', '0000'), ('dns.count.auth_rr', '0000'), ('dns.count.add_rr', '0000'), ('dns.qry.name', '0173057477696d6703636f6d00'), ('dns.qry.type', '0001'), ('dns.qry.class', '0001')]
+
         :param root: A tree structure in "list of (fieldkey, subnode)" tuples.
         :param allSubFields: if True, descend into all sub nodes which are not leaves,
             and append them to the field sequence.
-
             If False (default), ignore all branch nodes which are not listed in :func:`_includeSubFields`..
-        :return:
+        :return: Flat list of subfields
         """
         CONSTANTS_CLASS = ParsedMessage.__getCompatibleConstants()
 
@@ -1811,7 +1879,11 @@ class ParsedMessage(object):
                 ((sub.COMPATIBLE_TO.decode(),sub) for sub in ParsingConstants.getAllSubclasses()),
                 key=lambda s: StrictVersion(s[0])
             )
-            strictTshark = StrictVersion(ParsedMessage.__tshark.version.decode())
+            if not cls.__tshark:
+                tsharkVersion = TsharkConnector.checkTsharkCompatibility()[0]
+            else:
+                tsharkVersion = cls.__tshark.version
+            strictTshark = StrictVersion(tsharkVersion.decode())
             for compatibleTo, PC in subParsingConstants:
                 if strictTshark <= StrictVersion(compatibleTo):
                     cls.__constants = PC()
@@ -1923,13 +1995,11 @@ class ParsedMessage(object):
         :param fieldname: The field name to look for in the dissection.
         :return: list of values for all fields with the given fieldname, empty list if non found.
         """
-        element = ParsedMessage._getElementByName(self._fieldsflat, fieldname)
-        if not element:
-            return []
-        return element if isinstance(element, list) else [element]
+        return ParsedMessage._getElementByName(self._fieldsflat, fieldname)
 
     @property
     def messagetype(self):
+        """Retrieve the type of this message as defined by MessageTypeIdentifiers."""
         return self.__getCompatibleConstants().MESSAGE_TYPE_IDS.typeOfMessage(self)
 
     def __getstate__(self):

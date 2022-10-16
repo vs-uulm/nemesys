@@ -181,7 +181,7 @@ class SegmentPrinter(object):
     Printing of inferred segments within messages without ground truth,
     """
 
-    def __init__(self, segmentsPerMsg: Sequence[Sequence[MessageSegment]]):
+    def __init__(self, segmentsPerMsg: Iterable[Iterable[MessageSegment]]):
         """
         :param segmentsPerMsg: The segments that should be visualized by color changes or other optical features.
         """

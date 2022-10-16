@@ -5,6 +5,7 @@ NEMESYS requires that Netzob is at least as recent to have the following commits
     * fix hash generation for Symbol + add one for AbstractField (44d899c/df7094a)
     * fix building of layered messages (57ee01e/9cb7507)
 """
+import logging
 import unittest, itertools
 from os import path
 
@@ -29,7 +30,7 @@ class TestAbstractField(unittest.TestCase):
 
     def test_hash(self):
         """
-        Check if different objects return different hashes.
+        Check if different AbstractField objects return different hashes.
         """
         for afA, afB in itertools.combinations(self.afs, 2):
             if afA == afB:
@@ -50,7 +51,7 @@ class TestSymbol(unittest.TestCase):
 
     def test_hash(self):
         """
-        Check if different objects return different hashes.
+        Check if different Symbol objects return different hashes.
         """
         for symA, symB in itertools.combinations(self.symbols, 2):
             if symA == symB:
@@ -64,7 +65,7 @@ class TestPCAPImporter(unittest.TestCase):
     """
     # TESTPCAP = "resources/pcaps/test_import_udp.pcap"
     # """relative to the netzob repository folder 'test'"""
-    TESTPCAP = "resources/test_import_udp_courtesy2NetzobTeam.pcap"
+    TESTPCAP = "../tests/resources/test_import_udp_courtesy2NetzobTeam.pcap"
 
     UPGRADE_NOTE = "Netzob version with faulty PCAP import. "
 
@@ -73,6 +74,7 @@ class TestPCAPImporter(unittest.TestCase):
         # testpath = path.join(modpath, "../../test")
         # self.pcappath = path.join(testpath, TestPCAPImporter.TESTPCAP)
         self.pcappath = TestPCAPImporter.TESTPCAP
+        logging.getLogger().setLevel(logging.WARNING)
 
     def test_layer1(self):
         """
