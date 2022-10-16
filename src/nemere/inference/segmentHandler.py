@@ -9,8 +9,8 @@ from netzob.Model.Vocabulary.Symbol import Symbol, Field
 
 from nemere.utils.loader import BaseLoader
 from nemere.inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
-from nemere.inference.analyzers import MessageAnalyzer
-from nemere.inference.templates import TypedTemplate
+from nemere.inference.analyzers import MessageAnalyzer, Value
+from nemere.inference.templates import AbstractClusterer, TypedTemplate
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -125,6 +125,24 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
     return tuple(segments)
 
 
+def segmentsFromSymbols(symbols: List[Symbol]):
+    msgflds = [(msg,flds) for s in symbols for msg,flds in s.getMessageCells().items()]
+    segmentedMessages = []
+    for msg,flds in msgflds:
+        analyzer = Value(msg)
+        msgSegs = []
+        pointer = 0
+        for bv in flds:
+            length = len(bv)
+            if length == 0:
+                continue
+            msgSegs.append(MessageSegment(analyzer, pointer, length))
+            pointer += length
+        assert pointer == len(msg.data)
+        segmentedMessages.append(msgSegs)
+    return segmentedMessages
+
+
 def fixedlengthSegmenter(length: int, specimens: BaseLoader,
                          analyzerType: type, analysisArgs: Union[Tuple, None], unit=MessageAnalyzer.U_BYTE, padded=False) \
         -> List[Tuple[MessageSegment]]:
@@ -137,7 +155,6 @@ def fixedlengthSegmenter(length: int, specimens: BaseLoader,
     >>> from nemere.inference.segmentHandler import fixedlengthSegmenter
     >>> specimens = SpecimenLoader("../input/deduped-orig/ntp_SMIA-20111010_deduped-100.pcap", 2, True)
     >>> comparator = MessageComparator(specimens, 2, True, debug=False)
-    Wait for tshark output (max 20s)...
     >>> segmentedMessages = fixedlengthSegmenter(4, specimens, Value, None)
     >>> areIdentical = True
     >>> for msgsegs in segmentedMessages:
@@ -172,7 +189,7 @@ def fixedlengthSegmenter(length: int, specimens: BaseLoader,
         if len(l4msg.data) > lastOffset:  # append the overlap
             if padded:
                 # here are nasty hacks!
-                # TODO Better define a new subclass of MessageSegment that internally padds values
+                # TODO Better define a new subclass of MessageSegment that internally pads values
                 #  (and bytes? what are the guarantees?) to a given length that exceeds the message length
                 residuepadd = lastOffset + length - len(l4msg.data)
                 newMessage = copy.copy(originalAnalyzer.message)
@@ -219,9 +236,10 @@ def segments2types(segments: Iterable[TypedSegment]) -> Dict[str, List[TypedSegm
     :return: A dict of
         fieldtype (str) : segments of this type (list)
     """
+    from nemere.utils.evaluationHelpers import unknown
     typegroups = dict()
     for seg in segments:
-        fieldtype = seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else '[unknown]'
+        fieldtype = seg.fieldtype if isinstance(seg, (TypedSegment, TypedTemplate)) else unknown
         if fieldtype in typegroups:
             typegroups[fieldtype].append(seg)
         else:
@@ -257,6 +275,38 @@ def bcDeltaGaussMessageSegmentation(specimens, sigma=0.6) -> List[List[MessageSe
         msgSeg.append(analyzer.messageSegmentation())
     return msgSeg
 
+def bcDeltaGaussMessageSegmentationLE(specimens, sigma=0.6) -> List[List[MessageSegment]]:
+    """
+    Little Endian version of
+    Segment message by determining inflection points of gauss-filtered bit congruence deltas.
+
+    >>> from nemere.utils.loader import SpecimenLoader
+    >>> sl = SpecimenLoader('../input/hide/random-100-continuous.pcap', layer=0, relativeToIP=True)
+    >>> segmentsPerMsg = bcDeltaGaussMessageSegmentationLE(sl)
+    Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance for little endian.
+    >>> for spm in segmentsPerMsg:
+    ...     if b''.join([seg.bytes for seg in spm]).hex() != spm[0].message.data.hex():
+    ...         print("Mismatch!")
+
+    :return: Segmentation of the specimens in the pool.
+    """
+    from nemere.inference.analyzers import BitCongruenceDeltaGaussLE
+
+    print('Segmentation by inflections of sigma-{:.1f}-gauss-filtered bit-variance for little endian.'.format(
+        sigma
+    ))
+    msgSeg = list()
+    for l4msg, rmsg in specimens.messagePool.items():
+        analyzer = BitCongruenceDeltaGaussLE(l4msg)
+        analyzer.setAnalysisParams(sigma)
+        analyzer.analyze()
+        msgSeg.append(analyzer.messageSegmentation())
+    return msgSeg
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # #  Start: Refinements # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # noinspection PyUnusedLocal
 def refinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
@@ -293,7 +343,6 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
         charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
         refinedPerMsg.append(charSplited)
 
-    # for tests use test_segment-refinements.py
     moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
     newstuff = list()
     for msg in refinedPerMsg:
@@ -302,6 +351,8 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
         newstuff.append(charmerged)
 
     return newstuff
+
+
 
 
 def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
@@ -323,7 +374,6 @@ def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> Li
         charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
         refinedPerMsg.append(charSplited)
 
-    # for tests use test_segment-refinements.py
     moco = refine.CropDistinct.countCommonValues(refinedPerMsg)
     newstuff = list()
     for msg in refinedPerMsg:
@@ -344,6 +394,8 @@ def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
         * frequency reinforced segments (CropDistinct) and
         * splitting of first segment (SplitFixed)
 
+    Note: This refinement alone actually performes considerably worse than originalRefinements!
+
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
@@ -357,12 +409,17 @@ def charRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
         charsMerged = refine.MergeConsecutiveChars(msg).merge()
         charSplited = refine.ResplitConsecutiveChars(charsMerged).split()
         refinedPerMsg.append(charSplited)
+        # assert correct result
+        if msg[0].offset != charSplited[0].offset or msg[-1].nextOffset != charSplited[-1].nextOffset:
+            raise RuntimeError("Segment bytes where lost!")
 
-    # for tests use test_segment-refinements.py
     newstuff = list()
     for msg in refinedPerMsg:
         charmerged = refine.CumulativeCharMerger(msg).merge()
         newstuff.append(charmerged)
+        # assert correct result
+        if msg[0].offset != charmerged[0].offset or msg[-1].nextOffset != charmerged[-1].nextOffset:
+            raise RuntimeError("Segment bytes where lost!")
 
     return newstuff
 
@@ -431,6 +488,93 @@ def matrixFromTpairs(distances: Iterable[Tuple[T,T,float]], segmentOrder: Sequen
         if row == col and intseg[2] != identity:
             print("Warning: Identity value at {},{} was overwritten by {}".format(row, col, intseg[2]))
     return simtrx
+
+
+def segments2clusteredTypes(clusterer: AbstractClusterer, analysisTitle: str,
+                            singularTemplates=True, charSegments:List[AbstractSegment]=None) \
+        -> List[Tuple[str, List[Tuple[str, List[Tuple[str, TypedSegment]]]]]]:
+    """
+    Cluster segments according to the distance of their feature vectors.
+    Keep and label segments classified as noise.
+
+    :param clusterer: Clusterer object that contains all the segments to be clustered
+    :param analysisTitle: the string to be used as label for the result
+    :param singularTemplates: Flag to separate singular values into their own templates.
+    :param charSegments: list of char segments if they should not be clustered regularly.
+    :return: List/Tuple structure of annotated analyses, clusters, and segments.
+        List [ of
+            Tuples (
+                 "analysis label",
+                 List [ of cluster
+                    Tuples (
+                        "cluster label",
+                        List [ of segment
+                            Tuples (
+                                "segment label (e. g. field type)",
+                                MessageSegment object
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+    """
+    from math import log
+    from .templates import Template
+    print("Clustering segments...")
+    noise, *clusters = clusterer.clusterSimilarSegments(False)
+
+    if charSegments is not None and len(charSegments) > 0:
+        clusters.append(charSegments)
+
+    # TODO handle separately
+    if singularTemplates:
+        # extract "large" templates from noise that should rather be its own cluster
+        for idx, seg in reversed(list(enumerate(noise.copy()))):  # type: int, MessageSegment
+            freqThresh = log(len(clusterer.segments))
+            if isinstance(seg, Template):
+                if len(seg.baseSegments) > freqThresh:
+                    clusters.append([noise.pop(idx)])  # .baseSegments
+
+    print("{} clusters generated from {} segments".format(len(clusters), len(clusterer.segments)))
+
+    segmentClusters = list()
+    segLengths = set()
+    numNoise = len(noise)
+    if numNoise > 0:
+        noiseSegLengths = {seg.length for seg in noise}
+        outputLengths = [str(slen) for slen in noiseSegLengths]
+        if len(outputLengths) > 5:
+            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
+        segLengths.update(noiseSegLengths)
+        noisetypes = {t: len(s) for t, s in segments2types(noise).items()}
+        segmentClusters.append(('{} ({} bytes), Noise: {} Seg.s'.format(
+            analysisTitle, " ".join(outputLengths), numNoise),
+                                   [("{}: {} Seg.s".format(cseg.fieldtype, noisetypes[cseg.fieldtype]), cseg)
+                                    for cseg in noise] )) # ''
+    for cnum, segs in enumerate(clusters):
+        clusterDists = clusterer.distanceCalculator.distancesSubset(segs)
+        typegroups = segments2types(segs)
+        clusterSegLengths = {seg.length for seg in segs}
+        outputLengths = [str(slen) for slen in clusterSegLengths]
+        if len(outputLengths) > 5:
+            outputLengths = outputLengths[:2] + ["..."] + outputLengths[-2:]
+        segLengths.update(clusterSegLengths)
+
+        mostFrequentTypes = sorted(((ftype, len(tsegs)) for ftype, tsegs in typegroups.items()), key=lambda x: -x[1])
+
+        segmentGroups = ('{} ({} bytes), Cluster #{} ({:.2f} {}): {} Seg.s ($d_{{max}}$={:.3f})'.format(
+            analysisTitle, " ".join(outputLengths),
+            cnum, mostFrequentTypes[0][1]/sum(s for t, s in mostFrequentTypes), mostFrequentTypes[0][0], len(segs), clusterDists.max()), list())
+        for ftype, tsegs in typegroups.items():  # [label, segment]
+            segmentGroups[1].extend([("{}: {} Seg.s".format(ftype, len(tsegs)), tseg) for tseg in tsegs])
+        segmentClusters.append(segmentGroups)
+
+    segmentClusters = [ ( '{} ({} bytes) {}'.format(analysisTitle,
+                                                    next(iter(segLengths)) if len(segLengths) == 1 else 'mixedamount',
+                                                    clusterer if clusterer else 'n/a'),
+                          segmentClusters) ]
+    return segmentClusters
 
 
 def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:

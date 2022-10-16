@@ -4,16 +4,14 @@
 #input=input/*-1000.pcap
 #input="input/*-100.pcap input/*-1000.pcap"
 #input=input/maxdiff-filtered/*-1000.pcap
-#input=input/maxdiff-fromOrig/*-1000.pcap
+input="input/maxdiff-fromOrig/*-100*.pcap"
+#input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
 
-input=input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap
-#input="input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap"
 
 L2PROTOS="input/awdl-* input/au-*"
 
 prefix="netzob-format"
 
-# AWDL
 numpad="206"
 for f in reports/${prefix}-* ; do
   if [ -e "$f" ] ; then
@@ -26,7 +24,7 @@ currcomm=$(git log -1 --format="%h")
 report=reports/${prefix}-${numpad}-fms-${currcomm}
 mkdir ${report}
 
-smin=50
+smin=57
 
 pids=()
 for fn in ${input} ; do

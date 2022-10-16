@@ -45,6 +45,8 @@ optThresh = {
     "nbns_SMIA20111010-one_maxdiff-"        : 53,
     "ntp_SMIA-20111010_maxdiff-"            : 66,
     "smb_SMIA20111010-one-rigid1_maxdiff-"  : 53,
+    "awdl-filtered"                         : 57,
+    "au-wifi-filtered"                      : 51,
 }
 
 
@@ -154,8 +156,8 @@ def reduceBitsToBytes(formatdescbit):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Compare netzob inference and a scapy dissector for a set of messages (pcap).')
-    parser.add_argument('pcapfilename', help='pcapfilename')
+        description='Compare netzob inference and a protocol dissector for a set of messages (PCAP).')
+    parser.add_argument('pcapfilename', help='Filename of the PCAP to load.')
     parser.add_argument('--smin', type=int, help='minimum similarity threshold to iterate.')
     parser.add_argument('--smax', type=int, help='maximum similarity threshold to iterate. Omit to only infer at the threshold of smin')
     parser.add_argument('-p', '--profile', help='profile the netzob run.',
@@ -240,13 +242,12 @@ if __name__ == '__main__':
             qpfSimilarity[metrics.trueFormat].append(thresh)
 
     # TODO biggest/most correct cluster per threshold
-    # TODO format correctness, consiseness, (coverage) of each symbol
+    # TODO format correctness, conciseness, (coverage) of each symbol
 
     # ## Output
     # FMS.printFMS(formatmatchmetrics, False)
     # plot_scatter3d(underOverSpecific, formatMatchScore, similarityThreshold)
-    scoreStats = FMS.MessageScoreStatistics(comparator)
-    scoreStats.printMinMax(formatmatchmetrics)
+    FMS.MessageScoreStatistics.printMinMax(formatmatchmetrics)
 
     # experimental
     # plt.ion()

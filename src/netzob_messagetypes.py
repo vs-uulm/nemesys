@@ -81,6 +81,26 @@ def iterSimilarities(minSimilarity=40, maxSimilarity=60) \
             symFmt[similaritythreshold][0][symbol] = tformats
     return symFmt
 
+def writeNetzobPerformanceStatistics(specimens, threshTime):
+    import os, csv
+    from nemere.utils.evaluationHelpers import reportFolder
+
+    fileNameS = "Netzob-performance-statistics"
+    csvpath = os.path.join(reportFolder, fileNameS + '.csv')
+    csvWriteHead = False if os.path.exists(csvpath) else True
+
+    print('Write performance statistics to {}...'.format(csvpath))
+    with open(csvpath, 'a') as csvfile:
+        statisticscsv = csv.writer(csvfile)
+        if csvWriteHead:
+            statisticscsv.writerow([
+                'script', 'pcap', 'threshold', 'runtime'
+            ])
+        # noinspection PyUnresolvedReferences,PyPackageRequirements
+        import __main__ as main
+        statisticscsv.writerows([
+            [os.path.basename(main.__file__), os.path.basename(specimens.pcapFileName), threshold, runtime]
+            for threshold, runtime in threshTime.items() ])
 
 
 
@@ -119,7 +139,9 @@ if __name__ == '__main__':
         maxThresh = args.smax if args.smax else args.smin
     threshSymbTfmtTime = iterSimilarities(minThresh, maxThresh)
     threshSymbTfmt = {t: s for t, (s, r) in threshSymbTfmtTime.items()}
+
     threshTime = {t: r for t, (s, r) in threshSymbTfmtTime.items()}
+    writeNetzobPerformanceStatistics(specimens, threshTime)
 
     print('\nCalculate Cluster Statistics...')
     swstart = time.time()

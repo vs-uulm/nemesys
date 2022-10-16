@@ -3,7 +3,7 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from nemere.utils.evaluationHelpers import reportFolder
+from nemere.utils.evaluationHelpers import reportFolder, uulmColors
 
 
 class MessagePlotter(object):
@@ -12,12 +12,12 @@ class MessagePlotter(object):
     """
     from nemere.utils.loader import SpecimenLoader
 
-    STYLE_MAINLINE     = { 'linewidth': .6, 'alpha': .6, 'c': 'red' }
-    STYLE_BLUMAINLINE =  { 'linewidth': .6, 'alpha': .6, 'c': 'blue'}
-    STYLE_ALTMAINLINE  = { 'linewidth': .6, 'alpha': 1,  'c': 'red' }
+    STYLE_MAINLINE     = { 'linewidth': .6, 'alpha': .6, 'c': uulmColors['uulm-in'] }
+    STYLE_BLUMAINLINE =  { 'linewidth': .6, 'alpha': .6, 'c': uulmColors['uulm-med']}
+    STYLE_ALTMAINLINE  = { 'linewidth': .6, 'alpha': 1,  'c': uulmColors['uulm-in'] }
     STYLE_COMPARELINE  = { 'linewidth': .2, 'alpha': .6, 'c': 'black'}
-    STYLE_FIELDENDLINE = { 'linewidth': .5, 'linestyle': '--', 'alpha': .6 }
-    STYLE_CORRELATION  = dict(linewidth=.4, alpha=.6, c='green')
+    STYLE_FIELDENDLINE = { 'linewidth': .5, 'linestyle': '--', 'alpha': .6, 'c': uulmColors['uulm'] }
+    STYLE_CORRELATION  = dict(linewidth=.4, alpha=.6, c=uulmColors['uulm-mawi'])
 
     def __init__(self, specimens: SpecimenLoader, analysisTitle: str, isInteractive: bool=False):
         """
@@ -36,6 +36,7 @@ class MessagePlotter(object):
         self._title = analysisTitle
         self._interactive = isInteractive
         self._autoLegend = True
+
 
     @property
     def title(self) -> str:
@@ -60,7 +61,7 @@ class MessagePlotter(object):
         if self._autoLegend:
             plt.legend()
         plt.suptitle('{} | {}'.format(pcapName, self._title))
-        plt.tight_layout(rect=[0,0,1,.95])
+        plt.tight_layout(rect=[0,0,1,1])
 
         if not self._interactive and not exists(plotfile):
             plt.savefig(plotfile)
@@ -83,7 +84,6 @@ class MessagePlotter(object):
             t.set_color(color)
         return None
 
-
     @staticmethod
     def fillDiffToCompare(ax: plt.Axes, analysisResult: List[float], compareValue: List[float]):
         """
@@ -97,4 +97,13 @@ class MessagePlotter(object):
         """
         ax.fill_between(range(len(analysisResult)), analysisResult, compareValue, color='b', alpha=.4)
 
+    @property
+    def ax(self) -> plt.Axes:
+        """Convenience property for future change of the class to use something else then pyplot."""
+        return plt.gca()
+
+    @property
+    def fig(self) -> plt.Figure:
+        """Convenience property for future change of the class to use something else then pyplot."""
+        return plt.gcf()
 

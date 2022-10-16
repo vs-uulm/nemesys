@@ -80,6 +80,22 @@ class BaseLoader(object):
     def __repr__(self):
         return type(self).__name__ + ": " + self.pcapFileName + f" on layer {self.getBaseLayerOfPCAP()}"
 
+    @property
+    def maximumMessageLength(self):
+        """
+        :return: The maximum message length in bytes of the relevant network layer without its encapsulation for
+            the messages in this specimen's pool.
+        """
+        return max(len(line.data) for line in self.messagePool.keys())
+
+    @property
+    def cumulatedMessageLength(self):
+        """
+        :return: The sum of all message lengths in bytes of the relevant network layer without its encapsulation for
+            the messages in this specimen's pool. I. e., the cumulated size of all payload in the trace.
+        """
+        return sum(len(line.data) for line in self.messagePool.keys())
+
 class SpecimenLoader(BaseLoader):
     """
     Wrapper for loading messages from a PCAP as specimens.
@@ -106,6 +122,8 @@ class SpecimenLoader(BaseLoader):
         if not isfile(pcap):
             raise FileNotFoundError('File not found:', pcap)
         self.pcapFileName = pcap
+        self.layer = layer
+        self.relativeToIP = relativeToIP
         absLayer = 2 + layer if relativeToIP else layer
 
         # prevent Netzob from producing debug output in certain cases.
@@ -138,14 +156,6 @@ class SpecimenLoader(BaseLoader):
         dl = pcap.datalink()
         # Translates pcapy linktype values to tcpdump ones if in dict, otherwise the value is used unchanged
         return dl if dl not in SpecimenLoader.pcapyDatalinkTranslation else SpecimenLoader.pcapyDatalinkTranslation[dl]
-
-    @property
-    def maximumMessageLength(self):
-        """
-        :return: The maximum message length in bytes of the relevant network layer without its encapsulation for
-            the messages in this specimen's pool.
-        """
-        return max(len(line.data) for line in self.messagePool.keys())
 
 
 class ScaPyCAPimporter(object):

@@ -4,7 +4,7 @@ This script primarily is intended to check whether the dissection of a specific 
 interpreted correctly to create a baseline to compare inferences to.
 """
 
-import time, logging
+import time
 from argparse import ArgumentParser
 from os.path import isfile
 from sys import exit
@@ -52,10 +52,12 @@ if __name__ == '__main__':
     ###########################
 
     # # Multiple messages with ParsedMessage.parseMultiple test:   Dissection ran in 1.55 seconds.
-    if args.targetlayer:
-        pms = ParsedMessage.parseMultiple(pkt, args.targetlayer, args.relativeToIP, linktype=specimens.getBaseLayerOfPCAP())
-    else:
-        pms = ParsedMessage.parseMultiple(pkt, linktype=specimens.getBaseLayerOfPCAP())
+    # if args.targetlayer:
+    #     pms = ParsedMessage.parseMultiple(pkt, args.targetlayer, args.relativeToIP, linktype=specimens.getBaseLayerOfPCAP())
+    #     pms = ParsedMessage.parseOneshot(specimens)
+    # else:
+    #     pms = ParsedMessage.parseMultiple(pkt, linktype=specimens.getBaseLayerOfPCAP())
+    pms = ParsedMessage.parseOneshot(specimens)
     pms = list(pms.values())
 
     print("Dissection ran in {:3.2f} seconds.".format(time.time()-st))

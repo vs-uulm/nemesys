@@ -45,6 +45,7 @@ if __name__ == '__main__':
     print("Filename:", basename(args.pcapfilename))
     print("PCAP base layer is:", specimens.getBaseLayerOfPCAP())
     print("Longest message without its encapsulation:", specimens.maximumMessageLength)
+    print("Sum of message payload bytes:", specimens.cumulatedMessageLength)
     print("Most frequent byte values:")
     print(tabulate(
         ((hex(b), o) for b, o in countByteFrequency()[:10])
@@ -52,6 +53,7 @@ if __name__ == '__main__':
     print("Mean difference between bytes per message:",
           numpy.mean(list(chain.from_iterable(meanByteDiff(specimens.messagePool.keys())))))
     # print(tabulate(meanByteDiff(specimens.messagePool.keys())))
+    print()
 
     if args.interactive:
         print('Loaded PCAP in: specimens')

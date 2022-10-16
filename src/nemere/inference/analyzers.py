@@ -5,11 +5,11 @@ Class for the analysis of and to provide statistics about a single message.
 
 :author: Stephan Kleber
 """
+import IPython
 import numpy
 import pandas
-from bitarray import bitarray
+from bitstring import Bits
 from typing import Dict, List, Tuple, Union, Type
-from abc import abstractmethod
 
 from scipy.ndimage.filters import gaussian_filter1d
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
@@ -88,16 +88,14 @@ class BitCongruence(MessageAnalyzer):
                 "Needs at least two tokens to determine a congruence. Token list is {}".format(tokenlist))
         try:  # We need a type that can be casted to byte. Do it as soon as possible to fail early and completely.
             for tokenA, tokenB in zip(tokenlist[:-1], tokenlist[1:]):
-                # converting and failsafes. Ugly bytes and bitarray!
+                # converting and failsafes.
                 if not isinstance(tokenA, bytes):
                     tokenA = bytes( [ tokenA] )
-                bitsA = bitarray()
-                bitsA.frombytes(tokenA)
+                bitsA = Bits(bytes=tokenA)
 
                 if not isinstance(tokenB, bytes):
                     tokenB = bytes( [tokenB] )
-                bitsB = bitarray()
-                bitsB.frombytes(tokenB)
+                bitsB = Bits(bytes=tokenB)
 
                 bitlength = len(bitsA)
                 if bitlength != len(bitsB):
@@ -106,8 +104,8 @@ class BitCongruence(MessageAnalyzer):
 
                 # finally do the real work:
                 # total number of times (bits) subsequent tokens agree.
-                bAgree = ~ (bitsA ^ bitsB)   # type: bitarray
-                congruencelist.append(bAgree.count() / bitlength)
+                bAgree = ~ (bitsA ^ bitsB)   # type: Bits
+                congruencelist.append(bAgree.count(1) / bitlength)
         except TypeError as e:
             raise TypeError("Tokens must be convertible to bytes, which failed because: {} ".format(e))
         return congruencelist
@@ -145,7 +143,7 @@ class BitCongruenceGauss(BitCongruence):
 
     def messageSegmentation(self) -> List[MessageSegment]:
         """
-        Segment message by determining local maxima of sigma-1.5-gauss-filtered bit-congruence.
+        Segment message by determining local minima of sigma-1.5-gauss-filtered bit-congruence.
 
         >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
         >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
@@ -361,6 +359,151 @@ class BitCongruenceDeltaGauss(BitCongruenceDelta):
                 hiPlat[1].append(vl)
         return hiPlat
 
+class BitCongruenceLE(BitCongruence):
+    """
+    Little Endian version of
+    Bitwise congruence: Simple Matching [Sokal & Michener].
+
+    not unit-dependant, always byte-wise
+    """
+    @property
+    def values(self):
+        """
+        :return: The analysis values for this message, possibly prepended by NaN values
+            in the amount of startskip (see there),
+            after analyze() was called. None otherwise.
+        """
+        if self._values is None:
+            return None
+        return self._values[::-1] + [numpy.nan] * self.startskip
+
+    def analyze(self):
+        """
+        Bitwise congruence: Simple Matching [Sokal & Michener].
+        other kinds of bit variances from http://btluke.com/binclus.html
+
+        :return: list of congruences from index i = 1 to n between bits of i-1 and i
+        """
+        tokenlist = self._message.data[::-1]
+        self._values = BitCongruence.bitCongruenceBetweenTokens(tokenlist)
+        super().analyze()
+
+class BitCongruenceDeltaLE(BitCongruenceLE, BitCongruenceDelta):
+    @property
+    def bitcongruences(self):
+        """
+        :return: basic bit congruences
+        """
+        if self._bcvalues is None:
+            return None
+        return self._bcvalues[::-1] + [numpy.nan] * super().startskip
+
+class BitCongruenceDeltaGaussLE(BitCongruenceDeltaLE, BitCongruenceDeltaGauss):
+    @property
+    def bcdeltas(self):
+        """
+        :return: bit congruence deltas without smoothing
+        """
+        if self._bcdvalues is None:
+            return None
+        return self._bcdvalues[::-1] + [numpy.nan] * self.startskip
+
+    def messageSegmentation(self) -> List[MessageSegment]:
+        """
+        Segment message by determining inflection points of sigma-s-gauss-filtered bit-congruence.
+        The cut position is the delta max of the unsmoothed bcd in the scope of a min/max (rising) pair.
+
+        additionally cut at high plateaus starts in the basic bc values.
+
+        :return: Segmentation of this message based on this analyzer's type.
+        """
+        if not self.values:
+            if not self._analysisArgs:
+                raise ValueError('No values or analysis parameters set.')
+            self.analyze()
+
+        # CAVE: all following is in reversed index order!
+
+        # cut one byte before the inflection
+        inflectionPoints = self.inflectionPoints()
+        inflectionCuts = [ int(i)-1 for i in inflectionPoints[0]]
+
+        # get candidates to cut segments from message
+        cutCandidates = [0] + inflectionCuts \
+                        + [len(self._message.data)]  # add the message end
+        # cut only where a segment is of a length larger than 1
+        cutPositions = [0] + [right for left, right in zip(
+                cutCandidates[:-1], cutCandidates[1:]
+            ) if right - left > 1]
+        # cutPositions = list(sorted(cutPositions + nansep[0]))
+        # add the end of the message if its not already there
+        if cutPositions[-1] != cutCandidates[-1]:
+            cutPositions[-1] = cutCandidates[-1]
+
+        segments = list()
+        # zip(cutPositions[::-1][:-1], cutPositions[::-1][1:]) is in simpler terms:
+        for cutCurr, cutNext in zip(cutPositions[:0:-1], cutPositions[-2::-1]):
+            # here we reverse the index order again, to reinstate the actual byte offsets
+            offset = len(self.values) - cutCurr
+            length = cutCurr - cutNext
+            segments.append(MessageSegment(self, offset, length))
+        return segments
+
+    def extrema(self) -> List[Tuple[int, bool]]:
+        """
+        in reversed index order!
+        :return: all extrema of the smoothed bcd, each described by a tuple of its index and bool (min is False)
+        """
+        bcdNR = self.values[::-1]  # values is in message byte order and with added nans for missing values
+        lmin = MessageAnalyzer.localMinima(bcdNR)
+        lmax = MessageAnalyzer.localMaxima(bcdNR)
+        nrExtrema = sorted(
+            [(i, False) for i in lmin[0]] + [(i, True) for i in lmax[0]], key=lambda k: k[0])
+        return nrExtrema
+
+    def risingDeltas(self) -> List[Tuple[int, numpy.ndarray]]:
+        """
+        in reversed index order!
+        the deltas in the original bcd (so: 2nd delta) between minima and maxima in smoothed bcd
+
+        :return: offset of and the bcd-delta values starting at this position in rising parts of the smoothed bcd.
+            Thus, offset is a minimum + 1 and the array covers the indices up to the following maximum, itself included.
+        """
+        extrema = self.extrema()
+        risingdeltas = [ ( i[0] + 1, numpy.ediff1d(self.bcdeltas[::-1][i[0]:j[0]+1]) )  # include index of max
+                for i, j in zip(extrema[:-1], extrema[1:])
+                   if i[1] == False and j[1] == True and j[0]+1 - i[0] > 1]
+        # risingdeltas[-1][0] >= len(self.bcdeltas)
+        return risingdeltas
+
+    def inflectionPoints(self) -> Tuple[List[int], List[float]]:
+        """
+        in reversed index order!
+        adjusted approximation of the inflection points at rising edges of the smoothed bcd.
+        The approximation is that we are using the maximum delta of the unsmoothed bcd
+        in scope of the rising part of the graph.
+
+        :return: The indices and values of the approximated inflections.
+        """
+        inflpt = [ offset + int(numpy.nanargmax(wd)) for offset, wd in self.risingDeltas() ]
+        inflvl = [ self.bcdeltas[::-1][pkt] for pkt in inflpt ]
+        return inflpt, inflvl
+
+    def bcHighPlateaus(self):
+        """
+        in reversed index order!
+        :return: Plateaus in the bit congruence at high level (> 0.8)
+        """
+        plateauElevation = 0.8
+        plat = MessageAnalyzer.plateouStart(self.bitcongruences[::-1])
+
+        # filter for plateaus of high bit congruence
+        hiPlat = ([], [])
+        for ix, vl in zip(plat[0], plat[1]):
+            if vl > plateauElevation:
+                hiPlat[0].append(ix)
+                hiPlat[1].append(vl)
+        return hiPlat
 
 
 class BitCongruence2ndDelta(BitCongruenceDelta):
@@ -440,6 +583,77 @@ class BitCongruenceNgramMean(BitCongruence):
         return [0.0] * self.startskip + self._ngramMean
 
 
+class BitCongruenceNgramStd(BitCongruence):
+    """
+    Standard deviation of bit congruences for all bits within ngrams.
+    """
+    _n = None
+    _ngramVar = list()
+
+    def setAnalysisParams(self, n: Union[int, Tuple[int]]):
+        self._n = int(n) if not isinstance(n, tuple) else int(n[0])
+        self._startskip = self._n
+
+
+    def analyze(self):
+        """
+        not unit-dependant
+
+        deviation of bit congruence within ngrams
+
+        :return:
+        """
+        if not self._n:
+            raise ParametersNotSet('Analysis parameter missing: N-gram size ("n").')
+        from ..utils.baseAlgorithms import ngrams
+
+        super().analyze()
+        self._ngramVar = [float(numpy.std(bcn)) for bcn in ngrams(self._values, self._n)]
+
+
+    @property
+    def values(self):
+        if self._ngramVar is None:
+            return None
+        return [0.0] * self.startskip + self._ngramVar
+
+
+    def messageSegmentation(self):
+        """
+
+        :return: Segmentation of this message based on this analyzer's type.
+        """
+        raise NotImplementedError('Unfinished implementation.')
+
+        if not self._ngramVar:
+            if not self._analysisArgs:
+                raise ValueError('No values or analysis parameters set.')
+            self.analyze()
+
+        # TODO segmentation based on areas of similar congruence (not border detection):
+        # factor * std(message) < abs(std(3gram_n) - std(3gram_(n-1))) -> cut segment
+        # factor = 1 for now
+
+        # find a threshold factor
+        min(self._ngramVar)
+        max(self._ngramVar)
+
+        # prevent 1 byte segments, since they do not contain usable congruence!
+        cutCandidates = [0] + [int(b) for b in bclmins] + [len(self._message.data)]  # add the message end
+        cutPositions = [0] + [right for left, right in zip(
+            cutCandidates[:-1], cutCandidates[1:]
+        ) if right - left > 1]
+        if cutPositions[-1] != cutCandidates[-1]:
+            cutPositions[-1] = cutCandidates[-1]
+
+        segments = list()
+        for lmaxCurr, lmaxNext in zip(cutPositions[:-1], cutPositions[1:]):
+            segments.append(MessageSegment(self, lmaxCurr, lmaxNext-lmaxCurr))
+        return segments
+
+        # TODO Areas of similarity: may also be feasible for bc, hbc, sliding2means, deltaProgression
+
+
 class PivotBitCongruence(BitCongruence):
     """
     Repeatedly cut the message(segments) in half, calculate the mean/variance of bit congruence for each half,
@@ -451,13 +665,11 @@ class PivotBitCongruence(BitCongruence):
     that some messages get segmented arbitrarily deep, while others with clearly visible structure are
     not segmented at all. In this design the analysis is unsuitable.
 
-    Alternative:
+    Fixed Pivot Results:
     ============
     Slide the pivot positions over the whole message (-segment)
     and use the one maximizing difference in the segments' congruence to recurse.
 
-    Results:
-    ========
     Works comparatively well for DNS, is awful for ntp and dhcp.
     With the same parameters (different fixed and weighted threshold calculation strategies, fixed and weighted pivot
     selection condition), there is no correlation between fields and segment splits. Some areas of the message are too
@@ -478,7 +690,7 @@ class PivotBitCongruence(BitCongruence):
     def analysisParams(self):
         return self._meanThreshold,
 
-    def _recursivePivotMean(self, segment: MessageSegment):
+    def _recursiveFixedPivotMean(self, segment: MessageSegment):
         """
         Recursively split the segment in half, calculate the mean for the values of each of the two resulting
         sub-segments, and compare each of them to the original segments mean. If a sub-segment is sufficiently
@@ -500,11 +712,11 @@ class PivotBitCongruence(BitCongruence):
             # test for recursion conditions
             returnSegments = list()
             if abs(leftSegment.mean() - mymean) > self._meanThreshold:  # still different
-                returnSegments.extend(self._recursivePivotMean(leftSegment))
+                returnSegments.extend(self._recursiveFixedPivotMean(leftSegment))
             else:
                 returnSegments.append(leftSegment)
             if abs(rightSegment.mean() - mymean) > self._meanThreshold:  # still different
-                returnSegments.extend(self._recursivePivotMean(rightSegment))
+                returnSegments.extend(self._recursiveFixedPivotMean(rightSegment))
             else:
                 returnSegments.append(rightSegment)
             # if abs(lsm - rsm) > .1:  # still different
@@ -512,10 +724,8 @@ class PivotBitCongruence(BitCongruence):
         else:
             return [segment]
 
-
     def messageSegmentation(self) -> List[MessageSegment]:
-
-        segments = self._recursivePivotVar(MessageSegment(BitCongruence(self.message), 0, len(self._message.data)))
+        segments = self._recursiveDynamicSlidedMean(MessageSegment(BitCongruence(self.message), 0, len(self._message.data)))
         sortedSegments = sorted(segments, key=lambda x: x.offset)
         # varPerSeg = list()
         # for segment in sortedSegments:
@@ -532,11 +742,9 @@ class PivotBitCongruence(BitCongruence):
             input('next message: ')
         return sortedSegments
 
-
     __debug = False
 
-
-    def _recursivePivotVar(self, segment: MessageSegment):
+    def _recursiveDynamicPivotStd(self, segment: MessageSegment):
         """
         Recursively split the segment at positions shifting from 2 to n-2, calculate the standard deviation for the
         values of each of the two resulting sub-segments, and compare each of them to the original segments deviation.
@@ -584,7 +792,7 @@ class PivotBitCongruence(BitCongruence):
             if abs(leftSegment.stdev() - myvar) > weightedThresh:  # still different
                 if self.__debug:
                     print('split left', leftSegment.offset)
-                returnSegments.extend(self._recursivePivotVar(leftSegment))
+                returnSegments.extend(self._recursiveDynamicPivotStd(leftSegment))
             else:
                 if self.__debug:
                     print('left finished', abs(rightSegment.stdev() - myvar))
@@ -592,10 +800,77 @@ class PivotBitCongruence(BitCongruence):
             if abs(rightSegment.stdev() - myvar) > weightedThresh:  # still different
                 if self.__debug:
                     print('split right', rightSegment.offset)
-                returnSegments.extend(self._recursivePivotVar(rightSegment))
+                returnSegments.extend(self._recursiveDynamicPivotStd(rightSegment))
             else:
                 if self.__debug:
                     print('right finished', abs(rightSegment.stdev() - myvar))
+                returnSegments.append(rightSegment)
+
+            # if abs(lsm - rsm) > .1:  # still different
+            return returnSegments
+        else:
+            return [segment]
+
+    def _recursiveDynamicSlidedMean(self, segment: MessageSegment):
+        """
+        Recursively split the segment at positions shifting from 2 to n-2, calculate the mean for the
+        values of each of the two resulting sub-segments, and compare each of them to the original segment's mean.
+        If a sub-segment is sufficiently different from its parent
+        (meanThreshold = 0.5 parentvar * min(len(vl), len(vr))/(len(vl) + len(vr))) further split the sub-segment.
+
+        :param segment: One message segment that should be segmented.
+        :return: List of segments after the splitting.
+        """
+
+        if not segment.values:
+            segment.analyzer.analyze()
+        parentMean = segment.mean()
+
+        if segment.length >= 4:  # we need two bytes for each segment to get a bit congruence of them
+
+            # select a suitable pivot: find the one yielding the highest deviation-difference from parent
+            segmentSplit = dict()
+            for pivot in range(2, segment.length-1):
+                leftSegment = MessageSegment(segment.analyzer, segment.offset, pivot)
+                rightSegment = MessageSegment(segment.analyzer, segment.offset + pivot, segment.length - pivot)
+                # deviation needs to be higher towards the edges to be a probable splitting point
+                lenweight = 2 * min(leftSegment.length, rightSegment.length) / segment.length
+                # add splits: varDiff: (leftSegment, rightSegment)
+                segmentSplit[abs(leftSegment.mean() - rightSegment.mean()) * lenweight] \
+                    = (leftSegment, rightSegment)
+
+            if self.__debug:
+                from tabulate import tabulate
+                print(tabulate(sorted([(wlrdiff, ls.offset, ls.mean(), rs.offset, rs.mean(), rs.offset + rs.length)
+                                for wlrdiff, (ls, rs) in segmentSplit.items()], key=lambda x: x[0]), headers=[
+                    'wlrdiff', 'l.o', 'lmean', 'r.o', 'rmean', 'r.b']))  #abs(x[3] - x[4])
+
+            # use the segments splitted at selected pivot: search max varDiff in splits
+            splitdiffmax = max(segmentSplit.keys())
+            leftSegment, rightSegment = segmentSplit[splitdiffmax]
+            # weightedThresh = 0.5 * parentMean * min(leftSegment.length, rightSegment.length) / segment.length
+            weightedThresh = self._meanThreshold * parentMean
+            if self.__debug:
+                print('parent segment mean:', parentMean)
+                print('weighted threshold:', weightedThresh)
+
+            # test for recursion conditions: recurse if above weightedThresh
+            returnSegments = list()
+            if abs(leftSegment.mean() - parentMean) > weightedThresh:  # still different
+                if self.__debug:
+                    print('split left', leftSegment.offset)
+                returnSegments.extend(self._recursiveDynamicSlidedMean(leftSegment))
+            else:
+                if self.__debug:
+                    print('left finished', abs(rightSegment.mean() - parentMean))
+                returnSegments.append(leftSegment)
+            if abs(rightSegment.mean() - parentMean) > weightedThresh:  # still different
+                if self.__debug:
+                    print('split right', rightSegment.offset)
+                returnSegments.extend(self._recursiveDynamicSlidedMean(rightSegment))
+            else:
+                if self.__debug:
+                    print('right finished', abs(rightSegment.mean() - parentMean))
                 returnSegments.append(rightSegment)
 
             # if abs(lsm - rsm) > .1:  # still different
@@ -651,7 +926,7 @@ class SlidingNbcDelta(SlidingNmeanBitCongruence):
     ====
 
         A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
-        of equal length ant type.
+        of equal length and type.
     """
     def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
         super().__init__(message, unit)
@@ -668,6 +943,9 @@ class SlidingNbcDelta(SlidingNmeanBitCongruence):
         # self._values = numpy.ediff1d(self._values).tolist() + [numpy.nan]
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
 
+    @property
+    def values(self):
+        return super().values + [numpy.nan]
 
 class SlidingNbcDeltaGauss(SlidingNbcDelta):
     """
@@ -677,8 +955,8 @@ class SlidingNbcDeltaGauss(SlidingNbcDelta):
         super().__init__(message, unit)
         self._bcvalues = None
         self._sensitivity = 0.5
-        self._startskip += 1
         """Sensitivity threshold for the smoothed extrema."""
+        self._startskip += 1
 
     def setAnalysisParams(self, horizon=2, sigma=1.5):
         self._analysisArgs = (horizon, sigma)
@@ -823,6 +1101,21 @@ class SlidingNbc2ndDelta(SlidingNmeanBitCongruence):
 class HorizonBitcongruence(BitCongruence):
     """
     This is already the DELTA between the mean of the BC of 2 bytes to the left of n and the BC at n.
+
+    >>> from nemere.validation.dissectorMatcher import MessageComparator
+    >>> from nemere.utils.loader import SpecimenLoader
+    >>> from nemere.inference.analyzers import *
+    >>> specimens = SpecimenLoader("../input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap",
+    ...     relativeToIP=True, layer=2)
+    >>> # input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap
+    >>> comparator = MessageComparator(specimens, relativeToIP=True, layer=2)
+    >>> l4, rm = next(iter(comparator.messages.items()))
+    >>> analyzer = MessageAnalyzer.findExistingAnalysis(HorizonBitcongruence, MessageAnalyzer.U_BYTE, l4, (2,))
+    >>> a = []
+    >>> for l4,rm in comparator.messages.items():
+    ...     a.append((len(l4.data), comparator.fieldEndsPerMessage(rm)[-1]))
+
+
     """
     def setAnalysisParams(self, horizon):
         if isinstance(horizon, tuple):
@@ -1035,9 +1328,9 @@ class Autocorrelation(MessageAnalyzer):
         """
         if not self._am:
             raise ParametersNotSet('Analysis method missing.')
-        results = self._am.values
+        results = self._am.valuesRaw
         correlation = numpy.correlate(results, results, 'full')
-        self._values = correlation.tolist()
+        self._values = [numpy.nan] * self._am.startskip + correlation.tolist()
         super().analyze()
 
 
@@ -1076,182 +1369,6 @@ class CumulatedProgressionGradient(CumulatedValueProgression):
         self._values = numpy.gradient(self._values).tolist()
 
 
-class CumulatedProgressionDelta(CumulatedValueProgression):
-    """
-    Difference quotient (forward finite difference, h=1) for all values.
-
-    Alternative Idea
-    ====
-
-    A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
-        of equal length ant type.
-    """
-    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
-        super().__init__(message, unit)
-        self._startskip += 1
-
-    @property
-    def domain(self):
-        return 0, 255 if self.unit == MessageAnalyzer.U_BYTE else 128
-
-    def analyze(self):
-        super().analyze()
-        self._values = numpy.ediff1d(self._values).tolist()
-        # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-
-    def messageSegmentation(self) -> List[MessageSegment]:
-        """
-        produces very bad/unusable results.
-
-        :return:
-        """
-        if not self.values:
-            self.analyze()
-
-        # sudden drop (inversion?) in progression delta steepness.
-        sc = self.steepChanges(.3)  # TODO iterate best value
-
-        cutat = numpy.add(sorted(set(sc)), self._startskip).tolist()
-        if len(cutat) == 0 or cutat[0] != 0:
-            cutat = [0] + cutat
-        if len(cutat) == 0 or cutat[-1] != len(self._message.data):
-            cutat = cutat + [len(self._message.data)]  # add the message end
-
-
-        segments = list()
-        for cutCurr, cutNext in zip(cutat[:-1], cutat[1:]):
-            segments.append(MessageSegment(self, cutCurr, cutNext-cutCurr))
-        return segments
-
-    def steepChanges(self, epsfact: float=.1):
-        """
-        From the top of the value range to the bottom of the value range directly.
-
-        :param epsfact: value deviation towards the middle considered to be at the limits of the value range.
-        :return:
-        """
-        if epsfact > 1 or epsfact <= 0:
-            raise ValueError('epsilon factor for allowed range deviation is below 0 or above 1.')
-
-        vmin = min(self._values)
-        vmax = max(self._values)
-        epsilon = (vmax - vmin) * epsfact
-        emin = vmin + epsilon
-        emax = vmax - epsilon
-        return [ ix
-                 for ix, (vl, vr) in enumerate(zip(self._values[:-1], self._values[1:]))
-                 if vl > emax and vr < emin]
-
-
-class CumulatedProgression2ndDelta(CumulatedValueProgression):
-    """
-    2nd order difference quotient (forward finite difference, h=1) for all values.
-
-    Field boundaries have no obvious property in this 2nd order difference quotient (NTP/DNS).
-    """
-    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
-        super().__init__(message, unit)
-        self._startskip += 1
-
-    @property
-    def domain(self):
-        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
-        return -extrema, extrema
-
-    def analyze(self):
-        super().analyze()
-        self._values = [x2-2*x1+x0 for x2,x1,x0 in zip(self._values[2:], self._values[1:-1], self._values[:-2])]
-        # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-
-
-class ValueProgression(MessageAnalyzer):
-    @property
-    @abstractmethod
-    def domain(self):
-        return super().domain
-
-    @abstractmethod
-    def analyze(self):
-        super().analyze()
-
-
-class ValueProgressionDelta(ValueProgression):
-    """
-    Differential value progression. Shows the difference between subsequent values.
-    """
-    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
-        super().__init__(message, unit)
-        self._startskip = 1
-
-    @property
-    def domain(self):
-        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
-        return -extrema, extrema
-
-    def analyze(self):
-        valueprogression = []
-        if len(self._message.data) < 2:
-            raise ValueError("Needs at least two tokens to determine a value progression. Message is {}".format(
-                self._message.data))
-
-        if self._unit == MessageAnalyzer.U_NIBBLE:
-            tokens = self.nibblesFromBytes(self._message.data)
-        else:
-            tokens = self._message.data
-
-        prev = 0
-        for tokenA, tokenB in zip(tokens[1:], tokens[:-1]):
-            tokenDiff = tokenB - tokenA
-            prev += tokenDiff
-            valueprogression.append(tokenDiff)
-        self._values = valueprogression
-
-
-    def messageSegmentation(self) -> List[MessageSegment]:
-        if not self.values:
-            self.analyze()
-
-        # value drop or rise more than 200 (?) in one step, split at highest abs(value)
-        sc = self.steepChanges(200)  # TODO iterate best value
-        # and value drop to or rise from 0, split at the non-zero value
-        zb = self.zeroBorders()
-
-        cutat = numpy.add(sorted(set(sc + zb)), self._startskip).tolist()
-        if cutat[0] != 0:
-            cutat = [0] + cutat
-        if cutat[-1] != len(self._message.data):
-            cutat = cutat + [len(self._message.data)]
-
-
-        segments = list()
-        for cutCurr, cutNext in zip(cutat[:-1], cutat[1:]):  # add the message end
-            segments.append(MessageSegment(self, cutCurr, cutNext-cutCurr))
-        return segments
-
-
-    def steepChanges(self, steepness: int):
-        """
-        value drop or rise more than steepness in one step, split at highest abs(value)
-
-        :param steepness:
-        :return:
-        """
-        return [ ix if abs(vl) > abs(vr) else ix+1
-                 for ix, (vl, vr) in enumerate(zip(self._values[:-1], self._values[1:]))
-                 if abs(vr-vl) > steepness]
-
-
-    def zeroBorders(self):
-        """
-        value drop to or rise from 0, split at the non-zero value
-
-        :return:
-        """
-        return [ ix if abs(vl) > abs(vr) else ix+1
-                 for ix, (vl, vr) in enumerate(zip(self._values[:-1], self._values[1:]))
-                 if (vr == 0) != (vl == 0)]
-
-
 class EntropyWithinNgrams(MessageAnalyzer):
     """
     Calculates the entropy of each message ngrams based on an alphabet of bytes or nibbles (4 bit).
@@ -1283,14 +1400,43 @@ class EntropyWithinNgrams(MessageAnalyzer):
 
 
 class ValueVariance(MessageAnalyzer):
-    @property
-    def domain(self):
-        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
-        return -extrema*2, extrema*2
+    """
+    Shows the difference between subsequent values.
 
+    The early analyzer ValueProgressionDelta, i. e., the differential value progression, is the inverse of
+    ValueVariance: ValueVariance == inverted (minus) ValueProgressionDelta.
+    We removed ValueProgressionDelta to prevent confusion.
+
+    LOL. ValueVariance == CumulatedProgression2ndDelta. :-D
+
+    Field boundaries have no obvious property in this 2nd order difference quotient (NTP/DNS).
+    """
     def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
         super().__init__(message, unit)
         self._startskip = 1
+        self._analysisArgs = (200,)
+
+    @property
+    def domain(self):
+        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
+        return -extrema, extrema
+
+    def setAnalysisParams(self, steepness=(200,)):
+        """
+        200 is a decent tradeoff.
+        A larger value (220) benefits only NTP.
+        Other protocols rather benefit from lower values (150).
+
+        see ScoreStatistics-VD-steepness.ods
+        """
+        if isinstance(steepness, tuple):
+            self._analysisArgs = steepness
+        else:
+            self._analysisArgs = (int(steepness),)
+
+    @property
+    def steepness(self):
+        return self._analysisArgs[0]
 
     def analyze(self):
         """
@@ -1298,6 +1444,46 @@ class ValueVariance(MessageAnalyzer):
         """
         self._values = MessageAnalyzer.tokenDelta(list(self._message.data), self._unit)
 
+    def messageSegmentation(self) -> List[MessageSegment]:
+        if not self.values:
+            self.analyze()
+
+        # value drop or rise more than steepness threshold in one step, split at highest abs(value)
+        sc = self.steepChanges()
+        # and value drop to or rise from 0, split at the non-zero value
+        zb = self.zeroBorders()
+
+        cutat = numpy.add(sorted(set(sc + zb)), self._startskip).tolist()
+        if cutat[0] != 0:
+            cutat = [0] + cutat
+        if cutat[-1] != len(self._message.data):
+            cutat = cutat + [len(self._message.data)]
+
+
+        segments = list()
+        for cutCurr, cutNext in zip(cutat[:-1], cutat[1:]):  # add the message end
+            segments.append(MessageSegment(self, cutCurr, cutNext-cutCurr))
+        return segments
+
+    def steepChanges(self):
+        """
+        value drop or rise more than steepness in one step, split at highest abs(value)
+
+        :return:
+        """
+        return [ ix if abs(vl) > abs(vr) else ix+1
+                 for ix, (vl, vr) in enumerate(zip(self._values[:-1], self._values[1:]))
+                 if abs(vr-vl) > self.steepness]
+
+    def zeroBorders(self):
+        """
+        value drop to or rise from 0, split at the non-zero value
+
+        :return:
+        """
+        return [ ix if abs(vl) > abs(vr) else ix+1
+                 for ix, (vl, vr) in enumerate(zip(self._values[:-1], self._values[1:]))
+                 if (vr == 0) != (vl == 0)]
 
 class VarianceAmplitude(MessageAnalyzer):
     @property
@@ -1363,10 +1549,17 @@ class ValueFrequency(MessageAnalyzer):
 class Value(MessageAnalyzer):
     """
     Simply returns the byte values of the message.
+
+    LOL. this is CumulatedProgressionDelta == ValueProgression == Value. :-D
+
+    Alternative Idea
+    ====
+    A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
+        of equal length ant type.
     """
     @property
     def domain(self):
-        return 0,255
+        return 0, 255 if self.unit == MessageAnalyzer.U_BYTE else 128
 
     def analyze(self):
         """
@@ -1381,10 +1574,53 @@ class Value(MessageAnalyzer):
         else:
             return MessageAnalyzer.nibblesFromBytes(self.message.data)
 
+    def messageSegmentation(self) -> List[MessageSegment]:
+        """
+        produces very bad/unusable results.
+
+        :return:
+        """
+        if not self.values:
+            self.analyze()
+
+        # sudden drop (inversion?) in progression delta steepness.
+        sc = self.steepChanges(.3)  # TODO iterate best value
+
+        cutat = numpy.add(sorted(set(sc)), self._startskip).tolist()
+        if len(cutat) == 0 or cutat[0] != 0:
+            cutat = [0] + cutat
+        if len(cutat) == 0 or cutat[-1] != len(self._message.data):
+            cutat = cutat + [len(self._message.data)]  # add the message end
+
+        segments = list()
+        for cutCurr, cutNext in zip(cutat[:-1], cutat[1:]):
+            segments.append(MessageSegment(self, cutCurr, cutNext-cutCurr))
+        return segments
+
+    def steepChanges(self, epsfact: float=.1):
+        """
+        From the top of the value range to the bottom of the value range directly.
+
+        :param epsfact: value deviation towards the middle considered to be at the limits of the value range.
+        :return:
+        """
+        if epsfact > 1 or epsfact <= 0:
+            raise ValueError('epsilon factor for allowed range deviation is below 0 or above 1.')
+
+        vmin = min(self.values)
+        vmax = max(self.values)
+        epsilon = (vmax - vmin) * epsfact
+        emin = vmin + epsilon
+        emax = vmax - epsilon
+        return [ ix
+                 for ix, (vl, vr) in enumerate(zip(self.values[:-1], self.values[1:]))
+                 if vl > emax and vr < emin]
+
 
 class Entropy(SegmentAnalyzer):
     """
-    Calculates the entropy of each message ngrams based on an alphabet of bytes or nibbles (4 bit).
+    Calculates the entropy of each message segment based on the alphabet of bytes or nibbles (4 bit) in this segment.
+    This analyzer calculates the entropy of an already existing segment (subclass of SegmentAnalyzer) and is not a segmenter!
     """
     def value(self, start, end):
         if self._unit == MessageAnalyzer.U_NIBBLE:

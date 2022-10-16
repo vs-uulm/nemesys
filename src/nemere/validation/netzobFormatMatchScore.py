@@ -99,15 +99,14 @@ class MessageScoreStatistics(object):
         print("Empty inferences ignored:", countEmpty)
         return {th: (numpy.min(sc), numpy.max(sc), numpy.mean(sc)) for th, sc in thrScores.items()}
 
-
-    def printMinMax(self,
-                    formatmatchmetrics: Dict[Tuple[int, AbstractMessage], FormatMatchScore]):
+    @classmethod
+    def printMinMax(cls, formatmatchmetrics: Dict[Tuple[int, AbstractMessage], FormatMatchScore]):
         """
         Print the Format Match Score min/max per threshold.
 
         :param formatmatchmetrics: Dict[Threshold, Message], FormatMatchScore]
         """
-        mmm = self.minMaxMean(formatmatchmetrics)
+        mmm = cls.minMaxMean(formatmatchmetrics)
 
         qualmatrix = [["Thresh"], ["min"], ["max"], ["mean"]]
         for th, (minft, maxft, meanft) in mmm.items():

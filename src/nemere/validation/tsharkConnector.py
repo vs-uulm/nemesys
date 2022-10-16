@@ -2,9 +2,80 @@ import subprocess, io, struct, time, logging
 from queue import Queue
 from tempfile import NamedTemporaryFile
 from typing import Dict, Union
+import os
 
 
-class TsharkConnector(object):
+
+def _binary():
+    pathlist = ["/usr/bin/tshark", "/usr/local/bin/tshark"]  # v3.6 - v3.2
+    for tp in pathlist:
+        if os.path.isfile(tp) and os.access(tp, os.X_OK):
+            logging.getLogger(__name__).debug(f"Selecting tshark from {tp}")
+            return tp
+    return None
+
+
+class TsharkBase(object):
+    # __tsharkline = [_binary()]
+
+    def __init__(self):
+        self._linktype = None
+        self._tshark = None  # type: Union[subprocess.Popen, None]
+        self._tsharkqueue = Queue()
+        self._tempfile = None  # type: Union[io.BufferedRandom, None]
+        self._tempreader = None  # type: Union[io.BufferedReader, None]
+        self._version = None
+
+    @property
+    def linktype(self):
+        return self._linktype
+
+    @property
+    def version(self):
+        return self._version
+
+    @staticmethod
+    def checkTsharkCompatibility():
+        versionstring = subprocess.check_output(("tshark", "-v"))
+        versionlist = versionstring.split(maxsplit=4)
+        if versionlist[2] < b'2.1.1':
+            raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
+                            'dissection parsing. Found tshark version {}. '
+                            'Upgrade!\”'.format(versionlist[2].decode()))
+        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5', b'2.6.8', b'3.2.3', b'3.2.5'):
+            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning or faulty. "
+                  "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
+            return versionlist[2], False
+        return versionlist[2], True
+
+    def __getstate__(self):
+        """
+        Handling of runtime specific object attributes for pickling. This basically omits all instances of
+            io.BufferedReader, io.BufferedRandom, and subprocess.Popen
+            that need to be freshly instanciated after pickle.load() anyway.
+
+        :return: The dict of this object for use in pickle.dump()
+        """
+        return {
+            '_TsharkConnector_linktype': self._linktype,
+            '_TsharkConnector_version': self._version,
+        }
+
+    def __setstate__(self, state: Dict):
+        """
+        Handling of runtime specific object attributes for pickling.
+
+        :param state: The dict of this object got from pickle.load()
+        :return:
+        """
+        self._linktype = state['_TsharkConnector_linktype']
+        self._version = state['_TsharkConnector_version']
+        self._tsharkqueue = Queue()
+        self._tempfile = None
+        self._tempreader = None
+        self._tshark = None
+
+class TsharkConnector(TsharkBase):
     """
     Class to manage a tshark process and encapsulate the communication with the process' input and output.
 
@@ -31,28 +102,12 @@ class TsharkConnector(object):
     # -o tcp.analyze_sequence_numbers:FALSE :
     #       prevent error messages associated with the circumstance that it is no true trace tshark gets to dissect
     #       here. Spares the necessity of restarting the tshark process after every packet.
-    __tsharkline = ["/usr/bin/tshark", "-Q", "-a", "duration:600", "-l", "-n", "-i", "-", "-T", "json", "-x",
+    __tsharkline = [_binary(), "-Q", "-a", "duration:600", "-l", "-n", "-i", "-", "-T", "json", "-x",
                   "-o", "tcp.analyze_sequence_numbers:FALSE"]
 
     def __init__(self, linktype : int):
-        self.__linktype = linktype
-        self.__tshark = None  # type: Union[subprocess.Popen, None]
-        self.__tsharkqueue = Queue()
-        self.__tempfile = None  # type: Union[io.BufferedRandom, None]
-        self.__tempreader = None  # type: Union[io.BufferedReader, None]
-        self.__version = None
-        logging.getLogger(__name__).setLevel(logging.DEBUG)
-
-
-    @property
-    def linktype(self):
-        return self.__linktype
-
-
-    @property
-    def version(self):
-        return self.__version
-
+        super().__init__()
+        self._linktype = linktype
 
     def writePacket(self, paketdata: bytes):
         """
@@ -69,7 +124,6 @@ class TsharkConnector(object):
         cmd.stdin.write(packet)  # stdin type: io.BufferedWriter
         cmd.stdin.write(paketdata)
         cmd.stdin.flush()
-
 
     @staticmethod
     def __readlines(pipe: io.BufferedReader, queue: Queue):
@@ -115,7 +169,6 @@ class TsharkConnector(object):
                     time.sleep(.01)
                 break
 
-
     def readPacket(self):
         """
         Read a dissected packet definition from the queue.
@@ -124,14 +177,15 @@ class TsharkConnector(object):
         :raises ValueError: A ValueError if the JSON was incomplete.
         :return: A JSON string, trimmed and superficially validated.
         """
-        assert self.__tempreader is not None and not self.__tempreader.closed, "Call writePacket() first"
+        logger = logging.getLogger(__name__)
+        assert self._tempreader is not None and not self._tempreader.closed, "Call writePacket() first"
 
         import threading
-        readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self.__tempreader, self.__tsharkqueue))
+        readThread = threading.Thread(target=TsharkConnector.__readlines, args=(self._tempreader, self._tsharkqueue))
         readThread.start()
         logging.getLogger(__name__).info("Wait for queue to fill from the tshark-pipe...")
         for timeout in range(20):
-            if self.__tsharkqueue.empty():
+            if self._tsharkqueue.empty():
                 time.sleep(.05)
                 logging.getLogger(__name__).debug(f"Wait a little for queue to fill... {timeout:02d}")
             else:
@@ -139,14 +193,19 @@ class TsharkConnector(object):
         print("Wait for tshark output (max 20s)...")
         readThread.join(20.0)
 
-        if readThread.is_alive() or self.__tsharkqueue.empty():
+        if readThread.is_alive() or self._tsharkqueue.empty():
             raise TimeoutError("tshark timed out with no result.")
 
         logging.getLogger(__name__).info("Queue filled. Capture tshark JSON output.")
 
         tjson = ""
-        while not self.__tsharkqueue.empty():
-            tjson += self.__tsharkqueue.get_nowait().decode("utf-8")
+        while not self._tsharkqueue.empty():
+            queueEntry = self._tsharkqueue.get_nowait()
+            try:
+                tjson += queueEntry.decode("utf-8")
+            except UnicodeDecodeError as e:
+                logger.info(f"Ignored and replaced offending character due to {e}")
+                tjson += queueEntry.decode("utf-8", "replace")
 
         if tjson == ']\n':
             return None
@@ -165,7 +224,6 @@ class TsharkConnector(object):
 
         return tjsonS
 
-
     def _retrieveProcess(self) -> subprocess.Popen:
         """
         Retrieve the running tshark process or start a new one if none is open.
@@ -173,33 +231,32 @@ class TsharkConnector(object):
         :return: A running tshark process, to await packets written to it via :func:`_tsharkWritePacket()`.
         """
         # if there is a tshark process running...
-        if self.__tshark is not None and self.__tshark.poll() is None \
-            and (self.__tempfile is None or self.__tempreader is None
-                 or self.__tempfile.closed or self.__tempreader.closed):
-                # ... there must also be a open self.__tempfile and self.__tempreader
+        if self._tshark is not None and self._tshark.poll() is None \
+            and (self._tempfile is None or self._tempreader is None
+                 or self._tempfile.closed or self._tempreader.closed):
+                # ... there must also be a open self._tempfile and self._tempreader
                 self.terminate(2)
-                # print("Terminated tshark", self.__tshark.poll())
+                # print("Terminated tshark", self._tshark.poll())
 
-        if self.__tshark is None or self.__tshark.poll() is not None:
-            self.__version = TsharkConnector.checkTsharkCompatibility()[0]
+        if self._tshark is None or self._tshark.poll() is not None:
+            self._version = TsharkConnector.checkTsharkCompatibility()[0]
 
-            header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, self.__linktype)
+            header = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 0x7fff, self._linktype)
 
             # create tempfile
             # print("create tempfile")
-            self.__tempfile = NamedTemporaryFile()
-            self.__tempreader = open(self.__tempfile.name, "rb")
-            self.__tshark = subprocess.Popen(TsharkConnector.__tsharkline,
-                                        stdout=self.__tempfile, stdin=subprocess.PIPE)
-            self.__tshark.stdin.write(header)
+            self._tempfile = NamedTemporaryFile()
+            self._tempreader = open(self._tempfile.name, "rb")
+            self._tshark = subprocess.Popen(TsharkConnector.__tsharkline,
+                                        stdout=self._tempfile, stdin=subprocess.PIPE)
+            self._tshark.stdin.write(header)
             time.sleep(.3)
 
-        assert self.__tshark is not None and self.__tshark.poll() is None \
-               and self.__tempfile is not None and self.__tempreader is not None \
-               and not self.__tempfile.closed and not self.__tempreader.closed
+        assert self._tshark is not None and self._tshark.poll() is None \
+               and self._tempfile is not None and self._tempreader is not None \
+               and not self._tempfile.closed and not self._tempreader.closed
 
-        return self.__tshark
-
+        return self._tshark
 
     def terminate(self, wait=2):
         """
@@ -208,72 +265,39 @@ class TsharkConnector(object):
 
         :param wait: Wait for the process with timeout (see Popen.wait)
         """
-        if self.__tshark is not None and self.__tshark.poll() is None:  # poll returns None if tshark running
-            self.__tshark.terminate()
+        if self._tshark is not None and self._tshark.poll() is None:  # poll returns None if tshark running
+            self._tshark.terminate()
             if wait:
-                self.__tshark.wait(wait)
-                if self.__tshark.poll() is None:  # still running
-                    print("kill", self.__tshark.pid)
-                    self.__tshark.kill()
-                    if self.__tshark.poll() is None:  # still running
+                self._tshark.wait(wait)
+                if self._tshark.poll() is None:  # still running
+                    print("kill", self._tshark.pid)
+                    self._tshark.kill()
+                    if self._tshark.poll() is None:  # still running
                         raise ChildProcessError("tshark process could not be terminated.")
 
-        if self.__tempreader:
-            self.__tempreader.close()
-        if self.__tempfile:
-            self.__tempfile.close()
+        if self._tempreader:
+            self._tempreader.close()
+        if self._tempfile:
+            self._tempfile.close()
 
-        assert self.__tshark is None or self.__tshark.poll() is not None
-
+        assert self._tshark is None or self._tshark.poll() is not None
 
     def isRunning(self):
         """
         :return: whether a tshark process is running.
         """
-        return self.__tshark.poll() is None if self.__tshark else False
+        return self._tshark.poll() is None if self._tshark else False
 
 
-    @staticmethod
-    def checkTsharkCompatibility():
-        versionstring = subprocess.check_output(("tshark", "-v"))
-        versionlist = versionstring.split(maxsplit=4)
-        if versionlist[2] < b'2.1.1':
-            raise Exception('ERROR: The installed tshark does not support JSON output, which is required for '
-                            'dissection parsing. Found tshark version {}. '
-                            'Upgrade!\”'.format(versionlist[2].decode()))
-        if versionlist[2] not in (b'2.2.6', b'2.6.3', b'2.6.5', b'2.6.8', b'3.2.3', b'3.2.5'):
-            print("WARNING: Unchecked version {} of tshark in use! Dissections may be misfunctioning or faulty. "
-                  "Check compatibility of JSON output!\n".format(versionlist[2].decode()))
-            return versionlist[2], False
-        return versionlist[2], True
+class TsharkOneshot(TsharkBase):
+    __tsharkline = [_binary(), "-Q", "-l", "-n", "-T", "json", "-x",
+                  "-o", "tcp.analyze_sequence_numbers:FALSE", "-r"]
 
+    def __init__(self):
+        super().__init__()
+        self._version = TsharkBase.checkTsharkCompatibility()[0]
 
-    def __getstate__(self):
-        """
-        Handling of runtime specific object attributes for pickling. This basically omits all instances of
-            io.BufferedReader, io.BufferedRandom, and subprocess.Popen
-            that need to be freshly instanciated after pickle.load() anyway.
-
-        :return: The dict of this object for use in pickle.dump()
-        """
-        return {
-            '_TsharkConnector__linktype': self.__linktype,
-            '_TsharkConnector__version': self.__version,
-        }
-
-
-    def __setstate__(self, state: Dict):
-        """
-        Handling of runtime specific object attributes for pickling.
-
-        :param state: The dict of this object got from pickle.load()
-        :return:
-        """
-        self.__linktype = state['_TsharkConnector__linktype']
-        self.__version = state['_TsharkConnector__version']
-        self.__tsharkqueue = Queue()
-        self.__tempfile = None
-        self.__tempreader = None
-        self.__tshark = None
-
-
+    def readfile(self, pcapfilename):
+        tstdout = subprocess.check_output(type(self).__tsharkline + [pcapfilename])
+        jsontext = tstdout.decode("utf-8", "replace")
+        return jsontext

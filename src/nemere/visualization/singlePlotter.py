@@ -1,5 +1,6 @@
 from typing import List, Union, Tuple, Dict, Sequence
 import numpy
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from netzob.Model.Vocabulary.Symbol import Symbol
@@ -7,6 +8,7 @@ from netzob.Model.Vocabulary.Symbol import Symbol
 from nemere.visualization.plotter import MessagePlotter
 from nemere.validation.dissectorMatcher import MessageComparator
 from nemere.utils.loader import SpecimenLoader
+from nemere.utils.evaluationHelpers import uulmColors
 
 
 # noinspection PyMethodMayBeStatic
@@ -21,6 +23,8 @@ class SingleMessagePlotter(MessagePlotter):
         super().__init__(specimens, analysisTitle, isInteractive)
         plt.rc('xtick', labelsize=8)  # fontsize of the tick labels
         plt.rc('ytick', labelsize=8)  # fontsize of the tick labels
+        self._ax = plt.gca()
+        self._fig = plt.gcf()
 
 
     def plotAnalysis(self, analysisResults, compareValue = None, fieldEnds = None, labels = None):
@@ -44,7 +48,21 @@ class SingleMessagePlotter(MessagePlotter):
             raise NotImplementedError("Plotting fieldEnds and labels is not implemented.")
 
 
-    def plotColormesh(self, analysisResults: Union[List[List[float]], numpy.ndarray], fieldEnds: List[List[int]]=None):
+    def plotColormesh(self,
+                      analysisResults: Union[List[List[float]], numpy.ndarray],
+                      fieldEnds: List[List[int]]=None,
+                      valueDomain=(0,255), ylabel="byte value"):
+        """
+
+        :param analysisResults:
+        :param fieldEnds:
+        :param valueDomain: Use a tuple of two float values to change the normed color scale
+            to be continuous instead of discrete classes.
+        :param ylabel: Label for the colorbar legend.
+        :return:
+        """
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
         if isinstance(analysisResults, numpy.ndarray):
             paddedar = analysisResults
         else:
@@ -53,11 +71,43 @@ class SingleMessagePlotter(MessagePlotter):
             paddedar = numpy.array(
                 [line + [numpy.nan]*(mslen - len(line)) for line in analysisResults]
             )
+        paperheight = 8
+        paperwidth = max(16, paddedar.shape[1] * (paperheight * 0.90 / paddedar.shape[0]))
+        self.fig.set_size_inches(paperwidth,paperheight)
+        # plt.figure(figsize=(paperwidth,paperheight))
 
-        plt.pcolormesh(paddedar)
+        # optimize boundaries, colors and ticks for byte value range
+        cmap = mpl.cm.plasma # cubehelix, jet
+        if isinstance(valueDomain[0], float) or isinstance(valueDomain[1], float):
+            intervalNum = cmap.N
+        else:
+            intervalNum = int(valueDomain[1] - valueDomain[0] + 1)
+        boundaries = numpy.linspace(*valueDomain, intervalNum)
+        if intervalNum <= cmap.N:
+            norm = mpl.colors.BoundaryNorm(boundaries, cmap.N)
+        else:
+            norm = mpl.colors.Normalize(*valueDomain)
+        # pcm = plt.pcolormesh(paddedar, norm=norm, cmap=cmap)
+        # ensure square mesh elements/2D regular raster by using imshow
+        pcm = plt.imshow(paddedar, norm=norm, cmap=cmap)
+
         if fieldEnds:
             for msgnr, fe in enumerate(fieldEnds):
-                plt.scatter(fe, [msgnr + 0.5] * len(fe), color='black', marker='.', s=2)
+                # for pcolormesh, the coordinate needs to be (fe, [msgnr + 0.5])
+                plt.scatter(numpy.array(fe) - 0.5, [msgnr] * len(fe), color='white', marker='.', s=10)
+
+        tickSep = intervalNum//8
+        ticks = numpy.append(boundaries[::tickSep], boundaries[-1])
+        divider = make_axes_locatable(self.ax)
+        cax1 = divider.append_axes("right", size=0.15, pad=0.05)
+        self.fig.colorbar(pcm, ticks=ticks, boundaries=boundaries, cax=cax1)  # , values=list(range(255))
+        cax1.set_ylabel(ylabel)
+
+        self.ax.tick_params(axis='both', which='major', labelsize=8)
+        # xlim = plt.xlim()
+        # ylim = plt.ylim()
+        # plt.xlim(xlim[0] - 1, xlim[1] + 1)
+        # plt.ylim(ylim[0] - 1, ylim[1] + 1)
         plt.autoscale(tight=True)
 
 
@@ -179,7 +229,7 @@ class SingleMessagePlotter(MessagePlotter):
         #     # ax.plot([dcenter], [0.5], color='black', marker='.', markersize=6)
         #     ax.axvline(x=[0], **MessagePlotter.STYLE_FIELDENDLINE)
         # TODO change to one continuous bar plot
-        plt.bar(combinedDistances[0], combinedDistances[1], width=1.0, color="green")
+        plt.bar(combinedDistances[0], combinedDistances[1], width=1.0, color=uulmColors['uulm-mawi'])
         maxtrueticks = list()
         mintickdist = combinedDistances[0,-1] * 0.04  # the x coordinate of the last of the plot columns
         offset = maxTrueLens[0]
@@ -235,4 +285,15 @@ class SingleMessagePlotter(MessagePlotter):
         marginV = (bottom - top) * 0.05
         plt.text(left + marginH, top + marginV, text)
 
+
+    @property
+    def ax(self) -> plt.Axes:
+        """Convenience property for future change of the class to use something else then pyplot."""
+        return self._ax
+
+
+    @property
+    def fig(self) -> plt.Figure:
+        """Convenience property for future change of the class to use something else then pyplot."""
+        return self._fig
 
