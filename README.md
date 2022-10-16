@@ -75,6 +75,17 @@ This is highly experimental software and by no means guaranteed to be fit for pr
   Place your user in the "wireshark" group to enable tshark to run: `sudo gpasswd -a $USER wireshark`
 
 
+## Dockerfile
+
+There is a Dockerfile provided so that you can use Nemere without worrying about dependencies. The following code builds the image and starts a container with the directory bind as a volume so that input files can be easily used and generated reports can be easily accessed even after stoping the container.
+
+```
+git clone https://github.com/vs-uulm/nemesys.git
+cd nemesys
+docker build . -t nemere:latest
+docker run -ti --mount type=bind,source=$(pwd),target=/nemere/ nemere:latest
+```
+
 
 ## Sample scripts
 There are several scripts to provide a starting point to working with NEMESYS and FMS.

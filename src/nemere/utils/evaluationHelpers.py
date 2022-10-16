@@ -10,9 +10,9 @@ import os, csv, pickle, time
 from os.path import join, splitext, isfile, isdir, basename, exists, abspath
 from tabulate import tabulate
 
-from nemere import inferred4segment, markSegNearMatch
 from nemere.utils.loader import SpecimenLoader
 from nemere.validation.dissectorMatcher import MessageComparator, BaseComparator
+from nemere.visualization.simplePrint import inferred4segment, markSegNearMatch
 from nemere.inference.analyzers import *
 from nemere.inference.formatRefinement import isOverlapping
 from nemere.inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, \
@@ -187,7 +187,7 @@ def writePerformanceStatistics(specimens, clusterer, algos,
     csvpath = os.path.join(reportFolder, fileNameS + '.csv')
     csvWriteHead = False if os.path.exists(csvpath) else True
 
-    print('Write performance statistcs to {}...'.format(csvpath))
+    print('Write performance statistics to {}...'.format(csvpath))
     with open(csvpath, 'a') as csvfile:
         statisticscsv = csv.writer(csvfile)
         if csvWriteHead:
