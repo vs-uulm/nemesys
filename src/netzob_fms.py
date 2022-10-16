@@ -60,8 +60,8 @@ def getNetzobInference(l5msgs: List[AbstractMessage], minEquivalence=45):
 
 
 # noinspection PyShadowingNames
-def iterSimilarities(minSimilarity=40, maxSimilarity=60):
-    # type: () -> Dict[int, Tuple[Dict[netzob.Symbol, List[List[Tuple[str, int]]]], float]]
+def iterSimilarities(minSimilarity=40, maxSimilarity=60) \
+        -> Dict[int, Tuple[Dict[netzob.Symbol, List[List[Tuple[str, int]]]], float]]:
     """
     Iterate input parameter similarity threshold for clustering (minEquivalence = 0...100).
 
@@ -147,6 +147,10 @@ if __name__ == '__main__':
     parser.add_argument('--smax', type=int, help='maximum similarity threshold to iterate. Omit to only infer at the threshold of smin')
     parser.add_argument('-p', '--profile', help='profile the netzob run.',
                         action="store_true")
+    parser.add_argument('-l', '--layer', type=int, default=2,
+                        help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
+                             '(typically the payload of a transport protocol).')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
     args = parser.parse_args()
     if not isfile(args.pcapfilename):
         print('File not found: ' + args.pcapfilename)
@@ -156,8 +160,8 @@ if __name__ == '__main__':
     swstart = time.time()
     print('\nLoading ...')
 
-    specimens = SpecimenLoader(args.pcapfilename, 2, True)
-    comparator = MessageComparator(specimens, 2, True,
+    specimens = SpecimenLoader(args.pcapfilename, layer=args.layer, relativeToIP=args.relativeToIP)
+    comparator = MessageComparator(specimens, layer=args.layer, relativeToIP=args.relativeToIP,
                                failOnUndissectable=False, debug=debug)
     print('Loaded and dissected in {:.3f}s'.format(time.time() - swstart))
 

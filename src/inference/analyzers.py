@@ -9,12 +9,14 @@ import numpy
 import pandas
 from bitarray import bitarray
 from typing import Dict, List, Tuple, Union, Type
+from abc import abstractmethod
 
 from scipy.ndimage.filters import gaussian_filter1d
+from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 # The analyzer implementations heavily depend on the MessageAnalyzer base class
 # that itself is deeply intertwined with the MessageSegment class:
-from inference.segments import MessageAnalyzer, MessageSegment
+from inference.segments import MessageAnalyzer, MessageSegment, SegmentAnalyzer
 
 
 class NothingToCompareError(ValueError):
@@ -36,6 +38,10 @@ class NoneAnalysis(MessageAnalyzer):
     Class denoting a non-transforming analysis.
     Values remain None and only message is set.
     """
+    @property
+    def domain(self):
+        return None, None
+
     def analyze(self):
         pass
 
@@ -46,7 +52,13 @@ class BitCongruence(MessageAnalyzer):
 
     not unit-dependant, always byte-wise
     """
-    _startskip = 1
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip = 1
+
+    @property
+    def domain(self):
+        return 0,1
 
     def analyze(self):
         """
@@ -105,7 +117,9 @@ class BitCongruenceGauss(BitCongruence):
     """
     Noise reduced bitwise congruence: Simple Matching [Sokal & Michener].
     """
-    _bcvalues = None
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._bcvalues = None
 
     def setAnalysisParams(self, sigma=1.5):
         if isinstance(sigma, tuple):
@@ -133,11 +147,15 @@ class BitCongruenceGauss(BitCongruence):
         """
         Segment message by determining local maxima of sigma-1.5-gauss-filtered bit-congruence.
 
-        >>> hbg = BitCongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = BitCongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
@@ -179,7 +197,15 @@ class BitCongruenceGauss(BitCongruence):
 
 
 class BitCongruenceDelta(BitCongruence):
-    _bcvalues = None
+
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip = self._startskip + 1
+        self._bcvalues = None
+
+    @property
+    def domain(self):
+        return -1,1
 
     def analyze(self):
         """
@@ -192,7 +218,6 @@ class BitCongruenceDelta(BitCongruence):
         super().analyze()
         self._bcvalues = self._values
         self._values = MessageAnalyzer.tokenDelta(self._values)
-        self._startskip += 1
         assert self._startskip + len(self._values) == len(self._message.data), \
             "{} + {} != {}".format(self._startskip, len(self._values), len(self._message.data))
 
@@ -207,9 +232,12 @@ class BitCongruenceDelta(BitCongruence):
 
 
 class BitCongruenceDeltaGauss(BitCongruenceDelta):
-    _bcdvalues = None
     # _sensitivity = 0.33
     # """Sensitivity threshold for the smoothed extrema."""
+
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._bcdvalues = None
 
     def setAnalysisParams(self, sigma=1.5):
         self._analysisArgs = (sigma, )
@@ -336,6 +364,10 @@ class BitCongruenceDeltaGauss(BitCongruenceDelta):
 
 
 class BitCongruence2ndDelta(BitCongruenceDelta):
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        # self._startskip += 1
+
     def analyze(self):
         """
         2nd order delta of bitwise congruence. see :func:`MessageAnalyzer.bitCongruence()`
@@ -346,19 +378,19 @@ class BitCongruence2ndDelta(BitCongruenceDelta):
         """
         super().analyze()
         self._values = MessageAnalyzer.tokenDelta(self._values)
-        self._startskip += 1
 
 
 class BitCongruenceBetweenNgrams(BitCongruence):
     """
     Bit congruence for all bits within consecutive ngrams.
     """
-    _n = None
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._n = None
 
     def setAnalysisParams(self, n: Union[int, Tuple[int]]):
         self._n = n if not isinstance(n, tuple) else n[0]
         self._startskip = self._n
-
 
     def analyze(self):
         """
@@ -377,13 +409,14 @@ class BitCongruenceNgramMean(BitCongruence):
     """
     Cumulated bit congruences within each ngram of the message,
     """
-    _n = None
-    _ngramMean = list()
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._n = None
+        self._ngramMean = list()
 
     def setAnalysisParams(self, n: Union[int, Tuple[int]]):
         self._n = int(n) if not isinstance(n, tuple) else int(n[0])
         self._startskip = self._n
-
 
     def analyze(self):
         """
@@ -399,7 +432,6 @@ class BitCongruenceNgramMean(BitCongruence):
 
         super().analyze()
         self._ngramMean = [float(numpy.mean(bcn)) for bcn in ngrams(self._values, self._n)]
-
 
     @property
     def values(self):
@@ -432,7 +464,9 @@ class PivotBitCongruence(BitCongruence):
     similar in mean and deviation to be splitted altough they should be, while others are to diverse within a field,
     so they get fragmented way to much.
     """
-    _meanThreshold = .02
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._meanThreshold = .02
 
     def setAnalysisParams(self, args):
         if isinstance(args, tuple):
@@ -443,7 +477,6 @@ class PivotBitCongruence(BitCongruence):
     @property
     def analysisParams(self):
         return self._meanThreshold,
-
 
     def _recursivePivotMean(self, segment: MessageSegment):
         """
@@ -598,6 +631,9 @@ class SlidingNbcGradient(SlidingNmeanBitCongruence):
     """
     Gradient (centered finite difference, h=1) with numpy method.
     """
+    @property
+    def domain(self):
+        return -1,1
 
     def analyze(self):
         super().analyze()
@@ -617,10 +653,17 @@ class SlidingNbcDelta(SlidingNmeanBitCongruence):
         A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
         of equal length ant type.
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
+
+    @property
+    def domain(self):
+        return -1,1
+
     def analyze(self):
         super().analyze()
         halfWindow = self._analysisArgs[0]
-        self._startskip += 1
         self._values = [r-l for l,r in zip(self._values[:-halfWindow], self._values[halfWindow:])] + [numpy.nan]
         # self._values = numpy.ediff1d(self._values).tolist() + [numpy.nan]
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
@@ -630,9 +673,12 @@ class SlidingNbcDeltaGauss(SlidingNbcDelta):
     """
     Gauss filtered sliding n horizon bit congruence deltas.
     """
-    _bcvalues = None
-    _sensitivity = 0.5
-    """Sensitivity threshold for the smoothed extrema."""
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._bcvalues = None
+        self._sensitivity = 0.5
+        self._startskip += 1
+        """Sensitivity threshold for the smoothed extrema."""
 
     def setAnalysisParams(self, horizon=2, sigma=1.5):
         self._analysisArgs = (horizon, sigma)
@@ -646,7 +692,6 @@ class SlidingNbcDeltaGauss(SlidingNbcDelta):
         self._bcvalues = self._values
         bcv = numpy.array(self._values)
         self._values = list(gaussian_filter1d(bcv[~numpy.isnan(bcv)], sigma)) + [numpy.nan]
-        self._startskip += 1
 
     @property
     def bitcongruences(self):
@@ -661,11 +706,15 @@ class SlidingNbcDeltaGauss(SlidingNbcDelta):
         """
         Segment message by determining local extrema of sigma-s-gauss-filtered sliding n-byte-mean bit-congruence.
 
-        >>> hbg = HorizonBitcongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = HorizonBitcongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
@@ -757,11 +806,18 @@ class SlidingNbc2ndDelta(SlidingNmeanBitCongruence):
 
     Field boundaries have no obvious property in this 2nd order difference quotient (NTP/DNS).
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
+
+    @property
+    def domain(self):
+        return -1,1
+
     def analyze(self):
         super().analyze()
         self._values = [x2-2*x1+x0 for x2,x1,x0 in zip(self._values[2:], self._values[1:-1], self._values[:-2])]
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-        self._startskip += 1
 
 
 class HorizonBitcongruence(BitCongruence):
@@ -773,7 +829,11 @@ class HorizonBitcongruence(BitCongruence):
             self._analysisArgs = horizon
         else:
             self._analysisArgs = (int(horizon),)
+        self._startskip += self._analysisArgs[0]
 
+    @property
+    def domain(self):
+        return -1,1
 
     def analyze(self):
         """
@@ -784,7 +844,6 @@ class HorizonBitcongruence(BitCongruence):
         if not self._analysisArgs:
             raise ParametersNotSet('Analysis parameter missing: horizon.')
         horizon = self._analysisArgs[0]
-        self._startskip += horizon
 
         tokenlist = self._message.data  # tokenlist could also be list of ngrams.
         bitcongruences = BitCongruence.bitCongruenceBetweenTokens(tokenlist)
@@ -804,9 +863,9 @@ class HorizonBitcongruenceGauss(HorizonBitcongruence):
     """
     Gauss filtered multi-byte horizon bit congruence. This is already based on the DELTA between the mean of the BC of 2 bytes to the left of n and the BC at n.
     """
-
-
-    _bcvalues = None
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._bcvalues = None
 
     def setAnalysisParams(self, horizon=2, sigma=1.5):
         self._analysisArgs = (horizon, sigma)
@@ -830,11 +889,15 @@ class HorizonBitcongruenceGauss(HorizonBitcongruence):
         """
         Segment message by determining local maxima of sigma-1.5-gauss-filtered 2-byte-horizon bit-congruence.
 
-        >>> hbg = HorizonBitcongruenceGauss()
+        >>> from netzob.Model.Vocabulary.Messages.L4NetworkMessage import L4NetworkMessage
+        >>> tstmsg = '19040aec0000027b000012850a6400c8d23d06a2535ed71ed23d09faa4673315d23d09faa1766325d23d09faa17b4b10'
+        >>> l4m = L4NetworkMessage(bytes.fromhex(tstmsg))
+        >>> hbg = HorizonBitcongruenceGauss(l4m)
         >>> hbg.setAnalysisParams()
         >>> hbg.analyze()
         >>> spm = hbg.messageSegmentation()
         >>> print(b''.join([seg.bytes for seg in spm]).hex() == spm[0].message.data.hex())
+        True
 
         :return: Segmentation of this message based on this analyzer's type.
         """
@@ -904,11 +967,15 @@ class HorizonBitcongruenceDelta(HorizonBitcongruence):
     A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
         of equal length ant type.
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
+
     def analyze(self):
         super().analyze()
         self._values = numpy.ediff1d(self._values).tolist()
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-        self._startskip += 1
+
 
 
 class HorizonBitcongruence2ndDelta(HorizonBitcongruence):
@@ -918,11 +985,14 @@ class HorizonBitcongruence2ndDelta(HorizonBitcongruence):
 
     Field boundaries have no obvious property in this 2nd order difference quotient (NTP/DNS).
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
+
     def analyze(self):
         super().analyze()
         self._values = [x2-2*x1+x0 for x2,x1,x0 in zip(self._values[2:], self._values[1:-1], self._values[:-2])]
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-        self._startskip += 1
 
 
 class Autocorrelation(MessageAnalyzer):
@@ -930,7 +1000,21 @@ class Autocorrelation(MessageAnalyzer):
     Correlate the analysis of this message to itself,
     shifting over all bytes in the message.
     """
-    _am = None
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._am = None  # type: MessageAnalyzer
+
+    @property
+    def domain(self):
+        """
+        The correct domain cannot be determined for segments based on autocorrelation.
+        It is depenent on the length of the segment (dim):
+            sum( [analysisdomain]_1..dim * [analysisdomain]_1..dim )
+
+        :return: The domain for the whole message (>= domain of one segment {in} message)
+        """
+        return -len(self.message.data) * self._am.domain[0], \
+                len(self.message.data) * self._am.domain[1]
 
     def setAnalysisParams(self, analysisMethod: Type[MessageAnalyzer], *analysisArgs):
         self._am = MessageAnalyzer.findExistingAnalysis(analysisMethod, MessageAnalyzer.U_BYTE,
@@ -956,15 +1040,14 @@ class Autocorrelation(MessageAnalyzer):
         super().analyze()
 
 
-# noinspection PyAbstractClass
-class ValueProgression(MessageAnalyzer):
-    pass
-
-
 class CumulatedValueProgression(MessageAnalyzer):
     """
     Cumulation of value progression. Shows the subsequently cumulated values.
     """
+    @property
+    def domain(self):
+        return 0, (255 if self.unit == MessageAnalyzer.U_BYTE else 128) * len(self.message)
+
     def analyze(self):
         valuecumulation = [0]  # initial value
         if self._unit == MessageAnalyzer.U_NIBBLE:
@@ -983,6 +1066,10 @@ class CumulatedProgressionGradient(CumulatedValueProgression):
     """
     Gradient (centered finite difference, h=1) with numpy method.
     """
+    @property
+    def domain(self):
+        return 0, 255 if self.unit == MessageAnalyzer.U_BYTE else 128
+
     def analyze(self):
         super().analyze()
         self._values = numpy.gradient(self._values).tolist()
@@ -998,13 +1085,18 @@ class CumulatedProgressionDelta(CumulatedValueProgression):
     A difference quotient of n > 1 (8, 6, 4) may show regularly recurring 0s for consecutive fields
         of equal length ant type.
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
 
+    @property
+    def domain(self):
+        return 0, 255 if self.unit == MessageAnalyzer.U_BYTE else 128
 
     def analyze(self):
         super().analyze()
         self._values = numpy.ediff1d(self._values).tolist()
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-        self._startskip += 1
 
     def messageSegmentation(self) -> List[MessageSegment]:
         """
@@ -1056,20 +1148,44 @@ class CumulatedProgression2ndDelta(CumulatedValueProgression):
 
     Field boundaries have no obvious property in this 2nd order difference quotient (NTP/DNS).
     """
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip += 1
+
+    @property
+    def domain(self):
+        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
+        return -extrema, extrema
+
     def analyze(self):
         super().analyze()
         self._values = [x2-2*x1+x0 for x2,x1,x0 in zip(self._values[2:], self._values[1:-1], self._values[:-2])]
         # self._values = numpy.divide(numpy.diff(self._values, n=8), 8).tolist()
-        self._startskip += 1
 
 
-class ValueProgressionDelta(MessageAnalyzer):
+class ValueProgression(MessageAnalyzer):
+    @property
+    @abstractmethod
+    def domain(self):
+        return super().domain
+
+    @abstractmethod
+    def analyze(self):
+        super().analyze()
+
+
+class ValueProgressionDelta(ValueProgression):
     """
     Differential value progression. Shows the difference between subsequent values.
     """
-    _startskip = 1
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip = 1
 
-
+    @property
+    def domain(self):
+        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
+        return -extrema, extrema
 
     def analyze(self):
         valueprogression = []
@@ -1139,10 +1255,18 @@ class EntropyWithinNgrams(MessageAnalyzer):
     """
     Calculates the entropy of each message ngrams based on an alphabet of bytes or nibbles (4 bit).
     """
-    _n = None
+
+    @property
+    def domain(self):
+        from math import log
+        return 0, log(len(self._message.data) - self._n + 1, 2)
+
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._n = None
 
     def setAnalysisParams(self, n: Union[int, Tuple[int]]):
-        self._n = n if not isinstance(n, tuple) else n[0]
+        self._n = int(n if not isinstance(n, tuple) else n[0])
         self._startskip = self._n
 
     def analyze(self):
@@ -1158,7 +1282,14 @@ class EntropyWithinNgrams(MessageAnalyzer):
 
 
 class ValueVariance(MessageAnalyzer):
-    _startskip = 1
+    @property
+    def domain(self):
+        extrema = 255 if self.unit == MessageAnalyzer.U_BYTE else 128
+        return -extrema*2, extrema*2
+
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip = 1
 
     def analyze(self):
         """
@@ -1168,7 +1299,13 @@ class ValueVariance(MessageAnalyzer):
 
 
 class VarianceAmplitude(MessageAnalyzer):
-    _startskip = 2
+    @property
+    def domain(self):
+        return None
+
+    def __init__(self, message: AbstractMessage, unit=MessageAnalyzer.U_BYTE):
+        super().__init__(message, unit)
+        self._startskip = 2
 
     def analyze(self):
         """
@@ -1185,9 +1322,12 @@ class VarianceAmplitude(MessageAnalyzer):
 
 class ValueFrequency(MessageAnalyzer):
     @property
+    def domain(self):
+        return 0, len(self._message.data)
+
+    @property
     def values(self) -> Dict[int, int]:
         return self._values
-
 
     def analyze(self):
         """
@@ -1205,7 +1345,6 @@ class ValueFrequency(MessageAnalyzer):
                 bucket[char] = 1
         self._values = bucket
 
-
     def mostFrequent(self):
         """
         Most frequent byte values
@@ -1218,4 +1357,37 @@ class ValueFrequency(MessageAnalyzer):
         mostFreq = sorted([(frq, val) for val, frq in self._values.items()], key=lambda k: k[0])
         return mostFreq
 
+
+
+class Value(MessageAnalyzer):
+    """
+    Simply returns the byte values of the message.
+    """
+    @property
+    def domain(self):
+        return 0,255
+
+    def analyze(self):
+        """
+        Does nothing.
+        """
+        pass
+
+    @property
+    def values(self):
+        if self.unit == MessageAnalyzer.U_BYTE:
+            return list(self.message.data)
+        else:
+            return MessageAnalyzer.nibblesFromBytes(self.message.data)
+
+
+class Entropy(SegmentAnalyzer):
+    """
+    Calculates the entropy of each message ngrams based on an alphabet of bytes or nibbles (4 bit).
+    """
+    def value(self, start, end):
+        if self._unit == MessageAnalyzer.U_NIBBLE:
+            return [MessageAnalyzer.calcEntropy(MessageAnalyzer.nibblesFromBytes(self.message.data[start:end]))]
+        else:
+            return [MessageAnalyzer.calcEntropy(self.message.data[start:end])]
 

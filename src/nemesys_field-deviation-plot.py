@@ -32,6 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
                              '(typically the payload of a transport protocol).')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
     parser.add_argument('-c', '--columns', type=int, default=2,
                         help='Adjust width/aspect ratio for use in one USENIX column wide plot (1) or '
                              'for one USENIX column sideways leaving space for the caption (2)')
@@ -44,9 +45,9 @@ if __name__ == '__main__':
 
     print("Load messages...")
     specimens = SpecimenLoader(args.pcapfilename, layer=args.layer,
-                               relativeToIP=True if args.layer >=0 else False)
+                               relativeToIP=args.relativeToIP)
     comparator = MessageComparator(specimens, layer=args.layer,
-                               relativeToIP=True if args.layer >=0 else False,
+                               relativeToIP=args.relativeToIP,
                                failOnUndissectable=False, debug=debug)
 
     ########################
@@ -56,7 +57,7 @@ if __name__ == '__main__':
 
     inferenceTitle = 'bcDeltaGauss{:.1f}'.format(sigma)  # +hiPlateaus
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-    refinedPerMsg = refinements(segmentsPerMsg)
+    refinedPerMsg = refinements(segmentsPerMsg, None)
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
 

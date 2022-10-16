@@ -1,12 +1,22 @@
+"""
+DissectorMatcher, FormatMatchScore, and MessageComparator
+
+Methods to comparison of a list of messages' inferences and their dissections
+and match a message's inference with its dissector in different ways.
+"""
+
 from typing import List, Tuple, Dict, Iterable, Generator
 from collections import OrderedDict
 import copy
+
+from numpy import argmin
 
 from netzob import all as netzob
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 import visualization.bcolors as bcolors
 from validation.messageParser import ParsedMessage, ParsingConstants
+from inference.segments import TypedSegment
 
 
 class FormatMatchScore(object):
@@ -21,7 +31,7 @@ class FormatMatchScore(object):
     matchGain = None
     specificy = None
     nearWeights = None
-    meanDistance = None
+    meanDistance = None  # mean of "near" distances
     trueCount = None
     inferredCount = None
     exactCount = None
@@ -33,10 +43,11 @@ class FormatMatchScore(object):
 
 class MessageComparator(object):
     """
-    Formal and visual (?) comparison of a list of messages' inferences and their dissections.
+    Formal and visual comparison of a list of messages' inferences and their dissections.
 
-    Requires dissections been done in dissectorMatcher: (re-)move every functionality that requires direct interaction
-    with tshark and knowledge of layer, relativeToIP, and failOnUndissectable.
+    Functions that are closely coupled to the dissection: Interfaces with tshark to configure the call to it by
+    the parameters layer, relativeToIP, and failOnUndissectable and processes the output to directly know the
+    dissection result.
     """
     import utils.loader as sl
 
@@ -52,7 +63,7 @@ class MessageComparator(object):
         self.debug = debug
 
         # Cache messages that already have been parsed and labeled
-        self._messageCache = dict()  # type: Dict[bytes, ]
+        self._messageCache = dict()  # type: Dict[netzob.RawMessage, ]
         self._targetlayer = layer
         self._relativeToIP = relativeToIP
         self._failOnUndissectable = failOnUndissectable
@@ -61,9 +72,9 @@ class MessageComparator(object):
 
 
     def _dissectAndLabel(self, messages: Iterable[netzob.RawMessage]) \
-            -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
+            -> Dict[netzob.RawMessage, ParsedMessage]:
         """
-        :param messages: List of messages to be dissected
+        :param messages: List of messages to be dissected - needs to be hashable
         :return: dict of {message: format}, where format is a list of
             2-tuples describing the fields of this L2-message in their byte order
             each 2-tuple contains (field_type, field_length in byte)
@@ -75,16 +86,13 @@ class MessageComparator(object):
             raise NotImplementedError('PCAP Linktype with number {} is unknown'.format(self.baselayer))
 
         labeledMessages = dict()
-        toparse = list()
-        for msg in messages:
-            if msg.data not in self._messageCache:
-                # print("MessageCache miss for {}".format(msg.data))
-                toparse.append(msg)
+        toparse = [msg for msg in messages if msg not in self._messageCache]
+        # for msg in toparse: print("MessageCache miss for {}".format(msg.data))
         mparsed = ParsedMessage.parseMultiple(toparse, self._targetlayer, self._relativeToIP,
                                               failOnUndissectable=self._failOnUndissectable, linktype=self.baselayer)
         for m, p in mparsed.items():
             try:
-                self._messageCache[m.data] = p.getTypeSequence()
+                self._messageCache[m] = p
             except NotImplementedError as e:
                 if self._failOnUndissectable:
                     raise e
@@ -95,19 +103,23 @@ class MessageComparator(object):
                                 m.__class__.__name__)
 
             try:
-                labeledMessages[m] = self._messageCache[m.data]
+                labeledMessages[m] = self._messageCache[m]
             except KeyError:  # something went wrong in the last parsing attempt of m
                 if self._failOnUndissectable:
                     reparsed = ParsedMessage(m, self._targetlayer, self._relativeToIP,
                                              failOnUndissectable=self._failOnUndissectable)
-                    self._messageCache[m.data] = reparsed.getTypeSequence()
-                    labeledMessages[m] = self._messageCache[m.data]
+                    self._messageCache[m] = reparsed
+                    labeledMessages[m] = self._messageCache[m]
 
         return labeledMessages
 
 
     @property
-    def dissections(self):
+    def dissections(self) -> Dict[netzob.RawMessage, List[Tuple[str, int]]]:
+        return {message: dissected.getTypeSequence() for message, dissected in self._dissections.items()}
+
+    @property
+    def parsedMessages(self) -> Dict[netzob.RawMessage, ParsedMessage]:
         return self._dissections
 
 
@@ -332,18 +344,12 @@ class MessageComparator(object):
 
 
 
-
-
-
-
-
-
 class DissectorMatcher(object):
     """
     Incorporates methods to match a message's inference with its dissector in different ways.
 
-    The more low-level methods: Interfaces with tshark output to directly know about the dissection
-    and provide with layer, relativeToIP, and failOnUndissectable to its call.
+    Dissections been are done by MessageComparator so this class does not need direct interaction
+    with tshark nor any knowledge of layer, relativeToIP, and failOnUndissectable.
     """
 
     def __init__(self, mc: MessageComparator, inferredSymbol: netzob.Symbol, message:AbstractMessage=None):
@@ -408,11 +414,8 @@ class DissectorMatcher(object):
             ininscope = [infe for infe in self.__inferredFields if piv[0] <= infe <= piv[1]]
             if len(ininscope) == 0:
                 continue
-            inmindist = ininscope[0]
-            if len(ininscope) > 1:
-                for infe in ininscope:
-                    inmindist = min(abs(dife - infe), inmindist)
-            nearmatches[dife] = inmindist
+            closest = argmin([abs(dife - infe) for infe in ininscope]).astype(int)
+            nearmatches[dife] = ininscope[closest]
         return nearmatches
 
 
@@ -619,13 +622,14 @@ class DissectorMatcher(object):
             fms.specificyPenalty = specificyPenalty
             fms.matchGain = matchGain
             fms.nearWeights = nearweights
-            fms.meanDistance = numpy.mean(list(nearestdistances.values()))
+            fms.meanDistance = numpy.mean(list(nearestdistances.values())) if len(nearestdistances) > 0 else numpy.nan
             fms.trueCount = fieldcount
             fms.inferredCount = inferredcount
             fms.exactCount = exactcount
             fms.nearCount = nearcount
             fms.specificy = fieldcount - inferredcount
             fms.exactMatches = exactmatches
+            fms.nearMatches = nearmatches
 
             fmslist.append(fms)
         return fmslist

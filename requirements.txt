@@ -1,0 +1,13 @@
+humanhash
+netzob
+bitarray
+hdbscan
+sklearn
+numpy
+cython
+scapy
+IPython
+matplotlib
+pandas
+scipy
+tabulate
