@@ -42,36 +42,6 @@ analyses = {
 }
 
 
-# # raw nemesys - cft-121 "withoutrefinement"
-# sigmapertrace = {
-#     "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
-#     "dns_ictf2010_deduped-100.pcap"             : 0.6,
-#     "dns_ictf2010-new-deduped-100.pcap"         : 0.6,
-#     "nbns_SMIA20111010-one_deduped-100.pcap"    : 1.0,
-#     "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
-#     "smb_SMIA20111010-one_deduped-100.pcap"     : 0.6,
-#     "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
-#     "dns_ictf2010_deduped-982-1000.pcap"        : 0.6,
-#     "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
-#     "nbns_SMIA20111010-one_deduped-1000.pcap"   : 1.0,
-#     "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
-#     "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.6,
-#
-#     # assumptions derived from first traces
-#     "dhcp_SMIA2011101X-filtered_maxdiff-100.pcap": 0.6,
-#     "dns_ictf2010_maxdiff-100.pcap": 0.6,
-#     "dns_ictf2010-new_maxdiff-100.pcap": 0.6,
-#     "nbns_SMIA20111010-one_maxdiff-100.pcap": 1.0,
-#     "ntp_SMIA-20111010_maxdiff-100.pcap": 1.2,
-#     "smb_SMIA20111010-one-rigid1_maxdiff-100.pcap": 0.6,
-#     "dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap": 0.6,
-#     "dns_ictf2010_maxdiff-1000.pcap": 0.6,
-#     "dns_ictf2010-new_maxdiff-1000.pcap": 0.6,
-#     "nbns_SMIA20111010-one_maxdiff-1000.pcap": 1.0,
-#     "ntp_SMIA-20111010_maxdiff-1000.pcap": 1.2,
-#     "smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap": 0.6,
-# }
-
 sigmapertrace = {
     "dhcp_SMIA2011101X-filtered_maxdiff-1000.pcap": 0.4,
     "dns_ictf2010-new_maxdiff-1000.pcap": 0.9,

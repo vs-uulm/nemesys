@@ -296,6 +296,11 @@ class MultiMessagePlotter(MessagePlotter):
 
     def plotMultiSegmentLines(self, segmentGroups: List[Tuple[str, List[Tuple[str, TypedSegment]]]],
                               colorPerLabel=False):
+        """
+
+        :param segmentGroups: Groups of clusters of segments that should be plotted.
+        :param colorPerLabel: Flag to select whether segments should be colored accorrding to their label.
+        """
         import matplotlib.cm
 
         # make the leftover axes invisible

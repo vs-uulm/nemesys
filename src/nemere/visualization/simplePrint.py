@@ -1,3 +1,6 @@
+"""
+Helper methods and classes to generate human-readable output from the inference results.
+"""
 from collections import defaultdict
 from itertools import chain
 from time import strftime
@@ -16,6 +19,12 @@ from nemere.visualization import bcolors as bcolors
 
 
 def printMatrix(lines: Iterable[Iterable], headers: Iterable=None):
+    """
+    Print the two-dimensional Iterable in lines as matrix table, optionally with the given headers.
+
+    :param lines: Content to print
+    :param headers: Headers for the matrix
+    """
     ml = MatrixList()
     if headers:
         ml.headers = headers
@@ -63,6 +72,11 @@ def alignDescreteValues(listA: list, listB: list) -> Tuple[list, list]:
 
 
 def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
+    """
+    Print the two-dimensional Sequences of MessageSegments in a table with a index number as header.
+
+    :param sequence: two-dimensional Sequences of MessageSegments
+    """
     print(tabulate(((sg.bytes.hex() if sg is not None else '' for sg in msg) for msg in sequence),
                    headers=range(len(sequence[0])), showindex="always", disable_numparse=True))
 
@@ -80,6 +94,17 @@ def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
 
 
 def printMarkedBytesInMessage(message: AbstractMessage, markStart, markEnd, subStart=0, subEnd=None):
+    """
+    Print the given message and mark a substring from markStart to markEnd.
+    Optionally print only a substring of the message that must be at least as large as the marking.
+
+    :param message: The message whose hex-coded binary values are to be printed.
+    :param markStart: The start of the substring to be marked.
+    :param markEnd: The end of the substring to be marked.
+    :param subStart: The optional start of the substring to be printed.
+    :param subEnd: The optional end of the substring to be printed.
+    :return:
+    """
     if subEnd is None:
         subEnd = len(message.data)
     assert markStart >= subStart
@@ -99,6 +124,12 @@ def printMarkedBytesInMessage(message: AbstractMessage, markStart, markEnd, subS
 
 
 def markSegmentInMessage(segment: Union[MessageSegment, Template]):
+    """
+    Print a message with the given segment in the message marked (underlined).
+    Supports Templates by resolving them to their base segments.
+
+    :param segment: The segment to be marked. The message is implicitly extracted from the object.
+    """
     if isinstance(segment, MessageSegment):
         printMarkedBytesInMessage(segment.message, segment.offset, segment.nextOffset)
     else:
@@ -137,9 +168,11 @@ def markSegNearMatch(segment: Union[Iterable[MessageSegment], MessageSegment, Te
         cprinter = ComparingPrinter(comparator, [inf4seg])
         cprinter.toConsole([seg.message], (seg.offset, seg.nextOffset), context)
 
+    # # # # # Alternatives and usage examples:
+    #
     # # a simpler approach - without true fields marked as spaces
     # markSegmentInMessage(segment)
-
+    #
     # # get field number of next true field
     # tsm = trueSegmentedMessages[segment.message]  # type: List[MessageSegment]
     # fsnum, offset = 0, 0
@@ -147,7 +180,7 @@ def markSegNearMatch(segment: Union[Iterable[MessageSegment], MessageSegment, Te
     #     offset += tsm[fsnum].offset
     #     fsnum += 1
     # markSegmentInMessage(trueSegmentedMessages[segment.message][fsnum])
-
+    #
     # # limit to immediate segment context
     # posSegMatch = None  # first segment that starts at or after the recognized field
     # for sid, seg in enumerate(trueSegmentedMessages[segment.message]):
@@ -313,6 +346,13 @@ class SegmentPrinter(object):
         return ""
 
     def toTikz(self, selectMessages: Iterable[AbstractMessage] = None, styles = None):
+        """
+        Generate compilable tikz (LaTeX) code to visualize the given messages.
+
+        :param selectMessages: Messages to generate tikz code for.
+        :param styles: List of tikz styles to be included in the tikz environment preamble.
+        :return: The generated tikz/LaTeX code.
+        """
         if styles is None:
             styles = type(self)._basestyles.copy()
         else:
@@ -352,6 +392,14 @@ class SegmentPrinter(object):
         return texcode + "\n"
 
     def toTikzFile(self, selectMessages: Iterable[AbstractMessage] = None, styles = None, folder = None):
+        """
+        Generate compilable tikz (LaTeX) code to visualize the given messages and write into a file in the given folder.
+
+        :param selectMessages: Messages to generate tikz code for.
+        :param styles: List of tikz styles to be included in the tikz environment preamble.
+        :param folder: The folder to write the file to that contains the generated tikz/LaTeX code.
+        """
+
         from os.path import join, isdir, exists
         if folder is None:
             from ..utils.evaluationHelpers import reportFolder
@@ -501,6 +549,9 @@ class FieldtypeHelper(object):
 
 
 class FieldtypeComparingPrinter(ComparingPrinter):
+    """
+    Comprehensive class to encapsulate visualizations of segments from clusters in messages.
+    """
 
     def __init__(self, comparator: MessageComparator, ftclusters: List[FieldTypeTemplate]):
         # We populate the inferred segments from ftclusters ourselves right afterwards by _mapMessages2Segments().
@@ -590,6 +641,9 @@ class FieldtypeComparingPrinter(ComparingPrinter):
 
 
 class FieldClassesPrinter(SegmentPrinter):
+    """
+    Comprehensive class to encapsulate visualizations of segments from clusters in messages.
+    """
     def __init__(self, ftclusters: List[FieldTypeTemplate]):
         super().__init__(())
         self._ftHelper = FieldtypeHelper(ftclusters)

@@ -1,6 +1,8 @@
 """
 Batch handling of multiple segments.
 """
+from itertools import chain
+
 import numpy
 import copy
 from typing import List, Dict, Tuple, Union, Sequence, TypeVar, Iterable
@@ -10,7 +12,7 @@ from netzob.Model.Vocabulary.Symbol import Symbol, Field
 from nemere.utils.loader import BaseLoader
 from nemere.inference.segments import MessageSegment, HelperSegment, TypedSegment, AbstractSegment
 from nemere.inference.analyzers import MessageAnalyzer, Value
-from nemere.inference.templates import AbstractClusterer, TypedTemplate
+from nemere.inference.templates import AbstractClusterer, TypedTemplate, DelegatingDC, MemmapDC
 
 
 def segmentMeans(segmentsPerMsg: List[List[MessageSegment]]):
@@ -126,6 +128,10 @@ def segmentsFromLabels(analyzer, labels) -> Tuple[TypedSegment]:
 
 
 def segmentsFromSymbols(symbols: List[Symbol]):
+    """
+    :param symbols: List of Netzob symbols.
+    :return: List of messages represented by a list of segments each.
+    """
     msgflds = [(msg,flds) for s in symbols for msg,flds in s.getMessageCells().items()]
     segmentedMessages = []
     for msg,flds in msgflds:
@@ -319,9 +325,140 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[Li
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    return nemetylRefinements(segmentsPerMsg)
+    return zerocharPCAmocoSFrefinements(segmentsPerMsg, **kwargs)
 
 
+def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :return: refined segments in list per message
+    """
+    from itertools import chain
+    from nemere.inference.formatRefinement import RelocatePCA, CropDistinct
+
+    print("Refine segmentation (2xPCA, moco refinements)...")
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+
+    # charPass1 = charRefinements(segmentsPerMsg)
+    # refinedSegmentedMessages = RelocatePCA.refineSegments(charPass1, dc)
+
+    # pcaRound = charRefinements(segmentsPerMsg)
+    pcaRound = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+    for _ in range(2):
+        refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
+
+    # additionally perform most common values refinement
+    moco = CropDistinct.countCommonValues(pcaRound)
+    print([m.hex() for m in moco])
+    refinedSM = list()
+    for msg in pcaRound:
+        croppedMsg = CropDistinct(msg, moco).split()
+        refinedSM.append(croppedMsg)
+
+    charPass2 = charRefinements(refinedSM)
+
+    return charPass2
+
+
+def pcaMocoDoubleCharRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
+                       ) -> List[List[MessageSegment]]:
+    """
+    perform the char refinements after 2 passes of PCA and moco.
+    TODO Is this better than pcaMocoRefinements
+
+    :param segmentsPerMsg:
+    :param kwargs:
+    :return:
+    """
+    import nemere.inference.formatRefinement as refine
+
+    print("Refine segmentation (2xPCA, moco refinements)...")
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    pcaRound = charRefinements(valueSegsPerMsg)
+    for _ in range(2):
+        refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = refine.RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
+
+    # additionally perform most common values refinement
+    moco = refine.CropDistinct.countCommonValues(pcaRound)
+    print([m.hex() for m in moco])
+    refinedSM = list()
+    for msg in pcaRound:
+        croppedMsg = refine.CropDistinct(msg, moco).split()
+        refinedSM.append(croppedMsg)
+    return charRefinements(refinedSM)
+
+
+def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: is forwarded to RelocatePCA.refineSegments
+    :return: refined segments in list per message
+    """
+    from itertools import chain
+    from nemere.inference.formatRefinement import RelocatePCA
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+
+    print("Refine segmentation (PCA refinements)...")
+
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    # char refinement before and after
+    charPass1 = charRefinements(valueSegsPerMsg)
+    refinementDC = DelegatingDC(list(chain.from_iterable(charPass1)))
+    refinedSM = RelocatePCA.refineSegments(charPass1, refinementDC, **kwargs)
+    charPass2 = charRefinements(refinedSM)
+
+    return charPass2
+
+
+def pcaPcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation using specific improvements for the feature:
+    Inflections of gauss-filtered bit-congruence deltas.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: is forwarded to RelocatePCA.refineSegments
+    :return: refined segments in list per message
+    """
+    from itertools import chain
+    from nemere.inference.formatRefinement import RelocatePCA
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+
+    print("Refine segmentation (2xPCA refinements)...")
+
+    # char refinement before and after
+    # pcaRound = charRefinements(segmentsPerMsg)
+    pcaRound = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    for _ in range(2):
+        refinementDC = DelegatingDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
+    refinedSM = charRefinements(pcaRound)
+
+    return refinedSM
 
 
 def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
@@ -353,6 +490,25 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
     return newstuff
 
 
+def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+    import nemere.inference.formatRefinement as refine
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+    littleEndian = "littleEndian" in kwargs and kwargs["littleEndian"] == True
+
+    print("Refine segmentation (zero-slices refinements)...")
+
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    combinedRefinedSegments = [refine.BlendZeroSlices(list(msg)).blend(littleEndian=littleEndian)
+                               for msg in valueSegsPerMsg]
+    return baseRefinements(combinedRefinedSegments)
+
+
+def zeroPCARefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
+    return pcaRefinements(zeroBaseRefinements(segmentsPerMsg))
 
 
 def nemetylRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
@@ -444,6 +600,151 @@ def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
         refinedPerMsg.append(charSplited)
 
     return refinedPerMsg
+
+
+def zerocharPCAmocoRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
+                       ) -> List[List[MessageSegment]]:
+    import nemere.inference.formatRefinement as refine
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+    littleEndian = "littleEndian" in kwargs and kwargs["littleEndian"] == True
+
+    print("Refine segmentation (zero-slices, char, 2xPCA, moco refinements)...")
+
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    # .blend(True) to omit single zeros: in most cases (dns, nbns, smb), quality deteriorates.
+    zeroSlicedMessages = [refine.BlendZeroSlices(list(msg)).blend(False, littleEndian) for msg in valueSegsPerMsg]
+    pcaRound = [refine.CropChars(segs).split() for segs in zeroSlicedMessages]
+    for _ in range(2):
+        refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = refine.RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
+
+    # additionally perform most common values refinement
+    moco = refine.CropDistinct.countCommonValues(pcaRound)
+    print([m.hex() for m in moco])
+    refinedSM = list()
+    for msg in pcaRound:
+        croppedMsg = refine.CropDistinct(msg, moco).split()
+        refinedSM.append(croppedMsg)
+
+    # decreases FMS slightly for dhcp and smb
+    # refinedSM = charRefinements(refinedSM)
+
+    return refinedSM
+
+    # now needs recalculation of segment distances in dc
+
+
+def pcaMocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
+                                 ) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation according to the (unpublished) NEMEPCA paper method using specific improvements
+    for the feature: Inflections of gauss-filtered bit-congruence deltas.
+        * PCA
+        * CropDistinct
+        * SplitFixedv2
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: For evaluation:
+        * comparator: Encapsulated true field bounds to compare results to.
+        * reportFolder: For evaluation: Destination path to write results and statistics to.
+        * collectedSubclusters: For evaluation: Collect the intermediate (sub-)clusters generated during
+        the analysis of the segments.
+        * and others accepted by refine.RelocatePCA.refineSegments()
+    :return: refined segments in list per message
+
+    :raises ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
+    """
+    import nemere.inference.formatRefinement as refine
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+
+    print("Refine segmentation (PCA, CropDistinct, SplitFixedv2 refinements)...")
+
+    pcaRound = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+    for _ in range(1):
+        refinementDC = MemmapDC(list(chain.from_iterable(pcaRound)))
+        pcaRound = refine.RelocatePCA.refineSegments(pcaRound, refinementDC, **kwargs)
+
+    # additionally perform most common values refinement
+    moco = refine.CropDistinct.countCommonValues(pcaRound)
+    print([m.hex() for m in moco])
+    refinedSM = list()
+    for msg in pcaRound:
+        croppedMsg = refine.CropDistinct(msg, moco).split()
+        # and: first segments that are longer than 2 and at least two bytes are less than \x10
+        # (that have the first two bytes being non-zero)
+        if croppedMsg[0].length > 2 and sum(b < 0x10 for b in croppedMsg[0].bytes) >= 2:
+            splitfixed = refine.SplitFixed(croppedMsg).split(0, 1)
+            refinedSM.append(splitfixed)
+        else:
+            refinedSM.append(croppedMsg)
+    return refinedSM
+
+def zerocharPCAmocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
+                                 ) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation according to the (unpublished) NEMEPCA paper method using specific improvements
+    for the feature: Inflections of gauss-filtered bit-congruence deltas.
+        * NEMESYS
+        * NullBytes
+        * CropChars
+        * PCA
+        * CropDistinct
+        * SplitFixedv2
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: For evaluation:
+        * comparator: Encapsulated true field bounds to compare results to.
+        * reportFolder: For evaluation: Destination path to write results and statistics to.
+        * collectedSubclusters: For evaluation: Collect the intermediate (sub-)clusters generated during
+        the analysis of the segments.
+        * and others accepted by refine.RelocatePCA.refineSegments()
+    :return: refined segments in list per message
+
+    :raises ClusterAutoconfException: In case no clustering can be performed due to failed parameter autodetection.
+    """
+    import nemere.inference.formatRefinement as refine
+
+    if "collectedSubclusters" in kwargs:
+        kwargs["collectEvaluationData"] = kwargs["collectedSubclusters"]
+        del kwargs["collectedSubclusters"]
+    littleEndian = "littleEndian" in kwargs and kwargs["littleEndian"] == True
+
+    print("Refine segmentation (NullBytes, CropChars)...")
+
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+
+    # .blend(True) to omit single zeros: in most cases (dns, nbns, smb), quality deteriorates.
+    zeroSlicedMessages = [refine.BlendZeroSlices(list(msg)).blend(False, littleEndian) for msg in valueSegsPerMsg]
+    pcaRound = [refine.CropChars(segs).split() for segs in zeroSlicedMessages]
+    return pcaMocoSFrefinements(pcaRound, **kwargs)
+
+def entropymergeZeroCharPCAmocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
+                                 ) -> List[List[MessageSegment]]:
+    import nemere.inference.formatRefinement as refine
+
+    print("Refine segmentation (Merge consecutive random segments)...")
+    valueSegsPerMsg = MessageAnalyzer.convertAnalyzers(segmentsPerMsg, Value)
+    entropyMergedMessages = None
+    newMergedMessages = valueSegsPerMsg
+    # repeat merging as long as there are segments to merge left that match the conditions
+    while newMergedMessages != entropyMergedMessages:
+        entropyMergedMessages = newMergedMessages
+        newMergedMessages = [refine.EntropyMerger(list(msg)).merge() for msg in entropyMergedMessages]
+    refinedMessages = zerocharPCAmocoSFrefinements(newMergedMessages, **kwargs)
+    return refinedMessages
+    # return [refine.EntropyMerger(list(msg)).merge() for msg in refinedMessages]
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # #  End: Refinements # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 T = TypeVar('T')
@@ -619,6 +920,12 @@ def filterSegments(segments: Iterable[MessageSegment]) -> List[MessageSegment]:
     return filteredSegments
 
 def isExtendedCharSeq(values: bytes, meanCorridor=(50, 115), minLen=6):
+    """
+    :param values: Byte values to test for being a character sequence.
+    :param meanCorridor: Corridor of allowed mean values of non-null values in the bytes
+    :param minLen: Minimum length of the byte string to be considered as a character sequence.
+    :return: The given bytes string is likely a character sequence.
+    """
     vallen = len(values)
     nonzeros = [v for v in values if v > 0x00]
     return (vallen >= minLen
@@ -655,12 +962,13 @@ def filterChars(segments: Iterable[AbstractSegment], meanCorridor=(50, 115), min
 
 def wobbleSegmentInMessage(segment: MessageSegment):
     """
-    At start for now.
+    "Wobbles" segment byte values against its own start offsets.
 
-    For end if would be, e. g.: if segment.nextOffset < len(segment.message.data):  segment.nextOffset + 1
+    TODO Instead of the start offsets, for the end if would be, e. g.:
+        if segment.nextOffset < len(segment.message.data):  segment.nextOffset + 1
 
-    :param segment:
-    :return:
+    :param segment: Segment to wobble
+    :return: Wobbled segments
     """
     wobbles = [segment]
 

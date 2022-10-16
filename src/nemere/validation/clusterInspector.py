@@ -1,10 +1,10 @@
 import math
 from collections import Counter, MutableSequence
-from itertools import combinations
+from itertools import combinations, chain
 from typing import List, Iterable, Sequence, Tuple, Union
 
 import scipy.stats
-import numpy, re
+import numpy, pandas, re
 from networkx import Graph
 from networkx.algorithms.components.connected import connected_components
 from tabulate import tabulate
@@ -13,11 +13,16 @@ from nemere.inference.segmentHandler import segments2types, filterChars
 from nemere.inference.segments import MessageSegment, TypedSegment, AbstractSegment
 from nemere.inference.templates import DelegatingDC, AbstractClusterer, Template, TypedTemplate, FieldTypeTemplate
 from nemere.utils.loader import SpecimenLoader
-from nemere.utils.baseAlgorithms import tril
+from nemere.utils.evaluationHelpers import StartupFilecheck
+from nemere.utils.baseAlgorithms import ecdf, tril
 from nemere.visualization.distancesPlotter import DistancesPlotter
+from nemere.visualization.multiPlotter import MultiMessagePlotter
 
 
 class ClusterLabel(object):
+    """
+    Helper to generate cluster labels from cluster properties.
+    """
     def __init__(self, clusterNumber: Union[None, str, int] = None):
         self.clusterNumber = None  # type: Union[None, str]
         if clusterNumber is None:
@@ -79,7 +84,7 @@ class ClusterLabel(object):
             return f"tf{self.clusterNumber}"
 
     def toString(self):
-        """More classical string representation than repr"""
+        """More classical string representation than `__repr__()`"""
         if self.isNoise:
             if self.analysisTitle and self.lengthsString and self.clusterSize:
                 return '{} ({} bytes), Noise: {} Seg.s'.format(self.analysisTitle, self.lengthsString, self.clusterSize)
@@ -107,6 +112,9 @@ class ClusterLabel(object):
 
     @property
     def mostFrequentRatio(self) -> Union[None, float]:
+        """
+        :return: The most frequent field type in the cluster. Requires `self.mostFrequentTypes` to be set.
+        """
         if isinstance(self.mostFrequentTypes, Sequence):
             return self.mostFrequentTypes[0][1] / sum(s for t, s in self.mostFrequentTypes)
         return None
@@ -114,19 +122,19 @@ class ClusterLabel(object):
 
 class SegmentClusterCauldron(object):
     """
-    Container class for results of the clustering of segments
+    Container class for results of the clustering of segments.
     """
     noise: List[AbstractSegment]
     clusters: List[List[AbstractSegment]]
 
     def __init__(self, clusterer: AbstractClusterer, analysisTitle: str):
         """
-        Cluster segments according to the distance of their feature vectors.
+        Cluster segments according to the dissimilarities of their feature vectors.
         Keep and label segments classified as noise.
 
         Start post processing of clusters (splitting, merging, singular/regular clusters, ...) after the desired
         preparation of clusters (e.g., by extractSingularFromNoise, appendCharSegments, ...) by calling
-        **clustersOfUniqueSegments()**
+        `clustersOfUniqueSegments()`
         before advanced function are available.
 
         :param clusterer: Clusterer object that contains all the segments to be clustered
@@ -163,13 +171,13 @@ class SegmentClusterCauldron(object):
                     self.clusters.append([self.noise.pop(idx)])  # .baseSegments
 
     def appendCharSegments(self, charSegments: List[AbstractSegment]):
-        """Append the given char segments to the cluster container. Needs """
+        """Append the given char segments to the cluster container."""
         if len(charSegments) > 0:
             self.clusters.append(charSegments)
 
     @staticmethod
     def truncateList(values: Iterable, maxLen=5):
-        """Truncate a list of values if its longer than maxLen by adding ellipsis."""
+        """Truncate a list of values if its longer than maxLen by adding ellipsis dots."""
         output = [str(v) for v in values]
         if len(output) > maxLen:
             return output[:2] + ["..."] + output[-2:]
@@ -180,9 +188,9 @@ class SegmentClusterCauldron(object):
     def clustersOfUniqueSegments(self):
         """
         Consolidate cluster contents so that the same value in different segments is only represented once per cluster.
-        The clusters are also stored in the instance as property self.unisegClusters
+        The clusters are also stored in the instance as property `self.unisegClusters`
 
-        :return: structure of segments2clusteredTypes
+        :return: structure of `segments2clusteredTypes`
         """
         segmentClusters = [   # identical to the second iteration of segments2clusteredTypes()
             ( self._clusterLabel(segs), type(self)._segmentsLabels(segs) )
@@ -226,7 +234,7 @@ class SegmentClusterCauldron(object):
     def _regularAndSingularClusters(self):
         """
         Fill lists with clusters that contain at least three distinct values (regular) and less (singular).
-        see also nemere.inference.segmentHandler.extractEnumClusters()
+        see also `nemere.inference.segmentHandler.extractEnumClusters()`
         """
         self.regularClusters = SegmentClusters(self.clusterer.distanceCalculator)
         self.singularClusters = SegmentClusters(self.clusterer.distanceCalculator)
@@ -288,6 +296,9 @@ class SegmentClusterCauldron(object):
             return cLabel
 
     def exportAsTemplates(self):
+        """
+        :return: List of field type templates generated from the clusters in this cauldron.
+        """
         fTypeTemplates = list()
         for i in self.regularClusters.clusterIndices:
             # generate FieldTypeTemplates (padded nans) - Templates as is
@@ -322,7 +333,7 @@ class TypedSegmentClusterCauldron(SegmentClusterCauldron):
 
     def __init__(self, clusterer: AbstractClusterer, analysisTitle: str):
         """
-        Cluster segments according to the distance of their feature vectors.
+        Cluster segments according to the dissimilarities of their feature vectors.
         Keep and label segments classified as noise.
 
         :param clusterer: Clusterer object that contains all the segments to be clustered
@@ -393,6 +404,11 @@ class TypedSegmentClusterCauldron(SegmentClusterCauldron):
 
     @staticmethod
     def getMostFrequentTypes(cluster: List[TypedSegment]):
+        """
+        Determine the most frequent field types from the given list of typed segments.
+        :param cluster: List of typed segments
+        :return: Sorted list of most frequent types as tuples of a type and its count.
+        """
         typeGroups = segments2types(cluster)
         return sorted(((ftype, len(tsegs)) for ftype, tsegs in typeGroups.items()),
                                    key=lambda x: -x[1])
@@ -431,71 +447,158 @@ class TypedSegmentClusterCauldron(SegmentClusterCauldron):
         return False
 
 class SegmentClusterContainer(MutableSequence):
-    """Container for Clusters of unique segments."""
+    """Container for clusters of unique segments."""
 
-    _il3q = 99  # parameter: percentile q to remove extreme outliers from distances (for std calc)
-    _il3t = .4  # parameter: threshold for the ratio of stds to indicate a linear chain
-    _il4t = 3.  # parameter: threshold for the ratio of the increase of the matrix traces of the sorted distance matrix
-                #               in direction of the largest extent of the cluster
+    _il3q = 99
+    """parameter: percentile q to remove extreme outliers from dissimilarities (for std calc)"""
+    _il3t = .4
+    """parameter: threshold for the ratio of stds to indicate a linear chain"""
+    _il4t = 3.
+    """
+    parameter: threshold for the ratio of the increase of the matrix traces of the sorted dissimilarity matrix
+    in direction of the largest extent of the cluster"""
 
     def __init__(self, dc: DelegatingDC):
+        """
+        Initialize an empty container for segment clusters.
+        :param dc: Distance calculator that contains entries for all segments that will be contained in any clusters
+            that will be added to this container.
+        """
         self._clusters = list()  # type: List[Tuple[ClusterLabel, List[Tuple[str, TypedSegment]]]]
         self._distanceCalculator = dc
 
     def insert(self, index: int, o: Tuple[ClusterLabel, List[Tuple[str, TypedSegment]]]) -> None:
-        # TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?) except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+        """
+        Insert the entry o before for the cluster with the given index.
+
+        TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?)
+          except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+
+        :param index: Cluster index.
+        :param o: Cluster tuple structure.
+        """
         self._clusters.insert(index, o)
 
     def __getitem__(self, i: int) -> Tuple[ClusterLabel, List[Tuple[str, TypedSegment]]]:
+        """
+        Return the entry for the cluster with the given index.
+
+        :param i: Cluster index.
+        :return: Cluster tuple structure.
+        """
         return self._clusters.__getitem__(i)
 
     def __setitem__(self, i: int, o: Tuple[ClusterLabel, List[Tuple[str, TypedSegment]]]) -> None:
-        # TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?) except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+        """
+        Set/replace the entry for the cluster with the given index with o.
+
+        TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?)
+          except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+
+        :param i: Cluster index.
+        :param o: Cluster tuple structure.
+        """
         self._clusters.__setitem__(i, o)
 
     def __delitem__(self, i: int) -> None:
+        """
+        Remove the cluster with the given index from this container.
+        :param i: Cluster index.
+        """
         self._clusters.__delitem__(i)
 
     def __len__(self) -> int:
+        """
+        :return: Number of clusters in this container.
+        """
         return self._clusters.__len__()
 
     def __contains__(self, o: Tuple[ClusterLabel, List[Tuple[str, TypedSegment]]]):
-        # TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?) except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+        """
+        Check if o exists in this container.
+
+        TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?)
+          except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+
+        :param o: Cluster tuple structure.
+        :return: True if the given cluster o exists in this container.
+        """
         return self._clusters.__contains__(o)
 
     def clusterContains(self, i: int, o: Tuple[str, TypedSegment]):
-        # TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?) except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+        """
+        Check if the entry o exists in the cluster given by the index.
+
+        TODO check if o[1] is already in cluster #i and do not do anything (raise an Error?)
+          except updating the element labels to [mixed] if they were not identical in o[1] and cluster[i][1]
+
+        :param i: Cluster index.
+        :param o: Cluster elements.
+        :return: True if o is in the cluster with the given index, False otherwise.
+        """
         for lab, ele in self._clusters[i][1]:
             if lab == o[0] and ele.values == o[1].values:
                 return True
         return False
 
     def clusterIndexOfSegment(self, segment: TypedSegment):
+        """
+        :param segment: Segment to search for.
+        :return: Index of the cluster that contains the given segment,
+          None if the segment is not in any of the clusters of this container.
+        """
         for ci in self.clusterIndices:
             if segment in self.clusterElements(ci):
                 return ci
         return None
 
     def clusterLabel(self, i: int) -> str:
+        """
+        :param i: Cluster index.
+        :return: Label of the cluster with the given index.
+        """
         return str(self._clusters[i][0])
 
     def clusterElements(self, i: int) -> List[TypedSegment]:
+        """
+        :param i: Cluster index.
+        :return: List of segments contained in the cluster with the given index.
+        """
         return [b for a,b in self._clusters[i][1]]
 
     @property
     def clusters(self):
+        """
+        :return: Raw list of clusters in this container.
+        """
         return self._clusters
 
     def dcSubMatrix(self, i: int):
+        """
+        :param i: Cluster index.
+        :return: Dissimilarity matrix for the cluster with the given index.
+        """
         return self._distanceCalculator.distancesSubset(self.clusterElements(i))
 
     def __repr__(self):
+        """
+        :return: Textual representation of this cluster container.
+        """
         return "\n".join(self.clusterLabel(i) for i in self.clusterIndices)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def _modClusterLabel(self, subc: List[Tuple[str, Union[AbstractSegment, Template]]],
                          hasGT: bool, clusterNumber: str, analysisTitle: str):
+        """
+        Prepare a new cluster label for the given cluster subc from its properties.
+
+        :param subc: Cluster to create a label for.
+        :param hasGT: Flag to indicate if ground truth information should be used. Requires TypedSegment in subc.
+        :param clusterNumber: Cluster index.
+        :param analysisTitle: Title of the analysis to use in the label.
+        :return: Label for the cluster with the given index.
+        """
         cLabel = ClusterLabel(clusterNumber)
         cLabel.analysisTitle = analysisTitle
         cLabel.lengthsString = " ".join(SegmentClusterCauldron.truncateList({seg.length for l, seg in subc}))
@@ -512,7 +615,7 @@ class SegmentClusterContainer(MutableSequence):
         """
         Split clusters if they have extremely polarized occurrences
         (e.g., many unique values, very few very high occurring values).
-        As pivot use ln(occSum). (Determination of a knee has some false positives
+        As pivot use `ln(occSum)`. (Determination of a knee has some false positives
             and is way too complex for its benefit).
         """
         splitClusters = list()
@@ -551,7 +654,7 @@ class SegmentClusterContainer(MutableSequence):
         epsilonDensityThreshold = 0.01
         neighborDensityThreshold = 0.002
 
-        # median values for the 1-nearest neighbor ("minimum" distance).
+        # median values for the 1-nearest neighbor ("minimum" dissimilarity).
         minmedians = [numpy.median([self._distanceCalculator.neighbors(ce, self.clusterElements(i))[1][1]
                                   for ce in self.clusterElements(i)])
                     for i in self.clusterIndices]
@@ -561,7 +664,8 @@ class SegmentClusterContainer(MutableSequence):
         cpDists = { (i, j): self._distanceCalculator.distancesSubset(self.clusterElements(i), self.clusterElements(j))
             for i, j in combinations(self.clusterIndices, 2) }
 
-        # in case of empty distances, the median may be requested from an empty list. This is no problem, thus ignore.
+        # In case of empty dissimilarities, the median may be requested from an empty list.
+        #   This is no problem, thus ignore.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             vals = list()
@@ -575,7 +679,7 @@ class SegmentClusterContainer(MutableSequence):
                 smallCluster = i if maxdists[i] < maxdists[j] else j
                 # extent of the smaller cluster
                 smallClusterExtent = maxdists[smallCluster]
-                # density as median distances in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
+                # density as median dissimilarityie in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
                 dists2linki = numpy.delete(self.dcSubMatrix(i)[coordmin[0]], coordmin[0])
                 dists2linkj = numpy.delete(self.dcSubMatrix(j)[coordmin[1]], coordmin[1])
                 densityi = numpy.median(dists2linki[dists2linki <= smallClusterExtent / 2])
@@ -583,10 +687,10 @@ class SegmentClusterContainer(MutableSequence):
 
                 vals.append((
                     (i,j),                                # 0: indices tuple
-                    trils[i].mean(), None, minmedians[i], # 1*, 2, 3*: of distances in cluster i
+                    trils[i].mean(), None, minmedians[i], # 1*, 2, 3*: of dissimilarities in cluster i
                     None,                                 # 4
-                    trils[j].mean(), None, minmedians[j], # 5*, 6, 7*: of distances in cluster j
-                    cpDists[(i, j)].min(),                # 8*: min of distances between i and j
+                    trils[j].mean(), None, minmedians[j], # 5*, 6, 7*: of dissimilarities in cluster j
+                    cpDists[(i, j)].min(),                # 8*: min of dissimilarities between i and j
                     None,                                 # 9
                     densityi,                             # 10*: density within epsilon around link segment in i
                     densityj                              # 11*: density within epsilon around link segment in j
@@ -638,13 +742,14 @@ class SegmentClusterContainer(MutableSequence):
     def trilFlat(self, i: int) -> numpy.ndarray:
         """
         :param i: cluster index
-        :return: The values of the lower triangle of the distance matrix of the given cluster omitting the diagonal
+        :return: The values of the lower triangle of the dissimilarity matrix of the given cluster omitting the diagonal
             as a list.
         """
         return tril(self.dcSubMatrix(i))
 
     def occurrences(self, i: int) -> List[int]:
         """
+        Count distinct values in a cluster.
 
         You may put this list in a Counter:
         >>> from collections import Counter
@@ -694,13 +799,64 @@ class SegmentClusterContainer(MutableSequence):
         """
         return len(self.clusterElements(i))
 
+    def traverseViaNearest(self, i: int):
+        """
+        Path through the cluster hopping from nearest neighbor to nearest neighbor that has not already been visited.
+        All segments are visited this way.
+
+        >>> from tabulate import tabulate
+        >>> from nemere.utils.baseAlgorithms import generateTestSegments
+        >>> from nemere.inference.templates import DelegatingDC
+        >>> from nemere.validation.clusterInspector import SegmentClusterContainer
+        >>> segments = generateTestSegments()
+        >>> dc = DelegatingDC(segments)
+        Calculated distances for 37 segment pairs in ... seconds.
+        >>> someclusters = SegmentClusterContainer(dc)
+        >>> someclusters.append(("Sample Cluster", list(("Some Type", s) for s in segments)))
+        >>> path = zip(*someclusters.traverseViaNearest(0))
+        >>> print(tabulate((path)))
+        ----------------------------------------------------------------  ---------
+        MessageSegment 4 bytes at (0, 4): 00000000 | values: (0, 0, 0...  1
+        MessageSegment 4 bytes at (0, 4): 01020304 | values: (1, 2, 3...  0.125
+        MessageSegment 4 bytes at (0, 4): 03020304 | values: (3, 2, 3...  0.214355
+        MessageSegment 3 bytes at (0, 3): 020304 | values: (2, 3, 4)      0.111084
+        MessageSegment 3 bytes at (0, 3): 010304 | values: (1, 3, 4)      0.367676
+        MessageSegment 2 bytes at (0, 2): 0204 | values: (2, 4)           0.0714111
+        MessageSegment 2 bytes at (0, 2): 0203 | values: (2, 3)           0.700684
+        MessageSegment 3 bytes at (0, 3): 250545 | values: (37, 5, 69)    0.57666
+        ----------------------------------------------------------------  ---------
+
+        :param i: Cluster index
+        :return: The path as a list of segments and the distances along this path
+        """
+        idxA, idxC, segA, segC = self.remotestSegments(i)
+        distances = self.dcSubMatrix(i)
+        numpy.fill_diagonal(distances, numpy.nan)
+        segmentReference = self.clusterElements(i)
+        if Counter(segmentReference).most_common(1)[0][1] > 1:
+            raise ValueError("Duplicate element in cluster.")
+        df = pandas.DataFrame(distances, index=segmentReference, columns=segmentReference)
+
+        segB = segA
+        path = [segA]
+        distsAlongPath = list()
+        while df.shape[0] > 1:
+            nearest = df[segB].idxmin(0)
+            path.append(nearest)
+            distsAlongPath.append(df.at[segB, nearest])
+            df.drop(segB, 0, inplace=True)
+            df.drop(segB, 1, inplace=True)
+            assert all(numpy.isnan(numpy.diag(df)))  # be sure we removed symmetrical
+            segB = nearest
+        return path, numpy.array(distsAlongPath)
+
     def maxDist(self, i: int):
         """
         :param i: Cluster index
-        :return: The maximum distance between any two segments in cluster i.
+        :return: The maximum dissimilarity between any two segments in cluster i.
         """
         if self.distinctValues(i) < 2:
-            # If cluster contains only one template, we define the (maximum) distance to itself to be zero.
+            # If cluster contains only one template, we define the (maximum) dissimilarity to itself to be zero.
             #   (Less than 1 template/segment should not happen, but we handle it equally and do not fail,
             #   should it happen.)
             return 0
@@ -710,7 +866,7 @@ class SegmentClusterContainer(MutableSequence):
 
     def remotestSegments(self, i: int):
         """
-        Determine the segment with the maximum sum of distances to all other segments (A)
+        Determine the segment with the maximum sum of dissimilarities to all other segments (A)
         and the segment farthest away from this (C).
 
         >>> from pprint import pprint
@@ -767,14 +923,26 @@ class SegmentClusterContainer(MutableSequence):
         return idxA, idxC, segA, segC
 
     def elementLengths(self, i: int) -> numpy.ndarray:
+        """
+        :param i: Cluster index.
+        :return: The lengths in bytes of the elements in cluster i.
+        """
         segLens = numpy.array(list({e.length for e in self.clusterElements(i)}))
         return segLens
 
     def charSegmentCount(self, i: int):
+        """
+        :param i: Cluster index.
+        :return: Number of character segments in cluster i.
+        """
         return len(filterChars(self.clusterElements(i)))
 
     @staticmethod
     def mostFrequentTypes(cluster: List[Tuple[str, TypedSegment]]):
+        """
+        :param cluster: Cluster as a list of labels and typed segments.
+        :return: Sorted list of the most frequent types extraced from the element labels.
+        """
         segLabelExtractor = re.compile(r"(\w*): (\d*) Seg.s")
         allLabels = {l for l,e in cluster}
         typeStats = [next(segLabelExtractor.finditer(l)).groups() for l in allLabels]
@@ -783,6 +951,11 @@ class SegmentClusterContainer(MutableSequence):
         return mostFrequentTypes
 
     def distancesSortedByLargestExtent(self, i: int):
+        """
+        :param i: Cluster index.
+        :return: Dissimilarities of all elements in the cluster with index i
+            sorted by the dissimilarity from the remotest segment in the cluster.
+        """
         smi = self.dcSubMatrix(i)
         dfari = smi[self.remotestSegments(i)[0]]
         cmi = self.clusterElements(i)
@@ -793,11 +966,11 @@ class SegmentClusterContainer(MutableSequence):
     def traceMeanDiff(self, i: int):
         """
         Difference of the first and the mean of all other diffs of all $k$-traces (sums of the
-            $k$th superdiagonals) of the sorted distance matrix for the segments in this cluster.
-            It is sorted by the distance from the remotest segment in the cluster.
+            $k$th superdiagonals) of the sorted dissimilarity matrix for the segments in this cluster.
+            It is sorted by the dissimilarity from the remotest segment in the cluster.
 
-        :param i:
-        :return:
+        :param i: Cluster index.
+        :return: Dissimilarity difference value.
         """
         #
         #
@@ -811,16 +984,111 @@ class SegmentClusterContainer(MutableSequence):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    def shapeIndicators(self, i: int):
+        path, distsAlongPath = self.traverseViaNearest(i)
+        maxD = self.maxDist(i)
+        distList = self.trilFlat(i)
 
+        # deal with extreme outliers for indiLinear3
+        distMask = distList < numpy.percentile(distList, type(self)._il3q)
+        diapMask = distsAlongPath < numpy.percentile(distsAlongPath, type(self)._il3q)
+        # standard deviation of all distances without extreme outliers (outside 99-percentile)
+        distStdwoO = numpy.std(distList[distMask], dtype=numpy.float64)
+        # standard deviation of distances along path without extreme outliers (outside 99-percentile)
+        diapStdwoO = numpy.std(distsAlongPath[diapMask], dtype=numpy.float64)
+
+        indiLinear1 = bool(sum(distsAlongPath) < maxD * math.log(len(path)))  # indicates probable linear chain
+        indiLinear3 = bool(diapStdwoO / distStdwoO < type(self)._il3t)  # indicates probable linear chain
+        indiChaotic = bool(sum(distsAlongPath) > maxD * 1.2 * math.log(len(path)))  # indicates probable blob/chaotic cluster
+
+        return indiLinear1, indiLinear3, indiChaotic
+
+    def indiLinear1(self, i: int):
+        return self.shapeIndicators(i)[0]
+
+    def indiLinear3(self, i: int):
+        return self.shapeIndicators(i)[1]
+
+    def indiLinear4(self, i: int):
+        return self.traceMeanDiff(i) < self._il4t
+
+    def indiChaotic(self, i: int):
+        return self.shapeIndicators(i)[2]
+
+    def isAddr(self, i: int):
+        return self.occurrenceLnPercentRank(i) < 35
+            # don't care about shape
+            #  and self.shapeIndicators(i)[1:] == (True, False)  # don't care about indicator 1
+
+    def isSequence(self, i: int):
+        return 70 <= self.occurrenceLnPercentRank(i) <= 92.5 \
+               and self.indiLinear4(i) == True and self.indiChaotic(i) == False
+
+    def isIdFlagsInt(self, i: int):
+        return self.occurrenceLnPercentRank(i) > 85 \
+               and all(2 <= self.elementLengths(i)) and all(self.elementLengths(i) <= 4)
+
+    def isTimestamp(self, i: int):
+        return self.occurrenceLnPercentRank(i) > 95 \
+               and self.indiLinear4(i) == False and self.indiChaotic(i) == True \
+               and all(3 <= self.elementLengths(i)) and all(self.elementLengths(i) <= 8)
+
+    def isPayload(self, i: int):
+        # CHARS        [ or (BYTES > 8) ]
+        return self.charSegmentCount(i) / len(self.clusterElements(i)) > .80 # \
+               # or all(self.elementLengths(i) > 8)
+
+    def isPad(self, i: int):
+        valCnt = Counter(chain.from_iterable(e.values for e in self.clusterElements(i)))
+        mcVal, mcCnt = valCnt.most_common(1)[0]
+        # most common is null byte and nulls are almost the exclusive content
+        return mcVal == 0 and mcCnt / sum(valCnt.values()) > .95
 
     @property
     def clusterIndices(self):
+        """
+        :return: Range of all valid cluster indices in this container.
+        """
         return range(len(self))
+
+    def semanticTypeHypotheses(self):
+        hypo = dict()
+        for i in self.clusterIndices:
+            if self.isPad(i):
+                hypo[i] = "pad"
+            elif self.distinctValues(i) <= 3:
+                hypo[i] = None          # Flags/Addresses? see singular cluster rules for flags/id/addr
+            elif self.isPayload(i):     # prio 0
+                hypo[i] = "payload"
+            elif self.isTimestamp(i):   # prio 2 (swapped to 1)
+                hypo[i] = "timestamp"
+            elif self.isIdFlagsInt(i):  # prio 1 (swapped to 2)
+                hypo[i] = "id/flags/int"
+            elif self.isSequence(i):    # prio 3
+                hypo[i] = "addr/seq"  # "sequence"  TODO try to use distribution of values (equally distributed distances?)
+            elif self.isAddr(i):        # prio 4
+                hypo[i] = "addr/seq"  # "addr"
+            else:
+                hypo[i] = None
+        return hypo
 
 
 class SegmentClusters(SegmentClusterContainer):
+    """
+    Extension of the container for clusters of unique segments with further kinds of cluster properties to be evaluated.
+    This may support future work to identify semnatics of field types and thus also contains a number of helper
+    functions to plot and print cluster properties, representations, and hypothesis statistics.
+    """
 
     def plotDistances(self, i: int, specimens: SpecimenLoader, comparator=None):
+        """
+        Plot the dissimilarities between all segments of the given cluster in this container as Topology Plots.
+
+        :param i: Cluster index.
+        :param specimens: SpecimenLoader object to determine the source of the data
+            for retaining the correct link to the evaluated trace.
+        :param comparator: Compare to ground truth, if available.
+        """
         if len(self.clusterElements(i)) < 2:
             print("Too few elements to plot in", self.clusterLabel(i), "Ignoring it.")
             return
@@ -843,3 +1111,335 @@ class SegmentClusters(SegmentClusterContainer):
             sdp.plotManifoldDistances(self.clusterElements(i), dists, numpy.array(labels))
         sdp.axesFlat[1].set_title(self.clusterLabel(i))
         sdp.writeOrShowFigure()
+
+    def plotDistributions(self, specimens: SpecimenLoader):
+        plotTitle = "Distances Distribution Density per Cluster"
+        mmp = MultiMessagePlotter(specimens, plotTitle, math.ceil(len(self)))
+        subTitles = list()
+        # spn: sub plot number, clu: cluster
+        for spn in range(len(self)):
+            cl = self.clusterLabel(spn)
+            subTitles.append(cl)
+
+            dist = self.trilFlat(spn)
+            cnts, bins, _ = mmp.axes[spn].hist(dist, bins=30)
+            # mmp.axes[spn].legend()
+
+            mu, sigma = scipy.stats.norm.fit(dist)
+            bestfit = scipy.stats.norm.pdf(bins, mu, sigma)
+            yscale = sum(cnts) / sum(bestfit)
+            mmp.axes[spn].plot(bins, bestfit*yscale)
+        mmp.nameEachAx(subTitles)
+        mmp.writeOrShowFigure()
+
+    def plotPincipalComponents(self, specimens: SpecimenLoader, sampleSize=None):
+        """
+        Print up to the first ten eigenvalues of the covariance matrix of the distances per cluster.
+
+        :param specimens: For instantiating the plotter class.
+        :param sampleSize: If not None, enforce comparable results by random subsampling of clusters to
+            sampleSize and ignoring smaller clusters.
+        """
+        plotTitle = "Eigenvalues per Cluster"
+        mmp = MultiMessagePlotter(specimens, plotTitle, math.ceil(len(self)))
+        subTitles = list()
+        vals = list()
+        for i in range(len(self)):
+            cl = self.clusterLabel(i)
+            subTitles.append(cl)
+            if sampleSize is not None:
+                if len(self.clusterElements(i)) < sampleSize:
+                    print("Ignoring cluster", cl, "with element count", len(self.clusterElements(i)))
+                    continue
+                dists = self._distanceCalculator.distancesSubset(
+                    numpy.random.choice(self.clusterElements(i), sampleSize, False))
+            else:
+                dists = self.dcSubMatrix(i)
+            cov = numpy.cov(dists)
+            eigenValuesAndVectors = numpy.linalg.eigh(cov)
+            vals.append((cl, *eigenValuesAndVectors[0][10::-1]))
+            mmp.plotToSubfig(i, eigenValuesAndVectors[0][10::-1])
+        print(tabulate(vals))
+        mmp.nameEachAx(subTitles)
+        mmp.writeOrShowFigure()
+
+    def shapiro(self, i: int):
+        """
+        Result: Probably no test for normal distribution will work. Clusters with few elements tend to become false
+        positives while in any case the densities in the histograms will be truncated at 0 and the cluster "boundary".
+        """
+        dists = self.trilFlat(i)
+        subsDists = numpy.random.choice(dists, 5000, False) if len(dists) > 5000 else dists
+        # noinspection PyUnresolvedReferences
+        return scipy.stats.shapiro(subsDists)[1] > 0.05
+
+    def skewedness(self, i: int):
+        """(mode - mean)/stdev"""
+        dists = self.trilFlat(i)
+        # noinspection PyUnresolvedReferences
+        mode = scipy.stats.mode(dists).mode[0]
+        median = numpy.median(dists)
+        mean = numpy.mean(dists)
+        stdev = numpy.std(dists)
+        skn = (mode - median) / stdev
+        return mode, median, mean, stdev, skn
+
+    def occurrencePercentile(self, i: int, q=95):
+        return numpy.percentile(numpy.array(self.occurrences(i)), q)
+
+    def eig_eigw(self, i: int, rank=1):
+        """Deprecated. Direct eigenvalues up to rank."""
+        dists = self.dcSubMatrix(i)
+        return numpy.absolute(scipy.linalg.eigh(dists)[0])[:rank]
+
+    def eig_hasDirection(self, i: int):
+        """Deprecated.
+        Has a "direction" in terms of a "significantly large" first eigenvalue relative to the
+        maximal distance in the cluster."""
+        dirFactThresh = 5
+        ew = self.eig_eigw(i,2)
+        # ew0diff1 = ew[0] > 2 * ev[1]  # this distinguishes nothing helpful
+        ew0snf = ew[0] > dirFactThresh * self.maxDist(i)
+        return ew0snf # and ew0diff1
+
+    def pc_percentile(self, i: int, q=85):
+        """q: quantile"""
+        dists = self.dcSubMatrix(i)
+        cov = numpy.cov(dists)
+        eigenValuesAndVectors = numpy.linalg.eigh(cov)
+        return numpy.percentile(eigenValuesAndVectors[0], q)
+
+    def pc_stats(self, i: int, q=95):
+        """three-sigma rule of thumb: 68–**95**–99.7 rule"""
+        eigenValuesAndVectors = numpy.linalg.eigh(numpy.cov(self.dcSubMatrix(i)))
+        p95 = self.pc_percentile(i, q)
+        pcS = sum(eigenValuesAndVectors[0] > p95)  # larger 1: "has extent"
+        return (
+            self.clusterLabel(i),
+            sum(eigenValuesAndVectors[0][:-2]) / sum(eigenValuesAndVectors[0][-2:]),
+            p95,
+            pcS,
+            pcS / self.distinctValues(i),  # value > 0.1: ratio of significant PCs among all components,
+            # works as indicator for shape in nbns, not for smb
+            # interpretation: variance of distances concentrated on first pcSs.
+            self.distinctValues(i)
+        )
+
+    def entropy(self, i: int):
+        raise NotImplementedError()
+
+    def ecdf(self, i: int):
+        dist = self.trilFlat(i)  # type: numpy.ndarray
+        return ecdf(list(dist))
+
+    def plotECDFs(self, specimens: SpecimenLoader):
+        plotTitle = "Empirical Cumulated Distribution Function per Cluster"
+        mmp = MultiMessagePlotter(specimens, plotTitle, math.ceil(len(self)))
+        subTitles = list()
+        for spn in range(len(self)):
+            cl = self.clusterLabel(spn)
+            print(cl)
+            subTitles.append(cl)
+
+            ecdValues = self.ecdf(spn)
+            mmp.axes[spn].plot(*ecdValues)
+        mmp.nameEachAx(subTitles)
+        mmp.writeOrShowFigure()
+
+    def triangularDistances(self, i: int):
+        idxA, idxC, segA, segC = self.remotestSegments(i)
+        distances = self.dcSubMatrix(i)
+        directAC = distances[idxA,idxC]
+
+        viaB = distances[idxA] + distances[idxC]
+        assert viaB[idxA] == directAC  # this is path A--A--C
+        assert viaB[idxC] == directAC  # this is path A--C--C
+        viaB[idxC] = numpy.nan
+        viaB[idxA] = numpy.nan
+
+        detourB = viaB - directAC  # how much longer than the direct path A--C are we for each B?
+        return detourB
+        # TODO how to compare to a single threshold (as a tuned parameter)?
+
+    def shapeStats(self, filechecker: StartupFilecheck, doPrint=False):
+        """filechecker.pcapstrippedname"""
+        from tabulate import tabulate
+        import csv
+
+        vals = list()
+        for i in range(len(self)):
+            if self.distinctValues(i) < 2:
+                print("Omit cluster with less than two elements", self.clusterLabel(i), "(id/flags?)")
+                continue
+
+            idxA, idxC, segA, segC = self.remotestSegments(i)
+            path, distsAlongPath = self.traverseViaNearest(i)
+            maxD = self.maxDist(i)
+            distList = self.trilFlat(i)
+
+            # deal with extreme outliers for indiLinear3
+            distMask = distList < numpy.percentile(distList, type(self)._il3q)
+            diapMask = distsAlongPath < numpy.percentile(distsAlongPath, type(self)._il3q)
+            # standard deviation of all distances without extreme outliers (outside 99-percentile)
+            distStdwoO = numpy.std(distList[distMask], dtype=numpy.float64)
+            # standard deviation of distances along path without extreme outliers (outside 99-percentile)
+            diapStdwoO = numpy.std(distsAlongPath[diapMask], dtype=numpy.float64)
+
+            # indicates probable linear chain
+            indiLinear1 = bool(sum(distsAlongPath) < maxD * math.log(len(path)))
+            # (indicates probable linear chain)
+            indiLinear2 = bool(path.index(segC) / len(path) > .9)
+            # indicates probable linear chain
+            indiLinear3 = bool(diapStdwoO / distStdwoO < type(self)._il3t)
+            # indicates probable blob/chaotic cluster
+            indiChaotic = bool(sum(distsAlongPath) > maxD * 1.2 * math.log(len(path)))
+            # everything else: probable non-linear (multi-linear) substructure
+            assert self.shapeIndicators(i) == (indiLinear1, indiLinear3, indiChaotic)
+
+            # shorter float can cause "RuntimeWarning: overflow encountered in reduce" for large clusters
+            distStd = numpy.std(distList, dtype=numpy.float64)
+            diapStd = numpy.std(distsAlongPath, dtype=numpy.float64)
+
+            # collect statistics
+            vals.append((
+                self.clusterLabel(i),
+                numpy.mean(distList),
+                distStd,
+                maxD,
+                sum(distsAlongPath),
+                sum(distsAlongPath) - maxD,
+                path.index(segC),
+                len(path),
+                numpy.mean(distsAlongPath),
+                diapStd,
+                numpy.percentile(distsAlongPath, 95),
+                diapStdwoO,
+                distStdwoO,
+                self.traceMeanDiff(i),
+
+                indiLinear1,
+                indiLinear2,
+                indiLinear3,
+                self.indiLinear4(i),
+                indiChaotic,
+
+                math.log(self.occurrenceSum(i)),
+                self.occurrenceLnPercentRank(i),
+                self.occurrencePercentile(i),
+                numpy.std(self.occurrences(i)),
+                numpy.median(self.occurrences(i)),
+                self.distinctValues(i),
+            ))
+        headers = [
+            "cluster", "meanDist", "stdDist", "maxDist", "distsAlongPath", "detour", "segCinPath", "pathLength",
+            "mean(distsAlongPath)", "std(distsAlongPath)", "percentile(distsAlongPath, 95)", "distStdwoO", "diapStdwoO",
+            "traceMeanDiff",
+            "indiLinear1", "indiLinear2", "indiLinear3", "indiLinear4", "indiChaotic",
+            "lnOccSum", "lnOccPercRank", "95percentile", "occStd", "occMedian", "distinctV" ]
+        if doPrint:
+            print(tabulate(vals, headers=headers))
+        from os.path import join
+        reportFile = join(filechecker.reportFullPath, "shapeStats-" + filechecker.pcapstrippedname + ".csv")
+        print("Write cluster shape statistics to", reportFile)
+        with open(reportFile, 'a') as csvfile:
+            statisticscsv = csv.writer(csvfile)
+            statisticscsv.writerow(headers)
+            statisticscsv.writerows(vals)
+        return vals
+
+    def routingPath(self, i: int):
+        raise NotImplementedError("Find a routing algorithm to find the shortest path from the most distant elements.")
+
+    def linkedClustersStats(self):
+        """Merge nearby (single-linked) clusters with very similar densities."""
+        # median values for the 1-nearest neighbor ("minimum" distance).
+        minmedians = [numpy.median([self._distanceCalculator.neighbors(ce, self.clusterElements(i))[1][1]
+                                  for ce in self.clusterElements(i)])
+                    for i in self.clusterIndices]
+        # minmeans = [numpy.mean([self._distanceCalculator.neighbors(ce, self.clusterElements(i))[1][1]
+        #                         for ce in self.clusterElements(i)])
+        #             for i in self.clusterIndices()]
+        maxdists = [self.maxDist(i) for i in self.clusterIndices]
+
+        trils = [self.trilFlat(i) for i in self.clusterIndices]
+        cpDists = { (i, j): self._distanceCalculator.distancesSubset(self.clusterElements(i), self.clusterElements(j))
+            for i, j in combinations(self.clusterIndices, 2) }
+        # plt.plot(*ecdf(next(iter(cpDists.values())).flat))
+
+        vals = list()
+        for i, j in combinations(self.clusterIndices, 2):
+            # density in $\epsilon$-neighborhood around nearest points between similar clusters
+            #   $\epsilon$-neighborhood: link segments (closest in two clusters) s_lc_ic_j
+            #   d(s_lc_ic_j, s_k) <= $\epsilon$ for all (s_k in c_i) != s_lc_ic_j
+            # the nearest points between the clusters
+            coordmin = numpy.unravel_index(cpDists[(i, j)].argmin(), cpDists[(i, j)].shape)
+            # index of the smaller cluster
+            smallCluster = i if maxdists[i] < maxdists[j] else j
+            # extent of the smaller cluster
+            smallClusterExtent = maxdists[smallCluster]
+            # density as median distances in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
+            dists2linki = numpy.delete(self.dcSubMatrix(i)[coordmin[0]], coordmin[0])
+            dists2linkj = numpy.delete(self.dcSubMatrix(j)[coordmin[1]], coordmin[1])
+            densityi = numpy.median(dists2linki[dists2linki <= smallClusterExtent / 2])
+            densityj = numpy.median(dists2linkj[dists2linkj <= smallClusterExtent / 2])
+
+            trili = trils[i]
+            trilj = trils[j]
+            vals.append((
+                self.clusterLabel(i),                       # 0
+                trili.mean(), trili.std(), minmedians[i],   # 1, 2, 3
+                self.clusterLabel(j),                       # 4
+                trilj.mean(), trilj.std(), minmedians[j],   # 5, 6, 7
+                cpDists[(i, j)].min(),                      # 8
+                cpDists[(i, j)].max(),                      # 9
+                densityi,                                   # 10
+                densityj                                    # 11
+            ))
+
+        # print(tabulate([(self.clusterLabel(i), minmedians[i]) for i in self.clusterIndices],
+        #                headers=["cluster", "density"]))
+        # # density +/- 0.002 (?)
+        # print(tabulate(
+        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]), numpy.array([v[1], v[5]]).min() * 10, abs(v[3] - v[7]))
+        #      for v in vals]))
+        # print(tabulate(
+        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]),
+        #       bool(v[8] < numpy.array([v[1] + v[5]]).min() * 10), abs(v[3] - v[7]))
+        #      for v in vals]))
+        # print(tabulate(
+        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]),
+        #       bool(v[8] < v[1] + v[2] + v[5] + v[6]), bool(abs(v[3] - v[7]) < 0.002))
+        #      for v in vals]))
+
+        # merge cluster condition!! working on nbns with no FP!
+        areVeryCloseBy = [bool(v[8] < v[1] or v[8] < v[5]) for v in vals]
+        linkHasSimilarEpsilonDensity = [bool(abs(v[10] - v[11]) < 0.01) for v in vals]
+        # closer as the mean between both cluster's "densities" normalized to the extent of the cluster
+        areSomewhatCloseBy = [bool(v[8] < numpy.mean([v[3] / v[1], v[7] / v[5]])) for v in vals]
+        haveSimilarDensity = [bool(abs(v[3] - v[7]) < 0.002) for v in vals]
+
+        print(tabulate([
+            ( *v, areVeryCloseBy[ij], linkHasSimilarEpsilonDensity[ij],
+              areSomewhatCloseBy[ij], haveSimilarDensity[ij] ) for ij, v in enumerate(vals)]))
+        # works with test traces:
+        #  nbns! smb!
+        #  dhcp: no! => + linkHasSimilarEpsilonDensity
+        #  dns!
+        #  ntp!
+        return vals
+
+        # mergedClusters = SegmentClusters(self._distanceCalculator)
+        # mergedClusters.append(("#2, #4: flags", [element for i in [1, 3] for element in self[i][1]]))
+        # mergedClusters.append(("ids", [element for i in [0, 6, 7, 8, 9] for element in self[i][1]]))
+        # mergedClusters.append(("ipv4s", [element for i in [1, 3, 4, 5] for element in self[i][1]]))
+        # mergedClusters.semanticTypeHypotheses()
+        # return mergedClusters
+
+        # mmp = MultiMessagePlotter(specimens, analysisTitle, 20)
+        # c03 = list(((i, j), d) for (i, j), d in cpDists.items() if i in [0, 3])
+        # for ax, ((i, j), didi) in zip(mmp.axes, c03):
+        #     ax.plot(*ecdf(didi.flat))
+        #     ax.set_title(
+        #         cauldron.regularClusters.clusterLabel(i)[10:30] + " | " + cauldron.regularClusters.clusterLabel(j)[10:30])
+        # mmp.writeOrShowFigure()
+

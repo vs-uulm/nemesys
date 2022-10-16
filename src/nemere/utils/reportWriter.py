@@ -18,6 +18,7 @@ from nemere.inference.segments import AbstractSegment, TypedSegment, MessageSegm
 from nemere.inference.templates import Template, TypedTemplate, FieldTypeTemplate
 from nemere.utils.evaluationHelpers import StartupFilecheck, reportFolder, segIsTyped, unknown
 from nemere.utils.loader import SpecimenLoader
+from nemere.validation.clusterInspector import SegmentClusterCauldron
 from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator, BaseDissectorMatcher
 from nemere.visualization.simplePrint import FieldtypeComparingPrinter
 
@@ -55,7 +56,7 @@ def getMinMeanMaxFMS(scores: Iterable[float]) -> Tuple[float, float, float]:
 def countMatches(quality: Iterable[FormatMatchScore]):
     """
     :param quality: List of FormatMatchScores
-    :return: count of exact matches, off-by-one near matches, off-by-more-than-one matches
+    :return: Count of exact matches, off-by-one near matches, off-by-more-than-one matches
     """
     exactcount = 0
     offbyonecount = 0
@@ -70,6 +71,16 @@ def countMatches(quality: Iterable[FormatMatchScore]):
 def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
                 runtime: float, comparator: MessageComparator,
                 inferenceTitle: str, folder="reports", withTitle=False):
+    """
+    Write report of the message segmentation quality measured in FMS to files.
+
+    :param formatmatchmetrics: FMS for each message.
+    :param runtime: Runtime of the analysis.
+    :param comparator: Comparator to relate the inference to the ground truth.
+    :param inferenceTitle: The title to use in the report to refer to the analysis run.
+    :param folder: Folder to store the report to.
+    :param withTitle: Flag to use the inferenceTitle in the file names of the report.
+    """
 
     if not isdir(folder):
         raise NotADirectoryError("The reports folder {} is not a directory. Reports cannot be written there.".format(
@@ -149,6 +160,12 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
 
 
 def writeSegmentedMessages2CSV(segmentsPerMsg: Sequence[Sequence[MessageSegment]], folder="reports"):
+    """
+    Write the given segmentation into a CSV file.
+
+    :param segmentsPerMsg: List of messages as a list of segments
+    :param folder: Folder to store the report to.
+    """
     import csv
     fileNameS = 'SegmentedMessages'
     with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
@@ -160,6 +177,15 @@ def writeSegmentedMessages2CSV(segmentsPerMsg: Sequence[Sequence[MessageSegment]
 
 def writeFieldTypesTikz(comparator: MessageComparator, segmentedMessages: List[Tuple[MessageSegment]],
                         fTypeTemplates: List[FieldTypeTemplate], filechecker: StartupFilecheck):
+    """
+    Visualization of segments from clusters in messages as tikz file.
+    see also nemere/visualization/simplePrint.py
+
+    :param comparator: Comparator to relate the inference to the ground truth.
+    :param segmentedMessages: List of messages as a list of segments.
+    :param fTypeTemplates: Field type templates of the inferred fields.
+    :param filechecker: Filechecker to determine a suitable folder to write the file to.
+    """
     # select the messages to print by quality: three of around fmsmin, fmsmean, fmsmax each
     fmslist = [BaseDissectorMatcher(comparator, msg).calcFMS() for msg in segmentedMessages]
     fmsdict = {fms.score: fms for fms in fmslist}  # type: Dict[float, FormatMatchScore]
@@ -177,9 +203,26 @@ def writeFieldTypesTikz(comparator: MessageComparator, segmentedMessages: List[T
         tikzfile.write(tikzcode)
 
 
+def writeSemanticTypeHypotheses(cauldron: SegmentClusterCauldron, filechecker: StartupFilecheck):
+    cauldron.regularClusters.shapeStats(filechecker)
+    semanticHeaders = ["regCluI", "Cluster Label", "semantic type"]
+    semanticHypotheses = cauldron.regularClusters.semanticTypeHypotheses()
+    # print(tabulate([(i, cauldron.regularClusters.clusterLabel(i), h) for i, h in
+    #                 semanticHypotheses.items()], headers=semanticHeaders))
+    reportFile = join(filechecker.reportFullPath, "semanticTypeHypotheses-" + filechecker.pcapstrippedname + ".csv")
+    print("Write semantic type hypotheses to", reportFile)
+    with open(reportFile, 'a') as csvfile:
+        statisticscsv = csv.writer(csvfile)
+        statisticscsv.writerow(semanticHeaders)
+        statisticscsv.writerows([( i, cauldron.regularClusters.clusterLabel(i), h )
+                                 for i, h in semanticHypotheses.items()])
+
 
 Element = TypeVar('Element', AbstractMessage, AbstractSegment)
 class Report(ABC):
+    """
+    A base class for writing reports of various inference aspects into files.
+    """
     statsFile = "statistics"
 
     def __init__(self, groundtruth, pcap: Union[str, StartupFilecheck], reportPath: str=None):
@@ -196,6 +239,7 @@ class Report(ABC):
 
     @abstractmethod
     def write(self, inference, runtitle: Union[str, Dict]):
+        """To be implemented by a subclass."""
         raise NotImplementedError()
 
 class ClusteringReport(Report, ABC):
@@ -235,6 +279,10 @@ class ClusteringReport(Report, ABC):
 
     @staticmethod
     def inferenceColumns(inferenceParams: Dict[str, str]):
+        """
+        :param inferenceParams: Parameters of the inference to be included in each line of the report.
+        :return: List of additional columns in the report about the subject inference.
+        """
         infCols = OrderedDict()
         infCols["tokenrefine"] = inferenceParams["tokenizer"]
         if inferenceParams["tokenParams"] is not None: infCols["tokenrefine"] += "-" + inferenceParams["tokenParams"]
@@ -265,6 +313,12 @@ class IndividualClusterReport(ClusteringReport):
         self._additionalColumns[header] = colData
 
     def write(self, clusters: Dict[Hashable, List[Element]], runtitle: Union[str, Dict]):
+        """
+        Write the report with the individual cluster statistics for the given clusters to the file system.
+
+        :param clusters: Clusters to generate the report for.
+        :param runtitle: Title by which this analysis can be identified.
+        """
         numSegs = 0
         prList = []
 
@@ -371,6 +425,8 @@ class CombinatorialClustersReport(ClusteringReport):
 
     def write(self, clusters: Dict[Hashable, List[Element]], runtitle: Union[str, Dict], ignoreUnknown=True):
         """
+        Write the report with the individual cluster statistics for the given clusters to the file system.
+
         Precision and recall for the whole clustering interpreted as number of draws from pairs of messages.
 
         For details see: https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-clustering-1.html
@@ -380,6 +436,9 @@ class CombinatorialClustersReport(ClusteringReport):
             for (a) all clusters and for (b) clusters that have a size of at least 1/40 of the number of samples/messages.
 
         'total segs' and 'unique segs' are including 'unknown' and 'noise'
+
+        :param clusters: Clusters to generate the report for.
+        :param runtitle: Title by which this analysis can be identified.
         """
         from collections import Counter
         from itertools import combinations, chain
@@ -499,12 +558,12 @@ def plotMultiSegmentLines(segmentGroups: List[Tuple[str, List[Tuple[str, TypedSe
     """
     This is a not awfully important helper function saving the writing of a few lines of code.
 
-    :param segmentGroups:
-    :param specimens:
-    :param pagetitle:
-    :param colorPerLabel:
+    :param segmentGroups: Groups of clusters of segments that should be plotted.
+    :param specimens: Specimen object to link the plot to the source trace.
+    :param pagetitle: Title to include in the plot name.
+    :param colorPerLabel: Flag to select whether segments should be colored accorrding to their label.
     :param typeDict: dict of types (str-keys: list of segments) present in the segmentGroups
-    :param isInteractive:
+    :param isInteractive: Use a interactive windows or write to file.
     """
     from nemere.visualization.multiPlotter import MultiMessagePlotter
 
@@ -544,6 +603,12 @@ class SegmentClusterReport(ClusteringReport):
         super().__init__(None, pcap, reportPath)
 
     def write(self, clusters: Dict[str, List[Union[MessageSegment, Template]]], runtitle: Union[str, Dict]=None):
+        """
+        Write the report with the cluster statistics for the given clusters to the file system.
+
+        :param clusters: Clusters to generate the report for.
+        :param runtitle: Title by which this analysis can be identified.
+        """
         self._writeCSV(clusters, runtitle)
 
     def _writeCSV(self, clusters: Dict[str, List[Union[MessageSegment, Template]]], runtitle: Union[str, Dict]=None):
@@ -579,7 +644,7 @@ class SegmentClusterGroundtruthReport(SegmentClusterReport):
                  pcap: Union[str, StartupFilecheck], reportPath: str=None):
         """
 
-        :param comparator: The comparator  providing the ground truth
+        :param comparator: The comparator providing the ground truth
         :param segments: List of segments to write statistics for
         :param pcap: The filename or StartupFilecheck object pointing to the pcap
         :param reportPath: If None, automatically determine a path in the report folder using pcap.reportFullPath
@@ -595,6 +660,12 @@ class SegmentClusterGroundtruthReport(SegmentClusterReport):
                             for rawSeg, typSeg in self.typedMatchTemplates.items()}
 
     def write(self, clusters: Dict[str, Union[MessageSegment, Template]], runtitle: Union[str, Dict]=None):
+        """
+        Write the report with the cluster statistics for the given clusters to the file system.
+
+        :param clusters: Clusters to generate the report for.
+        :param runtitle: Title by which this analysis can be identified.
+        """
         self._writeCSV(clusters, runtitle)
 
     def _writeCSV(self, clusters: Dict[str, Union[MessageSegment, Template]], runtitle: Union[str, Dict]=None):
