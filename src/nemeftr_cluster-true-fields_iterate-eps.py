@@ -100,9 +100,7 @@ if __name__ == '__main__':
 
         # Histogram of all the distances between the segments
         hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
-        # hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
         knn = [dc.neighbors(seg)[0][1] for seg in dc.segments]
-        # print(knn)
         hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
         plt.axvline(clusterer.eps, label="{:.3f}".format(clusterer.eps), color="darkmagenta")
         hstplt.writeOrShowFigure()
@@ -131,14 +129,11 @@ if __name__ == '__main__':
                 del mixedClusters[0][rIdx]
             mixedClusters[0].append(("[mixed]", tSegment))
         uniqueGroups = [(segmentGroups[0][0], uniqueClusters)]
-        # # only use "real" clusters:
-        # uniqueGroups = segmentGroups
 
         # # # # # # # # # # # # # # # # # # # # # # # # #
         # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
         print("Plot distances...")
         sdp = DistancesPlotter(specimens, 'distances-' + titleFormat, False)
-        # labels = numpy.array([labelForSegment(segmentGroups, seg) for seg in dc.segments])
         labels = numpy.array([labelForSegment(uniqueGroups, seg) for seg in dc.segments])
 
         # we need to omit some labels, if the amount amount of unique labels is greater than threshold
@@ -157,16 +152,6 @@ if __name__ == '__main__':
 
 
         print("Prepare output...")
-        # typeDict = segments2types(segments)
-        # # for pagetitle, segmentClusters in segmentGroups:
-        # for pagetitle, segmentClusters in uniqueGroups:
-        #     plotMultiSegmentLines(segmentClusters, specimens, titleFormat,
-        #                           True, typeDict, False)
-
-        # # total/all segments
-        # ftclusters = {label: resolveTemplates2Segments(e for t, e in elements)
-        #               for label, elements in segmentGroups[0][1]}
-        #
         # unique segments
         ftclusters = {label: [e for t, e in elements]
                       for label, elements in uniqueGroups[0][1]}
@@ -177,11 +162,6 @@ if __name__ == '__main__':
         groundtruth = {seg: seg.fieldtype
                        for l, segs in ftclusters.items() for seg in segs}
 
-        # # unique segments
-        # ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeContext}
-        # ftclusters["Noise"] = resolveTemplates2Segments(noise)
-        # groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
-        #                for rawSeg, typSeg in typedMatchSegs.items()}
         report = CombinatorialClustersReport(groundtruth, filechecker)
         report.write(ftclusters, titleFormat)
 

@@ -9,9 +9,11 @@ Generates segment-dissimilarity topology plots of the clustering result.
 import argparse
 from math import log
 
-from nemere.inference.templates import FieldTypeTemplate, DBSCANsegmentClusterer, ClusterAutoconfException
+from nemere.inference.templates import FieldTypeTemplate, \
+    DBSCANsegmentClusterer, ClusterAutoconfException
 from nemere.inference.segmentHandler import baseRefinements, originalRefinements, \
-    isExtendedCharSeq, nemetylRefinements
+    isExtendedCharSeq, nemetylRefinements, \
+    pcaMocoRefinements, pcaRefinements, zerocharPCAmocoSFrefinements, pcaMocoSFrefinements
 from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport, \
     SegmentClusterGroundtruthReport
 from nemere.visualization.distancesPlotter import SegmentTopology
@@ -103,8 +105,34 @@ if __name__ == '__main__':
             fromCache.configureRefinement(baseRefinements)
         elif args.refinement == "nemetyl":
             fromCache.configureRefinement(nemetylRefinements)
+        elif args.refinement == "PCA1":
+            fromCache.configureRefinement(pcaRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "PCAmoco":
+            fromCache.configureRefinement(pcaMocoRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "zerocharPCAmocoSF":
+            fromCache.configureRefinement(zerocharPCAmocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
         elif args.refinement is None or args.refinement == "none":
             print("No refinement selected. Performing raw segmentation.")
+        else:
+            print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
+            exit(2)
+    elif tokenizer[:5] == "zeros":
+        if args.refinement == "PCA1":
+            fromCache.configureRefinement(pcaRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "PCAmocoSF":
+            fromCache.configureRefinement(pcaMocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement is None or args.refinement == "none":
+            print("No refinement selected. Performing zeros segmentation with CropChars.")
         else:
             print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
             exit(2)
@@ -253,7 +281,6 @@ if __name__ == '__main__':
         # noinspection PyUnresolvedReferences
         import numpy
 
-        # globals().update(locals())
         IPython.embed()
 
 

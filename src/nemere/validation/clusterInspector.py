@@ -802,7 +802,7 @@ class SegmentClusterContainer(MutableSequence):
     def traverseViaNearest(self, i: int):
         """
         Path through the cluster hopping from nearest neighbor to nearest neighbor that has not already been visited.
-        All segments are visited this way.
+        All segments contained in the cluster with index i are visited this way.
 
         >>> from tabulate import tabulate
         >>> from nemere.utils.baseAlgorithms import generateTestSegments
@@ -814,7 +814,7 @@ class SegmentClusterContainer(MutableSequence):
         >>> someclusters = SegmentClusterContainer(dc)
         >>> someclusters.append(("Sample Cluster", list(("Some Type", s) for s in segments)))
         >>> path = zip(*someclusters.traverseViaNearest(0))
-        >>> print(tabulate((path)))
+        >>> print(tabulate(path))
         ----------------------------------------------------------------  ---------
         MessageSegment 4 bytes at (0, 4): 00000000 | values: (0, 0, 0...  1
         MessageSegment 4 bytes at (0, 4): 01020304 | values: (1, 2, 3...  0.125
@@ -827,7 +827,7 @@ class SegmentClusterContainer(MutableSequence):
         ----------------------------------------------------------------  ---------
 
         :param i: Cluster index
-        :return: The path as a list of segments and the distances along this path
+        :return: The path as a list of segments and the dissimilarities along this path
         """
         idxA, idxC, segA, segC = self.remotestSegments(i)
         distances = self.dcSubMatrix(i)
@@ -985,6 +985,21 @@ class SegmentClusterContainer(MutableSequence):
     # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def shapeIndicators(self, i: int):
+        """
+        Heuristic indicators of whether the cluster with index i is linear-chain or chaotic/globular-blob shaped.
+
+        The heuristics are:
+        * indiLinear1: indicates a probable linear chain if the dissimilarities along one path through the cluster
+            are less than the maximum of all dissimilarities multiplied with the path length through the cluster.
+        * indiLinear3: indicates a probable linear chain if the ratio between
+            the standard deviation of all dissimilarities and the standard deviation of dissimilarities along a path
+            through the cluster is below the threshold `_il3t`.
+        indiChaotic: indicates a probable blob/chaotic cluster if the dissimilarities along one path through the cluster
+            are greater than the maximum of all dissimilarities multiplied with the path length through the cluster.
+
+        :param i: Cluster index.
+        :return: Tuple of three Boolean indicators. The two first for linear chained, the third for chaotic.
+        """
         path, distsAlongPath = self.traverseViaNearest(i)
         maxD = self.maxDist(i)
         distList = self.trilFlat(i)
@@ -992,9 +1007,9 @@ class SegmentClusterContainer(MutableSequence):
         # deal with extreme outliers for indiLinear3
         distMask = distList < numpy.percentile(distList, type(self)._il3q)
         diapMask = distsAlongPath < numpy.percentile(distsAlongPath, type(self)._il3q)
-        # standard deviation of all distances without extreme outliers (outside 99-percentile)
+        # standard deviation of all dissimilarities without extreme outliers (outside 99-percentile)
         distStdwoO = numpy.std(distList[distMask], dtype=numpy.float64)
-        # standard deviation of distances along path without extreme outliers (outside 99-percentile)
+        # standard deviation of dissimilarities along path without extreme outliers (outside 99-percentile)
         diapStdwoO = numpy.std(distsAlongPath[diapMask], dtype=numpy.float64)
 
         indiLinear1 = bool(sum(distsAlongPath) < maxD * math.log(len(path)))  # indicates probable linear chain
@@ -1004,41 +1019,113 @@ class SegmentClusterContainer(MutableSequence):
         return indiLinear1, indiLinear3, indiChaotic
 
     def indiLinear1(self, i: int):
+        """
+        One of multiple heuristic indicators of whether the cluster with index i is linear-chain shaped.
+        see `self.shapeIndicators()`
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates a linear-chain shaped cluster, False otherwise.
+        """
         return self.shapeIndicators(i)[0]
 
     def indiLinear3(self, i: int):
+        """
+        One of multiple heuristic indicators of whether the cluster with index i is linear-chain shaped.
+        see `self.shapeIndicators()`
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates a linear-chain shaped cluster, False otherwise.
+        """
         return self.shapeIndicators(i)[1]
 
     def indiLinear4(self, i: int):
+        """
+        One of multiple heuristic indicators of whether the cluster with index i is linear-chain shaped.
+        Checks whether the difference of the first and the mean of all other diffs of all $k$-traces
+        are below threshold `self._il4t`.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates a linear-chain shaped cluster, False otherwise.
+        """
         return self.traceMeanDiff(i) < self._il4t
 
     def indiChaotic(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i is chaotic/globular-blob shaped.
+        see `self.shapeIndicators()`
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates a chaotic/globular-blob shaped cluster, False otherwise.
+        """
         return self.shapeIndicators(i)[2]
 
     def isAddr(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains address fields.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         return self.occurrenceLnPercentRank(i) < 35
             # don't care about shape
             #  and self.shapeIndicators(i)[1:] == (True, False)  # don't care about indicator 1
 
     def isSequence(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains sequential numbering fields.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         return 70 <= self.occurrenceLnPercentRank(i) <= 92.5 \
                and self.indiLinear4(i) == True and self.indiChaotic(i) == False
 
     def isIdFlagsInt(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains identifier, flags, or arbitrary integer fields.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         return self.occurrenceLnPercentRank(i) > 85 \
                and all(2 <= self.elementLengths(i)) and all(self.elementLengths(i) <= 4)
 
     def isTimestamp(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains timestamp fields.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         return self.occurrenceLnPercentRank(i) > 95 \
                and self.indiLinear4(i) == False and self.indiChaotic(i) == True \
                and all(3 <= self.elementLengths(i)) and all(self.elementLengths(i) <= 8)
 
     def isPayload(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains payload fields.
+        Currently only considers character sequences as payload.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         # CHARS        [ or (BYTES > 8) ]
         return self.charSegmentCount(i) / len(self.clusterElements(i)) > .80 # \
                # or all(self.elementLengths(i) > 8)
 
     def isPad(self, i: int):
+        """
+        Heuristic indicator of whether the cluster with index i contains padding fields.
+
+        :param i: Cluster index.
+        :return: True if the heuristic indicates the named field types to be prevalent in the cluster i,
+            False otherwise.
+        """
         valCnt = Counter(chain.from_iterable(e.values for e in self.clusterElements(i)))
         mcVal, mcCnt = valCnt.most_common(1)[0]
         # most common is null byte and nulls are almost the exclusive content
@@ -1052,6 +1139,11 @@ class SegmentClusterContainer(MutableSequence):
         return range(len(self))
 
     def semanticTypeHypotheses(self):
+        """
+        :return: String value of the most probably field type according to the heuristic about the semantics
+            of the fields in the clusters of this container.
+            A dict of indices mapped to the semantic hypthesis for the respective cluster
+        """
         hypo = dict()
         for i in self.clusterIndices:
             if self.isPad(i):
@@ -1065,7 +1157,7 @@ class SegmentClusterContainer(MutableSequence):
             elif self.isIdFlagsInt(i):  # prio 1 (swapped to 2)
                 hypo[i] = "id/flags/int"
             elif self.isSequence(i):    # prio 3
-                hypo[i] = "addr/seq"  # "sequence"  TODO try to use distribution of values (equally distributed distances?)
+                hypo[i] = "addr/seq"  # "sequence"  TODO try to use distribution of values (equally distributed dissimilarities?)
             elif self.isAddr(i):        # prio 4
                 hypo[i] = "addr/seq"  # "addr"
             else:
@@ -1113,6 +1205,12 @@ class SegmentClusters(SegmentClusterContainer):
         sdp.writeOrShowFigure()
 
     def plotDistributions(self, specimens: SpecimenLoader):
+        """
+        Plot the dissimilarity distribution density per cluster in this container.
+
+        :param specimens: SpecimenLoader object to determine the source of the data
+            for retaining the correct link to the evaluated trace.
+        """
         plotTitle = "Distances Distribution Density per Cluster"
         mmp = MultiMessagePlotter(specimens, plotTitle, math.ceil(len(self)))
         subTitles = list()
@@ -1134,9 +1232,10 @@ class SegmentClusters(SegmentClusterContainer):
 
     def plotPincipalComponents(self, specimens: SpecimenLoader, sampleSize=None):
         """
-        Print up to the first ten eigenvalues of the covariance matrix of the distances per cluster.
+        Print up to the first ten eigenvalues of the covariance matrix of the dissimilarities per cluster.
 
-        :param specimens: For instantiating the plotter class.
+        :param specimens: For instantiating the plotter class and thus to determine the source of the data
+            for retaining the correct link to the evaluated trace.
         :param sampleSize: If not None, enforce comparable results by random subsampling of clusters to
             sampleSize and ignoring smaller clusters.
         """
@@ -1165,8 +1264,13 @@ class SegmentClusters(SegmentClusterContainer):
 
     def shapiro(self, i: int):
         """
+        Perform the Shapiro-Wilk test for normality on cluster i.
+
         Result: Probably no test for normal distribution will work. Clusters with few elements tend to become false
         positives while in any case the densities in the histograms will be truncated at 0 and the cluster "boundary".
+
+        :param i: Cluster index.
+        :return: True if the Shapiro-Wilk test passes, False otherwise.
         """
         dists = self.trilFlat(i)
         subsDists = numpy.random.choice(dists, 5000, False) if len(dists) > 5000 else dists
@@ -1174,7 +1278,14 @@ class SegmentClusters(SegmentClusterContainer):
         return scipy.stats.shapiro(subsDists)[1] > 0.05
 
     def skewedness(self, i: int):
-        """(mode - mean)/stdev"""
+        """
+        Calculate a measure for the skewedness of the given cluster cluster.
+        The used skewedness measure is `(mode - mean)/stdev`.
+
+        :param i: Cluster index.
+        :return: Tuple of mode, median, mean, standard deviation, and skewedness
+            calculated from the dissimilarities in the cluster i.
+        """
         dists = self.trilFlat(i)
         # noinspection PyUnresolvedReferences
         mode = scipy.stats.mode(dists).mode[0]
@@ -1185,17 +1296,33 @@ class SegmentClusters(SegmentClusterContainer):
         return mode, median, mean, stdev, skn
 
     def occurrencePercentile(self, i: int, q=95):
+        """
+        Percentile with the given q of the value occurrence frequencies in cluster i.
+
+        :param i: Cluster index.
+        :param q: Quantile.
+        :return: The percentile value.
+        """
         return numpy.percentile(numpy.array(self.occurrences(i)), q)
 
     def eig_eigw(self, i: int, rank=1):
-        """Deprecated. Direct eigenvalues up to rank."""
+        """
+        Deprecated.
+
+        :param i: Cluster index.
+        :return: Direct eigenvalues up to rank.
+        """
         dists = self.dcSubMatrix(i)
         return numpy.absolute(scipy.linalg.eigh(dists)[0])[:rank]
 
     def eig_hasDirection(self, i: int):
-        """Deprecated.
-        Has a "direction" in terms of a "significantly large" first eigenvalue relative to the
-        maximal distance in the cluster."""
+        """
+        Deprecated.
+
+        :param i: Cluster index.
+        :return: True if given cluster with index i has a "direction" in terms of a "significantly large"
+            first eigenvalue relative to the maximal dissimilarity.
+        """
         dirFactThresh = 5
         ew = self.eig_eigw(i,2)
         # ew0diff1 = ew[0] > 2 * ev[1]  # this distinguishes nothing helpful
@@ -1203,14 +1330,35 @@ class SegmentClusters(SegmentClusterContainer):
         return ew0snf # and ew0diff1
 
     def pc_percentile(self, i: int, q=85):
-        """q: quantile"""
+        """
+        Percentile with the given q of the principle component scores (eigenvalues)
+        of the covariance matrix of cluster with index i.
+
+        :param i: Cluster index.
+        :param q: Quantile.
+        :return: The percentile value.
+        """
         dists = self.dcSubMatrix(i)
         cov = numpy.cov(dists)
         eigenValuesAndVectors = numpy.linalg.eigh(cov)
         return numpy.percentile(eigenValuesAndVectors[0], q)
 
     def pc_stats(self, i: int, q=95):
-        """three-sigma rule of thumb: 68–**95**–99.7 rule"""
+        """
+        Set of principle component statistics for cluster i including the percentile of princile component scores
+        for the given quantile q.
+        Useful for checking the three-sigma rule of thumb with quantiles: 68–**95**–99.7.
+
+        :param i: Cluster index.
+        :param q: Quantile.
+        :return: Tuple of
+            * The cluster label,
+            * ratio of the sum of the first two and the last two scores (eigenvalues),
+            * the percentile of the scores above of the given quantile q,
+            * the sum of scores above of the given quantile q,
+            * the variance of dissimilarities concentrated on first PCs,
+            * and the number of differing values in the cluster i.
+        """
         eigenValuesAndVectors = numpy.linalg.eigh(numpy.cov(self.dcSubMatrix(i)))
         p95 = self.pc_percentile(i, q)
         pcS = sum(eigenValuesAndVectors[0] > p95)  # larger 1: "has extent"
@@ -1221,18 +1369,29 @@ class SegmentClusters(SegmentClusterContainer):
             pcS,
             pcS / self.distinctValues(i),  # value > 0.1: ratio of significant PCs among all components,
             # works as indicator for shape in nbns, not for smb
-            # interpretation: variance of distances concentrated on first pcSs.
+            # interpretation: variance of dissimilarities concentrated on first PCs.
             self.distinctValues(i)
         )
 
     def entropy(self, i: int):
+        """Not implemented."""
         raise NotImplementedError()
 
     def ecdf(self, i: int):
+        """
+        :param i: Cluster index.
+        :return: The empirical cummulative distribution function of the cluster i.
+        """
         dist = self.trilFlat(i)  # type: numpy.ndarray
         return ecdf(list(dist))
 
     def plotECDFs(self, specimens: SpecimenLoader):
+        """
+        Plot the empirical cummulative distribution function of the cluster i.
+
+        :param specimens: SpecimenLoader object to determine the source of the data
+            for retaining the correct link to the evaluated trace.
+        """
         plotTitle = "Empirical Cumulated Distribution Function per Cluster"
         mmp = MultiMessagePlotter(specimens, plotTitle, math.ceil(len(self)))
         subTitles = list()
@@ -1247,6 +1406,12 @@ class SegmentClusters(SegmentClusterContainer):
         mmp.writeOrShowFigure()
 
     def triangularDistances(self, i: int):
+        """
+        Evaluate triangle inequality for the remotest elements in the given cluster.
+
+        :param i: Cluster index.
+        :return: Values of how much longer the detour over any B is than the direct path A--C in the cluster i.
+        """
         idxA, idxC, segA, segC = self.remotestSegments(i)
         distances = self.dcSubMatrix(i)
         directAC = distances[idxA,idxC]
@@ -1262,6 +1427,14 @@ class SegmentClusters(SegmentClusterContainer):
         # TODO how to compare to a single threshold (as a tuned parameter)?
 
     def shapeStats(self, filechecker: StartupFilecheck, doPrint=False):
+        """
+        Collects the different shape statistics that are the basis for sematic heuristics
+        of the clusters in this container. Writes the cluster shape statistics to a CSV and returns it as a list.
+
+        :param filechecker: Use the filechecker class to determine a suitable report folder to write the CSV to.
+        :param doPrint: Flag to request the statistics table to be printed to the console in addition.
+        :return: The statistics as multi-dimensional list.
+        """
         """filechecker.pcapstrippedname"""
         from tabulate import tabulate
         import csv
@@ -1280,9 +1453,9 @@ class SegmentClusters(SegmentClusterContainer):
             # deal with extreme outliers for indiLinear3
             distMask = distList < numpy.percentile(distList, type(self)._il3q)
             diapMask = distsAlongPath < numpy.percentile(distsAlongPath, type(self)._il3q)
-            # standard deviation of all distances without extreme outliers (outside 99-percentile)
+            # standard deviation of all dissimilarities without extreme outliers (outside 99-percentile)
             distStdwoO = numpy.std(distList[distMask], dtype=numpy.float64)
-            # standard deviation of distances along path without extreme outliers (outside 99-percentile)
+            # standard deviation of dissimilarities along path without extreme outliers (outside 99-percentile)
             diapStdwoO = numpy.std(distsAlongPath[diapMask], dtype=numpy.float64)
 
             # indicates probable linear chain
@@ -1348,11 +1521,18 @@ class SegmentClusters(SegmentClusterContainer):
         return vals
 
     def routingPath(self, i: int):
+        """Not implemented."""
         raise NotImplementedError("Find a routing algorithm to find the shortest path from the most distant elements.")
 
     def linkedClustersStats(self):
-        """Merge nearby (single-linked) clusters with very similar densities."""
-        # median values for the 1-nearest neighbor ("minimum" distance).
+        """
+        Determine nearby (single-linked) clusters with very similar densities to evaluate
+        the criteria used to merge clusters.
+        The actual merging is performed by function `SegmentClusterContainer.mergeOnDensity()`
+
+        :return: The values used to determine whether to merge clusters.
+        """
+        # median values for the 1-nearest neighbor ("minimum" dissimilarity).
         minmedians = [numpy.median([self._distanceCalculator.neighbors(ce, self.clusterElements(i))[1][1]
                                   for ce in self.clusterElements(i)])
                     for i in self.clusterIndices]
@@ -1377,7 +1557,7 @@ class SegmentClusters(SegmentClusterContainer):
             smallCluster = i if maxdists[i] < maxdists[j] else j
             # extent of the smaller cluster
             smallClusterExtent = maxdists[smallCluster]
-            # density as median distances in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
+            # density as median dissimilarities in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
             dists2linki = numpy.delete(self.dcSubMatrix(i)[coordmin[0]], coordmin[0])
             dists2linkj = numpy.delete(self.dcSubMatrix(j)[coordmin[1]], coordmin[1])
             densityi = numpy.median(dists2linki[dists2linki <= smallClusterExtent / 2])
@@ -1396,21 +1576,6 @@ class SegmentClusters(SegmentClusterContainer):
                 densityj                                    # 11
             ))
 
-        # print(tabulate([(self.clusterLabel(i), minmedians[i]) for i in self.clusterIndices],
-        #                headers=["cluster", "density"]))
-        # # density +/- 0.002 (?)
-        # print(tabulate(
-        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]), numpy.array([v[1], v[5]]).min() * 10, abs(v[3] - v[7]))
-        #      for v in vals]))
-        # print(tabulate(
-        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]),
-        #       bool(v[8] < numpy.array([v[1] + v[5]]).min() * 10), abs(v[3] - v[7]))
-        #      for v in vals]))
-        # print(tabulate(
-        #     [(*v, bool(v[8] < v[1] or v[8] < v[5]),
-        #       bool(v[8] < v[1] + v[2] + v[5] + v[6]), bool(abs(v[3] - v[7]) < 0.002))
-        #      for v in vals]))
-
         # merge cluster condition!! working on nbns with no FP!
         areVeryCloseBy = [bool(v[8] < v[1] or v[8] < v[5]) for v in vals]
         linkHasSimilarEpsilonDensity = [bool(abs(v[10] - v[11]) < 0.01) for v in vals]
@@ -1427,19 +1592,3 @@ class SegmentClusters(SegmentClusterContainer):
         #  dns!
         #  ntp!
         return vals
-
-        # mergedClusters = SegmentClusters(self._distanceCalculator)
-        # mergedClusters.append(("#2, #4: flags", [element for i in [1, 3] for element in self[i][1]]))
-        # mergedClusters.append(("ids", [element for i in [0, 6, 7, 8, 9] for element in self[i][1]]))
-        # mergedClusters.append(("ipv4s", [element for i in [1, 3, 4, 5] for element in self[i][1]]))
-        # mergedClusters.semanticTypeHypotheses()
-        # return mergedClusters
-
-        # mmp = MultiMessagePlotter(specimens, analysisTitle, 20)
-        # c03 = list(((i, j), d) for (i, j), d in cpDists.items() if i in [0, 3])
-        # for ax, ((i, j), didi) in zip(mmp.axes, c03):
-        #     ax.plot(*ecdf(didi.flat))
-        #     ax.set_title(
-        #         cauldron.regularClusters.clusterLabel(i)[10:30] + " | " + cauldron.regularClusters.clusterLabel(j)[10:30])
-        # mmp.writeOrShowFigure()
-

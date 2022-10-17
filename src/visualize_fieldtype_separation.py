@@ -58,14 +58,10 @@ if __name__ == '__main__':
     # segment messages according to true fields from the labels
     print("Segmenting messages...")
     segmentedMessages = annotateFieldTypes(analyzerType, analysisArgs, comparator)
-    # # filter segments
-    # filteredSegments = filterSegments(chain.from_iterable(segmentedMessages))  # type: List[TypedSegment]
     # # all segments
     filteredSegments = list(chain.from_iterable(segmentedMessages))
 
     print("Calculating dissimilarities...")
-    # dc = DistanceCalculator(filteredSegments)
-    # dc = DelegatingDC(filteredSegments)
     dc = MemmapDC(filteredSegments)
 
     print("Generate type groups and templates...")

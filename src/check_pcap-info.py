@@ -1,5 +1,5 @@
 """
-Parse PCAP, print some statistics and infos about it and open a IPython shell.
+Parse PCAP, print some statistics and infos about it, and open an IPython shell.
 """
 from itertools import chain
 from typing import List, Sequence

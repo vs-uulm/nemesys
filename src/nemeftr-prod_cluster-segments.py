@@ -14,8 +14,10 @@ import IPython
 import matplotlib.pyplot as plt
 import numpy as numpy
 
-from nemere.inference.segmentHandler import originalRefinements, nemetylRefinements, isExtendedCharSeq
-from nemere.inference.templates import ClusterAutoconfException, FieldTypeTemplate, DBSCANadjepsClusterer
+from nemere.inference.segmentHandler import originalRefinements, nemetylRefinements, zerocharPCAmocoSFrefinements, \
+    pcaMocoSFrefinements, isExtendedCharSeq
+from nemere.inference.templates import ClusterAutoconfException, FieldTypeTemplate, \
+    DBSCANadjepsClusterer
 from nemere.utils.evaluationHelpers import StartupFilecheck, CachedDistances, TitleBuilderSens
 from nemere.utils.reportWriter import SegmentClusterReport
 from nemere.visualization.distancesPlotter import DistancesPlotter
@@ -90,8 +92,22 @@ if __name__ == '__main__':
             fromCache.configureRefinement(originalRefinements)
         elif args.refinement == "nemetyl":
             fromCache.configureRefinement(nemetylRefinements)
+        elif args.refinement == "zerocharPCAmocoSF":
+            fromCache.configureRefinement(zerocharPCAmocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
         elif args.refinement is None or args.refinement == "none":
             print("No refinement selected. Performing raw segmentation.")
+        else:
+            print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
+            exit(2)
+    elif tokenizer[:5] == "zeros":
+        if args.refinement == "PCAmocoSF":
+            fromCache.configureRefinement(pcaMocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement is None or args.refinement == "none":
+            print("No refinement selected. Performing zeros segmentation with CropChars.")
         else:
             print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
             exit(2)

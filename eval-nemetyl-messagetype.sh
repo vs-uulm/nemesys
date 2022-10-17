@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# Calls the reference implementation of NEMETYL described in our INFOCOM 2020 paper.
+# The parameters in this script are the same as used in the paper's evaluation.
 
 #input=input/*-100.pcap
 #input=input/*-1000.pcap
@@ -15,18 +18,29 @@ input="input/maxdiff-fromOrig/*-100*.pcap"
 sigmas="1.2"
 
 # full
-segmenters="nemesys"
+segmenters="nemesys zeros"
 
 # full
-#refines="none original base nemetyl"
+#refines="none original base nemetyl PCA1 PCAmoco PCAmocoSF zerocharPCAmocoSF emzcPCAmocoSF"
 
 # Nemesys options
-# refines="original nemetyl"
-refines="nemetyl"
+# refines="original nemetyl PCA1 PCAmoco zerocharPCAmocoSF"
+# default
+# refines="original nemetyl zerocharPCAmocoSF"
+
+# Zeros options
+# refines="none PCA1 PCAmocoSF"
+# default
+# refines="PCA1 PCAmocoSF"
+
+# all-segmenter defaults
+# refines="PCA1 PCAmocoSF original nemetyl zerocharPCAmocoSF emzcPCAmocoSF"
+
+refines="nemetyl PCAmocoSF zerocharPCAmocoSF emzcPCAmocoSF"
 
 
 L2PROTOS="input/awdl-* input/au-* input/wlan-beacons-*"
-L1PROTOS=""
+L1PROTOS="input/ari_*"
 LEPROTOS="input/awdl-* input/au-* input/smb* input/*/smb* input/wlan-beacons-*"
 
 prefix="nemetyl"

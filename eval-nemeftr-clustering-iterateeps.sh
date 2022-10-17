@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 #
-# NEMEFTR-full mode 1:
-# Clustering of segments on similarity without ground truth.
+# Calls the reference implementation of the field type clustering of segments on similarity without ground truth
+# described in our DSN 2022 paper (NEMEFTR-full mode 1). This script iterates the epsilon parameter for clustering
+# for evaluation over the configured range.
+# The parameters in this script are the same as used in the paper's evaluation.
 
 input="input/maxdiff-fromOrig/*-100*.pcap"
 
 
-segmenters="nemesys"
+segmenters="nemesys zeros"
 
 # Nemesys options
-refines="none original nemetyl"
+# refines="original nemetyl PCA1 PCAmoco zerocharPCAmocoSF emzcPCAmocoSF"
+
+# Zeros options
+#refines="none PCA1 PCAmocoSF"
+
+refines="PCAmocoSF nemetyl emzcPCAmocoSF"
 
 L2PROTOS="input/awdl-* input/wlan-beacons-*"
 LEPROTOS="input/awdl-* input/wlan-beacons-* input/smb* input/*/smb*"

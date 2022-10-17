@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 #
-# NEMEFTR-full mode 1:
-# Clustering of segments on similarity without ground truth.
+# Calls the reference implementation of the field type clustering of segments on similarity without ground truth
+# described in our DSN 2022 paper (NEMEFTR-full mode 1). The parameters in this script are the same as used
+# in the paper's evaluation.
+
 
 input="input/maxdiff-fromOrig/*-100*.pcap"
 #input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
 
 
-segmenters="nemesys"
+segmenters="nemesys zeros"
 
 # Nemesys options
-refines="original nemetyl"
+# refines="original nemetyl PCA1 PCAmoco zerocharPCAmocoSF emzcPCAmocoSF"
+
+# Zeros options
+#refines="none PCA1 PCAmocoSF"
+
+refines="nemetyl PCAmocoSF emzcPCAmocoSF"
 
 
+L1PROTOS="input/ari_*"
 L2PROTOS="input/awdl-* input/au-* input/wlan-beacons-*"
 LEPROTOS="input/awdl-* input/au-* input/smb* input/*/smb* input/wlan-beacons-*"
 
@@ -47,6 +55,12 @@ for seg in ${segmenters} ; do
               optargs="-l 2"
             fi
           done
+          for proto in ${L1PROTOS} ; do
+            if [[ "${fn}" == ${proto} ]] ; then
+              # replace
+              optargs="-l 1"
+            fi
+          done
           for proto in ${LEPROTOS} ; do
             if [[ "${fn}" == $proto ]] ; then
               # append
@@ -57,7 +71,7 @@ for seg in ${segmenters} ; do
           strippedname="${bn%.*}"
 
           # fixed sigma 1.2 (nemeftr-paper: "constant σ of 1.2")  ###  add -p for plots
-          python src/nemeftr_cluster-segments.py -pt ${seg} -s 1.2 ${optargs} -f ${ref} ${fn} # >> "${report}/${strippedname}.log" &
+          python src/nemeftr_cluster-segments.py -t ${seg} -s 1.2 ${optargs} -f ${ref} ${fn} # >> "${report}/${strippedname}.log" &
           pids+=( $! )
           # python src/nemeftr_cluster-segments.py -t ${seg} -s 1.2 -p -e ${optargs} -f ${ref} ${fn}
 
@@ -65,11 +79,11 @@ for seg in ${segmenters} ; do
           # python src/nemeftr_cluster-segments.py -p -f ${ref} ${fn}
       done
 
-      for pid in "${pids[@]}"; do
-              printf 'Waiting for %d...' "$pid"
-              wait $pid
-              echo 'done.'
-      done
+#      for pid in "${pids[@]}"; do
+#              printf 'Waiting for %d...' "$pid"
+#              wait $pid
+#              echo 'done.'
+#      done
 
       mkdir ${report}-${seg}-${ref}
       for fn in ${input};

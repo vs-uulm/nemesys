@@ -1,13 +1,15 @@
-# NEMESYS and NEMETYL
+# NEMESYS, NEMETYL, and followup work
+This repository contains one integrated proof-of-concept implementation of multiple concepts, methods, and 
+algoritms developed during the dissertation of Stephan Kleber, ORCID 0000-0001-9836-4897.
+The implemention contains the following concepts, methods, and algorithms:
 
-#### NEMESYS: NEtwork MEssage Syntax analysYS
-and 
-#### Format Match Score
+----
+
+#### NEMESYS: NEtwork MEssage Syntax analysYS *and* FMS: Format Match Score
 
 **Paper authors:** Stephan Kleber, Henning Kopp, and Frank Kargl, *Institute of Distributed Systems, Ulm University*
 
 https://www.usenix.org/conference/woot18/presentation/kleber
-
 
 ###### On usage please cite as:
 
@@ -15,7 +17,7 @@ https://www.usenix.org/conference/woot18/presentation/kleber
 
 [BibTeX](https://www.usenix.org/biblio/export/bibtex/220576)
 
-
+---
 
 #### NEMETYL: NEtwork MEssage TYpe identification by aLignment
 
@@ -27,12 +29,34 @@ https://arxiv.org/abs/2002.03391
 
 *S. Kleber, R. W. van der Heijden, and F. Kargl:* „Message Type Identification of Binary Network Protocols using Continuous Segment Similarity“, in IEEE International Conference on Computer Communications, 2020.
 
+---
 
 
+##### Network Message Field Type Classification
+
+**Paper authors:**
+Stephan Kleber, Frank Kargl, *Institute of Distributed Systems, Ulm University*
+and 
+Milan Stute, Matthias Hollick, *Secure Mobile Networking Lab, Technical University of Darmstadt* 
+
+###### On usage please cite as:
+
+*Stephan Kleber, Milan Stute, Matthias Hollick, and Frank Kargl:* „Network Message Field Type Classification and Recognition for Unknown Binary Protocols“. In Proceedings of the DSN Workshop on Data-Centric Dependability and Security. DCDS. Baltimore, Maryland, USA: IEEE/IFIP, 2022.
+
+---
+
+##### PCA for Network Message Segmentation
+
+**Paper authors:** Stephan Kleber and Frank Kargl, *Institute of Distributed Systems, Ulm University*
+
+###### On usage please cite as:
+
+*Stephan Kleber and Frank Kargl:* „Refining Network Message Segmentation with Principal Component Analysis“. In Proceedings of the tenth annual IEEE Conference on Communications and Network Security. CNS. Austin, TX, USA: IEEE, 2022.
+
+---
 
 
-
-## Release: INFOCOM2020
+## Release: CNS2022
 
 **Code author:** Stephan Kleber ([stephan.kleber@uni-ulm.de](mailto:stephan.kleber@uni-ulm.de)), *Institute of Distributed Systems, Ulm University*
 
@@ -43,9 +67,19 @@ Additionally, this repository contains the reference implementation for calculat
 
 **NEMETYL** is a novel method for discriminating protocol message types from each other. It uses structural features of binary protocols inferred by NEMESYS to accurately recognize structural patterns and cluster messages based on their common structure.
 
-NEMESYS, FMS, and NEMETYL are indented to be used as a library to be integrated into your own scripts.
+**Network Message Field Type Classification** is the first generic method to analyze message field data types in unknown binary protocols by clustering of segments with the same data type as a kind of semantic deduction.
+
+**PCA for Network Message Segmentation** is a method to refine the approximation of the field inference. It uses principle component analysis (PCA) to discover
+linearly correlated variance between sets of message segments. We relocate the boundaries of the initial coarse segmentation to more accurately match with the true fields.
+
+NEMESYS, FMS, NEMETYL, the Field Type Classification, and PCA-refined Segmentation are indented to be used as a library to be integrated into your own scripts.
 However, you can also use it interactively with your favorite python shell.
-Have a look into `nemesys.py`, `nemesys_fms.py`, resp. `nemetyl_align-segments.py` to get an impression of the basic functionality and how to call it.
+Have a look into `nemesys.py`, `nemesys_fms.py`, `nemesys_pca-refinement.py`, `nemezero_pca-refinement.py`,
+`nemetyl_align-segments.py`, resp.
+`nemeftr-prod_cluster-segments.py`
+ to get an impression of the basic functionality and how to call it.
+The other scrpts in `src/` show how other aspects of the contained methods can be used and explored.
+All of these scripts can be called with commane line parameters to immediately start analyzing protocol traces with the default settings also used in the published papers.
 
 
 
@@ -61,8 +95,7 @@ This is highly experimental software and by no means guaranteed to be fit for pr
 * libpcap for pcapy: `apt-get install libpcap-dev libpq-dev`
 * Install packages listed in requirements.txt: `pip install -r requirements.txt`
 	* This necessitates to install libpcap for pcapy: `sudo apt-get install libpcap-dev`
-* Manual install of Netzob from the ["fix-layer-build" branch](git@github.com:skleber/netzob.git)
-  -- ~~currently NOT the official~~ [~~"next" branch~~](https://github.com/netzob/netzob/tree/next/netzob)! --
+* Manual install of Netzob from the ["next" branch](https://github.com/netzob/netzob/tree/next/netzob)
   (the current Netzob version available in the official repository and via PyPI lacks some required fixes): 
     * clone Netzob next branch to a local folder: `git clone --single-branch -b next https://github.com/netzob/netzob.git` 
     * install it: `python setup.py install`
@@ -110,8 +143,13 @@ All scripts provide these command line options:
 PCAP preparation scripts:
 
 * `prep_deduplicate-trace.py pcapfilename`
+
   Detect identical payloads and de-duplicate traces, ignoring encapsulation metadata.
 
+* `prep_filter-maxdiff-trace.py pcapfilename`
+
+  Filter a PCAP for the subset of packets that have the maximum difference to all other messages.
+  
 
 ### check_*
 Basic checks whether PCAPs are parseable:
@@ -122,9 +160,14 @@ The tshark-dissected fields that are contained in the PCAPs need to be known to 
 Therefore, validation.messageParser.ParsingConstants needs to be made aware of any field occuring in the traces.
 
 * `check_parse-pcap.py pcapfilename`
+
   Parse a PCAP file and print its dissection for testing. This helps verifying if there are any unknown fields 
   that need to be added to validation.messageParser.ParsingConstants.
   Before starting to validate/use FMS with a new PCAP, first run this check and solve any errors.
+
+* `check_pcap-info.py pcapfilename`
+
+  Parse PCAP, print some statistics and infos about it, and open an IPython shell.
   
   
 
@@ -133,25 +176,57 @@ Infer messages from PCAPs by the NEMESYS approach (BCDG-segmentation)
 and write FMS and other evaluation data to reports and plots.
 
 * `nemesys.py pcapfilename`
+
   Run NEMESYS and open an interactive python shell (IPython) that provides access to the analysis results.
 
 * `nemesys_fms.py pcapfilename`
+
   Run NEMESYS and validate it by calculating the FMS for each inferred message.
   Writes the results as text files to a timestamped subfolder of `reports/` 
   
 * `nemesys_field-deviation-plot.py pcapfilename`
+
   Run NEMESYS and validate it by visualizing the deviation of the true format from each inferred message.
   Writes the results as plots in PDF files to a timestamped subfolder of `reports/` 
+
+* `nemesys_pca-refinement.py pcapfilename` 
+
+  Reference implementation of the refinement of segments of messages according to their variance measured 
+  by PCA as described in our CNS 2022 paper.
+  Writes the results as text files to a timestamped subfolder of `reports/`
 
 
 
 ### nemetyl_*
-
 Infer message types from PCAPs using Canberra dissimilarity as feature to determine segment similarity. Similar segments are then aligned in multiple messages and clustered based on their alignment scores. The clusters denote the inferred message types of similar structure.
 
-* `nemetyl_align-segments.py`
+* `nemetyl_align-segments.py pcapfilename`
 
   Run NEMETYL and write the analysis results to a subfolder of `reports/`.
+
+
+### nemeftr_*
+Classity Network Message Field Types using Canberra dissimilarity and DBSCAN clustring.
+
+* `nemeftr-prod_cluster-segments.py`
+
+  Reference implementation for calling NEMEFTR-full mode 1, 
+  the NEtwork MEssage Field Type Recognition (DSN 2022),
+  classification of data types, with an unknown protocol.
+
+* `nemeftr_cluster-segments.py`
+
+  Plot and print dissimilarities between segments for an early state of NEMEFTR and for the evaluation of 
+  the epsilon autoconfiguration. Segments are generated from a heuristic segmentation.
+  Output for evaluation are a dissimilarity topology plot and histogram, ECDF plot, clustered vector visualization plots,
+  and segment cluster statistics.
+
+* `nemeftr_cluster-true-fields.py`
+
+  Plot and print dissimilarities between segments for an early state of NEMEFTR and for the evaluation of 
+  the epsilon autoconfiguration. Segments are generated from an optimal baseline segmentation. 
+  Output for evaluation are a dissimilarity topology plot and histogram, ECDF plot, clustered vector visualization plots,
+  and segment cluster statistics.
 
 
 

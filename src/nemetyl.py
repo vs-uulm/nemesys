@@ -17,7 +17,8 @@ import os
 import IPython
 
 from nemere.alignment.alignMessages import TypeIdentificationByAlignment
-from nemere.inference.segmentHandler import originalRefinements, nemetylRefinements
+from nemere.inference.segmentHandler import originalRefinements, nemetylRefinements, zerocharPCAmocoSFrefinements, \
+    pcaMocoSFrefinements
 from nemere.inference.templates import ClusterAutoconfException
 from nemere.utils.evaluationHelpers import StartupFilecheck, CachedDistances, TitleBuilder, writePerformanceStatistics
 
@@ -31,13 +32,15 @@ analysis_method = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 # tokenizers to select from
-tokenizers = ('4bytesfixed', 'nemesys')
+tokenizers = ('4bytesfixed', 'nemesys', 'zeros')
 roundingprecision = 10**8
 # refinement methods
 refinementMethods = [
     "none",
     "original", # WOOT2018 paper
     "nemetyl",  # INFOCOM2020 paper: ConsecutiveChars+moco+splitfirstseg
+    "PCAmocoSF",  # PCA+moco+SF (v2) | applicable to zeros
+    "zerocharPCAmocoSF"  # with split fixed (v2)
     ]
 
 if __name__ == '__main__':
@@ -87,8 +90,22 @@ if __name__ == '__main__':
             fromCache.configureRefinement(originalRefinements)
         elif args.refinement == "nemetyl":
             fromCache.configureRefinement(nemetylRefinements)
+        elif args.refinement == "zerocharPCAmocoSF":
+            fromCache.configureRefinement(zerocharPCAmocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
         elif args.refinement is None or args.refinement == "none":
             print("No refinement selected. Performing raw segmentation.")
+        else:
+            print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
+            exit(2)
+    elif tokenizer[:5] == "zeros":
+        if args.refinement == "PCAmocoSF":
+            fromCache.configureRefinement(pcaMocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement is None or args.refinement == "none":
+            print("No refinement selected. Performing zeros segmentation with CropChars.")
         else:
             print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
             exit(2)
@@ -199,5 +216,5 @@ if __name__ == '__main__':
     if args.interactive:
         # noinspection PyUnresolvedReferences
         from tabulate import tabulate
-        # globals().update(locals())
+
         IPython.embed()

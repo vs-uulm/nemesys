@@ -197,6 +197,9 @@ class MergeConsecutiveChars(Merger):
 
 
 class EntropyMerger(Merger):
+    """
+    Merge consecutive segments if both have an n-gram entropy higher than a threshold and other conditions are met.
+    """
 
     # min entropy above which consecutive segments are merged if both have an n-gram entropy higher than this.
     consecutiveEntropiesThresh = 0.5
@@ -210,6 +213,13 @@ class EntropyMerger(Merger):
     # congruenceEntropiesThresh = 0.95
 
     def condition(self, segl: MessageSegment, segr: MessageSegment):
+        """
+        Merge segments if entropy conditions (see `self.staticCondition()`) are met.
+
+        :param segl: left segment
+        :param segr: right segment
+        :return: True if merging is required, False otherwise.
+        """
         clearToMerge = type(self).staticCondition(segl, segr)
         if clearToMerge:
             logger = logging.getLogger(__name__)
@@ -218,6 +228,24 @@ class EntropyMerger(Merger):
 
     @staticmethod
     def staticCondition(segl: MessageSegment, segr: MessageSegment):
+        """
+        Merge ﬁelds of a message carrying random-looking contents and thus split up too much  into a single segment,
+        after identifying them by their local entropy. We deﬁne local entropy to be the normalized entropy of
+        consecutive bit n-grams. If two subsequent segments have a high local entropy and the diﬀerence between their
+        local entropies is small, we identify both segments as likely random. However, there are instances where two
+        subsequent segments look random within themselves, but their start is discernible, like counters or timestamps
+        that have similar most signiﬁcant bits. To prevent merging those, we bit-wise XOR subsequent segments and
+        calculate the local entropy for this combination. We merge consecutive segments if the local entropy of both
+        segments is greater than EntropyMerger.congruenceEntropiesThresh,
+        their entropy diﬀerence is below EntropyMerger.consecutiveEntropiesDiffThresh,
+        and the entropy of the XOR congruence between both segments’ beginnings is greater than 0.95.
+        The thresholds are conservative in that they where empirically determined using our test traces
+        to minimize false positives.
+
+        :param segl: left segment
+        :param segr: right segment
+        :return: The two segments should be merged of True, if not this is False.
+        """
         eobl = entropyOfBytes(segl.bytes)
         eobr = entropyOfBytes(segr.bytes)
         diff = abs(eobl - eobr)
@@ -248,6 +276,13 @@ class FrequencyRiseMerger(Merger):
             self._holdPeak[seg] = lastFrequency
 
     def condition(self, segl: TypedSegment, segr: TypedSegment) -> bool:
+        """
+        Condition check to merge segments if the frequency of byte values rises.
+
+        :param segl: left segment
+        :param segr: right segment
+        :return: True if merging is required, False otherwise.
+        """
         if self._littleEndian:
             return self._holdPeak[segl] <= self._holdPeak[segr]
         else:
@@ -730,12 +765,25 @@ class RelocateZeros(MessageModifier):
     """Improve its raw segments by relocating inferred boundaries near the beginning and end of sequences of nulls."""
 
     def __init__(self, segments: List[MessageSegment], comparator: MessageComparator):
+        """
+        :param segments: The segments of one message in offset order.
+        :param comparator: Ground truth
+        """
         super().__init__(segments)
         self._parsedMessage = comparator.parsedMessages[comparator.messages[segments[0].message]]
         self.counts = None
         self.doprint = False
 
     def split(self):
+        """
+        Split message segments:
+        1. If the last bytes before the nulls fulﬁll the character heuristic, assume it is a null-termination for the
+           string and allocate the nulls to the end of the character segment;
+        1. otherwise, assign the null-bytes to the following segment, assuming they are the
+           unset most signiﬁcant bytes of a number value.
+
+        :return: The new segmentations of the messages.
+        """
         trueFieldEnds = MessageComparator.fieldEndsFromLength([l for t, l in self._parsedMessage.getFieldSequence()])
 
         newmsg = self.segments[0:1]
@@ -805,9 +853,7 @@ class RelocateZeros(MessageModifier):
 
     def initCounts(self, amounts: Dict[str, int] = None):
         """
-        Counts of different kinds of off-by-one situations for zeros
-
-        :return:
+        Counts of different kinds of off-by-one situations for zeros. Results are placed in `self.counts`.
         """
         if amounts is None:
             self.counts = {
@@ -818,10 +864,11 @@ class RelocateZeros(MessageModifier):
             self.counts = amounts
 
 
-
-
 class RelocatePCA(object):
-
+    """
+    Method to refine the segmentation by principle component analysis (PCA) to discover
+    linearly correlated variance between sets of message segments.
+    """
     # PCA conditions parameters
     minSegLen = 3  # minimum number of cluster members
     maxAbsolutePrincipals = 4  # absolute maximum of significant principal components for PCA/sub-clustering
@@ -852,6 +899,13 @@ class RelocatePCA(object):
     def __init__(self, similarSegments: FieldTypeContext,
                  eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]=None,
                  screeKnee: float=None, littleEndian: bool=False):
+        """
+        :param similarSegments: Segments that are similar enough so that
+            we do not measure random but systematic variance.
+        :param eigenValuesAndVectors: The Eigenvalues and -vectors of the covariance matrix of similarSegments.
+        :param screeKnee: The knee in the scree graph of the given Eigenvalues.
+        :param littleEndian: If the protocol should be treated as little endian.
+        """
         self._similarSegments = similarSegments
         self._eigen = eigenValuesAndVectors if eigenValuesAndVectors is not None \
             else numpy.linalg.eigh(similarSegments.cov)
@@ -876,16 +930,19 @@ class RelocatePCA(object):
 
         self._testSubclusters = None
 
-
     @property
     def similarSegments(self):
+        """
+        :return: Segments that are contained in this object.
+        """
         return self._similarSegments
-
 
     @property
     def eigen(self):
+        """
+        :return: Eigenvalues and -vectors
+        """
         return self._eigen
-
 
     @staticmethod
     def screeKneedle(eigenValuesAndVectors: Tuple[numpy.ndarray, numpy.ndarray]) -> float:
@@ -912,19 +969,15 @@ class RelocatePCA(object):
         if not isinstance(kl.knee, int):
             return 0.0
 
-        # if kl.knee > 1:
-        #     print(scree)
-        #     import matplotlib.pyplot as plt
-        #     kl.plot_knee_normalized()
-        #     plt.show()
-        #     # IPython.embed()
-
         return scree[kl.knee]
-
-
 
     @staticmethod
     def filterForSubclustering(fTypeContext: Sequence[FieldTypeContext]):
+        """
+        :param fTypeContext: Input clusters.
+        :return: List of cluster IDs that potentially need to be subclustered.
+            For the current approach, return all clusters.
+        """
         interestingClusters = [
             cid for cid, clu in enumerate(fTypeContext)
             # if not clu.length < RelocatePCA.minSegLen
@@ -986,23 +1039,20 @@ class RelocatePCA(object):
 
         return interestingClusters, eigenVnV, screeKnees
 
-
     @property
     def principalComponents(self):
-        """**significant** principal components (scores)"""
+        """:return: **significant** principal components (scores)"""
         return self._principalComponents
-
 
     @property
     def screeThresh(self):
+        """return: The scree-dependent minimum for any principal component."""
         return self._screeThresh
-
 
     @property
     def contribution(self):
-        """contributions of loadings per **significant** principal component"""
+        """:return: Contributions of loadings per **significant** principal component"""
         return self._contribution
-
 
     @staticmethod
     def _preFilter(segments: Sequence[MessageSegment], label: str) -> Tuple[FieldTypeContext, bool]:
@@ -1036,7 +1086,6 @@ class RelocatePCA(object):
 
         return ftContext, RelocatePCA.__preFilter(ftContext)
 
-
     @staticmethod
     def __preFilter(ftContext: FieldTypeContext) -> bool:
         """
@@ -1065,7 +1114,6 @@ class RelocatePCA(object):
 
         return enoughSegments and enoughVariance and notOnlyChars
 
-
     def _meetsPCAprerequisites(self) -> bool:
         """
         Apply at the beginning of a new sub-clustering recusion between PCA or further sub-clustering.
@@ -1092,7 +1140,6 @@ class RelocatePCA(object):
                 self._similarSegments.fieldtype, charSegCount))
 
         return not tooManyPCs and not tooHighLenDiff and not tooManyChars
-
 
     def getSubclusters(self, dc: DistanceCalculator = None, S: float = None,
                        reportFolder: str = None, trace: str = None) -> List[Union['RelocatePCA', FieldTypeContext]]:
@@ -1190,13 +1237,12 @@ class RelocatePCA(object):
             print(e)
             return [self]
 
-
-
-
     def relocateOffsets(self, reportFolder:str = None, trace:str = None, comparator: MessageComparator = None,
                         conditionA = True, conditionE1 = False, conditionE2 = True,
                         conditionF = False, conditionG = False):
         """
+        Determine candidate offsets for relocation according to the PCA method using the given enabled interpretation
+        conditions. Contains a series of debugging options that allow to trace the origin for refinement decisions.
 
         :param conditionA:  Enable Condition A
         :param conditionE1: Enable Condition E1
@@ -1511,7 +1557,6 @@ class RelocatePCA(object):
 
         return relocate
 
-
     def relocateBoundaries(self, comparator: MessageComparator = None, reportFolder:str = None) \
             -> Dict[MessageSegment, List[int]]:
         """
@@ -1676,7 +1721,6 @@ class RelocatePCA(object):
 
                 unchangedBounds = commonBounds.unchangedBounds(seg, relocate)
 
-
                 # Separately calculate frequency of off-by-one positions of unchanged bounds
                 # (copy of commonBounds.commonUnchangedOffByOne(seg) internals)
                 uoboFreq = {
@@ -1688,12 +1732,6 @@ class RelocatePCA(object):
                         max(commonBounds.commonEnds[ub - 1] / sum(commonBounds.commonEnds.values()),
                             uoboFreq[ub - 1] if ub - 1 in uoboFreq else -1)
                     for ub in unchangedBounds if ub - 1 in commonBounds.commonEnds })
-                # uoboFreq = {uobo: max(commonBounds.commonStarts[uobo] / sum(commonBounds.commonStarts.values()),
-                #                 commonBounds.commonEnds[uobo] / sum(commonBounds.commonEnds.values()))
-                #         for uobo in unchangedOffbyone
-                #         if (uobo in commonBounds.commonStarts)
-                #         or (uobo in commonBounds.commonEnds)}
-
 
                 # True boundaries for the segments' relative positions
                 fe = [0] + comparator.fieldEndsPerMessage(seg.analyzer.message)
@@ -1747,17 +1785,6 @@ class RelocatePCA(object):
                             valTable[num],
                         ])
 
-            # # segment boundary change comparison tables
-            # print()
-            # print(sc.similarSegments.fieldtype)
-            # print()
-            # print(tabulate(valMtrx, showindex=True, headers=["seg", "original"]
-            #                                 + ["new"] * (len(valMtrx[0]) - 3)
-            #                                 + ["newBounds", "cutsExt"]
-            #                ))
-            # print()
-            # print(commonBounds.commonStarts.most_common())
-            # print(commonBounds.commonEnds.most_common())
             tabmod.PRESERVE_WHITESPACE = False
 
         # collect new bounds
@@ -1775,9 +1802,6 @@ class RelocatePCA(object):
 
         return relocatedBoundaries
 
-
-
-
     @staticmethod
     def _offbyone(reloc: List[int]):
         """
@@ -1787,10 +1811,11 @@ class RelocatePCA(object):
         return sorted(set([r - 1 for r in reloc] + [r for r in reloc] + [r + 1 for r in reloc]))
 
 
-
-
-
     class CommonBoundUtil(object):
+        """
+        Utility class to refine boundaries within the padded range of all segments in a cluster considering
+        frequent common offsets and end positions.
+        """
 
         commonFreqThreshold = 0.4
         """Threshold for the frequency of a bound has at least to have 
@@ -1844,7 +1869,7 @@ class RelocatePCA(object):
 
         def filterOutMoreCommonNeighbors(self, relocWmargin: List[int]) -> Tuple[List[int], List[int]]:
             """
-            resolve adjacent most common starts/ends (use more common bound)
+            Resolve adjacent most common starts/ends (use more common bound).
 
             :param relocWmargin:
             :return: More common starts and ends, than their neighboring common starts or ends.
@@ -1869,7 +1894,7 @@ class RelocatePCA(object):
 
         def unchangedBounds(self, seg: MessageSegment, reloc: List[int]):
             """
-            inverse of moveAt*
+            Inverse of moveAt*
 
             :param seg:
             :param reloc: here we need the padding-global raw "relocate" without the added 0 and length
@@ -1902,22 +1927,6 @@ class RelocatePCA(object):
                                           and self.commonEnds[ub - 1] >
                                           RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonEnds.values())
                 ]
-
-            # unchangedOffbyone = [ub - 1 for ub in unchangedBounds] + [ub + 1 for ub in unchangedBounds]
-            # commonUnchangedOffbyone = [uobo for uobo in unchangedOffbyone
-            #                            if (uobo in self.commonStarts and
-            #                                self.commonStarts[uobo] >
-            #                                RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonStarts.values()))
-            #                            or (uobo in self.commonEnds and
-            #                                self.commonEnds[uobo] >
-            #                                RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(self.commonEnds.values())
-            #                            )]
-
-            # if any(cb for cb in (self.commonStarts, self.commonEnds)
-            #         if uobo in cb and
-            #         cb[uobo] > RelocatePCA.CommonBoundUtil.uoboFreqThresh * sum(cb.values())
-            #        )
-            # ]
 
             return commonUnchangedOffbyone
 
@@ -1994,11 +2003,6 @@ class RelocatePCA(object):
             return cutsExt
 
 
-
-
-
-
-
     @staticmethod
     def segs4bound(segs2bounds: Dict[MessageSegment, List[int]], bound: int) -> List[MessageSegment]:
         """
@@ -2013,7 +2017,6 @@ class RelocatePCA(object):
             for b in bounds.copy():
                 if b == bound:
                     yield seg
-
 
     @staticmethod
     def removeSuperfluousBounds(newBounds: Dict[AbstractMessage, Dict[MessageSegment, List[int]]]):
@@ -2096,9 +2099,7 @@ class RelocatePCA(object):
                         print()
                         IPython.embed()
 
-
         return newBounds
-
 
     @staticmethod
     def refineSegmentedMessages(inferredSegmentedMessages: Iterable[Sequence[MessageSegment]],
@@ -2245,7 +2246,6 @@ class RelocatePCA(object):
             assert msgbytes == msg.data, "segment sequence does not match message bytes"
         return refinedSegmentedMessages
 
-
     @staticmethod
     def refineSegments(inferredSegmentedMessages: Iterable[Sequence[MessageSegment]], dc: DistanceCalculator,
                        initialKneedleSensitivity: float=10.0, subclusterKneedleSensitivity: float=5.0,
@@ -2382,7 +2382,6 @@ class BlendZeroSlices(MessageModifier):
         if BlendZeroSlices._debug:
             self.zeroSegments = list()
 
-
     def blend(self, ignoreSingleZeros=False, littleEndian=False):
         """
         :param ignoreSingleZeros: ignore single zero bytes (except after char sequences),
@@ -2475,7 +2474,6 @@ class CropChars(MessageModifier):
     `inference.segmentHandler.isExtendedCharSeq`, to find these.
     Generates segments from those char sequences and the given segments of the message (see constructor).
     """
-
     def split(self):
         """
         Split a message into char segments and blend them with the segments given in the object instance's segment
@@ -2498,7 +2496,6 @@ class CropChars(MessageModifier):
                                      + msgbytes.hex() + "\nis:     " + newbytes.hex()
 
         return blendedSegments
-
 
     def blend(self, mixin: List[MessageSegment]):
         """
@@ -2529,7 +2526,6 @@ class CropChars(MessageModifier):
                 newSegSeq.append(MessageSegment(seg.analyzer, lastOffset, seg.nextOffset - lastOffset))
             # else nothing to do since no bytes/segments left
         return newSegSeq
-
 
     @staticmethod
     def isOverlapping(segA: MessageSegment, segB: MessageSegment) -> bool:

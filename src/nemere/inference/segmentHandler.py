@@ -373,9 +373,9 @@ def pcaMocoDoubleCharRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegmen
     perform the char refinements after 2 passes of PCA and moco.
     TODO Is this better than pcaMocoRefinements
 
-    :param segmentsPerMsg:
-    :param kwargs:
-    :return:
+    :param segmentsPerMsg: A list of lists of segments for each message.
+    :param kwargs: Arguments to forward to the `RelocatePCA.refineSegments()` function
+    :return: refined segments in list per message
     """
     import nemere.inference.formatRefinement as refine
 
@@ -408,7 +408,7 @@ def pcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs)
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.
-    :param kwargs: is forwarded to RelocatePCA.refineSegments
+    :param kwargs: Is forwarded to `RelocatePCA.refineSegments()`
     :return: refined segments in list per message
     """
     from itertools import chain
@@ -437,7 +437,7 @@ def pcaPcaRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwar
     Inflections of gauss-filtered bit-congruence deltas.
 
     :param segmentsPerMsg: a list of one list of segments per message.
-    :param kwargs: is forwarded to RelocatePCA.refineSegments
+    :param kwargs: is forwarded to `RelocatePCA.refineSegments()`
     :return: refined segments in list per message
     """
     from itertools import chain
@@ -491,6 +491,15 @@ def baseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[
 
 
 def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:
+    """
+    Refine segmentation by slicing messages at null-bytes using
+    nemere.inference.formatRefinement.BlendZeroSlices
+    and subsequently apply baseRefinements.
+
+    :param segmentsPerMsg: A list of lists of segments for each message.
+    :param kwargs: Flags for collectedSubclusters and/or littleEndian
+    :return: refined segments in list per message
+    """
     import nemere.inference.formatRefinement as refine
 
     if "collectedSubclusters" in kwargs:
@@ -508,6 +517,14 @@ def zeroBaseRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kw
 
 
 def zeroPCARefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> List[List[MessageSegment]]:
+    """
+    Refine segmentation by slicing messages at null-bytes using zeroBaseRefinements
+    (i. a., nemere.inference.formatRefinement.BlendZeroSlices)
+    and subsequently apply pcaRefinements.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :return: refined segments in list per message
+    """
     return pcaRefinements(zeroBaseRefinements(segmentsPerMsg))
 
 
@@ -604,6 +621,16 @@ def originalRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]]) -> L
 
 def zerocharPCAmocoRefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
                        ) -> List[List[MessageSegment]]:
+    """
+    Refine segmentation by slicing messages at null-bytes using zeroBaseRefinements
+    (i. a., nemere.inference.formatRefinement.BlendZeroSlices)
+    and subsequently apply PCA refinement and most-common-values refinement.
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: Is forwarded to `RelocatePCA.refineSegments()`
+        and also directly uses collectedSubclusters and littleEndian flags
+    :return: refined segments in list per message
+    """
     import nemere.inference.formatRefinement as refine
 
     if "collectedSubclusters" in kwargs:
@@ -689,8 +716,8 @@ def pcaMocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **k
 def zerocharPCAmocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
                                  ) -> List[List[MessageSegment]]:
     """
-    Refine the segmentation according to the (unpublished) NEMEPCA paper method using specific improvements
-    for the feature: Inflections of gauss-filtered bit-congruence deltas.
+    Refine the segmentation with a slightly simpler method than in the NEMEPCA paper (DSN 2022)
+    using specific improvements for the feature: Inflections of gauss-filtered bit-congruence deltas.
         * NEMESYS
         * NullBytes
         * CropChars
@@ -727,6 +754,30 @@ def zerocharPCAmocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegmen
 
 def entropymergeZeroCharPCAmocoSFrefinements(segmentsPerMsg: Sequence[Sequence[MessageSegment]], **kwargs
                                  ) -> List[List[MessageSegment]]:
+    """
+    Refine the segmentation according to the NEMEPCA (CNS 2022 paper) method using specific improvements
+    for the feature: Inflections of gauss-filtered bit-congruence deltas.
+        * NEMESYS
+        * EntropyMerge
+        * NullBytes
+        * CropChars
+        * PCA
+        * CropDistinct
+        * SplitFixedv2
+
+    :param segmentsPerMsg: a list of one list of segments per message.
+    :param kwargs: For evaluation:
+        * comparator: Encapsulated true field bounds to compare results to.
+        * reportFolder: For evaluation: Destination path to write results and statistics to.
+        * collectedSubclusters: For evaluation: Collect the intermediate (sub-)clusters generated during
+        the analysis of the segments.
+        * and others accepted by refine.RelocatePCA.refineSegments()
+    :return: refined segments in list per message
+
+    :param segmentsPerMsg:
+    :param kwargs:
+    :return:
+    """
     import nemere.inference.formatRefinement as refine
 
     print("Refine segmentation (Merge consecutive random segments)...")

@@ -2,8 +2,6 @@
 Filter a PCAP for the subset of packets that have the maximum difference to all other messages.
 For the maximum difference, multiple approaches are conceivable. Here we implement three for comparison and apply
 the metric of the average least common segment values per message.
-
-For some evaluation results see: nemesys-reports/NEMEPrep/prep_filter-maxdiff-trace.terminal.txt
 """
 
 import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
@@ -21,7 +19,7 @@ from tabulate import tabulate
 
 from netzob.Model.Vocabulary.Messages.RawMessage import AbstractMessage
 
-from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, baseRefinements
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, zeroBaseRefinements
 from nemere.inference.segments import MessageSegment
 from nemere.inference.templates import DelegatingDC, Template
 from nemere.inference.analyzers import Value
@@ -194,7 +192,7 @@ if __name__ == '__main__':
     specimens = SpecimenLoader(pcapfilename, args.layer, args.relativeToIP)
     if args.filter in filterOptions[1:]:  # only the second two filters need segments.
         segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-        refinedPerMsg = baseRefinements(segmentsPerMsg)
+        refinedPerMsg = zeroBaseRefinements(segmentsPerMsg)
 
     print("Filter messages...")
     filterduration = time.time()
@@ -241,19 +239,11 @@ if __name__ == '__main__':
             if writeHead:
                 cw.writerow(headers)
             cw.writerows(stats)
-        #
-        # msgRlookup = {v:k for k,v in specimens.messagePool.items()}
-        # for pmsg in pms:
-        #     filteredComparator.pprint2Interleaved(msgRlookup[pmsg.message])  # RawMessage -> L4Message
-        # print("\n")
     except NotImplementedError as e:
         print("Groundtruth not available for unknown protocol, comparison aborted.\n"
               "Original exception was: ", e)
     # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     #
-
-
-
     # write back the packets
     print("Re-read trace with scapy...")
     packetList = sy.rdpcap(pcapfilename)
@@ -266,5 +256,4 @@ if __name__ == '__main__':
     sy.wrpcap(outfile, sortedPackets, linktype=specimens.getBaseLayerOfPCAP())
 
     if args.interactive:
-        # globals().update(locals())
         IPython.embed()

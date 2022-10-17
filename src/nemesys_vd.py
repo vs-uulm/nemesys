@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from nemere.utils.loader import SpecimenLoader
 from nemere.inference.analyzers import *
-from nemere.inference.segmentHandler import originalRefinements, baseRefinements, symbolsFromSegments, charRefinements
+from nemere.inference.segmentHandler import symbolsFromSegments, charRefinements
 from nemere.utils import reportWriter
 
 debug = False
@@ -78,14 +78,6 @@ def bcDeltaPlot(bcdg_mmm: List[ValueVariance]):
 
     fieldEnds = [comparator.fieldEndsPerMessage(bcdg.message) for bcdg in bcdg_mmm]
 
-    # mark the byte right before the max delta
-    # inflectionXs = [[offset + int(numpy.nanargmax(wd)) - 1 for offset, wd in a.risingDeltas()] for a in bcdg_mmm]
-    # inflections = [(pwp, [bcdg.values[p] for p in pwp]) for pwp, bcdg in zip(inflectionXs, bcdg_mmm)]
-
-    # pinpointedInflections = [a.inflectionPoints() for a in bcdg_mmm]
-    # preInflectionXs = [[i - 1 for i in xs] for xs,ys in pinpointedInflections]
-    # preInflectionPoints = [ (pwp, [bcdg.bcdeltas[p] for p in pwp]) for pwp, bcdg in zip(preInflectionXs, bcdg_mmm)]
-
     mmp = MultiMessagePlotter(specimens, 'valueDelta', 3, 1, args.interactive)
     # noinspection PyProtectedMember
     for ax in mmp._axes.flat:  # type: plt.Axes
@@ -96,14 +88,8 @@ def bcDeltaPlot(bcdg_mmm: List[ValueVariance]):
     mmp.plotSubfigs([a.values for a in bcdg_mmm],
                   #  compareValue=[a.bcdeltas for a in bcdg_mmm],
                     fieldEnds=fieldEnds, fieldEndMarks=False)
-    # mmp.scatterInEachAx(preInflectionPoints, 'v')
-    # mmp.scatterInEachAx(inflections, 'o')
     mmp.printMessageBytes([a.message for a in bcdg_mmm], {'size': 4})  # set to 4 for DNS, 2.5 for NTP
     mmp.writeOrShowFigure()
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -152,7 +138,6 @@ if __name__ == '__main__':
         analyzer.analyze()
         segmentsPerMsg.append(analyzer.messageSegmentation())
     runtimeSegmentation = time.time() - startsegmentation
-    # refinedPerMsg = originalRefinements(segmentsPerMsg)
     refinedPerMsg = charRefinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
@@ -163,8 +148,6 @@ if __name__ == '__main__':
 
     ########################
 
-    # Without refinement:
-    # comparator.pprintInterleaved(symbols)
     comparator.pprintInterleaved(refinedSymbols)
 
     # calc FMS per message

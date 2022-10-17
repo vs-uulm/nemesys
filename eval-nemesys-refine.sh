@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+# Calls the reference implementation of NEMESYS described in our WOOT 2018 paper.
+# The parameters in this script are the same as used in the paper's evaluation.
+
 
 # input=input/*-100.pcap
 # input=input/*-1000.pcap

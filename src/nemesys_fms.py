@@ -14,8 +14,7 @@ import matplotlib.pyplot as plt
 from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from nemere.utils.loader import SpecimenLoader
 from nemere.inference.analyzers import *
-from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, baseRefinements, originalRefinements, \
-    symbolsFromSegments
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, originalRefinements, symbolsFromSegments
 from nemere.utils import reportWriter
 from nemere.utils.evaluationHelpers import sigmapertrace
 
@@ -125,10 +124,7 @@ if __name__ == '__main__':
         print('File not found: ' + args.pcapfilename)
         exit(1)
 
-    # sigma = 0.6 if not args.sigma else args.sigma
     if not args.sigma:
-        # input="input/maxdiff-fromOrig/*-100.pcap input/deduped-orig/dhcp_SMIA2011101X_deduped-10000.pcap input/deduped-orig/dns_ictf2010-new-deduped-10000.pcap input/deduped-orig/nbns_SMIA20111010-one_deduped-10000.pcap input/deduped-orig/ntp_SMIA-20111010_deduped-9995-10000.pcap input/deduped-orig/smb_SMIA20111010-one_deduped-10000.pcap"
-        # for fn in $input ; do python src/nemesys_fms.py -rl2 ${fn} ; done
         pcapBasename = basename(args.pcapfilename)
         sigma = sigmapertrace[pcapBasename] if pcapBasename in sigmapertrace else 0.6
     else:
@@ -160,8 +156,6 @@ if __name__ == '__main__':
 
     ########################
 
-    # Without refinement:
-    # comparator.pprintInterleaved(symbols)
     comparator.pprintInterleaved(refinedSymbols)
 
     # calc FMS per message
@@ -179,7 +173,6 @@ if __name__ == '__main__':
 
     ########################
 
-    # writeResults(tikzcode, specimens, inferenceTitle)
     if args.interactive:
         print('Loaded PCAP in: specimens, comparator')
         print('Inferred messages in: symbols, refinedSymbols')

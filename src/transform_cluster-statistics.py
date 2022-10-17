@@ -1,7 +1,7 @@
 """
 Evaluation of field type clustering quality:
 
-Transform the output of the clustering process performed by characterize_fieldtypes.py
+Transform the output of the clustering process performed by nemeftr_cluster-segments.py
 into a table of cluster quality scores. It expects the input to be named segment-cluster-statistics.csv
 as defined in utils.evaluationHelpers.scStatsFile
 and outputs scoreTable.csv

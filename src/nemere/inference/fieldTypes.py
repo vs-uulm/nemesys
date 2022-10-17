@@ -1,4 +1,5 @@
-from typing import Type, Union, Any, Tuple, Iterable
+from abc import ABC
+from typing import Type, Union, Any, Tuple, Iterable, List, Dict
 
 import numpy
 import scipy.spatial
@@ -6,7 +7,7 @@ import scipy.spatial
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
 
 from nemere.inference.analyzers import Value
-from nemere.inference.segments import MessageAnalyzer
+from nemere.inference.segments import MessageAnalyzer, TypedSegment
 
 
 
@@ -184,5 +185,242 @@ class FieldTypeMemento(BaseTypeMemento):
         if self.fieldtype == "id":
             conf *= 2
         return conf
+
+
+class RecognizedVariableLengthField(object):
+    """
+    Lightweight representation a field of variable length recognized by a heuristic method.
+    """
+
+    def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
+                 position: int, end: int, confidence: float):
+        self.message = message
+        self.position = position
+        self.end = end
+        self.confidence = confidence
+        self.template = template
+
+    def __repr__(self) -> str:
+        """
+        :return: A textual representation of this heuristically recognized field.
+        """
+        return "RecognizedField of {} at ({}, {}) (c {:.2f})".format(
+            self.template.fieldtype, self.position, self.end, self.confidence)
+
+
+    def isOverlapping(self, otherField: 'RecognizedField') -> bool:
+        """
+        Determines whether the current recognized field overlaps with a given other field.
+
+        :param otherField: The other field to check against.
+        :return: Is overlapping or not.
+        """
+        if self.message == otherField.message \
+                and (self.position <= otherField.position < self.end
+                or otherField.position < self.end <= otherField.end):
+            return True
+        else:
+            return False
+
+
+    def toSegment(self, fallbackAnalyzer:Type[MessageAnalyzer]=Value,
+                  fallbackUnit: int=MessageAnalyzer.U_BYTE, fallbackParams: Tuple=()) -> TypedSegment:
+        """
+        Convertes this object to a MessageSegment. Uses the analyzer stored in the object's template
+        to (re-)create the segments.
+
+        :param fallbackAnalyzer: Used if the object knows no template to extract an analyzer from.
+        :param fallbackUnit: Used if the object knows no template to extract a unit from.
+        :param fallbackParams: Used if the object knows no template to extract analyzer parameters from.
+        :return: A segment anotated with this templates fieldtype.
+        """
+        if isinstance(self.template, FieldTypeMemento):
+            analyzer = self.template.recreateAnalyzer(self.message)
+        else:
+            # With out a FieldTypeMemento we have no information about the original analyzer, and probably there never
+            #   has existed any, e.g. for char and flag heuristics. Therefore define a fallback.
+            analyzer = MessageAnalyzer.findExistingAnalysis(
+                fallbackAnalyzer, fallbackUnit, self.message, fallbackParams)
+        return TypedSegment(analyzer, self.position, len(self.template), self.template.fieldtype)
+
+
+class RecognizedField(RecognizedVariableLengthField):
+    """
+    Represents a field of constant length recognized by a heuristic method.
+    """
+    def __init__(self, message: AbstractMessage, template: BaseTypeMemento,
+                 position: int, confidence: float):
+        """
+        Create the representation of a heuristically recognized field.
+        This object is much more lightweight than inference.segments.AbstractSegment.
+
+        :param message: The message this field is contained in.
+        :param template: The field type template that this field resembles.
+        :param position: The byte position/offset in the message at which the field starts.
+        :param confidence: The confidence (0 is best) of the recognition.
+        """
+        if isinstance(template, BaseTypeMemento):
+            super().__init__(message, template, position, position + len(template), confidence)
+        else:
+            raise TypeError("Template needs to be a BaseTypeMemento")
+
+
+
+class ValueFieldTypeRecognizer(ABC):
+    """
+    Provides the method #recognizedFields to find the most confident matches with the known field types to be recognized.
+    The templates to recognize must be provided in a subclass into the class variable `fieldtypeTemplates` as
+    list of `FieldTypeMemento`s.
+    """
+    fieldtypeTemplates = None  # type: List[FieldTypeMemento]
+
+    def __init__(self, analyzer: MessageAnalyzer):
+        self._analyzer = analyzer
+        for ftt in type(self).fieldtypeTemplates:
+            assert ftt.analyzerClass == type(analyzer), \
+                "The given analyzer is not compatible to the existing templates."
+
+    @property
+    def message(self):
+        return self._analyzer.message
+
+    def findInMessage(self, fieldtypeTemplate: FieldTypeMemento):
+        """
+
+        :param fieldtypeTemplate:
+        :return: list of (position, confidence) for all offsets.
+        """
+        assert fieldtypeTemplate.analyzerClass == type(self._analyzer)
+
+        # position, confidence
+        posCon = list()
+        ftlen = len(fieldtypeTemplate)
+        for offset in range(len(self._analyzer.values) - ftlen + 1):
+            ngram = self._analyzer.values[offset:offset+ftlen]
+            if set(ngram) == {0}:  # zero values do not give any information
+                posCon.append(99)
+            else:
+                posCon.append(fieldtypeTemplate.confidence(ngram))  # / (ftlen**2 / 4)
+
+        return posCon
+
+    def charsInMessage(self) -> List[RecognizedField]:
+        """
+        Mark recognized char sequences.
+
+        :return: list of recognized char sequences with the constant confidence of 0.2
+        """
+        from nemere.inference.segmentHandler import isExtendedCharSeq
+
+        confidence = 0.2
+        offset = 0
+        minLen = 6
+        recognizedChars = list()
+        while offset < len(self.message.data) - minLen:
+            # ignore chunks starting with 00 if its not likely an UTF16 string
+            # if (self.message.data[offset:offset+1] != b"\x00"
+            #         or self.message.data[offset+1:offset+2] != b"\x00"
+            #         and self.message.data[offset+2:offset+3] == b"\x00"
+            #     ) and ( ):
+            if b"\x00" not in self.message.data[offset:offset + minLen] \
+                    or self.message.data[offset:offset + minLen].count(b"\x00") > 1 \
+                    and b"\x00\x00" not in self.message.data[offset:offset + minLen]:
+                add2len = 0
+                while offset + minLen + add2len <= len(self.message.data) \
+                        and isExtendedCharSeq(self.message.data[offset:offset + minLen + add2len], minLen=6):
+                    add2len += 1
+                    # end chunk if zero byte or double zero for a likely UTF16 is hit
+                    # // xx 00 00
+                    # -3 -2 -1
+                    # -4 -3 -2 -1
+                    if self.message.data[offset + minLen + add2len - 1:offset + minLen + add2len] == b"\x00" \
+                        and self.message.data[offset + minLen + add2len - 3:offset + minLen + add2len - 2] != b"\x00":
+                            # or self.message.data[offset + minLen + add2len - 2:offset + minLen + add2len - 1] == b"\x00"):
+                        add2len += 1
+                        break
+                chunkLen = minLen + add2len - 1
+                chunk = self.message.data[offset:offset + chunkLen]
+                if isExtendedCharSeq(chunk, minLen=6):
+                    recognizedChars.append(
+                        RecognizedField(self.message, BaseTypeMemento("chars", chunkLen), offset, confidence))
+                    offset += minLen + add2len
+                else:
+                    offset += 1
+            else:
+                offset += 1
+        return recognizedChars
+
+    def flagsInMessage(self) -> List[RecognizedField]:
+        """
+        Mark probable flag byte pairs.
+        Recognizes probable flag bytes by not exceeding the number of 2 bits set per byte.
+
+        :return: list of recognized flag sequences with the constant confidence of 3.0
+        """
+        confidence = 3.0
+        offset = 0
+        minLen = 2
+        bitset = 2
+
+        recognizedFlags = list()
+        while offset < len(self.message.data) - minLen:
+            belowBitset = True
+            bitSum = 0
+            bitCountSeq = list()
+            for bVal in self.message.data[offset:offset + minLen]:
+                bitCount = bin(bVal).count("1")
+                bitCountSeq.append(bitCount)
+                bitSum += bitCount
+                if bitCount > bitset:
+                    belowBitset = False
+                    break
+            if belowBitset and bitSum > 0:
+                # TODO find a valid dynamic generation by observing groundtruth
+                # confidence = 4 * bitSum / bitset  # * minLen
+                recognizedFlags.append(
+                    RecognizedField(self.message, BaseTypeMemento("flags", minLen), offset, confidence))
+            offset += 1
+        return recognizedFlags
+
+    def recognizedFields(self, confidenceThreshold = None) -> Dict[FieldTypeMemento, List[RecognizedField]]:
+        """
+        Most probable inferred field structure: The field template positions with the highest confidence for a match.
+        Iterate starting from the most confident match and removing all further matches that overlap with this high
+        confidence match.
+
+        :param confidenceThreshold: Threshold to decide which confidence value is high enough to assume a match if no
+            concurring comparison values ("no relevant matches") are in this message. If not given, a threshold is
+            determined dynamically from 20/numpy.log(ftMemento.stdev.mean()).
+            The rationale is that the stdev allows to estimate the original distance that the majority of base segments
+            the template was created from resided in. TODO what about the log and factor 20?
+        :return: Mapping of each field type to the list recognized fields for it.
+        """
+        applConfThre = confidenceThreshold
+        mostConfident = dict()
+        for ftMemento in type(self).fieldtypeTemplates:
+            if confidenceThreshold is None:
+                applConfThre = 20/numpy.log(ftMemento.stdev.mean())
+            confidences = self.findInMessage(ftMemento)
+            mostConfident[ftMemento] = [RecognizedField(self.message, ftMemento, pos, con)
+                                        for pos, con in enumerate(confidences) if con < applConfThre]
+        mostConfident[BaseTypeMemento("chars")] = self.charsInMessage()
+        mostConfident[BaseTypeMemento("flags")] = self.flagsInMessage()
+        return mostConfident
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

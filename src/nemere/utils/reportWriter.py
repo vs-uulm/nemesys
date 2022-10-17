@@ -204,6 +204,12 @@ def writeFieldTypesTikz(comparator: MessageComparator, segmentedMessages: List[T
 
 
 def writeSemanticTypeHypotheses(cauldron: SegmentClusterCauldron, filechecker: StartupFilecheck):
+    """
+    Write report with the semantic type hypothesis as CSV.
+
+    :param cauldron: Clusters of of the inferred fields.
+    :param filechecker: Filechecker to determine a suitable folder to write the file to.
+    """
     cauldron.regularClusters.shapeStats(filechecker)
     semanticHeaders = ["regCluI", "Cluster Label", "semantic type"]
     semanticHypotheses = cauldron.regularClusters.semanticTypeHypotheses()

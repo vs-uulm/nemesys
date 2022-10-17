@@ -81,7 +81,6 @@ def tabuSeqOfSeg(sequence: Sequence[Sequence[MessageSegment]]):
                    headers=range(len(sequence[0])), showindex="always", disable_numparse=True))
 
 
-
 def resolveIdx2Seg(dc: DistanceCalculator, segseq: Sequence[Sequence[int]]):
     """
     Prints tabulated hex representations of (aligned) sequences of indices.

@@ -23,7 +23,7 @@ import numpy, math
 
 from nemere.utils.evaluationHelpers import analyses, StartupFilecheck, consolidateLabels, CachedDistances
 from nemere.utils.reportWriter import plotMultiSegmentLines, CombinatorialClustersReport, reportFolder, \
-    SegmentClusterGroundtruthReport
+    SegmentClusterGroundtruthReport, writeSemanticTypeHypotheses
 from nemere.inference.templates import DBSCANsegmentClusterer, ClusterAutoconfException
 from nemere.inference.segmentHandler import segments2types, isExtendedCharSeq
 from nemere.validation.clusterInspector import TypedSegmentClusterCauldron
@@ -38,9 +38,6 @@ analysisTitle = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 
-# kneedleSensitivity=9.0
-# kneedleSensitivity=8.0
-# kneedleSensitivity=4.0
 kneedleSensitivity=24.0
 
 # for evaluation
@@ -117,12 +114,8 @@ if __name__ == '__main__':
                 nonCharSegs.append(seg)
 
     print("Clustering...")
-    # # use HDBSCAN
-    # segmentGroups = segments2clusteredTypes(tg, analysisTitle, min_cluster_size=15)
 
     # use DBSCAN
-    # kneedleSensitivity += (log(len(dc.segments),10) - 2) * 4  # for larger traces
-    # clusterer = DBSCANsegmentClusterer(dc, S=kneedleSensitivity)
     if separateChars:
         # noinspection PyUnboundLocalVariable
         clusterer = DBSCANsegmentClusterer(dc, nonCharSegs, S=kneedleSensitivity)
@@ -172,9 +165,7 @@ if __name__ == '__main__':
 
         # Histogram of all the distances between the segments
         hstplt = SingleMessagePlotter(specimens, 'histo-distance-1nn-' + titleFormat, False)
-        # hstplt.histogram(tril(dc.distanceMatrix), bins=[x/50 for x in range(50)])
         knn = [dc.neighbors(seg)[0][1] for seg in dc.segments]
-        # print(knn)
         hstplt.histogram(knn, bins=[x / 50 for x in range(50)])
         if filechecker.pcapbasename in besteps:
             plt.axvline(besteps[filechecker.pcapbasename], label=besteps[filechecker.pcapbasename],
@@ -191,8 +182,6 @@ if __name__ == '__main__':
         # noinspection PyUnboundLocalVariable
         cauldron.appendCharSegments(charSegments)
     uniqueGroups = cauldron.clustersOfUniqueSegments()
-    # # only use "real" clusters:
-    # segmentGroups = cauldron.segments2clusteredTypes()
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
     titleFormat = "{} ({}, {}-{})".format(
@@ -212,7 +201,6 @@ if __name__ == '__main__':
         # re-extract cluster labels for segments, templates can only be represented as one label for this distinct position
         print("Plot distances...")
         sdp = DistancesPlotter(specimens, 'distances-' + titleFormat, False)
-        # labels = numpy.array([labelForSegment(segmentGroups, seg) for seg in dc.segments])
         labels = numpy.array([cauldron.label4segment(seg) for seg in dc.segments])
 
         # we need to omit some labels, if the amount amount of unique labels is greater than threshold
@@ -234,35 +222,23 @@ if __name__ == '__main__':
             (analysisLabel + " (singular clusters)", cauldron.singularClusters.clusters)
         ]
         typeDict = segments2types(dc.rawSegments)
-        # for pagetitle, segmentClusters in segmentGroups:
         for pagetitle, segmentClusters in paginatedGroups:
             plotMultiSegmentLines(segmentClusters, specimens, pagetitle,  # titleFormat
                                   True, typeDict, False)
 
-    # # total/all segments
-    # ftclusters = {label: resolveTemplates2Segments(e for t, e in elements)
-    #               for label, elements in segmentGroups[0][1]}
-    #
     # unique segments
     ftclusters = {cauldron.unisegClusters.clusterLabel(i): cauldron.unisegClusters.clusterElements(i)
                   for i in range(len(cauldron.unisegClusters))}
-    # # remove noise if present
+    # remove noise if present
     # may not be necessary any more (due to the new SegmentClusterCauldron class),
     #   leave at the moment to be on the safe side
     noisekeys = [ftk for ftk in ftclusters.keys() if ftk.find("Noise") >= 0]
     if len(noisekeys) > 0:
         ftclusters["Noise"] = ftclusters[noisekeys[0]]
         del ftclusters[noisekeys[0]]
-    # print("\n\nFor comparison, remove the failed cluster #10(?) of smb from ftclusters...\n\n")
-    # IPython.embed()
-    # # gt from ft
+    # gt from ft
     groundtruth = {seg: seg.fieldtype
                    for l, segs in ftclusters.items() for seg in segs}
-    # # (non?)unique segments
-    # ftclusters = {ftc.fieldtype: ftc.baseSegments for ftc in fTypeContext}
-    # ftclusters["Noise"] = resolveTemplates2Segments(noise)
-    # groundtruth = {rawSeg: typSeg[1].fieldtype if typSeg[0] > 0.5 else "[unknown]"
-    #                for rawSeg, typSeg in typedMatchSegs.items()}
     report = CombinatorialClustersReport(groundtruth, filechecker)
     report.write(ftclusters, titleFormat)
 
@@ -275,7 +251,7 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # # #
 
     for i in range(len(cauldron.regularClusters)): cauldron.regularClusters.plotDistances(i, specimens)
-    # cauldron.regularClusters.plotDistributions(specimens)
+    writeSemanticTypeHypotheses(cauldron, filechecker)
 
     # # # # # # # # # # # # # # # # # # # # # # # # #
     #
@@ -288,7 +264,6 @@ if __name__ == '__main__':
         # noinspection PyUnresolvedReferences
         from tabulate import tabulate
 
-        # globals().update(locals())
         IPython.embed()
 
 

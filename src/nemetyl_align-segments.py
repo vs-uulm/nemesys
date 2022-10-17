@@ -14,8 +14,10 @@ which is used as feature to determine their similarity. Similar fields are then 
 
 import argparse
 
+
 from nemere.alignment.alignMessages import TypeIdentificationByAlignment
-from nemere.inference.segmentHandler import originalRefinements, baseRefinements, nemetylRefinements
+from nemere.inference.segmentHandler import originalRefinements, baseRefinements, pcaRefinements, pcaMocoRefinements, \
+    nemetylRefinements, zerocharPCAmocoSFrefinements, pcaMocoSFrefinements, entropymergeZeroCharPCAmocoSFrefinements
 from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from nemere.inference.templates import ClusterAutoconfException
 from nemere.utils.evaluationHelpers import *
@@ -33,7 +35,7 @@ analysis_method = 'value'
 # fix the distance method to canberra
 distance_method = 'canberra'
 # tokenizers to select from
-tokenizers = ('tshark', '4bytesfixed', 'nemesys')
+tokenizers = ('tshark', '4bytesfixed', 'nemesys', 'zeros')
 roundingprecision = 10**8
 # refinement methods
 refinementMethods = [
@@ -41,6 +43,11 @@ refinementMethods = [
     "original", # WOOT2018 paper
     "base",     # ConsecutiveChars+moco
     "nemetyl",  # ConsecutiveChars+moco+splitfirstseg
+    "PCA1",     # PCA 1-pass | applicable to nemesys and zeros
+    "PCAmoco",  # PCA+moco
+    "PCAmocoSF",  # PCA+moco+SF (v2) | applicable to zeros
+    "zerocharPCAmocoSF",  # with split fixed (v2)
+    "emzcPCAmocoSF",  # zerocharPCAmocoSF + entropy based merging
     ]
 
 
@@ -126,15 +133,6 @@ def epsautoconfeval(epsilon, plotTitle):
     :param epsilon The manually determined "best" epsilon for comparison
     :return:
     """
-
-    # # distribution of all distances in matrix
-    # hstplt = SingleMessagePlotter(specimens, tokenizer+'-distance-distribution-histo', args.interactive)
-    # hstplt.histogram(tril(sm.distances), bins=[x / 50 for x in range(50)])
-    # plt.axvline(epsilon, label="manually determined eps={:0.2f}".format(epsilon), c="red")
-    # hstplt.text('max {:.3f}, mean {:.3f}'.format(sm.distances.max(), sm.distances.mean()))
-    # hstplt.writeOrShowFigure()
-    # del hstplt
-
     neighbors = tyl.sm.neighbors()  # list of tuples: (index from sm.distances, distance) sorted by distance
 
     mmp = MultiMessagePlotter(specimens, "knn-distance-funtion_" + plotTitle, 1, 2,
@@ -148,9 +146,6 @@ def epsautoconfeval(epsilon, plotTitle):
         knearest = sorted([nfori[k][1] for nfori in neighbors])
         mmp.plotToSubfig(1, knearest, alpha=.4, label="k={}".format(k))
 
-    # # kneedle approach: yields unusable results. does not find a knee!
-
-
     # smoothing approach
     from scipy.ndimage.filters import gaussian_filter1d
     from math import log
@@ -160,8 +155,6 @@ def epsautoconfeval(epsilon, plotTitle):
     smoothknearest = dict()
     seconddiff = dict()  # type: Dict[int, numpy.ndarray]
     seconddiffMax = (0, 0, 0)
-
-    # ksteepeststats = list()
 
     # can we omit k = 0 ?
     #   --> No - recall and even more so precision deteriorates for dns and dhcp (1000s)
@@ -176,34 +169,19 @@ def epsautoconfeval(epsilon, plotTitle):
         if 2*sigma < seconddiffargmax < len(neighbors) - 2*sigma and diffrelmax > seconddiffMax[2]:
             seconddiffMax = (k, seconddiffargmax, diffrelmax)
 
-        # ksteepeststats.append((k, seconddiff[k].max(), diffrelmax))
-    # print(tabulate(ksteepeststats, headers=("k", "max(f'')", "max(f'')/f")))
-
     # prepare to plot the smoothed nearest neighbor distribution and its second derivative
     k = seconddiffMax[0]
     x = seconddiffMax[1] + 1
-
-    # # calc mean of first derivative to estimate the noisiness (closer to 1 is worse)
-    # firstdiff = numpy.diff(smoothknearest[k], 1)
-    # # alt: integral
-    # diag = numpy.empty_like(smoothknearest[k])
-    # for i in range(diag.shape[0]):
-    #     diag[i] = smoothknearest[k][0] + i*(smoothknearest[k][-1] - smoothknearest[k][0])/smoothknearest[k][-1]
-    # belowdiag = diag - smoothknearest[k]
-    # print("f' median={:.2f}".format(numpy.median(firstdiff)))
-    # print("diag-f={:.2f}".format(sum(belowdiag)))
 
     mmp.plotToSubfig(0, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=.4)
     mmp.plotToSubfig(1, smoothknearest[k], label="smooth k={}, sigma={:.2f}".format(k, sigma), alpha=1, color='blue')
     mmp.plotToSubfig(0, knearest[k], alpha=.4)
 
     ax0twin = mmp.axes[0].twinx()
-    # mmp.plotToSubfig(ax0twin, seconddiff[k], linestyle='dotted', color='cyan', alpha=.4)
     # noinspection PyTypeChecker
     mmp.plotToSubfig(ax0twin, [None] + seconddiff[k].tolist(), linestyle='dotted',
                      color='magenta', alpha=.4)
 
-    # epsilon = knearest[k][x]
     epsilon = smoothknearest[k][x]
 
     mmp.axes[0].axhline(epsilon, linestyle='dashed', color='blue', alpha=.4,
@@ -215,11 +193,6 @@ def epsautoconfeval(epsilon, plotTitle):
     mmp.writeOrShowFigure(filechecker.reportFullPath)
     del mmp
 
-    # if args.interactive:
-    #     from tabulate import tabulate
-    #     IPython.embed()
-    # exit(0)
-
     return epsilon
 
 def clusterClusters():
@@ -230,7 +203,6 @@ def clusterClusters():
     """
     # ClusterClusterer
     clusterclusterer = ClusterClusterer(tyl.alignedClusters, dc)
-    # clusterDists = clusterclusterer.calcClusterDistances()
 
     mergeEps, mergeMpts = clusterclusterer.autoconfigureDBSCAN()
 
@@ -295,10 +267,6 @@ def countVals4Field(clusters, selected, field):
                 comparator.parsedMessages[specimens.messagePool[msg[0].message]].getValuesByName(
                     field) for msg in msgs))
             print(valCounter[lab])
-    # psftck = [set(tc.keys()) for tc in valCounter.values()]
-    # # these tag values are present in all psf messages
-    # psfcommon = psftck[0].intersection(*psftck)
-    # [[b for b in a if b not in psfcommon] for a in psftck]
     return valCounter
 
 def singularFields(clusters, cmp, select):
@@ -326,15 +294,6 @@ def discriminators(single, selectcount):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # END : Evaluation helpers  # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -388,8 +347,38 @@ if __name__ == '__main__':
             fromCache.configureRefinement(baseRefinements)
         elif args.refinement == "nemetyl":
             fromCache.configureRefinement(nemetylRefinements)
+        elif args.refinement == "PCA1":
+            fromCache.configureRefinement(pcaRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "PCAmoco":
+            fromCache.configureRefinement(pcaMocoRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "zerocharPCAmocoSF":
+            fromCache.configureRefinement(zerocharPCAmocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "emzcPCAmocoSF":
+            fromCache.configureRefinement(entropymergeZeroCharPCAmocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
         else:
             print("No refinement selected. Performing raw segmentation.")
+    elif tokenizer[:5] == "zeros":
+        if args.refinement == "PCA1":
+            fromCache.configureRefinement(pcaRefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement == "PCAmocoSF":
+            fromCache.configureRefinement(pcaMocoSFrefinements, littleEndian=littleendian)
+            if littleendian:
+                refinement = args.refinement + "le"
+        elif args.refinement is None or args.refinement == "none":
+            print("No refinement selected. Performing zeros segmentation with CropChars.")
+        else:
+            print(f"The refinement {args.refinement} is not supported with this tokenizer. Abort.")
+            exit(2)
     try:
         fromCache.get()
     except ClusterAutoconfException as e:
@@ -407,24 +396,11 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
 
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # if not exists(smcachefn):
-    #
-    # # # # # # # # # # # # # # # # # # # # # # # #
     # Calculate Alignment-Score and CLUSTER messages
     # # # # # # # # # # # # # # # # # # # # # # # #
     tyl.clusterMessages()
     # Prepare basic information about the inference run for the report
     inferenceParams = TitleBuilder(tokenizer, args.refinement, args.sigma, tyl.clusterer)
-    #
-    # smcachefn = 'cache-sm-{}-{}-{}.{}'.format(analysisTitle, tokenparm, filechecker.pcapstrippedname, 'sm')
-    #     with open(smcachefn, 'wb') as f:
-    #         pickle.dump(sm, f, pickle.HIGHEST_PROTOCOL)
-    # else:
-    #     print("Load distances from cache file {}".format(smcachefn))
-    #     sm = pickle.load(open(smcachefn, 'rb'))
-    #     if not isinstance(sm, SegmentedMessages):
-    #         print('Loading of cached message distances failed.')
-    #         exit(11)
     # # # # # # # # # # # # # # # # # # # # # # # #
     if withplots:
         # plot message distances and clusters
@@ -440,9 +416,6 @@ if __name__ == '__main__':
     # # # # # # # # # # # # # # # # # # # # # # # #
     # DEBUG and TESTING
     # # # # # # # # # # # # # # # # # # # # # # # #
-    # retrieve manually determined epsilon value
-    # epsilon = message_epspertrace[filechecker.pcapbasename]
-    #               if filechecker.pcapbasename in message_epspertrace else 0.15
     if withplots:
         epsConfirm = epsautoconfeval(tyl.eps, tokenizer +
                                      (f"-s{args.sigma}-{args.refinement}" if tokenizer[:7] == "nemesys" else "") )
@@ -553,36 +526,6 @@ if __name__ == '__main__':
     filteredSplitCombinReport = CombinatorialClustersReport(groundtruth, filechecker)
     filteredSplitCombinReport.write(filteredClusters, inferenceParams.dict)
 
-    # # Alternative approach to ClusterMerger, discarded.
-    # clusterClusters()
-
-    # # overwrite existing variables
-    # # # # # # # # # # # # # # # # # # # # # # # #
-    # messageClusters = mergedClusters
-    #
-    # # align clusters that have been merged
-    # mergedAligned = dict()
-    # for cLabel, clusterMerges in messageClusters.items():  # type: Union[int, str], List[Tuple[MessageSegment]]
-    #     if cLabel not in alignedClusters:
-    #         clusteralignment, alignedsegments = sm.alignMessageType(clusterMerges)
-    #         mergedAligned[cLabel] = alignedsegments
-    #     else:
-    #         mergedAligned[cLabel] = alignedClusters[cLabel]
-    # alignedClusters = mergedAligned
-    # del mergedAligned
-    #
-    # # labels for distance plot
-    # msgLabelMap = {tuple(msgsegs): clunu for clunu, msgs in messageClusters.items() for msgsegs in msgs}
-    # labels = numpy.array([msgLabelMap[tuple(seglist)] for seglist in segmentedMessages])
-    #
-    # END # of # check for cluster merge candidates #
-    # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-
-
-
-
 
     writePerformanceStatistics(
         specimens, tyl.clusterer, inferenceParams.plotTitle,
@@ -623,7 +566,6 @@ if __name__ == '__main__':
         import numpy
         from tabulate import tabulate
 
-        # globals().update(locals())
         IPython.embed()
 
 

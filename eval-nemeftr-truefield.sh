@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# NEMEFTR: Optimal-segmentation baseline
+# Calls the reference implementation of the field type clustering of segments on similarity with ground truth
+# described in our DSN 2022 paper (NEMEFTR: Optimal-segmentation baseline). The parameters in this script are
+# the same as used in the paper's evaluation.
+
 
 #input=input/*-100*.pcap
 #input=input/*-1000.pcap

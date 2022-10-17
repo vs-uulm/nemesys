@@ -15,7 +15,7 @@ from nemere.utils.loader import SpecimenLoader
 from nemere.validation.dissectorMatcher import MessageComparator, BaseComparator
 from nemere.visualization.simplePrint import inferred4segment, markSegNearMatch
 from nemere.inference.analyzers import *
-from nemere.inference.formatRefinement import isOverlapping
+from nemere.inference.formatRefinement import isOverlapping, BlendZeroSlices, CropChars
 from nemere.inference.segmentHandler import segmentsFromLabels, bcDeltaGaussMessageSegmentation, refinements, \
     fixedlengthSegmenter, bcDeltaGaussMessageSegmentationLE
 from nemere.inference.segments import MessageAnalyzer, TypedSegment, MessageSegment, AbstractSegment
@@ -35,10 +35,10 @@ analyses = {
     'sbcdg': SlidingNbcDeltaGauss,
     'pivot': PivotBitCongruence,
 
-    'variance': ValueVariance,  # Note: VARIANCE is the inverse of PROGDIFF
-    'value': Value,
-    'ntropy': EntropyWithinNgrams,
-    'stropy': Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
+    'variance': ValueVariance,  # Note: VARIANCE is the inverse of the removed PROGDIFF (ValueProgressionDelta)
+    'value':    Value,
+    'ntropy':   EntropyWithinNgrams,
+    'stropy':   Entropy,  # TODO check applicability of (cosine) distance calculation to this feature
 }
 
 
@@ -61,6 +61,22 @@ sigmapertrace = {
     "nbns_SMIA20111010-one_deduped-10000.pcap": 0.4,
     "ntp_SMIA-20111010_deduped-9995-10000.pcap": 1.3,
     "smb_SMIA20111010-one_deduped-10000.pcap": 0.4,
+}
+
+# FMS based - cft-130 + cft-132
+pcamocoSigmapertrace = {
+    "dhcp_SMIA2011101X_deduped-100.pcap"        : 0.6,
+    "dns_ictf2010_deduped-100.pcap"             : 0.9,
+    "dns_ictf2010-new-deduped-100.pcap"         : 1.0,
+    "nbns_SMIA20111010-one_deduped-100.pcap"    : 0.8,
+    "ntp_SMIA-20111010_deduped-100.pcap"        : 1.2,
+    "smb_SMIA20111010-one_deduped-100.pcap"     : 0.9,
+    "dhcp_SMIA2011101X_deduped-1000.pcap"       : 0.6,
+    "dns_ictf2010_deduped-982-1000.pcap"        : 0.9,
+    "dns_ictf2010-new-deduped-1000.pcap"        : 1.0,
+    "nbns_SMIA20111010-one_deduped-1000.pcap"   : 0.9,
+    "ntp_SMIA-20111010_deduped-1000.pcap"       : 1.2,
+    "smb_SMIA20111010-one_deduped-1000.pcap"    : 0.8,
 }
 
 epspertrace = {
@@ -176,7 +192,7 @@ def consolidateLabels(labels: numpy.ndarray, trigger = "$d_{max}$=0.000", maxLab
 def writePerformanceStatistics(specimens, clusterer, algos,
                                segmentationTime, dist_calc_segmentsTime, dist_calc_messagesTime,
                                cluster_params_autoconfTime, cluster_messagesTime, align_messagesTime):
-    fileNameS = "NEMETYL-performance-statistcs"
+    fileNameS = "NEMETYL-performance-statistics"
     csvpath = os.path.join(reportFolder, fileNameS + '.csv')
     csvWriteHead = False if os.path.exists(csvpath) else True
 
@@ -300,7 +316,7 @@ def calcHexDist(hexA, hexB):
 class CachedDistances(object):
 
     # tokenizers to select from
-    tokenizers = ('nemesys',)  # zeroslices + CropChars
+    tokenizers = ('nemesys', 'zeros')  # zeroslices + CropChars
 
     # refinement methods
     refinementMethods = [
@@ -308,6 +324,13 @@ class CachedDistances(object):
         "original",  # WOOT2018 paper
         "base",  # ConsecutiveChars+moco
         "nemetyl",  # INFOCOM2020 paper: ConsecutiveChars+moco+splitfirstseg
+        "PCA1",  # PCA 1-pass | applicable to nemesys and zeros
+        "PCAmoco",  # PCA+moco
+        "zero",  # zeroslices+base
+        "zeroPCA",  # zero+base + 2-pass PCA
+        "PCAmocoSF",  # PCA+moco+SF (v2) | applicable to zeros
+        "zerocharPCAmocoSF",  # with split fixed (v2)
+        "emzcPCAmocoSF",  # zerocharPCAmocoSF + entropy based merging
     ]
 
     def __init__(self, pcapfilename: str, analysisTitle: str, layer=2, relativeToIP=True):
@@ -455,6 +478,15 @@ class CachedDistances(object):
             # get analyzer requested by analyzerType/analysisArgs
             self.segmentedMessages = MessageAnalyzer.convertAnalyzers(
                 segmentsPerMsg, self.analyzerType, self.analysisArgs)
+            self._callRefinement()
+        elif self.tokenizer in ["zeros", "zerosle"]:
+            # 4. segment messages into their zero/non-zero parts
+            segmentsPerMsg = [(MessageSegment(Value(msg), 0, len(msg.data)),)
+                              for msg in self.specimens.messagePool.keys()]
+            # .blend(ignoreSingleZeros=True) to omit single zeros
+            zeroSlicedMessages = [BlendZeroSlices(list(msg)).blend(littleEndian=littleEndian)
+                                  for msg in segmentsPerMsg]
+            self.segmentedMessages = [CropChars(segs).split() for segs in zeroSlicedMessages]
             self._callRefinement()
         else:
             raise ValueError(f"tokenizer {self.tokenizer} is unknown")
