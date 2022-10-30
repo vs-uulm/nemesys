@@ -49,7 +49,7 @@ if __name__ == '__main__':
     startsegmentation = time.time()
     segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
     runtimeSegmentation = time.time() - startsegmentation
-    refinedPerMsg = refinements(segmentsPerMsg, unused=None)
+    refinedPerMsg = refinements(segmentsPerMsg)
     runtimeRefinement = time.time() - startsegmentation
 
     print('Segmented and refined in {:.3f}s'.format(time.time() - startsegmentation))
