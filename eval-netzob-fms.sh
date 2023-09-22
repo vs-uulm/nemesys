@@ -37,6 +37,12 @@ for fn in ${input} ; do
       # optargs="-l 2 --smax 75"
     fi
   done
+  for proto in ${L1PROTOS} ; do
+    if [[ "${fn}" == ${proto} ]] ; then
+      # replace
+      optargs="-l1"
+    fi
+  done
 #   python src/netzob_fms.py --smin ${smin} ${optargs} ${fn} > "${report}/$(basename -s .pcap ${fn}).log" &
   python src/netzob_fms.py ${optargs} ${fn} >> "${report}/$(basename -s .pcap ${fn}).log" &
   pids+=( $! )

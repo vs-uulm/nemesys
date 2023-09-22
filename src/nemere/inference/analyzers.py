@@ -341,7 +341,7 @@ class BitCongruenceDeltaGauss(BitCongruenceDelta):
         :return: The indices and values of the approximated inflections.
         """
         inflpt = [ offset + int(numpy.nanargmax(wd)) for offset, wd in self.risingDeltas() ]
-        inflvl = [ self.bcdeltas[pkt] for pkt in inflpt ]
+        inflvl = [ self.values[pkt] for pkt in inflpt ]
         return inflpt, inflvl
 
     def bcHighPlateaus(self):

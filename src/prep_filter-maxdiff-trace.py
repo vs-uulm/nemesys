@@ -5,6 +5,9 @@ the metric of the average least common segment values per message.
 """
 
 import logging  # hide warnings of scapy: https://stackoverflow.com/questions/24812604/hide-scapy-warning-message-ipv6
+
+from nemere.validation.messageParser import DissectionIncomplete
+
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 
@@ -19,7 +22,7 @@ from tabulate import tabulate
 
 from netzob.Model.Vocabulary.Messages.RawMessage import AbstractMessage
 
-from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, zeroBaseRefinements
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, baseRefinements
 from nemere.inference.segments import MessageSegment
 from nemere.inference.templates import DelegatingDC, Template
 from nemere.inference.analyzers import Value
@@ -192,7 +195,7 @@ if __name__ == '__main__':
     specimens = SpecimenLoader(pcapfilename, args.layer, args.relativeToIP)
     if args.filter in filterOptions[1:]:  # only the second two filters need segments.
         segmentsPerMsg = bcDeltaGaussMessageSegmentation(specimens, sigma)
-        refinedPerMsg = zeroBaseRefinements(segmentsPerMsg)
+        refinedPerMsg = baseRefinements(segmentsPerMsg)
 
     print("Filter messages...")
     filterduration = time.time()
@@ -239,7 +242,7 @@ if __name__ == '__main__':
             if writeHead:
                 cw.writerow(headers)
             cw.writerows(stats)
-    except NotImplementedError as e:
+    except (NotImplementedError, DissectionIncomplete) as e:
         print("Groundtruth not available for unknown protocol, comparison aborted.\n"
               "Original exception was: ", e)
     # # # # # # # # # # # # # # # # # # # # # # # # # # # #

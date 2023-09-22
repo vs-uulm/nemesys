@@ -234,7 +234,6 @@ class SegmentClusterCauldron(object):
     def _regularAndSingularClusters(self):
         """
         Fill lists with clusters that contain at least three distinct values (regular) and less (singular).
-        see also `nemere.inference.segmentHandler.extractEnumClusters()`
         """
         self.regularClusters = SegmentClusters(self.clusterer.distanceCalculator)
         self.singularClusters = SegmentClusters(self.clusterer.distanceCalculator)
@@ -242,7 +241,6 @@ class SegmentClusterCauldron(object):
             if len({seg[1].bytes for seg in uc[1]}) > 3:
                 self.regularClusters.append(uc)
             else:
-                # TODO evaluate nemere.inference.segmentHandler.extractEnumClusters
                 self.singularClusters.append(uc)
         # redundantly store regular clusters before any mering and splitting
         self.originalRegularClusters = SegmentClusters(self.clusterer.distanceCalculator)
@@ -679,7 +677,7 @@ class SegmentClusterContainer(MutableSequence):
                 smallCluster = i if maxdists[i] < maxdists[j] else j
                 # extent of the smaller cluster
                 smallClusterExtent = maxdists[smallCluster]
-                # density as median dissimilarityie in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
+                # density as median dissimilarity in $\epsilon$-neighborhood with smallClusterExtent as $\epsilon$
                 dists2linki = numpy.delete(self.dcSubMatrix(i)[coordmin[0]], coordmin[0])
                 dists2linkj = numpy.delete(self.dcSubMatrix(j)[coordmin[1]], coordmin[1])
                 densityi = numpy.median(dists2linki[dists2linki <= smallClusterExtent / 2])

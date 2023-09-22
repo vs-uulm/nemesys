@@ -15,7 +15,7 @@ from nemere.inference.segmentHandler import baseRefinements, originalRefinements
     isExtendedCharSeq, nemetylRefinements, pcaRefinements, \
     zerocharPCAmocoSFrefinements, pcaMocoSFrefinements, entropymergeZeroCharPCAmocoSFrefinements
 from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport, \
-    SegmentClusterGroundtruthReport, writeFieldTypesTikz, writeSemanticTypeHypotheses
+    SegmentClusterGroundtruthReport,  writeFieldTypesTikz, writeSemanticTypeHypotheses
 from nemere.validation.clusterInspector import SegmentClusterCauldron
 from nemere.visualization.distancesPlotter import SegmentTopology
 from nemere.utils.evaluationHelpers import *

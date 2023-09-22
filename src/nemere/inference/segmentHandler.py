@@ -325,7 +325,10 @@ def refinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[Li
     :param segmentsPerMsg: a list of one list of segments per message.
     :return: refined segments in list per message
     """
-    return zerocharPCAmocoSFrefinements(segmentsPerMsg, **kwargs)
+    # for compatibility with different refinment methods with and without kwargs, remove dummy argument
+    if list(kwargs.keys()) == ["unused"]:
+        kwargs = {}
+    return originalRefinements(segmentsPerMsg, **kwargs)
 
 
 def pcaMocoRefinements(segmentsPerMsg: List[List[MessageSegment]], **kwargs) -> List[List[MessageSegment]]:

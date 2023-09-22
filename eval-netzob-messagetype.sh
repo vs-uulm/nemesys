@@ -48,6 +48,15 @@ mkdir ${report}
 #python src/netzob_messagetypes.py input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-100.pcap  -r --smin 53
 #python src/netzob_messagetypes.py input/maxdiff-fromOrig/smb_SMIA20111010-one-rigid1_maxdiff-1000.pcap -r --smin 53
 
+## find similarity threshold
+#python src/netzob_messagetypes.py input/awdl-filtered_maxdiff-100.pcap -l2 --smin 45 --smax 80
+#python src/netzob_messagetypes.py input/au-wifi-filtered.pcap -l2 --smin 45 --smax 80
+## regular run
+#python src/netzob_messagetypes.py input/awdl-filtered_maxdiff-500.pcap -l2 --smin 65
+#python src/netzob_messagetypes.py input/awdl-filtered_maxdiff-350.pcap -l2 --smin 65
+#python src/netzob_messagetypes.py input/awdl-filtered_maxdiff-250.pcap -l2 --smin 65
+#python src/netzob_messagetypes.py input/awdl-filtered_maxdiff-100.pcap -l2 --smin 57
+#python src/netzob_messagetypes.py input/awdl-filtered.pcap -l2 --smin 57
 
 mv reports/*.csv ${report}/
 mv reports/*.pdf ${report}/

@@ -1347,6 +1347,7 @@ class ParsedMessage(object):
         self.protocols = None
         self.protocolname = None
         self.protocolbytes = None
+        self.framebytes = None
         self._fieldsflat = None
         self._dissectfull = None
         self.__failOnUndissectable = failOnUndissectable
@@ -1580,9 +1581,17 @@ class ParsedMessage(object):
             # ... and set the message afterwards
             pm.message = msg
             pm._parseJSON([paketjson])
-            # assert "".join(pm.getFieldValues()) == msg.data.hex(), \
-            #     f"msg data and dissector mismatch:\n{msg.data.hex()}\n{''.join(pm.getFieldValues())}"
-            # TODO validate correct msg to pm association (via byte data)
+
+            # # Different check options:
+            # # pm.protocolbytes from the JSON
+            # # pm.framebytes from the JSON
+            # # f"msg data and dissector mismatch:\n{l4msg.data.hex()}\n{''.join(pm.getFieldValues())}"
+            # try:
+            #     assert pm.framebytes == msg.data.hex(), \
+            #         f"msg data and dissector mismatch:\n{msg.data.hex()}\n{pm.framebytes}"
+            # except:
+            #     print(f"msg data and dissector mismatch:\n{msg.data.hex()}\n{pm.framebytes}")
+            #     IPython.embed()
             prsdmsgs[msg] = pm
 
         return prsdmsgs  # type: dict[AbstractMessage: ParsedMessage]
@@ -1631,6 +1640,9 @@ class ParsedMessage(object):
         layersvalue = ParsedMessage._getElementByName(ParsedMessage._getElementByName(
             dissectjson, sourcekey), layerskey)
         if layersvalue:
+            frameraw = ParsedMessage._getElementByName(layersvalue, framekey + ParsedMessage.RK)
+            if len(frameraw) >= 1 and isinstance(frameraw[0], str):
+                self.framebytes = frameraw[0]
             protocolsvalue = ParsedMessage._getElementByName(ParsedMessage._getElementByName(
                 layersvalue, framekey), protocolskey)
             if len(protocolsvalue) == 1 and isinstance(protocolsvalue[0], str):

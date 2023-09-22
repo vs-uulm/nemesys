@@ -67,7 +67,7 @@
     * filtered by adapted /home/stephan/REUP-common/trace-collection/sources/filters/filter-smb.sh
 * smb_maccdc2012_maxdiff-1100.pcap
     * from /media/usb0/project-raw-files/traces/MACCDC2012/smb_maccdc2012.pcap
-    * packets of trace are 802.11q VLAN encapsulated, strip to IP:
+    * packets of trace are 802.11q VLAN encapsulated, strip to IP:  
       python3 strip_encapsulation.py smb_maccdc2012_000*-f2.pcap
     * filtered by /home/stephan/REUP-common/trace-collection/sources/filters/filter-smb.sh
     * download command and additional infos: /media/usb0/project-raw-files/traces/MACCDC2012/source.txt
