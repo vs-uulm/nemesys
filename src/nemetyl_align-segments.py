@@ -14,13 +14,13 @@ which is used as feature to determine their similarity. Similar fields are then 
 
 import argparse
 
-
 from nemere.alignment.alignMessages import TypeIdentificationByAlignment
 from nemere.inference.segmentHandler import originalRefinements, baseRefinements, pcaRefinements, pcaMocoRefinements, \
     nemetylRefinements, zerocharPCAmocoSFrefinements, pcaMocoSFrefinements, entropymergeZeroCharPCAmocoSFrefinements
 from nemere.alignment.hirschbergAlignSegments import HirschbergOnSegmentSimilarity
 from nemere.inference.templates import ClusterAutoconfException
 from nemere.utils.evaluationHelpers import *
+from nemere.utils.baseAlgorithms import ecdf
 from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport
 from nemere.visualization.multiPlotter import MultiMessagePlotter
 from nemere.alignment.clusterMerging import ClusterClusterer

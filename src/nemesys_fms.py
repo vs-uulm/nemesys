@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 from nemere.validation.dissectorMatcher import MessageComparator, FormatMatchScore, DissectorMatcher
 from nemere.utils.loader import SpecimenLoader
 from nemere.inference.analyzers import *
-from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, originalRefinements, symbolsFromSegments
+from nemere.inference.segmentHandler import bcDeltaGaussMessageSegmentation, originalRefinements, \
+    symbolsFromSegments
 from nemere.utils import reportWriter
 from nemere.utils.evaluationHelpers import sigmapertrace
 

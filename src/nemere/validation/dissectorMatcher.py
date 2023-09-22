@@ -451,7 +451,7 @@ class MessageComparator(BaseComparator):
                         fitnodes.append(
                             '\\node[fit=(m{}f{})(m{}f{}), tfe] {{}};'.format(smid, pol+1, smid, por)
                         )
-                        # TODO add the inferred field's "truest" type as label
+                        # TODO add the inferred field's "most true" type as label
                 texcode += '\n' + '\n'.join(fitnodes)
 
         texcode += """
@@ -615,7 +615,7 @@ class AbstractDissectorMatcher(ABC):
         self._inferredFields = None  # must be filled by subclass!
 
     @property
-    def inferredFields(self):
+    def inferredFields(self) -> List[int]:
         """
         :return: List of inferred field ends.
         """
@@ -731,8 +731,20 @@ class AbstractDissectorMatcher(ABC):
 
         exactcount = len(exactmatches)
         nearcount = len(nearmatches)
-        fieldcount = len(self.dissectionFields) - 1
-        inferredcount = len(self.inferredFields) - 1
+
+        msglen = len(self._message.data)
+
+        fieldcount = len(self.dissectionFields)
+        if 0 in self.dissectionFields:
+            fieldcount -= 1
+        if msglen in self.dissectionFields:
+            fieldcount -= 1
+
+        inferredcount = len(self.inferredFields)
+        if 0 in self.inferredFields:
+            inferredcount -= 1
+        if msglen in self.inferredFields:
+            inferredcount -= 1
 
         # nearmatches weighted by distance, /2 to increase spread -> less intense penalty for deviation from 0
         nearweights = {tfe: math.exp(- ((dist / 2) ** 2))
@@ -742,7 +754,9 @@ class AbstractDissectorMatcher(ABC):
         try:
             specificyPenalty = math.exp(- ((fieldcount - inferredcount) / fieldcount) ** 2)
         except ZeroDivisionError:
-            raise ZeroDivisionError("Offending message:\n{}".format(self._message.data.hex()))
+            raise ZeroDivisionError(f"Likely cause: Unknown protocol or missing dissector."
+                                    f"fieldcount: {fieldcount} - inferredcount: {inferredcount}"
+                                    f"\nOffending message:\n{self._message.data.hex()}")
         matchGain = (exactcount + sum([nearweights[nm] for nm in nearmatches.keys()])) / fieldcount
         score = specificyPenalty * (
             # exact matches + weighted near matches
@@ -751,6 +765,7 @@ class AbstractDissectorMatcher(ABC):
         fms = FormatMatchScore(self._message)
         fms.trueFormat = self._comparator.parsedMessages[self._comparator.messages[self._message]].getTypeSequence()
         fms.score = score
+        fms.symbol = self.inferredFields   # sets the list of field ends instead of a Netzob Symbol
         fms.specificyPenalty = specificyPenalty
         fms.matchGain = matchGain
         fms.nearWeights = nearweights
@@ -790,6 +805,11 @@ class BaseDissectorMatcher(AbstractDissectorMatcher):
         self._inferredFields = [0] + [seg.nextOffset for seg in messageSegments]
         if self._inferredFields[-1] < len(self._message.data):
             self._inferredFields += [len(self._message.data)]
+
+    def calcFMS(self):
+        fms = super().calcFMS()
+        fms.symbol = self.__messageSegments   # sets the list of segments instead of a Netzob Symbol
+        return fms
 
 
 class DissectorMatcher(AbstractDissectorMatcher):

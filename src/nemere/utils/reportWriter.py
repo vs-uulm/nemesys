@@ -6,6 +6,7 @@ import os
 import csv
 from abc import ABC, abstractmethod
 
+import IPython
 import numpy
 from typing import Dict, Tuple, Iterable, TypeVar, Hashable, List, Union, Any, Sequence
 from os.path import isdir, splitext, basename, join, exists
@@ -13,6 +14,7 @@ from itertools import chain
 from collections import Counter, defaultdict, OrderedDict
 
 from netzob.Model.Vocabulary.Messages.AbstractMessage import AbstractMessage
+from netzob.Model.Vocabulary.Symbol import Symbol
 
 from nemere.inference.segments import AbstractSegment, TypedSegment, MessageSegment
 from nemere.inference.templates import Template, TypedTemplate, FieldTypeTemplate
@@ -20,7 +22,7 @@ from nemere.utils.evaluationHelpers import StartupFilecheck, reportFolder, segIs
 from nemere.utils.loader import SpecimenLoader
 from nemere.validation.clusterInspector import SegmentClusterCauldron
 from nemere.validation.dissectorMatcher import FormatMatchScore, MessageComparator, BaseDissectorMatcher
-from nemere.visualization.simplePrint import FieldtypeComparingPrinter
+from nemere.visualization.simplePrint import FieldtypeComparingPrinter, ComparingPrinter
 
 
 def calcScoreStats(scores: Iterable[float]) -> Tuple[float, float, float, float, float]:
@@ -112,26 +114,48 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
                            runtime] )
 
     # write Symbols to csvs
-    multipleSymbolCSVs = False
-    if multipleSymbolCSVs:
-        for cnt, symbol in enumerate(  # by the set comprehension,
-                { quality.symbol  # remove identical symbols due to multiple formats
-                for quality
-                in formatmatchmetrics.values() } ):
-            fileNameS = 'Symbol_{:s}_{:d}'.format(symbol.name, cnt)
+    if all(isinstance(quality.symbol, Symbol) or quality.symbol is None for quality in formatmatchmetrics.values()):
+        multipleSymbolCSVs = False  # Has no effect if not using Netzob Symbols
+        if multipleSymbolCSVs:
+            for cnt, symbol in enumerate(  # by the set comprehension,
+                    { quality.symbol  # remove identical symbols due to multiple formats
+                    for quality
+                    in formatmatchmetrics.values() } ):
+                fileNameS = 'Symbol_{:s}_{:d}'.format(symbol.name, cnt)
+                with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
+                    symbolcsv = csv.writer(csvfile)
+                    symbolcsv.writerow([field.name for field in symbol.fields])
+                    symbolcsv.writerows([val.hex() for val in msg] for msg in symbol.getCells())
+        else:
+            fileNameS = f'Symbols_{inferenceTitle}' if withTitle else 'Symbols'
             with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
                 symbolcsv = csv.writer(csvfile)
-                symbolcsv.writerow([field.name for field in symbol.fields])
-                symbolcsv.writerows([val.hex() for val in msg] for msg in symbol.getCells())
+                msgcells = chain.from_iterable([sym.getCells() for sym in  # unique symbols by set
+                    {fms.symbol for fms in formatmatchmetrics.values()} if sym is not None])
+                symbolcsv.writerows(
+                    [val.hex() for val in msg] for msg in msgcells
+                )
+    elif all(isinstance(quality.symbol, Sequence) for quality in formatmatchmetrics.values()):
+        if all(isinstance(segment, int) for quality in formatmatchmetrics.values() for segment in quality.symbol):
+            # in case we have inferred field bounds (0, ..., n-1) in symbol
+            fileNameS = f'Symbols_{inferenceTitle}' if withTitle else 'Symbols'
+            with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
+                symbolcsv = csv.writer(csvfile)
+                msgcells = [ [fms.message.data[offstart:offend].hex() for offstart,offend
+                              in zip(fms.symbol[:-1], fms.symbol[0])] for fms in formatmatchmetrics.values()]
+                symbolcsv.writerows(msgcells)
+        elif all(isinstance(segment, MessageSegment) for quality
+                 in formatmatchmetrics.values() for segment in quality.symbol):
+            # in case we have segment objects in symbol
+            fileNameS = f'Symbols_{inferenceTitle}' if withTitle else 'Symbols'
+            with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
+                symbolcsv = csv.writer(csvfile)
+                msgcells = [[seg.bytes.hex() for seg in fms.symbol] for fms in formatmatchmetrics.values()]
+                symbolcsv.writerows(msgcells)
+        else:
+            print("Inconsistent inference information for reporting. Omitting symbol writing.")
     else:
-        fileNameS = f'Symbols_{inferenceTitle}' if withTitle else 'Symbols'
-        with open(os.path.join(folder, fileNameS + '.csv'), 'w') as csvfile:
-            symbolcsv = csv.writer(csvfile)
-            msgcells = chain.from_iterable([sym.getCells() for sym in  # unique symbols by set
-                {fms.symbol for fms in formatmatchmetrics.values()}])
-            symbolcsv.writerows(
-                [val.hex() for val in msg] for msg in msgcells
-            )
+        print("No Symbols of inference information found for reporting. Omitting symbol writing.")
 
     # # write tshark-dissection to csv
     # # currently only unique formats. For a specific trace a baseline could be determined
@@ -141,22 +165,33 @@ def writeReport(formatmatchmetrics: Dict[AbstractMessage, FormatMatchScore],
     #     revmsg = {l2m: l5m for l5m, l2m in specimens.messagePool.items()}  # get L5 messages for the L2 in tformats
     #     formatscsv.writerows([(revmsg[l2m].data.hex(), f) for l2m, f in tformats.items()])
 
-
     # FMS : Symbol (we just need one example for each score, so we do not care overwriting multiple identical ones)
-    score2symbol = {fms.score: fms.symbol for fms in formatmatchmetrics.values()}
-
-    # symsMinMeanMax = [score2symbol[mmm] for mmm in scoreStats[:3]]
-    # add some context symbols
-    scoreSorted = sorted(score2symbol.keys())
-    meanI = scoreSorted.index(scoreStats[1])
-    scoreSelect = scoreSorted[-3:] + scoreSorted[meanI:meanI+3] + scoreSorted[:3]
-    symsMinMeanMax = [score2symbol[mmm] for mmm in scoreSelect]
-    tikzcode = comparator.tprintInterleaved(symsMinMeanMax)
-
-    # write Format Match Score and Metrics to csv
-    fn = f'example-inference-minmeanmax_{inferenceTitle}.tikz' if withTitle else 'example-inference-minmeanmax.tikz'
-    with open(join(folder, fn), 'w') as tikzfile:
-        tikzfile.write(tikzcode)
+    score2symbol = {fms.score: fms.symbol for fms in formatmatchmetrics.values() if fms.symbol is not None}
+    if scoreStats[1] in score2symbol.keys():
+        # symsMinMeanMax = [score2symbol[mmm] for mmm in scoreStats[:3]]
+        # add some context symbols
+        scoreSorted = sorted(score2symbol.keys())
+        meanI = scoreSorted.index(scoreStats[1])
+        scoreSelect = scoreSorted[-3:][::-1] + scoreSorted[meanI:meanI+3][::-1] + scoreSorted[:3][::-1]
+        symsMinMeanMax = [score2symbol[mmm] for mmm in scoreSelect]
+        tikzcode = None
+        if all(isinstance(mmm, Symbol) for mmm in symsMinMeanMax):
+            tikzcode = "FMS values: " + ", ".join(f"{fms:0.2f}" for fms in scoreSelect) + "\n\n"
+            tikzcode += comparator.tprintInterleaved(symsMinMeanMax)
+        elif all(isinstance(mmm, Sequence) for mmm in symsMinMeanMax) \
+                and all(isinstance(seg, MessageSegment) for mmm in symsMinMeanMax for seg in mmm):
+            tikzcode = "FMS values: " + ", ".join(f"{fms:0.2f}" for fms in scoreSelect) + "\n\n"
+            cprinter = ComparingPrinter(comparator, symsMinMeanMax)
+            tikzcode += cprinter.toTikz()
+        if tikzcode:
+            # write Format Match Score and Metrics to csv
+            fn = f'example-inference-minmeanmax_{inferenceTitle}.tikz' if withTitle else 'example-inference-minmeanmax.tikz'
+            with open(join(folder, fn), 'w') as tikzfile:
+                tikzfile.write(tikzcode)
+        else:
+            print("Inconsistent inference information. Cannot print examples.")
+    else:
+        print("No symbols in FMS given. Cannot print examples.")
 
 
 def writeSegmentedMessages2CSV(segmentsPerMsg: Sequence[Sequence[MessageSegment]], folder="reports"):

@@ -47,6 +47,7 @@ optThresh = {
     "smb_SMIA20111010-one-rigid1_maxdiff-"  : 53,
     "awdl-filtered"                         : 57,
     "au-wifi-filtered"                      : 51,
+    "ari_syslog_corpus_maxdiff-"            : 47,  # nemesys-reports/NEMEPCA/phase-postgv-3_comparison/netzob-format-206-fms-c4d940b/ari_syslog_corpus_maxdiff-99_clByAlign_20230207-021732
 }
 
 

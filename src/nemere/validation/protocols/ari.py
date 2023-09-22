@@ -2,7 +2,11 @@ from ..messageParser import ParsingConstants, MessageTypeIdentifiers
 
 class MTID_ARI(MessageTypeIdentifiers):
     FOR_PROTCOL = {
-        'ari': [ 'ari.message_name' ]
+        'ari': [ {
+            'field': 'ari.gid',
+            'filter': lambda v: True,
+            'select': lambda w: int.from_bytes(bytes.fromhex(w), "big") & 0xf801  # mask out bits 5-15
+        } ]
     }
     NAMED_TYPES = {}
 

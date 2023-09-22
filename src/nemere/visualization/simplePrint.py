@@ -382,8 +382,9 @@ class SegmentPrinter(object):
             # have a frame around each inferred field
             fitnodes = list()
             for seg in isegs:
+                nextoffsetnode = seg.nextOffset if seg.nextOffset <= len(seg.message.data) else len(seg.message.data)
                 fitnodes.append(
-                    f'\\node[fit=(m{msgid}f{seg.offset + 1})(m{msgid}f{seg.nextOffset}), tfe] {{}};'
+                    f'\\node[fit=(m{msgid}f{seg.offset + 1})(m{msgid}f{nextoffsetnode}), tfe] {{}};'
                 )
             texcode += '\n' + '\n'.join(fitnodes)
 

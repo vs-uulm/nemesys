@@ -8,9 +8,21 @@
 #input="input/*-100.pcap input/*-1000.pcap"
 #input="input/ntp_SMIA-20111010_deduped-1000.pcap input/smb_SMIA20111010-one_deduped-1000.pcap"
 
-input="input/maxdiff-fromOrig/*-100*.pcap"
-#input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100.pcap"
+#input="input/wlan-beacons-priv_maxdiff-100.pcapng"
+#input="input/maxdiff-fromOrig/ntp_SMIA-20111010_maxdiff-100*.pcap"
+#input="input/maxdiff-fromOrig/*-100*.pcap"
 
+# > 41 GB Memory needed for PCAmoco!
+# input="input/awdl-filtered.pcap"
+# > 30 GB Memory needed for PCAmoco!
+# input="inputl/awdl-filtered_maxdiff-500.pcap"
+
+# input="input/awdl-filtered_maxdiff-100.pcap input/awdl-filtered_maxdiff-250.pcap input/awdl-filtered_maxdiff-350.pcap input/maxdiff-fromOrig/*-100*.pcap"
+#input="input/maxdiff-fromOrig/*-100*.pcap input/awdl-filtered_maxdiff-100.pcap input/awdl-filtered.pcap"
+# input="input/awdl-filtered_maxdiff-250.pcap input/au-wifi-filtered.pcap"
+# input="input/awdl-filtered.pcap"
+#input="input/awdl-filtered_maxdiff-100.pcap input/awdl-filtered.pcap input/au-wifi-filtered.pcap"
+input="input/ari_syslog_corpus_maxdiff-99.pcapng input/ari_syslog_corpus_maxdiff-999.pcapng"
 
 #sigmas="0.6 0.8 1.0 1.2"
 # default
@@ -18,7 +30,8 @@ input="input/maxdiff-fromOrig/*-100*.pcap"
 sigmas="1.2"
 
 # full
-segmenters="nemesys zeros"
+#segmenters="nemesys zeros"
+segmenters="zeros"
 
 # full
 #refines="none original base nemetyl PCA1 PCAmoco PCAmocoSF zerocharPCAmocoSF emzcPCAmocoSF"
@@ -27,6 +40,7 @@ segmenters="nemesys zeros"
 # refines="original nemetyl PCA1 PCAmoco zerocharPCAmocoSF"
 # default
 # refines="original nemetyl zerocharPCAmocoSF"
+#refines="zerocharPCAmocoSF"
 
 # Zeros options
 # refines="none PCA1 PCAmocoSF"
@@ -38,14 +52,13 @@ segmenters="nemesys zeros"
 
 refines="nemetyl PCAmocoSF zerocharPCAmocoSF emzcPCAmocoSF"
 
-
 L2PROTOS="input/awdl-* input/au-* input/wlan-beacons-*"
 L1PROTOS="input/ari_*"
 LEPROTOS="input/awdl-* input/au-* input/smb* input/*/smb* input/wlan-beacons-*"
 
 prefix="nemetyl"
 
-cftnpad="405"
+cftnpad="414"
 for f in reports/${prefix}-* ; do
   if [ -e "$f" ] ; then
     cftnext=$(expr 1 + $(ls -d reports/${prefix}-* | sed "s/^.*${prefix}-\([0-9]*\)-.*$/\1/" | sort | tail -1))

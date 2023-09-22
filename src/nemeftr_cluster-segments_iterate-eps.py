@@ -9,13 +9,11 @@ Generates segment-dissimilarity topology plots of the clustering result.
 import argparse
 from math import log
 
-from nemere.inference.templates import FieldTypeTemplate, \
-    DBSCANsegmentClusterer, ClusterAutoconfException
-from nemere.inference.segmentHandler import baseRefinements, originalRefinements, \
-    isExtendedCharSeq, nemetylRefinements, \
-    pcaMocoRefinements, pcaRefinements, zerocharPCAmocoSFrefinements, pcaMocoSFrefinements
-from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport, \
-    SegmentClusterGroundtruthReport
+from nemere.inference.templates import FieldTypeTemplate, DBSCANsegmentClusterer, ClusterAutoconfException
+from nemere.inference.segmentHandler import baseRefinements, originalRefinements, pcaMocoRefinements, \
+    isExtendedCharSeq, nemetylRefinements, pcaRefinements, \
+    zerocharPCAmocoSFrefinements, pcaMocoSFrefinements
+from nemere.utils.reportWriter import IndividualClusterReport, CombinatorialClustersReport, SegmentClusterGroundtruthReport
 from nemere.visualization.distancesPlotter import SegmentTopology
 from nemere.utils.evaluationHelpers import *
 
