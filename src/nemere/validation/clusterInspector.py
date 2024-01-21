@@ -842,8 +842,8 @@ class SegmentClusterContainer(MutableSequence):
             nearest = df[segB].idxmin(0)
             path.append(nearest)
             distsAlongPath.append(df.at[segB, nearest])
-            df.drop(segB, 0, inplace=True)
-            df.drop(segB, 1, inplace=True)
+            df.drop(segB, axis=0, inplace=True)
+            df.drop(segB, axis=1, inplace=True)
             assert all(numpy.isnan(numpy.diag(df)))  # be sure we removed symmetrical
             segB = nearest
         return path, numpy.array(distsAlongPath)

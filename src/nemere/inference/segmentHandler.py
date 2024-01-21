@@ -65,11 +65,12 @@ def symbolsFromSegments(segmentsPerMsg: Iterable[Sequence[MessageSegment]]) -> L
     >>> testgapped = [[ MessageSegment(dummyana, 0, 2), MessageSegment(dummyana, 5, 2), MessageSegment(dummyana, 7, 6),
     ...                MessageSegment(dummyana, 17, 2) ]]
     >>> symbol = symbolsFromSegments(testgapped)[0]
-    >>> print(symbol)
+    >>> print(symbol.str_data())
     Field | Field | Field | Field    | Field  | Field | Field
     ----- | ----- | ----- | -------- | ------ | ----- | -----
     '23'  | '456' | '78'  | '9:;<=>' | '?@AB' | 'CD'  | 'E'...
     ----- | ----- | ----- | -------- | ------ | ----- | -----
+
 
     Intermediately produces:
     ```

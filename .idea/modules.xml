@@ -5,7 +5,7 @@
       <module fileurl="file://$PROJECT_DIR$/../fieldhunter/.idea/fieldhunter.iml" filepath="$PROJECT_DIR$/../fieldhunter/.idea/fieldhunter.iml" />
       <module fileurl="file://$PROJECT_DIR$/../goo-csp/.idea/goo-csp.iml" filepath="$PROJECT_DIR$/../goo-csp/.idea/goo-csp.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/nemesys.iml" filepath="$PROJECT_DIR$/.idea/nemesys.iml" />
-      <module fileurl="file://$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" filepath="$USER_HOME$/REUP-common/Tools/netzob-official/.idea/netzob-official.iml" />
+      <module fileurl="file://$USER_HOME$/REUP-common/Tools/netzob/.idea/netzob.iml" filepath="$USER_HOME$/REUP-common/Tools/netzob/.idea/netzob.iml" />
     </modules>
   </component>
 </project>

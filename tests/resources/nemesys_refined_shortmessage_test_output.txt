@@ -1,0 +1,23 @@
+Segment messages...
+Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
+Refine segmentation (NullBytes, CropChars)...
+Refine segmentation (PCA, CropDistinct, SplitFixedv2 refinements)...
+Use provided matrix: memmap (11, 11) float16
+Calculated distances for 55 segment pairs in 0.03 seconds.
+OPTICS min samples: 3 max eps: 0.4
+Initial clustering: OPTICS ms 3 maxeps 0.4 - cluster sizes: [8] - noise: 2
+Analyzing cluster tf00
+Cluster tf00 needs reclustering: too many principal components (2/2).
+No knee could be found. Original exception was:
+  max() arg is an empty sequence
+[]
+[38:5:1m00[0m[38:5:2m00[0m[38:5:3m0a[0m[38:5:4m41[0m
+[38:5:1m0000[0m[38:5:3m2934[0m
+[38:5:1m0000[0m[38:5:3m5984[0m
+[38:5:1m0000[0m[38:5:3m39cb[0m
+[38:5:1m00[0m[38:5:2m00[0m[38:5:3m21[0m[38:5:4mca[0m
+[38:5:1m0000[0m[38:5:3m486a[0m
+[38:5:1m0000[0m[38:5:3m2779[0m
+[38:5:1m0000[0m[38:5:3m5374[0m
+[38:5:1m0000[0m[38:5:3m4535[0m
+[38:5:1m0000[0m[38:5:3m51c1[0m

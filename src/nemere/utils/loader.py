@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Iterable, Union
 from os.path import isfile
 from collections import OrderedDict
 import logging
@@ -25,9 +25,9 @@ class BaseLoader(object):
     Especially useful for on-the-fly creation of test cases.
     """
 
-    def __init__(self, l5msgs, l1msgs=None, baselayer=None):
+    def __init__(self, l5msgs: Iterable[Union[AbstractMessage, RawMessage]], l1msgs=None, baselayer=None):
         """
-        Load messages from memory. Base class for other loaders, e. g. loading from PCAP file.
+        Load messages from memory. Base class for other loaders, e.g. loading from PCAP file.
 
         :param l5msgs:
         :param l1msgs:

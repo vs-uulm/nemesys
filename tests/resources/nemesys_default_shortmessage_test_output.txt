@@ -1,0 +1,13 @@
+Segment messages...
+Segmentation by inflections of sigma-0.6-gauss-filtered bit-variance.
+Refine segmentation (original WOOT18 refinements)...
+[38:5:1m00000a41[0m
+[38:5:1m0000[0m[38:5:3m2934[0m
+[38:5:1m0000[0m[38:5:3m5984[0m
+[38:5:1m0000[0m[38:5:3m39cb[0m
+[38:5:1m000021ca[0m
+[38:5:1m0000[0m[38:5:3m486a[0m
+[38:5:1m0000[0m[38:5:3m2779[0m
+[38:5:1m0000[0m[38:5:3m5374[0m
+[38:5:1m0000[0m[38:5:3m4535[0m
+[38:5:1m0000[0m[38:5:3m51c1[0m

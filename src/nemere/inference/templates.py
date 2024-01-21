@@ -425,17 +425,18 @@ class DistanceCalculator(object):
         >>> print(prepMtx[0])
         canberra
         >>> print(tabulate(prepMtx[1]))
-        --  --  --  --  --  -  --
-         1   2   3   4
-         2   3   4
-         1   3   4
-         2   4
-         2   3
-        20  30  37  50  69  2  30
-        37   5  69
-         0   0   0   0
-         3   2   3   4
-        --  --  --  --  --  -  --
+        --  --  ---  ---  ---  ---  ---
+         1   2    3    4  nan  nan  nan
+         2   3    4  nan  nan  nan  nan
+         1   3    4  nan  nan  nan  nan
+         2   4  nan  nan  nan  nan  nan
+         2   3  nan  nan  nan  nan  nan
+        20  30   37   50   69    2   30
+        37   5   69  nan  nan  nan  nan
+         0   0    0    0  nan  nan  nan
+         3   2    3    4  nan  nan  nan
+        --  --  ---  ---  ---  ---  ---
+
 
 
         # TODO if this should become is a performance killer, drop support for cosine and correlation
@@ -454,13 +455,19 @@ class DistanceCalculator(object):
             if method == 'cosine':
                 method = 'canberra'
 
+        max_len = max(len(seg[2]) for seg in segments)
+        # Create a NumPy array with NaN values
+        segmentValuesMatrix = numpy.full((len(segments), max_len), numpy.nan)
         if method == 'cosine':
             # comparing to zero vectors is undefined in cosine.
             # Its semantically equivalent to a (small) horizontal vector
-            segmentValuesMatrix = numpy.array(
-                [seg[2] if (numpy.array(seg[2]) != 0).any() else [1e-16]*len(seg[2]) for seg in segments])
+
+            for i, seg in enumerate(segments):
+                coseg = seg[2] if numpy.any(numpy.array(seg[2]) != 0) else numpy.full(len(seg[2]), 1e-16)
+                segmentValuesMatrix[i, :len(coseg)] = coseg
         else:
-            segmentValuesMatrix = numpy.array([seg[2] for seg in segments])
+            for i, seg in enumerate(segments):
+                segmentValuesMatrix[i, :len(seg[2])] = seg[2]
 
         return method, segmentValuesMatrix
 

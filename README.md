@@ -91,7 +91,7 @@ This is highly experimental software and by no means guaranteed to be fit for pr
 
 
 ## Requirements
-* Python 3
+* Python 3.9 (Netzob dependencies are incompatible with 3.11 currently)
 * libpcap for pcapy: `apt-get install libpcap-dev libpq-dev`
 * Install packages listed in requirements.txt: `pip install -r requirements.txt`
 	* This necessitates to install libpcap for pcapy: `sudo apt-get install libpcap-dev`

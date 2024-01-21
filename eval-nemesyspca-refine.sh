@@ -60,7 +60,7 @@ for ref in ${refines} ; do
       done
       for proto in ${LEPROTOS} ; do
         if [[ "${fn}" == $proto ]] ; then
-          # echo "Compare with and without litte endian optimization"
+          # echo "Compare with and without little endian optimization"
           # then append
           optargs="${optargs} -e"  # -e: little endian
         fi
@@ -71,7 +71,7 @@ for ref in ${refines} ; do
       python src/nemesys_pca-refinement.py -s ${sig} ${optargs} -f ${ref} ${fn} >> "${report}/${strippedname}.log" &
       pids+=( $! )
 
-      # Compare with and without litte endian optimization
+      # Compare with and without little endian optimization
       #python src/nemesys_pca-refinement.py -s ${sig} ${optargs} -e -f ${ref} ${fn}
 
       # dynamic sigma
