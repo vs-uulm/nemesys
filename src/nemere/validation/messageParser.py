@@ -477,7 +477,8 @@ class ParsingConstants226(ParsingConstants):
     COMPATIBLE_TO = b'2.2.6'
     MESSAGE_TYPE_IDS = MessageTypeIdentifiers226
 
-    # names of field nodes in the json which should be ignored.
+    # Names of field nodes in the json which should be ignored.
+    # This means the full name including the '_raw' suffix, if desired.
     IGNORE_FIELDS = [
         'bootp.option.type_raw', 'bootp.option.value_raw', 'bootp.option.end_raw',
 
@@ -1176,6 +1177,7 @@ class ParsingConstants325(ParsingConstants263):
     COMPATIBLE_TO = b'3.2.5'
     MESSAGE_TYPE_IDS = MessageTypeIdentifiers325
 
+    # This means the full name including the '_raw' suffix, if desired
     IGNORE_FIELDS = [
         'dhcp.option.type_raw', 'dhcp.option.value_raw', 'dhcp.option.end_raw',
 
