@@ -1,4 +1,4 @@
-FROM python:3.8-buster
+FROM python:3.9-bookworm
 
 WORKDIR /nemere
 
@@ -16,14 +16,6 @@ RUN pip3 install -r requirements.txt
 # pylstar should be installed by netzob, but pip fails to install it there
 RUN pip3 install pylstar==0.1.2
 
-# install netzob
-# (tested on commit https://github.com/netzob/netzob/tree/49ee3e5e7d6dce67496afd5a75827a78be0c9f70)
-RUN git clone --single-branch -b next https://github.com/netzob/netzob.git
-RUN cd netzob/netzob && \
-    git checkout 63125dbd31d28c27eee8616bd21345af417f5310 && \
-    python3 setup.py install && \
-    cd ../..
-
 # copy nemere
 COPY . .
 
@@ -34,3 +26,4 @@ USER user
 
 # start in blank shell
 CMD [ "/bin/bash" ]
+
