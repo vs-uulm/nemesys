@@ -1653,34 +1653,18 @@ class ParsedMessage(object):
                     errortext = "No IP layer could be identified in a message of the trace."
                     raise DissectionTemporaryFailure(errortext)
                 if not self.relativeToIP:
-                    baselayer = 0 if 'radiotap' not in self.protocols else self.protocols.index('radiotap') + 1
-                    absLayNum = (baselayer + self.layernumber) if self.layernumber >= 0 else len(self.protocols) - 1
+                    # Handle raw frame (layer 1)
+                    if self.layernumber == 1:
+                        self.protocolname = framekey
+                        absLayNum = 0
+                    else:
+                        baselayer = 0 if 'radiotap' not in self.protocols else self.protocols.index('radiotap') + 1
+                        absLayNum = (baselayer + self.layernumber) if self.layernumber >= 0 else len(self.protocols) - 1
+                        self.extractProtocolName(absLayNum, framekey, layersvalue)
                 else:
                     absLayNum = self.protocols.index('ip') + self.layernumber
-                try:
-                    # protocolname is e.g. 'ntp'
-                    self.protocolname = self.protocols[absLayNum]
-                except IndexError as e:
-                    # there is a bug in the wlan.mgt/awdl dissector: "sometimes" it doesn't list any layer
-                    # above wlan in the protocols value of frame (see `self.protocols`), so we check for
-                    # existing layers in the keys of `layersvalue` that have no "_raw" suffix (see
-                    # `ParsedMessage.RK`)
-                    rawProtocols = [lv[0] for lv in layersvalue
-                                    if not lv[0].endswith(ParsedMessage.RK) and lv[0] != framekey]
-                    # make sure everything up to the last protocol listed in self.protocols is also contained
-                    # in rawProtocols then replace the self.protocols list with the manually determined one.
-                    if rawProtocols[:len(self.protocols)] == self.protocols:
-                        self.protocols = rawProtocols
-                        self.protocolname = self.protocols[absLayNum]
-                    else:
-                        ptxt = f"{absLayNum} missing in {self.protocols}"
-                        print(ptxt)
-                        try:
-                            subprocess.run(["spd-say", ptxt])
-                        except FileNotFoundError:
-                            pass  # does not matter, there simply is no speech notification
-                        IPython.embed()
-                        raise e
+                    self.extractProtocolName(absLayNum, framekey, layersvalue)
+
                 self._dissectfull = ParsedMessage._getElementByName(layersvalue, self.protocolname)
 
                 # add missing layers in protocols list
@@ -1696,7 +1680,7 @@ class ParsedMessage(object):
                             self.protocols += missingLayers
                         break
 
-                # Only 'frame_raw' is guaranteed to all the bytes. Thus should we use this value??
+                # Only 'frame_raw' is guaranteed to contain all the bytes. Thus should we use this value??
                 self.protocolbytes = ParsedMessage._getElementByName(layersvalue,
                     self.protocolname + ParsedMessage.RK)  # tshark 2.2.6
                 if self.protocolbytes:   # tshark 2.6.3
@@ -1789,6 +1773,31 @@ class ParsedMessage(object):
         # if any of the requirements to the structure is not met (see if-conditions above).
         raise DissectionInvalidError('JSON invalid.')
 
+    def extractProtocolName(self, absLayNum, framekey, layersvalue):
+        try:
+            # protocolname is e.g. 'ntp'
+            self.protocolname = self.protocols[absLayNum]
+        except IndexError as e:
+            # there is a bug in the wlan.mgt/awdl dissector: "sometimes" it doesn't list any layer
+            # above wlan in the protocols value of frame (see `self.protocols`), so we check for
+            # existing layers in the keys of `layersvalue` that have no "_raw" suffix (see
+            # `ParsedMessage.RK`)
+            rawProtocols = [lv[0] for lv in layersvalue
+                            if not lv[0].endswith(ParsedMessage.RK) and lv[0] != framekey]
+            # make sure everything up to the last protocol listed in self.protocols is also contained
+            # in rawProtocols then replace the self.protocols list with the manually determined one.
+            if rawProtocols[:len(self.protocols)] == self.protocols:
+                self.protocols = rawProtocols
+                self.protocolname = self.protocols[absLayNum]
+            else:
+                ptxt = f"{absLayNum} missing in {self.protocols}"
+                print(ptxt)
+                try:
+                    subprocess.run(["spd-say", ptxt])
+                except FileNotFoundError:
+                    pass  # does not matter, there simply is no speech notification
+                IPython.embed()
+                raise e
 
     def _reassemblePostProcessing(self):
         """

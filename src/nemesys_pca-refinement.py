@@ -1,7 +1,7 @@
 """
-Reference implementation for calling NEMEPCA, the
+Implementation for evaluating NEMEPCA, the
 **PCA-refined NEMESYS: NEtwork MEssage Syntax analysYS**
-message format inference method with an unknown protocol.
+message format inference method with a KNOWN protocol.
 
 
 
@@ -325,7 +325,8 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--layer', type=int, default=2,
                         help='Protocol layer relative to IP to consider. Default is 2 layers above IP '
                              '(typically the payload of a transport protocol).')
-    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true')
+    parser.add_argument('-r', '--relativeToIP', default=False, action='store_true',
+                        help='Consider a layer relative to the IP layer (see also --layer flag)')
     parser.add_argument('-f', '--refinement', help='Select segment refinement method.', choices=refinementMethods)
     parser.add_argument('-e', '--littleendian', help='Toggle presumed endianness to little.', action="store_true")
     args = parser.parse_args()
