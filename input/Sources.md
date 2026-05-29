@@ -16,7 +16,7 @@
 
 
 ## SMIA
-[Netresec-Page](http://download.netresec.com/pcap/smia-2011/SMIA_2011-10-10_08%253A03%253A19_CEST_632834000_file1.pcap)
+[One of the SMIA 2011 PCAPs by FOI Totalförsvarets forskningsinstitut](https://download.iwlab.foi.se/dataset/smia2011/Network_traffic/SMIA_2011-10-10_08%253A03%253A19_CEST_632834000_file1.pcap)
 
 ### NTP
 * ntp_SMIA-20111010.pcap
@@ -75,7 +75,7 @@
 
 
 ## iCTF 2010
-[UCSB](http://ictf.cs.ucsb.edu/ictfdata/2010/dumps/ictf2010pcap.tar.gz)
+[UCSB iCTF 2010 (own mirror, since original http://ictf.cs.ucsb.edu/ictfdata/2010/dumps/ictf2010pcap.tar.gz became unavailable)](https://kleber.space/fileadmin/downloads/ictf2010.pcap42)
 
 ### IRC
 * irc_ictf2010-42.pcap
